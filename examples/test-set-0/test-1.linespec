@@ -1,0 +1,8 @@
+TEST test-1
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+EXPECT WRITE:MYSQL users
+WITH {{payloads/mysql_user_write_input.yaml}}
+RETURNS {{payloads/mysql_user_write_result.yaml}}
+RESPOND HTTP:201
+WITH {{payloads/user_create_resp.yaml}}

@@ -1,0 +1,65 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LineSpecError = void 0;
+exports.tokenize = tokenize;
+class LineSpecError extends Error {
+    constructor(message, line) {
+        super(message);
+        this.name = 'LineSpecError';
+        this.line = line;
+    }
+}
+exports.LineSpecError = LineSpecError;
+function tokenize(source) {
+    const tokens = [];
+    const lines = source.split('\n');
+    let lineNo = 0;
+    let sqlStartLine;
+    for (let i = 0; i < lines.length; i++) {
+        lineNo = i + 1;
+        let line = lines[i];
+        if (sqlStartLine !== undefined) {
+            if (line.trim() === '"""') {
+                const collectedLines = lines.slice(sqlStartLine, i);
+                const sqlValue = collectedLines.join('\n').trim();
+                tokens.push({ type: 'USING_SQL', value: sqlValue, line: sqlStartLine });
+                sqlStartLine = undefined;
+                continue;
+            }
+            continue;
+        }
+        line = line.trim();
+        if (line === '' || line.startsWith('#')) {
+            continue;
+        }
+        let match;
+        if ((match = line.match(/^TEST\s+(.+)$/))) {
+            tokens.push({ type: 'TEST', value: match[1].trim(), line: lineNo });
+        }
+        else if ((match = line.match(/^RECEIVE\s+(.+)$/))) {
+            tokens.push({ type: 'RECEIVE', value: match[1].trim(), line: lineNo });
+        }
+        else if ((match = line.match(/^EXPECT\s+(.+)$/))) {
+            tokens.push({ type: 'EXPECT', value: match[1].trim(), line: lineNo });
+        }
+        else if ((match = line.match(/^WITH\s+\{\{(.+?)\}\}$/))) {
+            tokens.push({ type: 'WITH', value: match[1], line: lineNo });
+        }
+        else if ((match = line.match(/^RETURNS\s+\{\{(.+?)\}\}$/))) {
+            tokens.push({ type: 'RETURNS', value: match[1], line: lineNo });
+        }
+        else if ((match = line.match(/^USING_SQL\s+"""$/))) {
+            sqlStartLine = i + 1;
+        }
+        else if ((match = line.match(/^RESPOND\s+(.+)$/))) {
+            tokens.push({ type: 'RESPOND', value: match[1].trim(), line: lineNo });
+        }
+        else {
+            throw new LineSpecError(`Unrecognized line: ${lines[i]}`, lineNo);
+        }
+    }
+    if (sqlStartLine !== undefined) {
+        throw new LineSpecError(`Unclosed USING_SQL block starting at line ${sqlStartLine}`, sqlStartLine);
+    }
+    return tokens;
+}

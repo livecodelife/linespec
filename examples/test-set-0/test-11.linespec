@@ -1,0 +1,6 @@
+TEST test-11
+RECEIVE HTTP:DELETE http://localhost:3000/users/3
+EXPECT WRITE:MYSQL users
+WITH {{payloads/mysql_delete_input.yaml}}
+RETURNS {{payloads/mysql_delete_result.yaml}}
+RESPOND HTTP:204

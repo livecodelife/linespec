@@ -1,0 +1,10 @@
+TEST test-4
+RECEIVE HTTP:PATCH http://localhost:3000/users/3
+WITH {{payloads/user_update_req.yaml}}
+EXPECT READ:MYSQL users
+RETURNS {{payloads/mysql_user_single_read_result.yaml}}
+EXPECT WRITE:MYSQL users
+WITH {{payloads/mysql_user_update_input.yaml}}
+RETURNS {{payloads/mysql_user_update_result.yaml}}
+RESPOND HTTP:200
+WITH {{payloads/user_update_resp.yaml}}

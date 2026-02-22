@@ -1,0 +1,6 @@
+TEST test-2
+RECEIVE HTTP:GET http://localhost:3000/users
+EXPECT READ:MYSQL users
+RETURNS {{payloads/mysql_users_read_result.yaml}}
+RESPOND HTTP:200
+WITH {{payloads/users_list_resp.yaml}}

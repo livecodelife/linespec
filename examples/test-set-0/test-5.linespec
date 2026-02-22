@@ -1,0 +1,8 @@
+TEST test-5
+RECEIVE HTTP:POST http://localhost:3000/todos
+WITH {{payloads/todo_create_req.yaml}}
+EXPECT WRITE:MYSQL todos
+WITH {{payloads/mysql_todo_write_input.yaml}}
+RETURNS {{payloads/mysql_todo_write_result.yaml}}
+RESPOND HTTP:201
+WITH {{payloads/todo_create_resp.yaml}}

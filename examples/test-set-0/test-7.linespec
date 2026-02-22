@@ -1,0 +1,6 @@
+TEST test-7
+RECEIVE HTTP:GET http://localhost:3000/todos/user/3
+EXPECT READ:MYSQL todos
+RETURNS {{payloads/mysql_todos_read_result.yaml}}
+RESPOND HTTP:200
+WITH {{payloads/todos_list_resp.yaml}}
