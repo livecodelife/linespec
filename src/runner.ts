@@ -6,12 +6,13 @@ import { spawn } from 'child_process';
 import http from 'http';
 import https from 'https';
 import { startProxy } from './mysql-proxy';
-import type { KMock, KTest, LoadedTestSet } from './types';
+import type { KMock, KTest, LoadedTestSet, TestResult } from './types';
 
 export interface RunnerOptions {
   composePath?: string;
   serviceUrl: string;
   dbPort?: number;
+  reportDir?: string;
 }
 
 async function findFreePort(): Promise<number> {
@@ -160,10 +161,40 @@ function stripNoise(body: unknown, noiseKeys: Record<string, string[]>): unknown
   return cloned;
 }
 
+function prettyPrint(str: string): string {
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2);
+  } catch {
+    return str;
+  }
+}
+
+function buildSideBySideDiff(expected: string, actual: string): string {
+  const expectedLines = prettyPrint(expected).split('\n');
+  const actualLines = prettyPrint(actual).split('\n');
+
+  const maxExpectedLen = Math.max(...expectedLines.map((l) => l.length));
+  const colWidth = Math.min(Math.max(maxExpectedLen, 40), 60);
+
+  const maxLines = Math.max(expectedLines.length, actualLines.length);
+  const rows: string[] = [];
+
+  for (let i = 0; i < maxLines; i++) {
+    const expLine = expectedLines[i] ?? '';
+    const actLine = actualLines[i] ?? '';
+    const paddedExp = expLine.padEnd(colWidth);
+    const separator = expLine === actLine ? '  ' : ' ~ ';
+    rows.push(`${paddedExp}${separator}${actLine}`);
+  }
+
+  return rows.join('\n');
+}
+
 async function runHttpTest(
   ktest: KTest,
-  serviceUrl: string
-): Promise<{ pass: boolean; reason?: string }> {
+  serviceUrl: string,
+  name: string
+): Promise<TestResult> {
   const url = new URL(ktest.spec.req.url);
   const targetUrl = `${serviceUrl}${url.pathname}${url.search}`;
 
@@ -178,12 +209,23 @@ async function runHttpTest(
     delete options.headers.Host;
     delete options.headers['Content-Length'];
 
+    const expectedStatus = ktest.spec.resp.status_code;
+
     const req = lib.request(targetUrl, options, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
-        if (res.statusCode !== ktest.spec.resp.status_code) {
-          resolve({ pass: false, reason: `status ${res.statusCode} ≠ ${ktest.spec.resp.status_code}` });
+        const actualStatus = res.statusCode ?? 0;
+
+        if (actualStatus !== expectedStatus) {
+          resolve({
+            name,
+            pass: false,
+            reason: `status ${actualStatus} ≠ ${expectedStatus}`,
+            expectedStatus,
+            actualStatus,
+            req: ktest.spec.req,
+          });
           return;
         }
 
@@ -203,16 +245,41 @@ async function runHttpTest(
         }
 
         if (actualBody !== expectedBody) {
-          resolve({ pass: false, reason: 'body mismatch' });
+          const diff = buildSideBySideDiff(expectedBody, actualBody);
+          resolve({
+            name,
+            pass: false,
+            reason: 'body mismatch',
+            expectedStatus,
+            actualStatus,
+            expectedBody,
+            actualBody,
+            diff,
+            req: ktest.spec.req,
+          });
           return;
         }
 
-        resolve({ pass: true });
+        resolve({
+          name,
+          pass: true,
+          expectedStatus,
+          actualStatus,
+          expectedBody,
+          actualBody,
+          req: ktest.spec.req,
+        });
       });
     });
 
     req.on('error', (err) => {
-      resolve({ pass: false, reason: err.message });
+      resolve({
+        name,
+        pass: false,
+        reason: err.message,
+        expectedStatus: ktest.spec.resp.status_code,
+        req: ktest.spec.req,
+      });
     });
 
     const method = ktest.spec.req.method.toUpperCase();
@@ -272,16 +339,67 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
 
     let passed = 0;
     let failed = 0;
+    const results: TestResult[] = [];
 
     for (const { name, ktest } of testSet.tests) {
-      const result = await runHttpTest(ktest, options.serviceUrl);
+      const result = await runHttpTest(ktest, options.serviceUrl, name);
+      results.push(result);
+
       if (result.pass) {
         passed++;
         process.stdout.write(`✓ ${name} PASS\n`);
       } else {
         failed++;
         process.stdout.write(`✗ ${name} FAIL (${result.reason})\n`);
+        if (result.expectedStatus !== undefined && result.actualStatus !== undefined) {
+          process.stdout.write(`  Expected status : ${result.expectedStatus}\n`);
+          process.stdout.write(`  Actual status   : ${result.actualStatus}\n`);
+        }
+        if (result.diff) {
+          const diffLines = result.diff.split('\n');
+          for (const line of diffLines) {
+            if (line.includes(' ~ ')) {
+              const parts = line.split(' ~ ');
+              const leftCol = parts[0] ?? '';
+              const rightCol = parts[1] ?? '';
+              const leftMatches = leftCol === rightCol;
+              if (!leftMatches) {
+                process.stdout.write(`\x1b[31m${leftCol}\x1b[0m  ~  \x1b[32m${rightCol}\x1b[0m\n`);
+              } else {
+                process.stdout.write(`${line}\n`);
+              }
+            } else {
+              process.stdout.write(`${line}\n`);
+            }
+          }
+        }
       }
+    }
+
+    if (options.reportDir) {
+      fs.mkdirSync(options.reportDir, { recursive: true });
+
+      const summary = {
+        passed,
+        failed,
+        total: passed + failed,
+        tests: results.map((r) => ({
+          name: r.name,
+          pass: r.pass,
+          reason: r.reason,
+        })),
+      };
+      fs.writeFileSync(path.join(options.reportDir, 'summary.json'), JSON.stringify(summary, null, 2));
+
+      for (const result of results) {
+        const safeName = result.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        fs.writeFileSync(
+          path.join(options.reportDir, `${safeName}.json`),
+          JSON.stringify(result, null, 2)
+        );
+      }
+
+      process.stdout.write(`→ Report written to ${options.reportDir}/\n`);
     }
 
     process.stdout.write(`\nsummary: ${passed} passed, ${failed} failed\n`);

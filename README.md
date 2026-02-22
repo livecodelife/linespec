@@ -31,7 +31,7 @@ linespec compile examples/test-set-0/test-1.linespec -o out
 ### `linespec test`
 
 ```bash
-linespec test [dir] [--compose <file>] [--service-url <url>]
+linespec test [dir] [--compose <file>] [--service-url <url>] [--report <dir>]
 ```
 
 **Options**
@@ -41,6 +41,7 @@ linespec test [dir] [--compose <file>] [--service-url <url>]
 | `[dir]` | Path to a compiled test-set directory containing `tests/` and `mocks.yaml` | `keploy-examples/test-set-0` |
 | `--compose <file>` | Path to the `docker-compose.yml` for the service under test | (required) |
 | `--service-url <url>` | Base URL of the service once it is running | `http://localhost:3000` |
+| `--report <dir>` | Report output directory, relative to the test-set dir | `linespec-report` |
 
 **Prerequisites** — Docker and Docker Compose must be installed and the Docker daemon must be running.
 
@@ -61,9 +62,41 @@ Expected output:
 ✓ MySQL proxy listening on port 54321 → localhost:3306
 ✓ Service healthy at http://localhost:3000
 ✓ test-1 PASS
-✓ test-2 PASS
+✗ test-2 FAIL (body mismatch)
+  Expected status : 200
+  Actual status   : 200
+  {                                           {
+    "id": 1,                                    "id": 1,
+    "title": "Buy milk"              ~          "title": "Buy bread"
+  }                                           }
+✓ test-3 PASS
 …
-summary: 11 passed, 0 failed
+→ Report written to keploy-examples/test-set-0/linespec-report/
+
+summary: 10 passed, 1 failed
+```
+
+> **Note:** Differing lines are marked with ` ~ ` and are coloured red (expected) / green (actual) in a terminal.
+
+### Report Folder
+
+The report is written to `<test-set-dir>/linespec-report/` by default. Override with `--report <dir>`.
+
+- `summary.json` — top-level object with `passed`, `failed`, `total`, and a `tests` array (each entry: `name`, `pass`, `reason?`).
+- `{test-name}.json` — full `TestResult` for that test: `name`, `pass`, `reason?`, `expectedStatus`, `actualStatus?`, `expectedBody?`, `actualBody?`, `diff?`, `req`.
+
+Example `summary.json`:
+
+```json
+{
+  "passed": 10,
+  "failed": 1,
+  "total": 11,
+  "tests": [
+    { "name": "test-1", "pass": true },
+    { "name": "test-2", "pass": false, "reason": "body mismatch" }
+  ]
+}
 ```
 
 ## Specification Format

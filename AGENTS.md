@@ -158,7 +158,9 @@ The compiler follows a pipeline: `source → tokenize → parse → validate →
 3. Docker Compose is started with a generated override file that rewrites `DATABASE_URL` to point at `host.docker.internal:<proxyPort>`
 4. `pollUntilHealthy(serviceUrl)` — polls the service root until HTTP 200 or 404
 5. Each `KTest` is replayed via Node's built-in `http` module; status code and body (minus noise keys) are compared
-6. A pass/fail summary is printed; `docker compose down` and proxy teardown run in `finally`
+6. For each failed `KTest`, `buildSideBySideDiff(expectedBody, actualBody)` produces a side-by-side string where lines that differ are separated by ` ~ `. `runTests` prints each diff line to stdout; lines containing ` ~ ` are split and the left column is wrapped in ANSI red (`\x1b[31m`) and the right in ANSI green (`\x1b[32m`).
+7. After all tests run, if `options.reportDir` is set (resolved by the CLI as `path.resolve(testDir, options.report)`), `runTests` calls `fs.mkdirSync(reportDir, { recursive: true })`, writes `summary.json` (aggregate counts + per-test pass/fail/reason), and writes one `{safeName}.json` per `TestResult` (full detail including `req`, `diff`, bodies). A confirmation line is printed to stdout.
+8. Summary line is printed; `docker compose down` and proxy teardown run in `finally`.
 
 ### Mock-or-Passthrough
 The MySQL proxy maintains an ordered queue of `KMockMysqlSpec` entries sorted by `created` timestamp. On each `COM_QUERY` it searches the queue for a spec whose `message.query` is a substring of (or contains) the incoming query. On a hit the mock is consumed and its serialised `responses` are written back to the client socket. On a miss the packet is forwarded to the real upstream and the response is streamed back transparently.

@@ -181,3 +181,14 @@ export interface LoadedTestSet {
     tests: LoadedKTest[];
     mocks: LoadedMock[];
 }
+export interface TestResult {
+    name: string;
+    pass: boolean;
+    reason?: string;
+    expectedStatus: number;
+    actualStatus?: number;
+    expectedBody?: string;
+    actualBody?: string;
+    diff?: string;
+    req: KTestReq;
+}
