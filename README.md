@@ -45,7 +45,7 @@ linespec test [dir] [--compose <file>] [--service-url <url>] [--report <dir>]
 
 **Prerequisites** — Docker and Docker Compose must be installed and the Docker daemon must be running.
 
-**How it works** — A MySQL TCP proxy is started on a free local port. It intercepts queries and returns mock responses from `mocks.yaml` when a matching query is found; otherwise it forwards the query to the real database. Docker Compose is launched with an override that rewrites the service's `DATABASE_URL` to route through the proxy via `host.docker.internal`. Once the service is healthy, each test in `tests/` is replayed as an HTTP request. Status code and body are compared against the recorded response (noise fields listed in `assertions.noise` are ignored). A pass/fail summary is printed and Docker Compose is torn down.
+**How it works** — A MySQL TCP proxy is started on a free local port. Infrastructure-level queries (such as `SET NAMES`, `COM_PING`, `information_schema` introspection, and `schema_migrations` checks) are always forwarded transparently to the real database and are never matched against `mocks.yaml`. For all other queries, the proxy checks `mocks.yaml` (which contains only app-level mocks compiled from `EXPECT READ_MYSQL` / `EXPECT WRITE_MYSQL` statements) and returns a mock response on a match; otherwise it forwards the query to the real database. Docker Compose is launched with an override that rewrites the service's `DATABASE_URL` to route through the proxy via `host.docker.internal`. Once the service is healthy, each test in `tests/` is replayed as an HTTP request. Status code and body are compared against the recorded response (noise fields listed in `assertions.noise` are ignored). A pass/fail summary is printed and Docker Compose is torn down.
 
 **Example**
 
@@ -58,7 +58,7 @@ linespec test keploy-examples/test-set-0 \
 Expected output:
 
 ```
-✓ Loaded 11 tests and 42 mocks from keploy-examples/test-set-0
+✓ Loaded 11 tests and 38 mocks from keploy-examples/test-set-0
 ✓ MySQL proxy listening on port 54321 → localhost:3306
 ✓ Service healthy at http://localhost:3000
 ✓ test-1 PASS

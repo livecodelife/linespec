@@ -151,10 +151,15 @@ keploy-examples/
 ### Pipeline Architecture
 The compiler follows a pipeline: `source → tokenize → parse → validate → compile`
 
+### Compiler — MySQL packet_type
+The compiler's `buildKMocks` function in `src/compiler.ts` sets the `packet_type` dynamically based on the statement type:
+- `WRITE_MYSQL` statements → `packet_type: OK` (proxy routes to `encodeOkPayload`)
+- `READ_MYSQL` statements → `packet_type: TextResultSet` (proxy routes to the column/row serialisation path)
+
 ### Test Runner Pipeline
 `linespec test [dir]` follows the sequence:
 1. `loadTestSet(dir)` — reads all `tests/*.yaml` and `mocks.yaml` from the given directory
-2. `startProxy(mocks, host, dbPort, proxyPort)` — starts a TCP server that intercepts MySQL `COM_QUERY` packets, returns a serialised mock response on a hit, or pipes the packet to the real upstream on a miss
+2. `startProxy(mocks, host, dbPort, proxyPort)` — starts a TCP server that intercepts MySQL `COM_QUERY` packets. Infrastructure queries (`SET NAMES`, `COM_PING`, `information_schema` schema introspection, and `schema_migrations` version checks) are always passed through to the real upstream without consulting the mock queue. For all other queries, the proxy returns a serialised mock response on a hit, or pipes the packet to the real upstream on a miss
 3. Docker Compose is started with a generated override file that rewrites `DATABASE_URL` to point at `host.docker.internal:<proxyPort>`
 4. `pollUntilHealthy(serviceUrl)` — polls the service root until HTTP 200 or 404
 5. Each `KTest` is replayed via Node's built-in `http` module; status code and body (minus noise keys) are compared
@@ -163,7 +168,7 @@ The compiler follows a pipeline: `source → tokenize → parse → validate →
 8. Summary line is printed; `docker compose down` and proxy teardown run in `finally`.
 
 ### Mock-or-Passthrough
-The MySQL proxy maintains an ordered queue of `KMockMysqlSpec` entries sorted by `created` timestamp. On each `COM_QUERY` it searches the queue for a spec whose `message.query` is a substring of (or contains) the incoming query. On a hit the mock is consumed and its serialised `responses` are written back to the client socket. On a miss the packet is forwarded to the real upstream and the response is streamed back transparently.
+The MySQL proxy maintains an ordered queue of `KMockMysqlSpec` entries (populated exclusively with app-level mocks from `EXPECT READ_MYSQL` / `EXPECT WRITE_MYSQL` statements) sorted by `created` timestamp. Infrastructure queries are not represented in the queue and therefore always fall through to the passthrough path. On each `COM_QUERY` it searches the queue for a spec whose `message.query` is a substring of (or contains) the incoming query. On a hit the mock is consumed and its serialised `responses` are written back to the client socket. On a miss the packet is forwarded to the real upstream and the response is streamed back transparently.
 
 ### Statement Types
 - `RECEIVE` - Trigger request (exactly one required)

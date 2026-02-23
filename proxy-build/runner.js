@@ -45,6 +45,98 @@ const child_process_1 = require("child_process");
 const http_1 = __importDefault(require("http"));
 const https_1 = __importDefault(require("https"));
 const mysql_proxy_1 = require("./mysql-proxy");
+async function resetProxyState(mgmtPort) {
+    return new Promise((resolve, reject) => {
+        const req = http_1.default.request({
+            hostname: 'localhost',
+            port: mgmtPort,
+            path: '/reset',
+            method: 'POST',
+        }, (res) => {
+            res.on('data', () => { });
+            res.on('end', resolve);
+        });
+        req.on('error', reject);
+        req.end();
+    });
+}
+async function setProxyTestName(mgmtPort, testName) {
+    return new Promise((resolve, reject) => {
+        const req = http_1.default.request({
+            hostname: 'localhost',
+            port: mgmtPort,
+            path: `/test/${encodeURIComponent(testName)}`,
+            method: 'POST',
+        }, (res) => {
+            res.on('data', () => { });
+            res.on('end', resolve);
+        });
+        req.on('error', reject);
+        req.end();
+    });
+}
+async function getProxyState(mgmtPort) {
+    const [consumedRes, unexpectedRes] = await Promise.all([
+        new Promise((resolve, reject) => {
+            const req = http_1.default.request({
+                hostname: 'localhost',
+                port: mgmtPort,
+                path: '/consumed',
+                method: 'GET',
+            }, (res) => {
+                let body = '';
+                res.on('data', (chunk) => { body += chunk; });
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(body));
+                    }
+                    catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.end();
+        }),
+        new Promise((resolve, reject) => {
+            const req = http_1.default.request({
+                hostname: 'localhost',
+                port: mgmtPort,
+                path: '/unexpected',
+                method: 'GET',
+            }, (res) => {
+                let body = '';
+                res.on('data', (chunk) => { body += chunk; });
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(body));
+                    }
+                    catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.end();
+        }),
+    ]);
+    return { consumed: consumedRes, unexpected: unexpectedRes };
+}
+function getMocksForTest(mocks, testName) {
+    const result = [];
+    for (const mock of mocks) {
+        if (mock.kind === 'MySQL') {
+            const spec = mock.spec;
+            if (spec.metadata && spec.metadata.type === 'mocks') {
+                const tests = spec.metadata.tests;
+                if (tests && Array.isArray(tests) && tests.includes(testName)) {
+                    result.push(spec);
+                }
+            }
+        }
+    }
+    return result;
+}
 async function findFreePort() {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
@@ -394,6 +486,9 @@ async function runTests(testSet, options) {
         ? path.join(path.dirname(composePath), '.linespec-compose-override.yml')
         : '';
     let proxyServer = null;
+    let mgmtServer = null;
+    let proxyState = null;
+    let mgmtPort = null;
     const dbPort = options.dbPort ?? 3306;
     try {
         const proxyPort = await findFreePort();
@@ -441,7 +536,7 @@ async function runTests(testSet, options) {
             }
             process.stdout.write('✓ Database ready\n');
             process.stdout.write('→ Building proxy Docker image...\n');
-            const proxyImageName = 'linespec-mysql-proxy:latest';
+            const proxyImageName = 'linespec-mysql-proxy:debug';
             const testDir = path.dirname(options.composePath);
             const mocksPath = path.join(testDir, 'linespec-tests', 'mocks.yaml');
             const proxyBuildDir = path.join(__dirname, '..', 'proxy-build');
@@ -504,6 +599,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
                 '--name', proxyContainerName,
                 '--network', 'todo-api_todo-network',
                 '-p', `${proxyPort}:3307`,
+                '-p', `${proxyPort + 1}:3308`,
                 proxyImageName,
                 'node', 'dist/proxy-server.js',
                 '--mocks', 'mocks.yaml',
@@ -511,8 +607,10 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
                 '--upstream-port', '3306',
                 '--port', '3307'
             ]);
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 10000));
             process.stdout.write(`✓ MySQL proxy running in container ${proxyContainerName}:3307 → db:3306\n`);
+            mgmtPort = proxyPort + 1;
+            process.stdout.write(`✓ Management server available on port ${mgmtPort}\n`);
             const overrideContent = buildOverrideContentForContainer(composeParsed, proxyPort);
             fs.writeFileSync(overridePath, overrideContent);
             process.stdout.write(`→ Generated override: ${overridePath}\n`);
@@ -525,8 +623,13 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
             ]);
         }
         else {
-            proxyServer = await (0, mysql_proxy_1.startProxy)(mocks, 'localhost', dbPort, proxyPort);
+            const proxyResult = await (0, mysql_proxy_1.startProxy)(mocks, 'localhost', dbPort, proxyPort);
+            proxyServer = proxyResult.server;
+            mgmtServer = proxyResult.mgmtServer;
+            proxyState = proxyResult.state;
+            mgmtPort = proxyPort + 1;
             process.stdout.write(`✓ MySQL proxy listening on port ${proxyPort} → localhost:${dbPort}\n`);
+            process.stdout.write(`✓ Management server listening on port ${mgmtPort}\n`);
             process.stdout.write(`→ Configure your app to connect to localhost:${proxyPort} instead of localhost:${dbPort}\n`);
             process.stdout.write('→ Waiting for service (ensure it is already running)...\n');
         }
@@ -536,11 +639,37 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
         let failed = 0;
         const results = [];
         for (const { name, ktest } of testSet.tests) {
+            if (mgmtPort !== null) {
+                await setProxyTestName(mgmtPort, name);
+                await resetProxyState(mgmtPort);
+            }
             const result = await runHttpTest(ktest, options.serviceUrl, name);
+            const warnings = [];
+            if (mgmtPort !== null) {
+                const state = await getProxyState(mgmtPort);
+                const testMocks = getMocksForTest(mocks, name);
+                const expectedMockNames = testMocks.map(m => m.name).filter((n) => !!n);
+                const unconsumed = expectedMockNames.filter(n => !state.consumed.includes(n));
+                if (unconsumed.length > 0) {
+                    result.pass = false;
+                    result.reason = `unconsumed mock: ${unconsumed.join(', ')}`;
+                }
+                if (state.unexpected.length > 0) {
+                    warnings.push(`Unexpected queries: ${state.unexpected.join(', ')}`);
+                }
+                if (warnings.length > 0) {
+                    result.warnings = warnings;
+                }
+            }
             results.push(result);
             if (result.pass) {
                 passed++;
-                process.stdout.write(`✓ ${name} PASS\n`);
+                if (result.warnings && result.warnings.length > 0) {
+                    process.stdout.write(`✓ ${name} PASS (warnings: ${result.warnings.join('; ')})\n`);
+                }
+                else {
+                    process.stdout.write(`✓ ${name} PASS\n`);
+                }
             }
             else {
                 failed++;
@@ -581,6 +710,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
                     name: r.name,
                     pass: r.pass,
                     reason: r.reason,
+                    ...(r.warnings && r.warnings.length > 0 ? { warnings: r.warnings } : {}),
                 })),
             };
             fs.writeFileSync(path.join(options.reportDir, 'summary.json'), JSON.stringify(summary, null, 2));
@@ -598,6 +728,9 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
     finally {
         if (proxyServer) {
             proxyServer.close();
+        }
+        if (mgmtServer) {
+            mgmtServer.close();
         }
         if (useCompose) {
             try {

@@ -33,8 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.encodeOkPayload = encodeOkPayload;
+exports.encodeColumnDefPayload = encodeColumnDefPayload;
+exports.encodeTextRowPayload = encodeTextRowPayload;
+exports.serializeResponses = serializeResponses;
 exports.startProxy = startProxy;
 const net = __importStar(require("net"));
+const http = __importStar(require("http"));
 function readPackets(stateBuf) {
     const packets = [];
     let offset = 0;
@@ -136,47 +141,49 @@ function decodeLenenc(buf, offset) {
 }
 function encodeOkPayload(msg) {
     const buffers = [Buffer.from([0x00])];
-    const affectedRows = msg.affectedRows ?? msg.affected_rows ?? 0;
+    const affectedRows = msg.affected_rows ?? msg.affectedRows ?? 0;
     buffers.push(encodeLenenc(affectedRows));
-    const lastInsertId = msg.lastInsertId ?? msg.last_insert_id ?? 0;
+    const lastInsertId = msg.last_insert_id ?? msg.lastInsertId ?? 0;
     buffers.push(encodeLenenc(lastInsertId));
-    const statusFlags = msg.statusFlags ?? msg.status_flags ?? 2;
+    const statusFlags = msg.status_flags ?? msg.statusFlags ?? 2;
     buffers.push(Buffer.alloc(2));
     buffers[buffers.length - 1][0] = statusFlags & 0xff;
     buffers[buffers.length - 1][1] = (statusFlags >> 8) & 0xff;
     buffers.push(Buffer.alloc(2));
-    const warningCount = msg.warningCount ?? msg.warnings ?? 0;
+    const warningCount = msg.warnings ?? msg.warnings ?? 0;
     if (warningCount !== 0) {
         buffers[buffers.length - 1][0] = warningCount & 0xff;
         buffers[buffers.length - 1][1] = (warningCount >> 8) & 0xff;
     }
     if ('info' in msg && msg.info !== undefined) {
         const infoStr = String(msg.info ?? '');
-        buffers.push(Buffer.from(infoStr, 'utf8'));
+        if (infoStr) {
+            buffers.push(encodeLenencStr(infoStr));
+        }
     }
     return Buffer.concat(buffers);
 }
 function encodeColumnDefPayload(col) {
     const buffers = [];
-    buffers.push(encodeLenencStr(col.catalog || 'def'));
-    buffers.push(encodeLenencStr(col.schema || ''));
-    buffers.push(encodeLenencStr(col.table || ''));
-    buffers.push(encodeLenencStr(col.orgTable || col.org_table || ''));
-    buffers.push(encodeLenencStr(col.name || ''));
-    buffers.push(encodeLenencStr(col.orgName || col.org_name || ''));
+    buffers.push(encodeLenencStr(col.catalog ?? 'def'));
+    buffers.push(encodeLenencStr(col.schema ?? ''));
+    buffers.push(encodeLenencStr(col.table ?? ''));
+    buffers.push(encodeLenencStr(col.org_table ?? col.orgTable ?? ''));
+    buffers.push(encodeLenencStr(col.name ?? ''));
+    buffers.push(encodeLenencStr(col.org_name ?? col.orgName ?? ''));
     buffers.push(Buffer.from([0x0c]));
     const charsetBuf = Buffer.alloc(2);
-    const charset = col.charset ?? col.character_set ?? 33;
+    const charset = col.character_set ?? col.characterSet ?? 33;
     charsetBuf.writeUInt16LE(charset, 0);
     buffers.push(charsetBuf);
     const colLenBuf = Buffer.alloc(4);
-    const columnLength = col.columnLength ?? col.column_length ?? 0;
+    const columnLength = col.column_length ?? col.columnLength ?? 0;
     colLenBuf.writeUInt32LE(columnLength, 0);
     buffers.push(colLenBuf);
-    const columnType = col.columnType ?? col.type ?? 0x00;
+    const columnType = col.type ?? 0x00;
     buffers.push(Buffer.from([columnType]));
     buffers.push(Buffer.alloc(2));
-    const columnFlags = col.columnFlags ?? col.flags;
+    const columnFlags = col.flags ?? col.columnFlags;
     if (columnFlags !== undefined) {
         buffers[buffers.length - 1][0] = columnFlags & 0xff;
         buffers[buffers.length - 1][1] = (columnFlags >> 8) & 0xff;
@@ -187,12 +194,25 @@ function encodeColumnDefPayload(col) {
 }
 function encodeTextRowPayload(row) {
     const buffers = [];
-    for (const val of Object.values(row)) {
-        if (val === null) {
-            buffers.push(Buffer.from([0xfb]));
+    if ('values' in row && Array.isArray(row.values)) {
+        const values = row.values;
+        for (const entry of values) {
+            if (entry.value === null) {
+                buffers.push(Buffer.from([0xfb]));
+            }
+            else {
+                buffers.push(encodeLenencStr(String(entry.value)));
+            }
         }
-        else {
-            buffers.push(encodeLenencStr(String(val)));
+    }
+    else {
+        for (const val of Object.values(row)) {
+            if (val === null) {
+                buffers.push(Buffer.from([0xfb]));
+            }
+            else {
+                buffers.push(encodeLenencStr(String(val)));
+            }
         }
     }
     return Buffer.concat(buffers);
@@ -236,30 +256,28 @@ function serializeResponses(responses, startSequenceId) {
             }
             if (msg.rows && Array.isArray(msg.rows)) {
                 for (const row of msg.rows) {
-                    if ('values' in row && Array.isArray(row.values)) {
-                        const values = row.values;
-                        const rowData = {};
-                        for (const v of values) {
-                            if ('name' in v && 'value' in v) {
-                                rowData[v.name] = v.value;
-                            }
-                        }
-                        const rowPayload = encodeTextRowPayload(rowData);
-                        buffers.push(writePacket(seqId++, rowPayload));
-                    }
-                    else {
-                        const rowPayload = encodeTextRowPayload(row);
-                        buffers.push(writePacket(seqId++, rowPayload));
-                    }
+                    const rowPayload = encodeTextRowPayload(row);
+                    buffers.push(writePacket(seqId++, rowPayload));
                 }
             }
-            if (msg.data) {
+            let finalData = undefined;
+            if (msg.FinalResponse) {
+                const finalResp = msg.FinalResponse;
+                finalData = finalResp.data;
+            }
+            if (finalData === undefined && msg.data !== undefined) {
+                finalData = msg.data;
+            }
+            if (finalData !== undefined) {
                 let dataBuf;
-                if (Array.isArray(msg.data)) {
-                    dataBuf = Buffer.from(msg.data);
+                if (Array.isArray(finalData)) {
+                    dataBuf = Buffer.from(finalData);
+                }
+                else if (typeof finalData === 'string' && finalData.length > 0) {
+                    dataBuf = Buffer.from(finalData.split(',').map(b => parseInt(b, 16)));
                 }
                 else {
-                    dataBuf = Buffer.from(msg.data.split(',').map(b => parseInt(b, 16)));
+                    continue;
                 }
                 buffers.push(writePacket(seqId++, dataBuf));
             }
@@ -301,6 +319,7 @@ function buildMockQueue(mocks) {
         if (mock.kind === 'MySQL') {
             const spec = mock.spec;
             if (spec.metadata && spec.metadata.type === 'mocks') {
+                spec.name = mock.name;
                 queue.push(spec);
             }
         }
@@ -308,14 +327,23 @@ function buildMockQueue(mocks) {
     queue.sort((a, b) => a.created - b.created);
     return queue;
 }
-function findAndConsumeMock(queue, requestOperation, query) {
+function findAndConsumeMock(queue, requestOperation, query, consumed, unexpected, testName) {
     for (let i = 0; i < queue.length; i++) {
         const spec = queue[i];
         if (spec.metadata.requestOperation !== requestOperation) {
             continue;
         }
+        const mockTests = spec.metadata.tests;
+        if (mockTests !== undefined && Array.isArray(mockTests) && mockTests.length > 0) {
+            if (testName === undefined || !mockTests.includes(testName)) {
+                continue;
+            }
+        }
         if (requestOperation === 'COM_PING') {
             queue.splice(i, 1);
+            if (consumed && spec.name) {
+                consumed.push(spec.name);
+            }
             return spec;
         }
         if (requestOperation === 'COM_QUERY' && query) {
@@ -325,6 +353,9 @@ function findAndConsumeMock(queue, requestOperation, query) {
                     const mockQuery = msg.query;
                     if (query.includes(mockQuery) || mockQuery.includes(query)) {
                         queue.splice(i, 1);
+                        if (consumed && spec.name) {
+                            consumed.push(spec.name);
+                        }
                         return spec;
                     }
                 }
@@ -379,7 +410,7 @@ function isResponseComplete(payload, passthroughState) {
     }
     return true;
 }
-function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
+function handleConnection(clientSocket, upstreamHost, upstreamPort, queue, consumed, unexpected, testName) {
     const upstreamSocket = net.createConnection(upstreamPort, upstreamHost);
     upstreamSocket.on('connect', () => {
         console.error(`[mysql-proxy] Connected to upstream ${upstreamHost}:${upstreamPort}`);
@@ -443,7 +474,7 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             }
             const commandByte = packet.payload[0];
             if (commandByte === 0x0e) {
-                const mock = findAndConsumeMock(queue, 'COM_PING');
+                const mock = findAndConsumeMock(queue, 'COM_PING', undefined, consumed, unexpected, testName);
                 if (mock) {
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
                     clientSocket.write(response);
@@ -455,22 +486,34 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
                     passthroughState.expectEof = false;
                     const fullPacket = writePacket(packet.seqId, packet.payload);
                     upstreamSocket.write(fullPacket);
+                    unexpected.push('COM_PING');
+                    console.warn('⚠ unexpected query passed through: COM_PING');
                 }
                 continue;
             }
             if (commandByte === 0x03) {
                 const query = packet.payload.slice(1).toString('utf8');
-                const mock = findAndConsumeMock(queue, 'COM_QUERY', query);
+                console.error(`[DEBUG] Received query: ${query}`);
+                const mock = findAndConsumeMock(queue, 'COM_QUERY', query, consumed, unexpected, testName);
                 if (mock) {
+                    console.error(`[DEBUG] Using mock: ${mock.name}`);
+                    console.error(`[DEBUG] Mock has ${mock.responses.length} response(s)`);
+                    for (let i = 0; i < mock.responses.length; i++) {
+                        console.error(`[DEBUG] Response ${i}: ${JSON.stringify(mock.responses[i]).substring(0, 200)}`);
+                    }
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
+                    console.error(`[DEBUG] Response buffer length: ${response.length}, full hex: ${response.toString('hex').substring(0, 200)}`);
                     clientSocket.write(response);
                 }
                 else {
+                    console.error(`[DEBUG] No mock found, passing through to upstream`);
                     passthroughState.active = true;
                     passthroughState.responsePhase = 'first';
                     passthroughState.columnsRemaining = 0;
                     const fullPacket = writePacket(packet.seqId, packet.payload);
                     upstreamSocket.write(fullPacket);
+                    unexpected.push(query);
+                    console.warn(`⚠ unexpected query passed through: ${query}`);
                 }
                 continue;
             }
@@ -487,10 +530,62 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
 function startProxy(mocks, upstreamHost, upstreamPort, listenPort) {
     return new Promise((resolve, reject) => {
         const queue = buildMockQueue(mocks);
+        const initialQueue = [...queue];
+        const consumed = [];
+        const unexpected = [];
+        let currentTestName;
+        const state = {
+            reset: () => {
+                consumed.length = 0;
+                unexpected.length = 0;
+            },
+            getConsumed: () => [...consumed],
+            getUnexpected: () => [...unexpected],
+            setTestName: (name) => {
+                currentTestName = name;
+            },
+            getTestName: () => currentTestName,
+            refreshQueue: () => {
+                queue.length = 0;
+                queue.push(...initialQueue);
+            },
+        };
         const server = net.createServer((clientSocket) => {
-            handleConnection(clientSocket, upstreamHost, upstreamPort, queue);
+            handleConnection(clientSocket, upstreamHost, upstreamPort, queue, consumed, unexpected, currentTestName);
+        });
+        const mgmtServer = http.createServer((req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.url === '/reset' && req.method === 'POST') {
+                state.reset();
+                res.statusCode = 200;
+                res.end(JSON.stringify({ status: 'ok' }));
+            }
+            else if (req.url === '/consumed' && req.method === 'GET') {
+                res.statusCode = 200;
+                res.end(JSON.stringify(state.getConsumed()));
+            }
+            else if (req.url === '/unexpected' && req.method === 'GET') {
+                res.statusCode = 200;
+                res.end(JSON.stringify(state.getUnexpected()));
+            }
+            else if (req.url?.startsWith('/test/') && req.method === 'POST') {
+                const testName = req.url.slice(6);
+                state.setTestName(testName || undefined);
+                state.refreshQueue();
+                res.statusCode = 200;
+                res.end(JSON.stringify({ status: 'ok', testName }));
+            }
+            else {
+                res.statusCode = 404;
+                res.end(JSON.stringify({ error: 'Not found' }));
+            }
         });
         server.on('error', reject);
-        server.listen(listenPort, '0.0.0.0', () => resolve(server));
+        mgmtServer.on('error', reject);
+        server.listen(listenPort, '0.0.0.0', () => {
+            mgmtServer.listen(listenPort + 1, '0.0.0.0', () => {
+                resolve({ server, mgmtServer, state });
+            });
+        });
     });
 }

@@ -136,26 +136,19 @@ function decodeLenenc(buf, offset) {
 }
 function encodeOkPayload(msg) {
     const buffers = [Buffer.from([0x00])];
-    if ('affectedRows' in msg) {
-        buffers.push(encodeLenenc(msg.affectedRows));
-    }
-    else {
-        buffers.push(encodeLenenc(0));
-    }
-    if ('lastInsertId' in msg) {
-        buffers.push(encodeLenenc(msg.lastInsertId));
-    }
-    else {
-        buffers.push(encodeLenenc(0));
-    }
-    const statusFlags = msg.statusFlags ?? 2;
+    const affectedRows = msg.affectedRows ?? msg.affected_rows ?? 0;
+    buffers.push(encodeLenenc(affectedRows));
+    const lastInsertId = msg.lastInsertId ?? msg.last_insert_id ?? 0;
+    buffers.push(encodeLenenc(lastInsertId));
+    const statusFlags = msg.statusFlags ?? msg.status_flags ?? 2;
     buffers.push(Buffer.alloc(2));
     buffers[buffers.length - 1][0] = statusFlags & 0xff;
     buffers[buffers.length - 1][1] = (statusFlags >> 8) & 0xff;
     buffers.push(Buffer.alloc(2));
-    if ('warningCount' in msg) {
-        buffers[buffers.length - 1][0] = msg.warningCount & 0xff;
-        buffers[buffers.length - 1][1] = (msg.warningCount >> 8) & 0xff;
+    const warningCount = msg.warningCount ?? msg.warnings ?? 0;
+    if (warningCount !== 0) {
+        buffers[buffers.length - 1][0] = warningCount & 0xff;
+        buffers[buffers.length - 1][1] = (warningCount >> 8) & 0xff;
     }
     if ('info' in msg && msg.info !== undefined) {
         const infoStr = String(msg.info ?? '');
@@ -168,21 +161,25 @@ function encodeColumnDefPayload(col) {
     buffers.push(encodeLenencStr(col.catalog || 'def'));
     buffers.push(encodeLenencStr(col.schema || ''));
     buffers.push(encodeLenencStr(col.table || ''));
-    buffers.push(encodeLenencStr(col.orgTable || ''));
+    buffers.push(encodeLenencStr(col.orgTable || col.org_table || ''));
     buffers.push(encodeLenencStr(col.name || ''));
-    buffers.push(encodeLenencStr(col.orgName || ''));
+    buffers.push(encodeLenencStr(col.orgName || col.org_name || ''));
     buffers.push(Buffer.from([0x0c]));
     const charsetBuf = Buffer.alloc(2);
-    charsetBuf.writeUInt16LE(col.charset ?? 33, 0);
+    const charset = col.charset ?? col.character_set ?? 33;
+    charsetBuf.writeUInt16LE(charset, 0);
     buffers.push(charsetBuf);
     const colLenBuf = Buffer.alloc(4);
-    colLenBuf.writeUInt32LE(col.columnLength ?? 0, 0);
+    const columnLength = col.columnLength ?? col.column_length ?? 0;
+    colLenBuf.writeUInt32LE(columnLength, 0);
     buffers.push(colLenBuf);
-    buffers.push(Buffer.from([col.columnType || 0x00]));
+    const columnType = col.columnType ?? col.type ?? 0x00;
+    buffers.push(Buffer.from([columnType]));
     buffers.push(Buffer.alloc(2));
-    if (col.columnFlags) {
-        buffers[buffers.length - 1][0] = col.columnFlags & 0xff;
-        buffers[buffers.length - 1][1] = (col.columnFlags >> 8) & 0xff;
+    const columnFlags = col.columnFlags ?? col.flags;
+    if (columnFlags !== undefined) {
+        buffers[buffers.length - 1][0] = columnFlags & 0xff;
+        buffers[buffers.length - 1][1] = (columnFlags >> 8) & 0xff;
     }
     buffers.push(Buffer.from([0x00]));
     buffers.push(Buffer.from([0x00]));
@@ -216,8 +213,8 @@ function serializeResponses(responses, startSequenceId) {
         }
         else if (packetType === 'TextResultSet') {
             const msg = resp.message;
-            const columnCount = encodeLenenc(msg.columnCount || 0);
-            payload = columnCount;
+            const columnCount = msg.columnCount ?? msg.column_count ?? 0;
+            payload = encodeLenenc(columnCount);
             buffers.push(writePacket(useSequenceId, payload));
             seqId = useSequenceId + 1;
             if (msg.columns && Array.isArray(msg.columns)) {
@@ -226,20 +223,34 @@ function serializeResponses(responses, startSequenceId) {
                     buffers.push(writePacket(seqId++, colPayload));
                 }
             }
-            if (msg.eofAfterColumns) {
+            const eofAfterColumns = msg.eofAfterColumns ?? msg.eof_after_columns;
+            if (eofAfterColumns) {
                 let eofBuf;
-                if (Array.isArray(msg.eofAfterColumns)) {
-                    eofBuf = Buffer.from(msg.eofAfterColumns);
+                if (Array.isArray(eofAfterColumns)) {
+                    eofBuf = Buffer.from(eofAfterColumns);
                 }
                 else {
-                    eofBuf = Buffer.from(msg.eofAfterColumns.split(',').map(b => parseInt(b, 16)));
+                    eofBuf = Buffer.from(eofAfterColumns.split(',').map(b => parseInt(b, 16)));
                 }
                 buffers.push(writePacket(seqId++, eofBuf));
             }
             if (msg.rows && Array.isArray(msg.rows)) {
                 for (const row of msg.rows) {
-                    const rowPayload = encodeTextRowPayload(row);
-                    buffers.push(writePacket(seqId++, rowPayload));
+                    if ('values' in row && Array.isArray(row.values)) {
+                        const values = row.values;
+                        const rowData = {};
+                        for (const v of values) {
+                            if ('name' in v && 'value' in v) {
+                                rowData[v.name] = v.value;
+                            }
+                        }
+                        const rowPayload = encodeTextRowPayload(rowData);
+                        buffers.push(writePacket(seqId++, rowPayload));
+                    }
+                    else {
+                        const rowPayload = encodeTextRowPayload(row);
+                        buffers.push(writePacket(seqId++, rowPayload));
+                    }
                 }
             }
             if (msg.data) {
@@ -258,14 +269,14 @@ function serializeResponses(responses, startSequenceId) {
             const msg = resp.message;
             const errBuf = Buffer.alloc(9);
             errBuf[0] = 0xff;
-            const errCode = msg.errorCode || 1;
+            const errCode = msg.errorCode ?? msg.error_code ?? 1;
             errBuf[1] = errCode & 0xff;
             errBuf[2] = (errCode >> 8) & 0xff;
             errBuf.write('#', 3);
-            const sqlState = msg.sqlState || 'HY000';
+            const sqlState = msg.sqlState ?? msg.sql_state ?? 'HY000';
             const sqlStateBuf = Buffer.from(sqlState, 'utf8');
             sqlStateBuf.copy(errBuf, 4);
-            const errorMessage = msg.errorMessage || 'Unknown error';
+            const errorMessage = msg.errorMessage ?? msg.error_message ?? 'Unknown error';
             const errorBuf = Buffer.from(errorMessage, 'utf8');
             errorBuf.copy(errBuf, 9);
             payload = errBuf;
@@ -461,11 +472,6 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
                     const fullPacket = writePacket(packet.seqId, packet.payload);
                     upstreamSocket.write(fullPacket);
                 }
-                continue;
-            }
-            if (commandByte === 0x02) {
-                const okPayload = Buffer.from([0x00, 0x00, 0x00, 0x02, 0x00]);
-                clientSocket.write(writePacket(packet.seqId + 1, okPayload));
                 continue;
             }
             passthroughState.active = true;
