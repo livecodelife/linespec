@@ -529,7 +529,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
       }
       
       await spawnProcess('docker', [
-        'build', '-t', proxyImageName, '-f', 'proxy-build/Dockerfile', 'proxy-build'
+        'build', '-t', proxyImageName, '-f', proxyBuildDockerfile, proxyBuildDir
       ]);
 
       const proxyContainerName = 'linespec-proxy';
