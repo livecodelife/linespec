@@ -124,24 +124,19 @@ function decodeLenenc(buf: Buffer, offset: number): { value: number; newOffset: 
 
 function encodeOkPayload(msg: Record<string, unknown>): Buffer {
   const buffers: Buffer[] = [Buffer.from([0x00])];
-  if ('affectedRows' in msg) {
-    buffers.push(encodeLenenc(msg.affectedRows as number));
-  } else {
-    buffers.push(encodeLenenc(0));
-  }
-  if ('lastInsertId' in msg) {
-    buffers.push(encodeLenenc(msg.lastInsertId as number));
-  } else {
-    buffers.push(encodeLenenc(0));
-  }
-  const statusFlags = (msg.statusFlags as number) ?? 2;
+  const affectedRows = (msg.affectedRows as number) ?? (msg.affected_rows as number) ?? 0;
+  buffers.push(encodeLenenc(affectedRows));
+  const lastInsertId = (msg.lastInsertId as number) ?? (msg.last_insert_id as number) ?? 0;
+  buffers.push(encodeLenenc(lastInsertId));
+  const statusFlags = (msg.statusFlags as number) ?? (msg.status_flags as number) ?? 2;
   buffers.push(Buffer.alloc(2));
   buffers[buffers.length - 1][0] = statusFlags & 0xff;
   buffers[buffers.length - 1][1] = (statusFlags >> 8) & 0xff;
   buffers.push(Buffer.alloc(2));
-  if ('warningCount' in msg) {
-    buffers[buffers.length - 1][0] = (msg.warningCount as number) & 0xff;
-    buffers[buffers.length - 1][1] = ((msg.warningCount as number) >> 8) & 0xff;
+  const warningCount = (msg.warningCount as number) ?? (msg.warnings as number) ?? 0;
+  if (warningCount !== 0) {
+    buffers[buffers.length - 1][0] = warningCount & 0xff;
+    buffers[buffers.length - 1][1] = (warningCount >> 8) & 0xff;
   }
   if ('info' in msg && msg.info !== undefined) {
     const infoStr = String(msg.info ?? '');
@@ -155,21 +150,25 @@ function encodeColumnDefPayload(col: Record<string, unknown>): Buffer {
   buffers.push(encodeLenencStr((col.catalog as string) || 'def'));
   buffers.push(encodeLenencStr((col.schema as string) || ''));
   buffers.push(encodeLenencStr((col.table as string) || ''));
-  buffers.push(encodeLenencStr((col.orgTable as string) || ''));
+  buffers.push(encodeLenencStr((col.orgTable as string) || (col.org_table as string) || ''));
   buffers.push(encodeLenencStr((col.name as string) || ''));
-  buffers.push(encodeLenencStr((col.orgName as string) || ''));
+  buffers.push(encodeLenencStr((col.orgName as string) || (col.org_name as string) || ''));
   buffers.push(Buffer.from([0x0c]));
   const charsetBuf = Buffer.alloc(2);
-  charsetBuf.writeUInt16LE(col.charset as number ?? 33, 0);
+  const charset = (col.charset as number) ?? (col.character_set as number) ?? 33;
+  charsetBuf.writeUInt16LE(charset, 0);
   buffers.push(charsetBuf);
   const colLenBuf = Buffer.alloc(4);
-  colLenBuf.writeUInt32LE(col.columnLength as number ?? 0, 0);
+  const columnLength = (col.columnLength as number) ?? (col.column_length as number) ?? 0;
+  colLenBuf.writeUInt32LE(columnLength, 0);
   buffers.push(colLenBuf);
-  buffers.push(Buffer.from([(col.columnType as number) || 0x00]));
+  const columnType = (col.columnType as number) ?? (col.type as number) ?? 0x00;
+  buffers.push(Buffer.from([columnType]));
   buffers.push(Buffer.alloc(2));
-  if (col.columnFlags) {
-    buffers[buffers.length - 1][0] = (col.columnFlags as number) & 0xff;
-    buffers[buffers.length - 1][1] = ((col.columnFlags as number) >> 8) & 0xff;
+  const columnFlags = (col.columnFlags as number) ?? (col.flags as number);
+  if (columnFlags !== undefined) {
+    buffers[buffers.length - 1][0] = columnFlags & 0xff;
+    buffers[buffers.length - 1][1] = (columnFlags >> 8) & 0xff;
   }
   buffers.push(Buffer.from([0x00]));
   buffers.push(Buffer.from([0x00]));
@@ -208,8 +207,8 @@ function serializeResponses(
       continue;
     } else if (packetType === 'TextResultSet') {
       const msg = resp.message as Record<string, unknown>;
-      const columnCount = encodeLenenc((msg.columnCount as number) || 0);
-      payload = columnCount;
+      const columnCount = (msg.columnCount as number) ?? (msg.column_count as number) ?? 0;
+      payload = encodeLenenc(columnCount);
       buffers.push(writePacket(useSequenceId, payload));
       seqId = useSequenceId + 1;
       if (msg.columns && Array.isArray(msg.columns)) {
@@ -218,19 +217,32 @@ function serializeResponses(
           buffers.push(writePacket(seqId++, colPayload));
         }
       }
-      if (msg.eofAfterColumns) {
+      const eofAfterColumns = msg.eofAfterColumns ?? msg.eof_after_columns;
+      if (eofAfterColumns) {
         let eofBuf: Buffer;
-        if (Array.isArray(msg.eofAfterColumns)) {
-          eofBuf = Buffer.from(msg.eofAfterColumns as number[]);
+        if (Array.isArray(eofAfterColumns)) {
+          eofBuf = Buffer.from(eofAfterColumns as number[]);
         } else {
-          eofBuf = Buffer.from((msg.eofAfterColumns as string).split(',').map(b => parseInt(b, 16)));
+          eofBuf = Buffer.from((eofAfterColumns as string).split(',').map(b => parseInt(b, 16)));
         }
         buffers.push(writePacket(seqId++, eofBuf));
       }
       if (msg.rows && Array.isArray(msg.rows)) {
         for (const row of msg.rows as Record<string, unknown>[]) {
-          const rowPayload = encodeTextRowPayload(row);
-          buffers.push(writePacket(seqId++, rowPayload));
+          if ('values' in row && Array.isArray(row.values)) {
+            const values = row.values as Record<string, unknown>[];
+            const rowData: Record<string, unknown> = {};
+            for (const v of values) {
+              if ('name' in v && 'value' in v) {
+                rowData[v.name as string] = v.value;
+              }
+            }
+            const rowPayload = encodeTextRowPayload(rowData);
+            buffers.push(writePacket(seqId++, rowPayload));
+          } else {
+            const rowPayload = encodeTextRowPayload(row);
+            buffers.push(writePacket(seqId++, rowPayload));
+          }
         }
       }
       if (msg.data) {
@@ -247,14 +259,14 @@ function serializeResponses(
       const msg = resp.message as Record<string, unknown>;
       const errBuf = Buffer.alloc(9);
       errBuf[0] = 0xff;
-      const errCode = (msg.errorCode as number) || 1;
+      const errCode = (msg.errorCode as number) ?? (msg.error_code as number) ?? 1;
       errBuf[1] = errCode & 0xff;
       errBuf[2] = (errCode >> 8) & 0xff;
       errBuf.write('#', 3);
-      const sqlState = (msg.sqlState as string) || 'HY000';
+      const sqlState = (msg.sqlState as string) ?? (msg.sql_state as string) ?? 'HY000';
       const sqlStateBuf = Buffer.from(sqlState, 'utf8');
       sqlStateBuf.copy(errBuf, 4);
-      const errorMessage = (msg.errorMessage as string) || 'Unknown error';
+      const errorMessage = (msg.errorMessage as string) ?? (msg.error_message as string) ?? 'Unknown error';
       const errorBuf = Buffer.from(errorMessage, 'utf8');
       errorBuf.copy(errBuf, 9);
       payload = errBuf;
