@@ -16,11 +16,85 @@ program
   .description('LineSpec DSL compiler for Keploy KTests and KMocks')
   .version('0.1.0');
 
+function collectLinespecFiles(dir: string): string[] {
+  const results: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectLinespecFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith('.linespec')) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
 program
   .command('compile <file>')
   .description('Compile a .linespec file into KTest and KMock YAML')
   .option('-o, --out <dir>', 'Output directory', 'out')
   .action((file: string, options: { out: string }) => {
+    let stats: fs.Stats;
+    try {
+      stats = fs.statSync(file);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.error(`Error: File not found: ${file}`);
+        process.exit(1);
+      }
+      throw err;
+    }
+
+    if (stats.isDirectory()) {
+      const files = collectLinespecFiles(file);
+      if (files.length === 0) {
+        console.log(`No .linespec files found in ${file}`);
+        return;
+      }
+
+      for (const filePath of files) {
+        let source: string;
+        try {
+          source = fs.readFileSync(filePath, 'utf-8');
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.error(`Error: File not found: ${filePath}`);
+            process.exit(1);
+          }
+          throw err;
+        }
+
+        const baseDir = path.dirname(path.resolve(filePath));
+
+        try {
+          const tokens = tokenize(source);
+          const spec = parse(tokens, filePath);
+          validate(spec, baseDir);
+          compile(spec, { outDir: options.out, baseDir });
+
+          console.log(`✓ Compiled ${spec.name} → ${options.out}/tests/${spec.name}.yaml`);
+        } catch (err) {
+          if (err instanceof LineSpecError) {
+            const lineInfo = err.line ? `:${err.line}` : '';
+            console.error(`Error${lineInfo}: ${err.message}`);
+            process.exit(1);
+          }
+          if (err instanceof Error) {
+            console.error(`Error: ${err.message}`);
+            process.exit(1);
+          }
+          throw err;
+        }
+      }
+
+      const mocksPath = path.join(options.out, 'mocks.yaml');
+      if (fs.existsSync(mocksPath)) {
+        console.log(`✓ Mocks → ${options.out}/mocks.yaml`);
+      }
+      return;
+    }
+
     let source: string;
     try {
       source = fs.readFileSync(file, 'utf-8');
