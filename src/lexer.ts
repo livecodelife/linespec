@@ -1,5 +1,5 @@
 export interface Token {
-  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND';
+  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE';
   value: string;
   line: number;
 }
@@ -19,10 +19,25 @@ export function tokenize(source: string): Token[] {
   const lines = source.split('\n');
   let lineNo = 0;
   let sqlStartLine: number | undefined;
+  let noiseLines: string[] | undefined;
+  let noiseStartLine: number | undefined;
 
   for (let i = 0; i < lines.length; i++) {
     lineNo = i + 1;
     let line = lines[i];
+
+    if (noiseLines !== undefined) {
+      if (line.startsWith(' ') || line.startsWith('\t')) {
+        noiseLines.push(line.trim());
+        continue;
+      } else {
+        tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine! });
+        noiseLines = undefined;
+        noiseStartLine = undefined;
+        i--;
+        continue;
+      }
+    }
 
     if (sqlStartLine !== undefined) {
       if (line.trim() === '"""') {
@@ -56,6 +71,9 @@ export function tokenize(source: string): Token[] {
       sqlStartLine = i + 1;
     } else if ((match = line.match(/^RESPOND\s+(.+)$/))) {
       tokens.push({ type: 'RESPOND', value: match[1].trim(), line: lineNo });
+    } else if (line === 'NOISE') {
+      noiseLines = [];
+      noiseStartLine = lineNo;
     } else {
       throw new LineSpecError(`Unrecognized line: ${lines[i]}`, lineNo);
     }
@@ -63,6 +81,10 @@ export function tokenize(source: string): Token[] {
 
   if (sqlStartLine !== undefined) {
     throw new LineSpecError(`Unclosed USING_SQL block starting at line ${sqlStartLine}`, sqlStartLine);
+  }
+
+  if (noiseLines !== undefined) {
+    tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine! });
   }
 
   return tokens;

@@ -1,0 +1,27 @@
+{
+  "name": "test-6",
+  "pass": false,
+  "reason": "body mismatch",
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "[{\"id\":3,\"title\":\"A todo\",\"description\":\"a great description\",\"completed\":true,\"user_id\":3}]",
+  "actualBody": "[]",
+  "diff": "[                                         ~ []\n  {                                       ~ \n    \"id\": 3,                              ~ \n    \"title\": \"A todo\",                    ~ \n    \"description\": \"a great description\", ~ \n    \"completed\": true,                    ~ \n    \"user_id\": 3                          ~ \n  }                                       ~ \n]                                         ~ ",
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/todos",
+    "header": {
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Host": "localhost:3000",
+      "Postman-Token": "b3b7f9cd-da39-4688-ad0e-cf8c3a18218c",
+      "User-Agent": "PostmanRuntime/7.48.0"
+    },
+    "body": "",
+    "timestamp": "2026-02-21T18:31:04.553Z"
+  }
+}

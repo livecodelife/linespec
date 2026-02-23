@@ -1,0 +1,39 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: test-2
+spec:
+  metadata: {}
+  req:
+    method: GET
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/users
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+    body: ''
+    timestamp: '2026-02-22T16:33:48.291Z'
+  resp:
+    status_code: 200
+    header:
+      Content-Type: application/json; charset=utf-8
+    body: '[{"id":3,"name":"User One","email":"user_one@example.com","password_digest":"$2a$12$PiJJT7PT/lhKoKjCzaEcBOYDk8uLm0OecnUW9YzsfCrA/W.D8lCwu","created_at":"2026-02-21T18:31:04.179Z","updated_at":"2026-02-21T18:31:04.179Z"}]'
+    status_message: OK
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-22T16:33:48.291Z'
+  objects: []
+  assertions:
+    noise:
+      id: []
+      password_digest: []
+      body.created_at: []
+      body.updated_at: []
+  created: 1771778028
+  app_port: 3000
+curl: |
+  curl --request GET \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --header 'Host: localhost:3000' \

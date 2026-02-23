@@ -8,3 +8,6 @@ WITH {{payloads/mysql_todo_update_input.yaml}}
 RETURNS {{payloads/mysql_todo_update_result.yaml}}
 RESPOND HTTP:200
 WITH {{payloads/todo_update_resp.yaml}}
+NOISE
+  body.created_at
+  body.updated_at

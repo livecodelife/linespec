@@ -1,0 +1,27 @@
+{
+  "name": "test-2",
+  "pass": false,
+  "reason": "body mismatch",
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "[{\"id\":3,\"name\":\"User One\",\"email\":\"user_one@example.com\",\"password_digest\":\"$2a$12$PiJJT7PT/lhKoKjCzaEcBOYDk8uLm0OecnUW9YzsfCrA/W.D8lCwu\"}]",
+  "actualBody": "[{\"id\":1,\"name\":\"User One\",\"email\":\"user_one@example.com\",\"password_digest\":\"$2a$12$ibapfkPGE3Wu5pNXDMgQouHV43dXp.XFW0oVvfNi/BYPvY4KRqiKa\"}]",
+  "diff": "[                                                             [\n  {                                                             {\n    \"id\": 3,                                                 ~     \"id\": 1,\n    \"name\": \"User One\",                                           \"name\": \"User One\",\n    \"email\": \"user_one@example.com\",                              \"email\": \"user_one@example.com\",\n    \"password_digest\": \"$2a$12$PiJJT7PT/lhKoKjCzaEcBOYDk8uLm0OecnUW9YzsfCrA/W.D8lCwu\" ~     \"password_digest\": \"$2a$12$ibapfkPGE3Wu5pNXDMgQouHV43dXp.XFW0oVvfNi/BYPvY4KRqiKa\"\n  }                                                             }\n]                                                             ]",
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/users",
+    "header": {
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Host": "localhost:3000",
+      "Postman-Token": "03a23998-8e2a-491a-9c9b-ebc23a61308e",
+      "User-Agent": "PostmanRuntime/7.48.0"
+    },
+    "body": "",
+    "timestamp": "2026-02-21T18:31:04.208Z"
+  }
+}

@@ -169,6 +169,7 @@ The MySQL proxy maintains an ordered queue of `KMockMysqlSpec` entries sorted by
 - `RECEIVE` - Trigger request (exactly one required)
 - `EXPECT` - External dependencies (zero or more)
 - `RESPOND` - Response (exactly one required, must be last)
+- `NOISE` - Response noise filter (optional, follows RESPOND); each indented line names a body field path to exclude from comparison; compiled to `KTest.spec.assertions.noise`
 
 ### Custom Errors
 All parsing and validation errors extend `LineSpecError` with optional line numbers for error reporting.

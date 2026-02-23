@@ -6,3 +6,6 @@ WITH {{payloads/mysql_todo_write_input.yaml}}
 RETURNS {{payloads/mysql_todo_write_result.yaml}}
 RESPOND HTTP:201
 WITH {{payloads/todo_create_resp.yaml}}
+NOISE
+  body.created_at
+  body.updated_at

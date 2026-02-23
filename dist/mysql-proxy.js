@@ -370,6 +370,9 @@ function isResponseComplete(payload, passthroughState) {
 }
 function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
     const upstreamSocket = net.createConnection(upstreamPort, upstreamHost);
+    upstreamSocket.on('connect', () => {
+        console.error(`[mysql-proxy] Connected to upstream ${upstreamHost}:${upstreamPort}`);
+    });
     const connState = {
         phase: 'handshake',
         clientBuf: Buffer.alloc(0),
@@ -477,6 +480,6 @@ function startProxy(mocks, upstreamHost, upstreamPort, listenPort) {
             handleConnection(clientSocket, upstreamHost, upstreamPort, queue);
         });
         server.on('error', reject);
-        server.listen(listenPort, () => resolve(server));
+        server.listen(listenPort, '0.0.0.0', () => resolve(server));
     });
 }

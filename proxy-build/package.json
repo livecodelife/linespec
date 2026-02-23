@@ -1,0 +1,26 @@
+{
+  "name": "linespec",
+  "version": "0.1.0",
+  "description": "LineSpec DSL compiler for Keploy KTests and KMocks",
+  "main": "dist/cli.js",
+  "bin": {
+    "linespec": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "dev": "ts-node src/cli.ts"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0",
+    "@types/js-yaml": "^4.0.9",
+    "ts-node": "^10.9.2",
+    "vitest": "^1.2.0"
+  }
+}

@@ -55,6 +55,7 @@ export interface ReceiveStatement {
 export interface RespondStatement {
   statusCode: number;
   withFile?: string;
+  noise?: string[];
 }
 
 export interface TestSpec {

@@ -1,0 +1,26 @@
+{
+  "name": "test-5",
+  "pass": false,
+  "reason": "status 422 ≠ 201",
+  "expectedStatus": 201,
+  "actualStatus": 422,
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/todos",
+    "header": {
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Content-Length": "100",
+      "Content-Type": "application/json",
+      "Host": "localhost:3000",
+      "Postman-Token": "66fbb098-782f-4e62-976f-4a487a2070c6",
+      "User-Agent": "PostmanRuntime/7.48.0"
+    },
+    "body": "{\n  \"title\": \"A todo\",\n  \"user_id\": 3,\n  \"description\": \"a great description\",\n  \"completed\": true\n}",
+    "timestamp": "2026-02-21T18:31:04.513Z"
+  }
+}

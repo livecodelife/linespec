@@ -1,0 +1,23 @@
+{
+  "name": "test-2",
+  "pass": false,
+  "reason": "body mismatch",
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "[{\"name\":\"User One\",\"email\":\"user_one@example.com\"}]",
+  "actualBody": "[]",
+  "diff": "[                                        ~ []\n  {                                      ~ \n    \"name\": \"User One\",                  ~ \n    \"email\": \"user_one@example.com\"      ~ \n  }                                      ~ \n]                                        ~ ",
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/users",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000"
+    },
+    "body": "",
+    "timestamp": "2026-02-22T16:33:48.291Z"
+  }
+}

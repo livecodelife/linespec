@@ -174,9 +174,16 @@ export function parse(tokens: Token[], filename: string): TestSpec {
     respondWithFile = withToken.value;
   }
 
+  let respondNoise: string[] | undefined;
+  if (peek(tokens, pos.value)?.type === 'NOISE') {
+    const noiseToken = consume(tokens, pos);
+    respondNoise = noiseToken.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+  }
+
   const respond: RespondStatement = {
     statusCode,
     withFile: respondWithFile,
+    noise: respondNoise,
   };
 
   if (peek(tokens, pos.value) !== undefined) {

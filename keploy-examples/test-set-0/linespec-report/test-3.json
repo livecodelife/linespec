@@ -1,0 +1,24 @@
+{
+  "name": "test-3",
+  "pass": false,
+  "reason": "status 404 ≠ 200",
+  "expectedStatus": 200,
+  "actualStatus": 404,
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/users/3",
+    "header": {
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Host": "localhost:3000",
+      "Postman-Token": "72199351-231a-4066-b1aa-8846a5b9f7c4",
+      "User-Agent": "PostmanRuntime/7.48.0"
+    },
+    "body": "",
+    "timestamp": "2026-02-21T18:31:04.229Z"
+  }
+}

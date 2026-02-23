@@ -216,6 +216,29 @@ Compiled To:
 
 RESPOND does NOT generate a KMock.
 
+### NOISE (optional)
+
+Syntax:
+
+```
+RESPOND HTTP:<status>
+WITH {{response.yaml}}
+NOISE
+  body.<field_name>
+  body.<field_name>
+```
+
+Rules:
+
+- `NOISE` must appear after `RESPOND` (and after `WITH` if present)
+- Each indented line names one field path to exclude from comparison
+- Field paths use dot notation matching the JSON response body (e.g. `body.created_at`)
+- `NOISE` is optional; omit it when no fields need filtering
+
+Compiled To:
+
+- `KTest.spec.assertions.noise` — each field becomes a key with an empty array value
+
 ---
 
 # Template Referencing
@@ -274,6 +297,9 @@ WITH {{create_todo_message.yaml}}
 
 RESPOND HTTP:201
 WITH {{saved_todo.yaml}}
+NOISE
+  body.created_at
+  body.updated_at
 ```
 
 ---

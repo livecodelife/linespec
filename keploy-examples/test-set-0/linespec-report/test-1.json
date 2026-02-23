@@ -1,0 +1,26 @@
+{
+  "name": "test-1",
+  "pass": false,
+  "reason": "status 422 ≠ 201",
+  "expectedStatus": 201,
+  "actualStatus": 422,
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/users",
+    "header": {
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Content-Length": "86",
+      "Content-Type": "application/json",
+      "Host": "localhost:3000",
+      "Postman-Token": "9dae9688-e902-4be7-ae7e-75cf238b86b5",
+      "User-Agent": "PostmanRuntime/7.48.0"
+    },
+    "body": "{\n  \"name\": \"User One\",\n  \"email\": \"user_one@example.com\",\n  \"password\": \"something\"\n}",
+    "timestamp": "2026-02-21T18:31:03.784Z"
+  }
+}

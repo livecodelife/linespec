@@ -9,6 +9,7 @@ import {
   KMockHttpSpec,
   KMockEventSpec,
   PayloadFile,
+  KTestAssertions,
 } from './types';
 
 export interface CompileOptions {
@@ -107,29 +108,13 @@ function buildKTest(spec: TestSpec, payloads: Map<string, PayloadFile>): KTest {
     ? { 'Content-Type': 'application/json; charset=utf-8' }
     : {};
 
-  let assertions: { noise: { 'body.created_at': string[]; 'body.updated_at': string[] } } | undefined;
-  if (respond.withFile) {
-    const payload = payloads.get(respond.withFile);
-    if (payload) {
-      const checkObject = (obj: unknown): boolean => {
-        if (Array.isArray(obj)) {
-          return obj.some((item) => checkObject(item));
-        }
-        if (obj && typeof obj === 'object') {
-          const keys = Object.keys(obj as object);
-          return keys.includes('created_at') || keys.includes('updated_at');
-        }
-        return false;
-      };
-      if (checkObject(payload.parsed)) {
-        assertions = {
-          noise: {
-            'body.created_at': [],
-            'body.updated_at': [],
-          },
-        };
-      }
+  let assertions: KTestAssertions | undefined;
+  if (respond.noise && respond.noise.length > 0) {
+    const noiseRecord: Record<string, string[]> = {};
+    for (const key of respond.noise) {
+      noiseRecord[key] = [];
     }
+    assertions = { noise: noiseRecord };
   }
 
   const ktest: KTest = {

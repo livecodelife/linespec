@@ -36,7 +36,7 @@ interface TestCase {
   mockCount: number;
   hasRequestBody: boolean;
   hasResponseBody: boolean;
-  hasTimestamps: boolean;
+  noiseFields?: string[];
   tableName: string;
   payloadFiles?: string[];
 }
@@ -94,7 +94,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: true,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
     payloadFiles: ['mysql_user_write_result.yaml'],
   },
@@ -107,7 +107,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
     payloadFiles: ['mysql_users_read_result.yaml'],
   },
@@ -120,7 +120,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
     payloadFiles: ['mysql_user_single_read_result.yaml'],
   },
@@ -133,7 +133,7 @@ const testCases: TestCase[] = [
     mockCount: 2,
     hasRequestBody: true,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
     payloadFiles: ['mysql_user_single_read_result.yaml', 'mysql_user_update_result.yaml'],
   },
@@ -146,7 +146,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: true,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
     payloadFiles: ['mysql_todo_write_result.yaml'],
   },
@@ -159,7 +159,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
     payloadFiles: ['mysql_todos_read_result.yaml'],
   },
@@ -172,7 +172,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
     payloadFiles: ['mysql_todos_read_result.yaml'],
   },
@@ -185,7 +185,7 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
     payloadFiles: ['mysql_todo_single_read_result.yaml'],
   },
@@ -198,7 +198,7 @@ const testCases: TestCase[] = [
     mockCount: 2,
     hasRequestBody: true,
     hasResponseBody: true,
-    hasTimestamps: true,
+    noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
     payloadFiles: ['mysql_todo_single_read_result.yaml', 'mysql_todo_update_result.yaml'],
   },
@@ -211,7 +211,6 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: false,
-    hasTimestamps: false,
     tableName: 'todos',
     payloadFiles: ['mysql_delete_result.yaml'],
   },
@@ -224,7 +223,6 @@ const testCases: TestCase[] = [
     mockCount: 1,
     hasRequestBody: false,
     hasResponseBody: false,
-    hasTimestamps: false,
     tableName: 'users',
     payloadFiles: ['mysql_delete_result.yaml'],
   },
@@ -280,13 +278,16 @@ describe('Integration Tests', () => {
           expect(respBody).toBe('');
         }
 
-        if (tc.hasTimestamps) {
+        if (tc.noiseFields && tc.noiseFields.length > 0) {
           expect(spec.assertions).toBeDefined();
           const assertions = spec.assertions as Record<string, unknown>;
           expect(assertions.noise).toBeDefined();
           const noise = assertions.noise as Record<string, unknown>;
-          expect(noise['body.created_at']).toBeDefined();
-          expect(noise['body.updated_at']).toBeDefined();
+          for (const field of tc.noiseFields) {
+            expect(noise[field]).toBeDefined();
+          }
+        } else {
+          expect(spec.assertions).toBeUndefined();
         }
 
         const mocks = loadKMocks(tempDir);

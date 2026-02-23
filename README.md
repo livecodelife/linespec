@@ -148,10 +148,14 @@ Specifies the HTTP response (required, must be last):
 ```
 RESPOND HTTP:<STATUS_CODE>
 WITH {{payload/response.yaml}}
+NOISE
+  body.<field>
+  body.<field>
 ```
 
 - `<STATUS_CODE>` - HTTP status code (200, 201, 400, 500, etc.)
 - `WITH` (optional) - Path to a YAML file containing the response body
+- `NOISE` (optional) - Lists response body fields to ignore during comparison; each indented line is one dot-notation field path
 
 ## Example
 
@@ -164,6 +168,9 @@ WITH {{payloads/mysql_user_write_input.yaml}}
 RETURNS {{payloads/mysql_user_write_result.yaml}}
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}
+NOISE
+  body.created_at
+  body.updated_at
 ```
 
 This generates:

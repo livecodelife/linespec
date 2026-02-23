@@ -372,6 +372,10 @@ function handleConnection(
   queue: KMockMysqlSpec[]
 ): void {
   const upstreamSocket = net.createConnection(upstreamPort, upstreamHost);
+  
+  upstreamSocket.on('connect', () => {
+    console.error(`[mysql-proxy] Connected to upstream ${upstreamHost}:${upstreamPort}`);
+  });
 
   const connState: ConnectionState = {
     phase: 'handshake',
@@ -499,6 +503,6 @@ export function startProxy(
     });
 
     server.on('error', reject);
-    server.listen(listenPort, () => resolve(server));
+    server.listen(listenPort, '0.0.0.0', () => resolve(server));
   });
 }
