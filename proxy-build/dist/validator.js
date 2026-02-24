@@ -62,7 +62,14 @@ function validate(spec, baseDir) {
             key = `HTTP:${expect.method}:${expect.url}`;
         }
         else if (expect.channel === 'READ_MYSQL' || expect.channel === 'WRITE_MYSQL' || expect.channel === 'WRITE_POSTGRESQL') {
-            key = `${expect.channel}:${expect.table}`;
+            // Include SQL query in key if USING_SQL is present to allow multiple operations on same table
+            const sql = expect.sql;
+            if (sql) {
+                key = `${expect.channel}:${expect.table}:${sql}`;
+            }
+            else {
+                key = `${expect.channel}:${expect.table}`;
+            }
         }
         else {
             key = `EVENT:${expect.topic}`;

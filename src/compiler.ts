@@ -342,16 +342,197 @@ function buildKMocks(spec: TestSpec, payloads: Map<string, PayloadFile>): KMock[
       const returnsFile = (expect as any).returnsFile;
       if (returnsFile && payloads.has(returnsFile)) {
         const payload = payloads.get(returnsFile)!;
-        mysqlSpec.responses.push({
-          header: {
+        if (responseOp === 'TextResultSet' && typeof payload.parsed === 'object' && payload.parsed !== null && 'rows' in payload.parsed) {
+          const rows = payload.parsed.rows as unknown[];
+          const parsed = payload.parsed as Record<string, unknown>;
+          
+          // Check if payload already has valid column definitions (like mysql_empty_result.yaml)
+          const existingColumnCount = parsed.columnCount as number | undefined;
+          const existingColumns = parsed.columns as unknown[] | undefined;
+          
+          if (existingColumnCount !== undefined && existingColumns && Array.isArray(existingColumns) && existingColumns.length > 0) {
+            // Use the custom payload format directly (preserving column definitions)
+            mysqlSpec.responses.push({
+              header: {
+                header: {
+                  payload_length: 0,
+                  sequence_id: 1,
+                },
+                packet_type: responseOp,
+              },
+              message: parsed,
+            });
+          } else if (Array.isArray(rows) && rows.length > 0) {
+            const firstRow = rows[0] as Record<string, unknown>;
+            let seqId = 2; // Column definitions start at sequence_id 2 (after column count at 1)
+            
+            const columns = Object.keys(firstRow).map(col => {
+              // Infer MySQL column type from column name and value - matching Keploy format
+              const value = firstRow[col];
+              let colType = 253; // Default to VAR_STRING
+              let colLength = 1020;
+              let colFlags = 0;
+              let colCharset = 255;
+              let colDecimals = 0;
+              
+              if (col === 'id') {
+                colType = 8; // MYSQL_TYPE_LONGLONG (BIGINT)
+                colLength = 20;
+                colFlags = 16899; // NOT_NULL + PRI_KEY + AUTO_INCREMENT
+                colCharset = 63; // Binary
+              } else if (col === 'user_id' || col.endsWith('_id')) {
+                colType = 8; // MYSQL_TYPE_LONGLONG (BIGINT)
+                colLength = 20;
+                colFlags = 20489; // NOT_NULL + KEY + UNSIGNED
+                colCharset = 63; // Binary
+              } else if (col === 'completed') {
+                colType = 1; // MYSQL_TYPE_TINY
+                colLength = 1;
+                colFlags = 0;
+                colCharset = 63; // Binary
+              } else if (col === 'created_at' || col === 'updated_at' || col.endsWith('_at')) {
+                colType = 12; // MYSQL_TYPE_DATETIME
+                colLength = 26;
+                colFlags = 4225; // NOT_NULL + BINARY
+                colCharset = 63; // Binary
+                colDecimals = 6;
+              } else if (col === 'description') {
+                colType = 252; // MYSQL_TYPE_LONG_BLOB (TEXT)
+                colLength = 262140;
+                colFlags = 16; // BLOB_FLAG
+                colCharset = 255;
+              } else if (typeof value === 'string' && value.length > 255) {
+                colType = 252; // MYSQL_TYPE_LONG_BLOB (TEXT)
+                colLength = 262140;
+                colFlags = 16; // BLOB_FLAG
+                colCharset = 255;
+              } else if (typeof value === 'string') {
+                colType = 253; // MYSQL_TYPE_VAR_STRING (VARCHAR)
+                colLength = 1020;
+                colFlags = 0;
+                colCharset = 255;
+              }
+              
+              const colDef = {
+                header: {
+                  payload_length: 0, // Will be calculated by proxy
+                  sequence_id: seqId++,
+                },
+                catalog: 'def',
+                schema: expect.table ? `todo_api_development` : '',
+                table: expect.table,
+                orgTable: expect.table,
+                name: col,
+                orgName: col,
+                fixed_length: 12,
+                character_set: colCharset,
+                column_length: colLength,
+                type: colType,
+                flags: colFlags,
+                decimals: colDecimals,
+                filler: [0, 0],
+                defaultValue: '',
+              };
+              return colDef;
+            });
+            
+            // Convert rows to Keploy format with headers and values array
+            let rowSeqId = seqId + 1; // Rows start after columns (plus EOF)
+            const keployRows = rows.map((row, index) => {
+              const rowData = row as Record<string, unknown>;
+                const values = Object.keys(rowData).map(col => {
+                  const val = rowData[col];
+                  const colDef = columns.find(c => c.name === col);
+                  // Convert value to string, with special handling for booleans (MySQL TINYINT is "0" or "1")
+                  let strValue: string;
+                  if (typeof val === 'boolean') {
+                    strValue = val ? '1' : '0';
+                  } else {
+                    strValue = String(val);
+                  }
+                  return {
+                    type: colDef?.type ?? 253,
+                    name: col,
+                    value: strValue,
+                    unsigned: false,
+                  };
+                });
+              
+              return {
+                header: {
+                  payload_length: 0, // Will be calculated
+                  sequence_id: rowSeqId++,
+                },
+                values: values,
+              };
+            });
+            
+            mysqlSpec.responses.push({
+              header: {
+                header: {
+                  payload_length: 0,
+                  sequence_id: 1,
+                },
+                packet_type: responseOp,
+              },
+              message: {
+                columnCount: columns.length,
+                columns: columns,
+                eofAfterColumns: [5, 0, 0, seqId, 254, 0, 0, 34, 0], // EOF after columns (seqId is now at 9 after 7 columns starting at 2)
+                rows: keployRows,
+                FinalResponse: {
+                  data: [5, 0, 0, rowSeqId, 254, 0, 0, 34, 0], // Final EOF uses rowSeqId which is now at the next sequence after all rows
+                  type: 'EOF',
+                },
+              },
+            });
+          } else {
+            // Empty result set - check if payload has custom format with columns
+            const parsed = payload.parsed as Record<string, unknown>;
+            const existingColumnCount = parsed.columnCount as number | undefined;
+            const existingColumns = parsed.columns as unknown[] | undefined;
+            
+            if (existingColumnCount !== undefined && existingColumns && Array.isArray(existingColumns)) {
+              // Use the custom payload format (preserving column definitions for empty result)
+              mysqlSpec.responses.push({
+                header: {
+                  header: {
+                    payload_length: 0,
+                    sequence_id: 1,
+                  },
+                  packet_type: responseOp,
+                },
+                message: parsed,
+              });
+            } else {
+              // Legacy empty result format (no column definitions)
+              mysqlSpec.responses.push({
+                header: {
+                  header: {
+                    payload_length: 0,
+                    sequence_id: 1,
+                  },
+                  packet_type: responseOp,
+                },
+                message: {
+                  columnCount: 0,
+                  rows: [],
+                },
+              });
+            }
+          }
+        } else {
+          mysqlSpec.responses.push({
             header: {
-              payload_length: 0,
-              sequence_id: 1,
+              header: {
+                payload_length: 0,
+                sequence_id: 1,
+              },
+              packet_type: responseOp,
             },
-            packet_type: responseOp,
-          },
-          message: payload.parsed,
-        });
+            message: payload.parsed,
+          });
+        }
       }
 
       mocks.push({
@@ -468,6 +649,12 @@ export function compile(spec: TestSpec, options: CompileOptions): void {
   if (kmocks.length > 0) {
     const mockDocs = kmocks.map((mock) => yaml.dump(mock, { lineWidth: -1, noRefs: true }));
     const mocksContent = mockDocs.map((d) => '---\n' + d).join('');
-    fs.writeFileSync(path.join(outDir, 'mocks.yaml'), mocksContent);
+    // Append to mocks.yaml instead of overwriting
+    const mocksPath = path.join(outDir, 'mocks.yaml');
+    if (fs.existsSync(mocksPath)) {
+      fs.appendFileSync(mocksPath, mocksContent);
+    } else {
+      fs.writeFileSync(mocksPath, mocksContent);
+    }
   }
 }

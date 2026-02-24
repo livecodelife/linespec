@@ -1,6 +1,9 @@
 TEST test-6
 RECEIVE HTTP:GET http://localhost:3000/todos
 EXPECT READ:MYSQL todos
+USING_SQL """
+SELECT `todos`.* FROM `todos`
+"""
 RETURNS {{payloads/mysql_todos_read_result.yaml}}
 RESPOND HTTP:200
 WITH {{payloads/todos_list_resp.yaml}}

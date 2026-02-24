@@ -426,6 +426,18 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
       const dbUpstreamPort = getDbUpstreamPort(composeParsed);
 
       process.stdout.write('→ Starting db service...\n');
+      
+      // Clean up previous database state to ensure fresh start
+      try {
+        await spawnProcess('docker', [
+          'compose',
+          '-f', options.composePath!,
+          'down', '-v'
+        ]);
+      } catch {
+        // Ignore errors - containers might not exist
+      }
+      
       await spawnProcess('docker', [
         'compose',
         '-f', options.composePath!,
@@ -529,7 +541,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
       }
       
       await spawnProcess('docker', [
-        'build', '-t', proxyImageName, '-f', proxyBuildDockerfile, proxyBuildDir
+        'build', '--no-cache', '-t', proxyImageName, '-f', proxyBuildDockerfile, proxyBuildDir
       ]);
 
       const proxyContainerName = 'linespec-proxy';

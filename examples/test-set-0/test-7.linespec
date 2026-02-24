@@ -1,7 +1,20 @@
 TEST test-7
 RECEIVE HTTP:GET http://localhost:3000/todos/user/3
+
+# Rails validates the user exists first
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
+"""
+RETURNS {{payloads/mysql_user_single_read_result.yaml}}
+
+# Then queries todos for that user
 EXPECT READ:MYSQL todos
+USING_SQL """
+SELECT `todos`.* FROM `todos` WHERE `todos`.`user_id` = 3
+"""
 RETURNS {{payloads/mysql_todos_read_result.yaml}}
+
 RESPOND HTTP:200
 WITH {{payloads/todos_list_resp.yaml}}
 NOISE

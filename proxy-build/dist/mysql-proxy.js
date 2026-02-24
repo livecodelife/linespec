@@ -35,6 +35,12 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startProxy = startProxy;
 const net = __importStar(require("net"));
+// Debug logging helper
+function logPacketBytes(label, data, maxBytes = 200) {
+    const hex = data.slice(0, Math.min(data.length, maxBytes)).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
+    const truncated = data.length > maxBytes ? `... (${data.length} bytes total)` : '';
+    console.error(`[mysql-proxy] ${label}: ${hex}${truncated}`);
+}
 function readPackets(stateBuf) {
     const packets = [];
     let offset = 0;
@@ -181,18 +187,45 @@ function encodeColumnDefPayload(col) {
         buffers[buffers.length - 1][0] = columnFlags & 0xff;
         buffers[buffers.length - 1][1] = (columnFlags >> 8) & 0xff;
     }
-    buffers.push(Buffer.from([0x00]));
-    buffers.push(Buffer.from([0x00]));
+    // Decimals (1 byte)
+    const decimals = col.decimals ?? 0;
+    buffers.push(Buffer.from([decimals & 0xff]));
+    // Filler (2 bytes)
+    buffers.push(Buffer.from([0x00, 0x00]));
     return Buffer.concat(buffers);
 }
-function encodeTextRowPayload(row) {
+function encodeTextRowPayload(row, columnNames) {
     const buffers = [];
-    for (const val of Object.values(row)) {
-        if (val === null) {
-            buffers.push(Buffer.from([0xfb]));
+    // If columnNames is provided, encode in that order
+    if (columnNames && columnNames.length > 0) {
+        for (const colName of columnNames) {
+            const val = row[colName];
+            if (val === null) {
+                buffers.push(Buffer.from([0xfb]));
+            }
+            else if (typeof val === 'boolean') {
+                // MySQL booleans are TINYINT(1), encode as "0" or "1"
+                console.error('[mysql-proxy] encodeTextRowPayload: encoding boolean', colName, '=', val, 'as', val ? '1' : '0');
+                buffers.push(encodeLenencStr(val ? '1' : '0'));
+            }
+            else {
+                buffers.push(encodeLenencStr(String(val)));
+            }
         }
-        else {
-            buffers.push(encodeLenencStr(String(val)));
+    }
+    else {
+        // Fallback to object values order
+        for (const val of Object.values(row)) {
+            if (val === null) {
+                buffers.push(Buffer.from([0xfb]));
+            }
+            else if (typeof val === 'boolean') {
+                // MySQL booleans are TINYINT(1), encode as "0" or "1"
+                buffers.push(encodeLenencStr(val ? '1' : '0'));
+            }
+            else {
+                buffers.push(encodeLenencStr(String(val)));
+            }
         }
     }
     return Buffer.concat(buffers);
@@ -202,29 +235,41 @@ function serializeResponses(responses, startSequenceId) {
     let seqId = startSequenceId;
     for (const resp of responses) {
         const packetType = resp.header.packet_type;
+        console.error('[mysql-proxy] Processing response packet_type:', packetType);
         const useSequenceId = resp.header.header.sequence_id ?? seqId;
         let payload;
         if (packetType === 'OK') {
             const msg = resp.message;
             payload = encodeOkPayload(msg);
-            buffers.push(writePacket(useSequenceId, payload));
+            const packet = writePacket(useSequenceId, payload);
+            logPacketBytes(`OK packet seq=${useSequenceId}`, packet);
+            buffers.push(packet);
             seqId = useSequenceId + 1;
             continue;
         }
         else if (packetType === 'TextResultSet') {
             const msg = resp.message;
             const columnCount = msg.columnCount ?? msg.column_count ?? 0;
+            console.error('[mysql-proxy] TextResultSet: columnCount=', columnCount);
             payload = encodeLenenc(columnCount);
-            buffers.push(writePacket(useSequenceId, payload));
+            const countPacket = writePacket(useSequenceId, payload);
+            logPacketBytes(`Column count packet seq=${useSequenceId}`, countPacket);
+            buffers.push(countPacket);
             seqId = useSequenceId + 1;
             if (msg.columns && Array.isArray(msg.columns)) {
+                console.error('[mysql-proxy] TextResultSet: encoding', msg.columns.length, 'columns');
                 for (const col of msg.columns) {
+                    console.error('[mysql-proxy] TextResultSet: encoding column', col.name, 'type=', col.type);
                     const colPayload = encodeColumnDefPayload(col);
-                    buffers.push(writePacket(seqId++, colPayload));
+                    const colPacket = writePacket(seqId, colPayload);
+                    logPacketBytes(`Column def ${col.name} seq=${seqId}`, colPacket, 100);
+                    buffers.push(colPacket);
+                    seqId++;
                 }
             }
             const eofAfterColumns = msg.eofAfterColumns ?? msg.eof_after_columns;
             if (eofAfterColumns) {
+                // eofAfterColumns already includes the full packet with header, don't wrap in writePacket
                 let eofBuf;
                 if (Array.isArray(eofAfterColumns)) {
                     eofBuf = Buffer.from(eofAfterColumns);
@@ -232,9 +277,16 @@ function serializeResponses(responses, startSequenceId) {
                 else {
                     eofBuf = Buffer.from(eofAfterColumns.split(',').map(b => parseInt(b, 16)));
                 }
-                buffers.push(writePacket(seqId++, eofBuf));
+                logPacketBytes(`EOF after columns (raw)`, eofBuf);
+                buffers.push(eofBuf);
+                seqId++;
             }
             if (msg.rows && Array.isArray(msg.rows)) {
+                console.error('[mysql-proxy] TextResultSet: encoding', msg.rows.length, 'rows');
+                // Get column names in order for proper row encoding
+                const columnNames = msg.columns && Array.isArray(msg.columns)
+                    ? msg.columns.map((c) => c.name)
+                    : undefined;
                 for (const row of msg.rows) {
                     if ('values' in row && Array.isArray(row.values)) {
                         const values = row.values;
@@ -244,25 +296,20 @@ function serializeResponses(responses, startSequenceId) {
                                 rowData[v.name] = v.value;
                             }
                         }
-                        const rowPayload = encodeTextRowPayload(rowData);
-                        buffers.push(writePacket(seqId++, rowPayload));
-                    }
-                    else {
-                        const rowPayload = encodeTextRowPayload(row);
-                        buffers.push(writePacket(seqId++, rowPayload));
+                        const rowPayload = encodeTextRowPayload(rowData, columnNames);
+                        const rowPacket = writePacket(seqId, rowPayload);
+                        logPacketBytes(`Row packet seq=${seqId}`, rowPacket, 100);
+                        buffers.push(rowPacket);
+                        seqId++;
                     }
                 }
             }
-            if (msg.data) {
-                let dataBuf;
-                if (Array.isArray(msg.data)) {
-                    dataBuf = Buffer.from(msg.data);
-                }
-                else {
-                    dataBuf = Buffer.from(msg.data.split(',').map(b => parseInt(b, 16)));
-                }
-                buffers.push(writePacket(seqId++, dataBuf));
-            }
+            // Final EOF
+            const finalEofBuf = Buffer.from([0xfe, 0x00, 0x00, 0x00, 0x00]);
+            const finalEofPacket = writePacket(seqId, finalEofBuf);
+            logPacketBytes(`Final EOF packet seq=${seqId}`, finalEofPacket);
+            buffers.push(finalEofPacket);
+            seqId++;
             continue;
         }
         else if (packetType === 'ERR') {
@@ -323,9 +370,48 @@ function findAndConsumeMock(queue, requestOperation, query) {
                 const msg = req.message;
                 if (typeof msg === 'object' && msg !== null && 'query' in msg) {
                     const mockQuery = msg.query;
-                    if (query.includes(mockQuery) || mockQuery.includes(query)) {
-                        queue.splice(i, 1);
+                    const mockLower = mockQuery.toLowerCase();
+                    const queryLower = query.toLowerCase();
+                    // Check if this is a write operation (should be consumed/removed after use)
+                    const isWriteOp = mockLower.startsWith('insert into ') ||
+                        mockLower.startsWith('update ') ||
+                        mockLower.startsWith('delete from ') ||
+                        mockLower.startsWith('begin') ||
+                        mockLower.startsWith('commit') ||
+                        mockLower.startsWith('rollback');
+                    // Try exact match first
+                    if (queryLower === mockLower) {
+                        if (isWriteOp) {
+                            queue.splice(i, 1);
+                        }
                         return spec;
+                    }
+                    // Fall back to prefix matching for INSERT/UPDATE/DELETE with dynamic values
+                    if (mockLower.startsWith('insert into ') || mockLower.startsWith('update ') || mockLower.startsWith('delete from ')) {
+                        // Extract table name from mock query (with optional backticks)
+                        let mockPrefix = '';
+                        if (mockLower.startsWith('insert into ')) {
+                            const tableMatch = mockLower.match(/^insert into\s+`?(\w+)`?/);
+                            if (tableMatch)
+                                mockPrefix = `insert into \`${tableMatch[1]}\``;
+                        }
+                        else if (mockLower.startsWith('update ')) {
+                            const tableMatch = mockLower.match(/^update\s+`?(\w+)`?/);
+                            if (tableMatch)
+                                mockPrefix = `update \`${tableMatch[1]}\``;
+                        }
+                        else if (mockLower.startsWith('delete from ')) {
+                            const tableMatch = mockLower.match(/^delete from\s+`?(\w+)`?/);
+                            if (tableMatch)
+                                mockPrefix = `delete from \`${tableMatch[1]}\``;
+                        }
+                        if (mockPrefix && queryLower.startsWith(mockPrefix)) {
+                            console.error(`[mysql-proxy] Pattern match for ${requestOperation}: ${mockPrefix}* matched query`);
+                            if (isWriteOp) {
+                                queue.splice(i, 1);
+                            }
+                            return spec;
+                        }
                     }
                 }
             }
@@ -404,7 +490,8 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             const { packets, remainder } = readPackets(connState.serverBuf);
             connState.serverBuf = remainder;
             for (const packet of packets) {
-                if (packet.seqId >= 6 && packet.payload[0] === 0x00) {
+                // Looking for OK packet (0x00) to signal end of handshake
+                if (packet.payload[0] === 0x00 && packet.payload.length > 5) {
                     connState.phase = 'command';
                     break;
                 }
@@ -445,10 +532,13 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             if (commandByte === 0x0e) {
                 const mock = findAndConsumeMock(queue, 'COM_PING');
                 if (mock) {
+                    console.error('[mysql-proxy] Using mock for COM_PING');
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
+                    logPacketBytes('SENDING COM_PING MOCK RESPONSE', response);
                     clientSocket.write(response);
                 }
                 else {
+                    console.error('[mysql-proxy] Passing through COM_PING to db');
                     passthroughState.active = true;
                     passthroughState.responsePhase = 'first';
                     passthroughState.columnsRemaining = 0;
@@ -462,10 +552,13 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
                 const query = packet.payload.slice(1).toString('utf8');
                 const mock = findAndConsumeMock(queue, 'COM_QUERY', query);
                 if (mock) {
+                    console.error('[mysql-proxy] Using mock for: ' + query);
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
+                    logPacketBytes('SENDING COM_QUERY MOCK RESPONSE', response);
                     clientSocket.write(response);
                 }
                 else {
+                    console.error('[mysql-proxy] Passing through to db: ' + query);
                     passthroughState.active = true;
                     passthroughState.responsePhase = 'first';
                     passthroughState.columnsRemaining = 0;
@@ -487,6 +580,14 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
 function startProxy(mocks, upstreamHost, upstreamPort, listenPort) {
     return new Promise((resolve, reject) => {
         const queue = buildMockQueue(mocks);
+        console.error('[mysql-proxy] Loaded ' + queue.length + ' mocks into queue');
+        for (let i = 0; i < queue.length; i++) {
+            const q = queue[i];
+            const req = q.requests[0];
+            if (req && typeof req.message === 'object' && 'query' in req.message) {
+                console.error('[mysql-proxy] Queue[' + i + ']: ' + req.message.query);
+            }
+        }
         const server = net.createServer((clientSocket) => {
             handleConnection(clientSocket, upstreamHost, upstreamPort, queue);
         });

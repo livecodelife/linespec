@@ -1,6 +1,9 @@
 TEST test-8
 RECEIVE HTTP:GET http://localhost:3000/todos/3
 EXPECT READ:MYSQL todos
+USING_SQL """
+SELECT `todos`.* FROM `todos` WHERE `todos`.`id` = 3 LIMIT 1
+"""
 RETURNS {{payloads/mysql_todo_single_read_result.yaml}}
 RESPOND HTTP:200
 WITH {{payloads/todo_single_resp.yaml}}
