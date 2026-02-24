@@ -1,0 +1,32 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: test-11
+spec:
+  metadata: {}
+  req:
+    method: DELETE
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/users/3
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+    body: ''
+    timestamp: '2026-02-24T14:56:14.906Z'
+  resp:
+    status_code: 204
+    header: {}
+    body: ''
+    status_message: No Content
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-24T14:56:14.906Z'
+  objects: []
+  created: 1771944974
+  app_port: 3000
+curl: |
+  curl --request DELETE \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --header 'Host: localhost:3000' \

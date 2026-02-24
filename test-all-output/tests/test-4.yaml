@@ -1,0 +1,51 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: test-4
+spec:
+  metadata: {}
+  req:
+    method: PATCH
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/users/3
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+      Content-Length: '94'
+    body: |-
+      {
+        "name": "string",
+        "email": "Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy",
+        "password": "string"
+      }
+    timestamp: '2026-02-24T14:56:14.912Z'
+  resp:
+    status_code: 200
+    header:
+      Content-Type: application/json; charset=utf-8
+    body: '{"name":"string","email":"Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy","password_digest":"$2a$12$mdJw5dIqhmneLSqqCvj8CuiHH11Zt70gonZkthImqhpCKzpiceHqy","id":3,"created_at":"2026-02-21T18:31:04.179Z","updated_at":"2026-02-21T18:31:04.498Z"}'
+    status_message: OK
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-24T14:56:14.912Z'
+  objects: []
+  assertions:
+    noise:
+      id: []
+      password_digest: []
+      body.created_at: []
+      body.updated_at: []
+  created: 1771944974
+  app_port: 3000
+curl: |-
+  curl --request PATCH \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --header 'Host: localhost:3000' \
+  --header 'Content-Length: 94' \
+  --data "{
+    "name": "string",
+    "email": "Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy",
+    "password": "string"
+  }"

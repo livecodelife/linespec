@@ -356,8 +356,12 @@ function buildMockQueue(mocks) {
     return queue;
 }
 function findAndConsumeMock(queue, requestOperation, query) {
-    for (let i = 0; i < queue.length; i++) {
-        const spec = queue[i];
+    console.error(`[mysql-proxy] findAndConsumeMock called with operation=${requestOperation}, query="${query}"`);
+    console.error(`[mysql-proxy] Queue length: ${queue.length}`);
+    // Create a snapshot of queue indices to avoid race conditions during iteration
+    // when the queue is modified by concurrent connections
+    const queueSnapshot = queue.map((spec, index) => ({ spec, index }));
+    for (const { spec, index: i } of queueSnapshot) {
         if (spec.metadata.requestOperation !== requestOperation) {
             continue;
         }
@@ -372,41 +376,104 @@ function findAndConsumeMock(queue, requestOperation, query) {
                     const mockQuery = msg.query;
                     const mockLower = mockQuery.toLowerCase();
                     const queryLower = query.toLowerCase();
+                    console.error(`[mysql-proxy] Checking mock query: "${mockQuery}"`);
+                    // Normalize queries for matching (remove backticks for comparison)
+                    const normalizedMock = mockLower.replace(/`/g, '');
+                    const normalizedQuery = queryLower.replace(/`/g, '');
+                    console.error(`[mysql-proxy] Trying exact match:`);
+                    console.error(`[mysql-proxy]   normalizedMock: "${normalizedMock}"`);
+                    console.error(`[mysql-proxy]   normalizedQuery: "${normalizedQuery}"`);
                     // Check if this is a write operation (should be consumed/removed after use)
-                    const isWriteOp = mockLower.startsWith('insert into ') ||
-                        mockLower.startsWith('update ') ||
-                        mockLower.startsWith('delete from ') ||
-                        mockLower.startsWith('begin') ||
-                        mockLower.startsWith('commit') ||
-                        mockLower.startsWith('rollback');
-                    // Try exact match first
-                    if (queryLower === mockLower) {
+                    const isWriteOp = normalizedMock.startsWith('insert into ') ||
+                        normalizedMock.startsWith('update ') ||
+                        normalizedMock.startsWith('delete from ') ||
+                        normalizedMock.startsWith('begin') ||
+                        normalizedMock.startsWith('commit') ||
+                        normalizedMock.startsWith('rollback');
+                    // Try exact match first (normalized)
+                    if (normalizedQuery === normalizedMock) {
+                        console.error(`[mysql-proxy] EXACT MATCH found for query: "${query}"`);
                         if (isWriteOp) {
                             queue.splice(i, 1);
                         }
                         return spec;
                     }
-                    // Fall back to prefix matching for INSERT/UPDATE/DELETE with dynamic values
-                    if (mockLower.startsWith('insert into ') || mockLower.startsWith('update ') || mockLower.startsWith('delete from ')) {
-                        // Extract table name from mock query (with optional backticks)
-                        let mockPrefix = '';
-                        if (mockLower.startsWith('insert into ')) {
-                            const tableMatch = mockLower.match(/^insert into\s+`?(\w+)`?/);
-                            if (tableMatch)
-                                mockPrefix = `insert into \`${tableMatch[1]}\``;
+                    // For SELECT queries, match by table name appearing in the query (but not schema queries)
+                    if (normalizedMock.startsWith('select ')) {
+                        // Skip schema/infrastructure queries
+                        if (normalizedQuery.includes('information_schema') ||
+                            normalizedQuery.includes('show full fields') ||
+                            normalizedQuery.includes('show ')) {
+                            continue;
                         }
-                        else if (mockLower.startsWith('update ')) {
-                            const tableMatch = mockLower.match(/^update\s+`?(\w+)`?/);
-                            if (tableMatch)
-                                mockPrefix = `update \`${tableMatch[1]}\``;
+                        // First check if queries have the same structure (both with WHERE or both without)
+                        const mockHasWhere = normalizedMock.includes(' where ');
+                        const queryHasWhere = normalizedQuery.includes(' where ');
+                        // If structure differs, skip this mock (let another mock match)
+                        if (mockHasWhere !== queryHasWhere) {
+                            console.error(`[mysql-proxy] WHERE clause mismatch - mockHasWhere=${mockHasWhere}, queryHasWhere=${queryHasWhere}`);
+                            continue;
                         }
-                        else if (mockLower.startsWith('delete from ')) {
-                            const tableMatch = mockLower.match(/^delete from\s+`?(\w+)`?/);
-                            if (tableMatch)
-                                mockPrefix = `delete from \`${tableMatch[1]}\``;
+                        // CRITICAL: SELECT mocks should only match SELECT queries, not DELETE/INSERT/UPDATE
+                        // Check that the incoming query is actually a SELECT
+                        if (!normalizedQuery.startsWith('select ')) {
+                            console.error(`[mysql-proxy] Query type mismatch - mock is SELECT but query is not: "${normalizedQuery.substring(0, 50)}"`);
+                            continue;
                         }
-                        if (mockPrefix && queryLower.startsWith(mockPrefix)) {
-                            console.error(`[mysql-proxy] Pattern match for ${requestOperation}: ${mockPrefix}* matched query`);
+                        // If both have WHERE, check if they're for the same column (basic check)
+                        if (mockHasWhere && queryHasWhere) {
+                            // Extract the column after WHERE (e.g., "where users.id" or "where email")
+                            const mockWhereCol = normalizedMock.match(/where\s+[`\w]+\.?`?(\w+)/);
+                            const queryWhereCol = normalizedQuery.match(/where\s+[`\w]+\.?`?(\w+)/);
+                            if (mockWhereCol && queryWhereCol && mockWhereCol[1] !== queryWhereCol[1]) {
+                                // Different WHERE columns, skip this mock
+                                console.error(`[mysql-proxy] Different WHERE columns - mock: ${mockWhereCol[1]}, query: ${queryWhereCol[1]}`);
+                                continue;
+                            }
+                        }
+                        // Extract table name from mock query
+                        const tableMatch = normalizedMock.match(/from\s+(\w+)/);
+                        if (tableMatch) {
+                            const tableName = tableMatch[1];
+                            // Check if real query references this table
+                            const hasTable = normalizedQuery.includes(`from ${tableName}`) ||
+                                normalizedQuery.includes(`join ${tableName}`);
+                            if (hasTable) {
+                                console.error(`[mysql-proxy] TABLE MATCH for ${requestOperation}: ${tableName}`);
+                                return spec;
+                            }
+                        }
+                    }
+                    // For INSERT/UPDATE/DELETE, match by operation + table name
+                    if (normalizedMock.startsWith('insert into ') ||
+                        normalizedMock.startsWith('update ') ||
+                        normalizedMock.startsWith('delete from ')) {
+                        let tableName = '';
+                        let opPrefix = '';
+                        if (normalizedMock.startsWith('insert into ')) {
+                            const match = normalizedMock.match(/^insert into\s+(\w+)/);
+                            if (match) {
+                                tableName = match[1];
+                                opPrefix = 'insert into';
+                            }
+                        }
+                        else if (normalizedMock.startsWith('update ')) {
+                            const match = normalizedMock.match(/^update\s+(\w+)/);
+                            if (match) {
+                                tableName = match[1];
+                                opPrefix = 'update';
+                            }
+                        }
+                        else if (normalizedMock.startsWith('delete from ')) {
+                            const match = normalizedMock.match(/^delete from\s+(\w+)/);
+                            if (match) {
+                                tableName = match[1];
+                                opPrefix = 'delete from';
+                            }
+                        }
+                        console.error(`[mysql-proxy] Pattern matching for ${opPrefix} on table ${tableName}, query starts with: "${normalizedQuery.substring(0, 50)}"`);
+                        if (tableName && normalizedQuery.startsWith(`${opPrefix} ${tableName}`)) {
+                            console.error(`[mysql-proxy] Pattern match for ${requestOperation}: ${opPrefix} ${tableName}*`);
                             if (isWriteOp) {
                                 queue.splice(i, 1);
                             }
@@ -417,6 +484,7 @@ function findAndConsumeMock(queue, requestOperation, query) {
             }
         }
     }
+    console.error(`[mysql-proxy] No match found for query: "${query}" - passing through to DB`);
     return null;
 }
 function isResponseComplete(payload, passthroughState) {
