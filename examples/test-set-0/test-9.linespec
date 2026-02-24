@@ -9,29 +9,9 @@ SELECT `todos`.* FROM `todos` WHERE `todos`.`id` = 3 LIMIT 1
 """
 RETURNS {{payloads/mysql_todo_single_read_result.yaml}}
 
-# Rails transaction begin
+# The actual UPDATE - simplified, no RETURNS needed
 EXPECT WRITE:MYSQL todos
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
-
-# The actual UPDATE
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-UPDATE `todos` SET `todos`.`title` = 'string', `todos`.`description` = 'string', `todos`.`updated_at` = '2026-02-21 18:31:04.534338' WHERE `todos`.`id` = 3
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_todo_update_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
+WITH {{payloads/todo_update_req.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/todo_update_resp.yaml}}

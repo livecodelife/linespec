@@ -4,7 +4,7 @@ This file provides guidance for agents working on the LineSpec codebase.
 
 ## Project Overview
 
-LineSpec is a DSL compiler for generating Keploy-compatible KTests and KMocks from human-readable service behavior specifications. It's a TypeScript CLI tool.
+LineSpec is a DSL compiler for generating Keploy-compatible KTests and KMocks from human-readable service behavior specifications. It's a TypeScript CLI tool designed for TDD workflows.
 
 ---
 
@@ -127,21 +127,21 @@ src/
   lexer.ts        # Tokenizer for .linespec files
   parser.ts       # AST generation
   validator.ts    # Semantic validation
-  compiler.ts     # YAML output generation
+  compiler.ts     # YAML output generation (KTests + KMocks)
   types.ts        # TypeScript type definitions
   test-loader.ts  # Loads KTest YAML files and mocks.yaml from a test-set directory
   mysql-proxy.ts  # TCP proxy that intercepts MySQL packets and serves mock responses
   runner.ts       # Orchestrates Docker Compose, the proxy, HTTP test execution, and reporting
-tests/
-  integration.test.ts  # Main test suite
 examples/
   test-set-0/          # .linespec input fixtures
     *.linespec
-    payloads/
+    payloads/          # YAML payload files for test data
 keploy-examples/
   test-set-0/          # Pre-compiled KTest + mocks fixtures
     tests/
     mocks.yaml
+tests/
+  integration.test.ts  # Main test suite
 ```
 
 ---
@@ -151,30 +151,149 @@ keploy-examples/
 ### Pipeline Architecture
 The compiler follows a pipeline: `source → tokenize → parse → validate → compile`
 
+### DSL Syntax
+
+LineSpec uses a declarative syntax to define service behavior:
+
+```
+TEST <name>
+RECEIVE HTTP:<METHOD> <URL>
+[WITH {{payloads/request.yaml}}]
+
+EXPECT <CHANNEL> <resource>
+[USING_SQL """
+<raw-sql>
+"""]
+[WITH {{payloads/input.yaml}}]
+[RETURNS {{payloads/output.yaml}}]
+
+RESPOND HTTP:<STATUS_CODE>
+[WITH {{payloads/response.yaml}}]
+[NOISE
+  body.<field>]
+```
+
+### MySQL Auto-Transaction System
+
+**Automatic Transaction Wrapping:**
+By default, `WRITE_MYSQL` expectations are automatically wrapped in `BEGIN...COMMIT` transaction mocks. This supports transactional ORMs like Rails ActiveRecord, Django, Hibernate, etc.
+
+```yaml
+# Input
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_create_req.yaml}}
+
+# Generates:
+# 1. BEGIN mock (auto-generated)
+# 2. INSERT INTO users (...) mock (from WITH payload)
+# 3. COMMIT mock (auto-generated)
+```
+
+**Disable with `NO TRANSACTION`:**
+For non-transactional ORMs, add the `NO TRANSACTION` keyword:
+
+```yaml
+EXPECT WRITE:MYSQL users
+NO TRANSACTION
+WITH {{payloads/user_create_req.yaml}}
+```
+
+### SQL Generation from Payloads
+
+The compiler automatically generates SQL from `WITH` payload files for MySQL expectations:
+
+**For WRITE_MYSQL (default generates INSERT):**
+```yaml
+# Payload (payloads/user_create_req.yaml):
+# name: John
+# email: john@example.com
+# password: secret123
+
+# Generated SQL:
+# INSERT INTO users (name, email, password) VALUES ('John', 'john@example.com', 'secret123')
+```
+
+**For READ_MYSQL (generates SELECT):**
+```yaml
+# Input without USING_SQL:
+EXPECT READ:MYSQL users
+RETURNS {{payloads/users_list.yaml}}
+
+# Generated SQL:
+# SELECT * FROM users
+```
+
+### Generic OK Responses for Writes
+
+Write operations (`WRITE_MYSQL`, `WRITE_POSTGRESQL`) don't require `RETURNS`. The compiler auto-generates a generic OK response:
+
+```yaml
+# Response mock (auto-generated):
+message:
+  header: 0
+  affected_rows: 1
+  last_insert_id: 0
+  status_flags: 2
+  warnings: 0
+  info: ''
+```
+
+This eliminates the need for write result payload files (`mysql_*_write_result.yaml`, etc.).
+
 ### Compiler — MySQL packet_type
-The compiler's `buildKMocks` function in `src/compiler.ts` sets the `packet_type` dynamically based on the statement type:
+The compiler sets the `packet_type` dynamically:
 - `WRITE_MYSQL` statements → `packet_type: OK` (proxy routes to `encodeOkPayload`)
-- `READ_MYSQL` statements → `packet_type: TextResultSet` (proxy routes to the column/row serialisation path)
+- `READ_MYSQL` statements → `packet_type: TextResultSet` (proxy routes to column/row serialisation)
 
 ### Test Runner Pipeline
 `linespec test [dir]` follows the sequence:
-1. `loadTestSet(dir)` — reads all `tests/*.yaml` and `mocks.yaml` from the given directory
-2. `startProxy(mocks, host, dbPort, proxyPort)` — starts a TCP server that intercepts MySQL `COM_QUERY` packets. Infrastructure queries (`SET NAMES`, `COM_PING`, `information_schema` schema introspection, and `schema_migrations` version checks) are always passed through to the real upstream without consulting the mock queue. For all other queries, the proxy returns a serialised mock response on a hit, or pipes the packet to the real upstream on a miss
-3. Docker Compose is started with a generated override file that rewrites `DATABASE_URL` to point at `host.docker.internal:<proxyPort>`
-4. `pollUntilHealthy(serviceUrl)` — polls the service root until HTTP 200 or 404
-5. Each `KTest` is replayed via Node's built-in `http` module; status code and body (minus noise keys) are compared
-6. For each failed `KTest`, `buildSideBySideDiff(expectedBody, actualBody)` produces a side-by-side string where lines that differ are separated by ` ~ `. `runTests` prints each diff line to stdout; lines containing ` ~ ` are split and the left column is wrapped in ANSI red (`\x1b[31m`) and the right in ANSI green (`\x1b[32m`).
-7. After all tests run, if `options.reportDir` is set (resolved by the CLI as `path.resolve(testDir, options.report)`), `runTests` calls `fs.mkdirSync(reportDir, { recursive: true })`, writes `summary.json` (aggregate counts + per-test pass/fail/reason), and writes one `{safeName}.json` per `TestResult` (full detail including `req`, `diff`, bodies). A confirmation line is printed to stdout.
-8. Summary line is printed; `docker compose down` and proxy teardown run in `finally`.
+1. `loadTestSet(dir)` — reads all `tests/*.yaml` and `mocks.yaml`
+2. `startProxy(mocks, host, dbPort, proxyPort)` — starts TCP proxy on a free port
+   - Infrastructure queries pass through to real DB
+   - App-level queries matched against mocks
+3. Docker Compose with `DATABASE_URL` override to route through proxy
+4. `pollUntilHealthy(serviceUrl)` — waits for HTTP 200/404
+5. Each `KTest` replayed via `http` module
+6. Status/body compared (noise fields ignored)
+7. Side-by-side diff for failures
+8. Report written to `linespec-report/`
+9. `docker compose down` and proxy teardown
 
-### Mock-or-Passthrough
-The MySQL proxy maintains an ordered queue of `KMockMysqlSpec` entries (populated exclusively with app-level mocks from `EXPECT READ_MYSQL` / `EXPECT WRITE_MYSQL` statements) sorted by `created` timestamp. Infrastructure queries are not represented in the queue and therefore always fall through to the passthrough path. On each `COM_QUERY` it searches the queue for a spec whose `message.query` is a substring of (or contains) the incoming query. On a hit the mock is consumed and its serialised `responses` are written back to the client socket. On a miss the packet is forwarded to the real upstream and the response is streamed back transparently.
+### Proxy Pattern Matching
+
+The proxy matches queries using a hierarchy:
+
+1. **Exact match first** (normalized by removing backticks, lowercasing)
+2. **Query type checking** — SELECT mocks only match SELECT queries, not INSERT/UPDATE/DELETE
+3. **Pattern matching** — For INSERT/UPDATE/DELETE, match by table name prefix
+4. **Table matching** — For SELECT, match by table name in FROM clause
+
+Example matching:
+```
+Mock:    insert into users (name, email) values (...)
+Rails:   INSERT INTO `users` (`name`, `email`, `created_at`) VALUES (...)
+Result:  ✓ MATCH (normalized + table prefix)
+```
+
+### Infrastructure Pass-Through
+These queries always pass through to the real database (never matched against mocks):
+- `SET NAMES ...`
+- `COM_PING`
+- `information_schema` queries
+- `schema_migrations` checks
+- `SHOW FULL FIELDS ...`
+- `SHOW ...` queries
 
 ### Statement Types
-- `RECEIVE` - Trigger request (exactly one required)
+- `RECEIVE` - Trigger request (exactly one required, must be first)
 - `EXPECT` - External dependencies (zero or more)
+  - `HTTP` - External HTTP calls
+  - `READ_MYSQL` - Database reads (requires `RETURNS`)
+  - `WRITE_MYSQL` - Database writes (auto-transactional, optional `RETURNS`)
+  - `WRITE_POSTGRESQL` - PostgreSQL writes
+  - `EVENT` - Message queue events
 - `RESPOND` - Response (exactly one required, must be last)
-- `NOISE` - Response noise filter (optional, follows RESPOND); each indented line names a body field path to exclude from comparison; compiled to `KTest.spec.assertions.noise`
+- `NOISE` - Response noise filter (optional, follows RESPOND)
 
 ### Custom Errors
 All parsing and validation errors extend `LineSpecError` with optional line numbers for error reporting.
@@ -188,3 +307,119 @@ All parsing and validation errors extend `LineSpecError` with optional line numb
 - Create temporary directories for test output
 - Verify YAML output structure against expected schemas
 - Test both success and failure cases
+
+---
+
+## Payload File Conventions
+
+### HTTP Request Payloads
+YAML with request body fields:
+```yaml
+name: User One
+email: user_one@example.com
+```
+
+### HTTP Response Payloads
+YAML with response body fields:
+```yaml
+id: 1
+name: User One
+email: user_one@example.com
+```
+
+### MySQL Read Result Payloads
+YAML with `rows` array:
+```yaml
+rows:
+  - id: 1
+    name: User One
+    email: user_one@example.com
+```
+
+The compiler infers MySQL column types from the data (e.g., `id` → BIGINT, `created_at` → DATETIME).
+
+### Empty Result Payloads
+For queries returning no rows:
+```yaml
+columnCount: 1
+columns:
+  - name: one
+    type: 8
+    # ... column definition
+rows: []
+```
+
+---
+
+## Common Patterns
+
+### Creating a Test for a POST Endpoint
+
+```linespec
+TEST create-resource
+RECEIVE HTTP:POST http://localhost:3000/resources
+WITH {{payloads/resource_create_req.yaml}}
+
+# Auto-generates SQL from payload
+EXPECT WRITE:MYSQL resources
+WITH {{payloads/resource_create_req.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/resource_create_resp.yaml}}
+NOISE
+  body.id
+  body.created_at
+```
+
+### Creating a Test for a GET Endpoint
+
+```linespec
+TEST get-resource
+RECEIVE HTTP:GET http://localhost:3000/resources/1
+
+# Requires RETURNS to verify data format
+EXPECT READ:MYSQL resources
+RETURNS {{payloads/resource_single.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/resource_single.yaml}}
+```
+
+### Handling Validation Queries
+
+Rails often checks for existing records before creating:
+
+```linespec
+TEST create-user-with-validation
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+
+# Validation query - returns empty (no duplicate)
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'user@example.com' LIMIT 1
+"""
+RETURNS {{payloads/mysql_empty_result.yaml}}
+
+# The actual INSERT
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_create_req.yaml}}
+
+RESPOND HTTP:201
+```
+
+### Non-Transactional ORM
+
+For ORMs that don't wrap operations in transactions:
+
+```linespec
+TEST create-item
+RECEIVE HTTP:POST http://localhost:3000/items
+WITH {{payloads/item_create_req.yaml}}
+
+EXPECT WRITE:MYSQL items
+NO TRANSACTION
+WITH {{payloads/item_create_req.yaml}}
+
+RESPOND HTTP:201
+```

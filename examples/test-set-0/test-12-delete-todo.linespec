@@ -8,28 +8,7 @@ SELECT `todos`.* FROM `todos` WHERE `todos`.`id` = 3 LIMIT 1
 """
 RETURNS {{payloads/mysql_todo_single_read_result.yaml}}
 
-# Rails transaction begin
+# The actual DELETE - simplified, no RETURNS needed
 EXPECT WRITE:MYSQL todos
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
-
-# The actual DELETE
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-DELETE FROM `todos` WHERE `todos`.`id` = 3
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_delete_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
 
 RESPOND HTTP:204

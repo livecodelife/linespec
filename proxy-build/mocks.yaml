@@ -173,9 +173,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -351,9 +351,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -529,9 +529,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -707,13 +707,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-1-mock-0
+name: test-1-mock-transaction-0
 spec:
   metadata:
     connID: '0'
@@ -736,18 +736,18 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-1-mock-1
+name: test-1-mock-0
 spec:
   metadata:
     connID: '0'
@@ -813,13 +813,13 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-1-mock-2
+name: test-1-mock-1
 spec:
   metadata:
     connID: '0'
@@ -829,11 +829,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 253
+          payload_length: 99
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: INSERT INTO `users` (`name`, `email`, `password_digest`, `created_at`, `updated_at`) VALUES ('User One', 'user_one@example.com', '$2a$12$PiJJT7PT/lhKoKjCzaEcBOYDk8uLm0OecnUW9YzsfCrA/W.D8lCwu', '2026-02-21 18:31:04.179338', '2026-02-21 18:31:04.179338')
+        query: INSERT INTO users (name, email, password) VALUES ('User One', 'user_one@example.com', 'something')
   responses:
     - header:
         header:
@@ -843,17 +843,17 @@ spec:
       message:
         header: 0
         affected_rows: 1
-        last_insert_id: 3
-        status_flags: 3
+        last_insert_id: 0
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-1-mock-3
+name: test-1-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -876,14 +876,14 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.625Z'
-  restimestampmock: '2026-02-24T15:15:36.625Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.363Z'
+  restimestampmock: '2026-02-24T16:42:45.363Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1059,9 +1059,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1237,9 +1237,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1415,9 +1415,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1593,9 +1593,43 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: test-10-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1811,9 +1845,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -1827,45 +1861,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 6
+          payload_length: 18
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: BEGIN
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: test-10-mock-2
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: OK
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 43
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: DELETE FROM `todos` WHERE `todos`.`id` = 3
+        query: DELETE FROM todos
   responses:
     - header:
         header:
@@ -1876,16 +1876,16 @@ spec:
         header: 0
         affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-10-mock-3
+name: test-10-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -1908,14 +1908,14 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.631Z'
-  restimestampmock: '2026-02-24T15:15:36.631Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.368Z'
+  restimestampmock: '2026-02-24T16:42:45.368Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2091,9 +2091,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2269,9 +2269,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2447,9 +2447,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2625,9 +2625,43 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: test-11-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2820,9 +2854,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.370Z'
+  restimestampmock: '2026-02-24T16:42:45.370Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -2836,45 +2870,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 6
+          payload_length: 18
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: BEGIN
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: test-11-mock-2
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: OK
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 43
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: DELETE FROM `users` WHERE `users`.`id` = 3
+        query: DELETE FROM users
   responses:
     - header:
         header:
@@ -2885,16 +2885,16 @@ spec:
         header: 0
         affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.371Z'
+  restimestampmock: '2026-02-24T16:42:45.371Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-11-mock-3
+name: test-11-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -2917,14 +2917,14 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.634Z'
-  restimestampmock: '2026-02-24T15:15:36.634Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.371Z'
+  restimestampmock: '2026-02-24T16:42:45.371Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -3100,9 +3100,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.636Z'
-  restimestampmock: '2026-02-24T15:15:36.636Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.372Z'
+  restimestampmock: '2026-02-24T16:42:45.372Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -3278,9 +3278,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.636Z'
-  restimestampmock: '2026-02-24T15:15:36.636Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.372Z'
+  restimestampmock: '2026-02-24T16:42:45.372Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -3456,9 +3456,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.636Z'
-  restimestampmock: '2026-02-24T15:15:36.636Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.372Z'
+  restimestampmock: '2026-02-24T16:42:45.372Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -3634,9 +3634,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.636Z'
-  restimestampmock: '2026-02-24T15:15:36.636Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.372Z'
+  restimestampmock: '2026-02-24T16:42:45.372Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -3829,9 +3829,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.636Z'
-  restimestampmock: '2026-02-24T15:15:36.636Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.372Z'
+  restimestampmock: '2026-02-24T16:42:45.372Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4007,9 +4007,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.637Z'
-  restimestampmock: '2026-02-24T15:15:36.637Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.374Z'
+  restimestampmock: '2026-02-24T16:42:45.374Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4185,9 +4185,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.637Z'
-  restimestampmock: '2026-02-24T15:15:36.637Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.374Z'
+  restimestampmock: '2026-02-24T16:42:45.374Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4363,9 +4363,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.637Z'
-  restimestampmock: '2026-02-24T15:15:36.637Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.374Z'
+  restimestampmock: '2026-02-24T16:42:45.374Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4541,9 +4541,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.637Z'
-  restimestampmock: '2026-02-24T15:15:36.637Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.374Z'
+  restimestampmock: '2026-02-24T16:42:45.374Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4736,9 +4736,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.637Z'
-  restimestampmock: '2026-02-24T15:15:36.637Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.374Z'
+  restimestampmock: '2026-02-24T16:42:45.374Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -4914,9 +4914,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -5092,9 +5092,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -5270,9 +5270,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -5448,9 +5448,43 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: test-4-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -5464,11 +5498,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 61
+          payload_length: 20
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
+        query: SELECT * FROM users
   responses:
     - header:
         header:
@@ -5643,47 +5677,13 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
 name: test-4-mock-1
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: OK
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 6
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: BEGIN
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: test-4-mock-2
 spec:
   metadata:
     connID: '0'
@@ -5749,13 +5749,13 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-4-mock-3
+name: test-4-mock-2
 spec:
   metadata:
     connID: '0'
@@ -5765,11 +5765,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 268
+          payload_length: 107
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: UPDATE `users` SET `users`.`name` = 'string', `users`.`email` = 'Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy', `users`.`password_digest` = '$2a$12$mdJw5dIqhmneLSqqCvj8CuiHH11Zt70gonZkthImqhpCKzpiceHqy', `users`.`updated_at` = '2026-02-21 18:31:04.498338' WHERE `users`.`id` = 3
+        query: INSERT INTO users (name, email, password) VALUES ('string', 'Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy', 'string')
   responses:
     - header:
         header:
@@ -5780,16 +5780,16 @@ spec:
         header: 0
         affected_rows: 1
         last_insert_id: 0
-        status_flags: 3
+        status_flags: 2
         warnings: 0
-        info: '(Rows matched: 1  Changed: 1  Warnings: 0'
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-4-mock-4
+name: test-4-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -5812,14 +5812,14 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.639Z'
-  restimestampmock: '2026-02-24T15:15:36.639Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.375Z'
+  restimestampmock: '2026-02-24T16:42:45.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -5995,9 +5995,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -6173,9 +6173,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -6351,9 +6351,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -6529,9 +6529,43 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: test-5-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -6545,11 +6579,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 61
+          payload_length: 20
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
+        query: SELECT * FROM users
   responses:
     - header:
         header:
@@ -6724,9 +6758,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -6740,45 +6774,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 6
+          payload_length: 109
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: BEGIN
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: test-5-mock-2
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: OK
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 207
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: INSERT INTO `todos` (`title`, `description`, `completed`, `user_id`, `created_at`, `updated_at`) VALUES ('A todo', 'a great description', TRUE, 3, '2026-02-21 18:31:04.534338', '2026-02-21 18:31:04.534338')
+        query: INSERT INTO todos (title, user_id, description, completed) VALUES ('A todo', 3, 'a great description', true)
   responses:
     - header:
         header:
@@ -6788,17 +6788,17 @@ spec:
       message:
         header: 0
         affected_rows: 1
-        last_insert_id: 3
-        status_flags: 3
+        last_insert_id: 0
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-5-mock-3
+name: test-5-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -6821,14 +6821,14 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.641Z'
-  restimestampmock: '2026-02-24T15:15:36.641Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.377Z'
+  restimestampmock: '2026-02-24T16:42:45.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7004,9 +7004,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.643Z'
-  restimestampmock: '2026-02-24T15:15:36.643Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.378Z'
+  restimestampmock: '2026-02-24T16:42:45.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7182,9 +7182,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.643Z'
-  restimestampmock: '2026-02-24T15:15:36.643Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.378Z'
+  restimestampmock: '2026-02-24T16:42:45.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7360,9 +7360,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.643Z'
-  restimestampmock: '2026-02-24T15:15:36.643Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.378Z'
+  restimestampmock: '2026-02-24T16:42:45.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7538,9 +7538,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.643Z'
-  restimestampmock: '2026-02-24T15:15:36.643Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.378Z'
+  restimestampmock: '2026-02-24T16:42:45.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7756,9 +7756,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.643Z'
-  restimestampmock: '2026-02-24T15:15:36.643Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.378Z'
+  restimestampmock: '2026-02-24T16:42:45.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -7934,9 +7934,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -8112,9 +8112,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -8290,9 +8290,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -8468,9 +8468,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -8484,11 +8484,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 61
+          payload_length: 20
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
+        query: SELECT * FROM users
   responses:
     - header:
         header:
@@ -8663,9 +8663,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -8881,9 +8881,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.644Z'
-  restimestampmock: '2026-02-24T15:15:36.644Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.379Z'
+  restimestampmock: '2026-02-24T16:42:45.379Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9059,9 +9059,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.645Z'
-  restimestampmock: '2026-02-24T15:15:36.645Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.381Z'
+  restimestampmock: '2026-02-24T16:42:45.381Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9237,9 +9237,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.645Z'
-  restimestampmock: '2026-02-24T15:15:36.645Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.381Z'
+  restimestampmock: '2026-02-24T16:42:45.381Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9415,9 +9415,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.645Z'
-  restimestampmock: '2026-02-24T15:15:36.645Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.381Z'
+  restimestampmock: '2026-02-24T16:42:45.381Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9593,9 +9593,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.645Z'
-  restimestampmock: '2026-02-24T15:15:36.645Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.381Z'
+  restimestampmock: '2026-02-24T16:42:45.381Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9609,11 +9609,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 61
+          payload_length: 20
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: SELECT `todos`.* FROM `todos` WHERE `todos`.`id` = 3 LIMIT 1
+        query: SELECT * FROM todos
   responses:
     - header:
         header:
@@ -9811,9 +9811,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.645Z'
-  restimestampmock: '2026-02-24T15:15:36.645Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.381Z'
+  restimestampmock: '2026-02-24T16:42:45.381Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -9989,9 +9989,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -10167,9 +10167,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -10345,9 +10345,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -10523,9 +10523,43 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: test-9-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -10741,9 +10775,9 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -10757,45 +10791,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 6
+          payload_length: 96
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: BEGIN
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: test-9-mock-2
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: OK
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 156
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: UPDATE `todos` SET `todos`.`title` = 'string', `todos`.`description` = 'string', `todos`.`updated_at` = '2026-02-21 18:31:04.534338' WHERE `todos`.`id` = 3
+        query: INSERT INTO todos (title, description, completed, user_id) VALUES ('string', 'string', true, 3)
   responses:
     - header:
         header:
@@ -10806,16 +10806,16 @@ spec:
         header: 0
         affected_rows: 1
         last_insert_id: 0
-        status_flags: 3
+        status_flags: 2
         warnings: 0
-        info: '(Rows matched: 1  Changed: 1  Warnings: 0'
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+        info: ''
+  created: 1771951365
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: test-9-mock-3
+name: test-9-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -10838,11 +10838,11 @@ spec:
         packet_type: OK
       message:
         header: 0
-        affected_rows: 0
+        affected_rows: 1
         last_insert_id: 0
-        status_flags: 16386
+        status_flags: 2
         warnings: 0
         info: ''
-  created: 1771946136
-  reqtimestampmock: '2026-02-24T15:15:36.646Z'
-  restimestampmock: '2026-02-24T15:15:36.646Z'
+  created: 1771951366
+  reqtimestampmock: '2026-02-24T16:42:45.382Z'
+  restimestampmock: '2026-02-24T16:42:45.382Z'

@@ -2,36 +2,13 @@ TEST test-5
 RECEIVE HTTP:POST http://localhost:3000/todos
 WITH {{payloads/todo_create_req.yaml}}
 
-# Rails validates the user exists
+# Rails validates the user exists (pattern matched by table name)
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
-"""
 RETURNS {{payloads/mysql_user_single_read_result.yaml}}
-
-# Rails transaction begin
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
 
 # The actual INSERT
 EXPECT WRITE:MYSQL todos
-USING_SQL """
-INSERT INTO `todos` (`title`, `description`, `completed`, `user_id`, `created_at`, `updated_at`) VALUES ('A todo', 'a great description', TRUE, 3, '2026-02-21 18:31:04.534338', '2026-02-21 18:31:04.534338')
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_todo_write_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL todos
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
+WITH {{payloads/todo_create_req.yaml}}
 
 RESPOND HTTP:201
 WITH {{payloads/todo_create_resp.yaml}}

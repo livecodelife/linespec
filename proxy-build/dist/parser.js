@@ -88,6 +88,7 @@ function parseExpectChannel(value, line) {
             table: rest,
             withFile: '',
             returnsFile: '',
+            transactional: true, // Default to transactional
         };
         return expect;
     }
@@ -147,6 +148,12 @@ function parse(tokens, filename) {
             const sqlToken = consume(tokens, pos);
             sql = sqlToken.value;
         }
+        // Check for NO_TRANSACTION keyword
+        let transactional = true; // Default
+        if (peek(tokens, pos.value)?.type === 'NO_TRANSACTION') {
+            consume(tokens, pos);
+            transactional = false;
+        }
         if (peek(tokens, pos.value)?.type === 'WITH') {
             const withToken = consume(tokens, pos);
             expectPartial.withFile = withToken.value;
@@ -157,6 +164,10 @@ function parse(tokens, filename) {
         }
         if (sql) {
             expectPartial.sql = sql;
+        }
+        // Set transactional flag for WRITE_MYSQL
+        if (expectPartial.channel === 'WRITE_MYSQL') {
+            expectPartial.transactional = transactional;
         }
         expects.push(expectPartial);
     }

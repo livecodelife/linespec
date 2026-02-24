@@ -69,6 +69,9 @@ function tokenize(source) {
         else if ((match = line.match(/^RESPOND\s+(.+)$/))) {
             tokens.push({ type: 'RESPOND', value: match[1].trim(), line: lineNo });
         }
+        else if ((match = line.match(/^NO\s+TRANSACTION$/))) {
+            tokens.push({ type: 'NO_TRANSACTION', value: 'NO_TRANSACTION', line: lineNo });
+        }
         else if (line === 'NOISE') {
             noiseLines = [];
             noiseStartLine = lineNo;

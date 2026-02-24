@@ -2,22 +2,11 @@ TEST test-4
 RECEIVE HTTP:PATCH http://localhost:3000/users/3
 WITH {{payloads/user_update_req.yaml}}
 
-# Rails loads the user first
+# Rails loads the user first (pattern matched by table name)
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
-"""
 RETURNS {{payloads/mysql_user_single_read_result.yaml}}
 
-# Rails transaction begin
-EXPECT WRITE:MYSQL users
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
-
-# Rails email uniqueness validation (checking other users don't have this email)
+# Rails email uniqueness validation - must use exact SQL for specific condition
 EXPECT READ:MYSQL users
 USING_SQL """
 SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy' AND `users`.`id` != 3 LIMIT 1
@@ -26,19 +15,7 @@ RETURNS {{payloads/mysql_empty_result.yaml}}
 
 # The actual UPDATE
 EXPECT WRITE:MYSQL users
-USING_SQL """
-UPDATE `users` SET `users`.`name` = 'string', `users`.`email` = 'Y95Eo@hTwDuyMmEWomNvmWRXfjUEr.cyy', `users`.`password_digest` = '$2a$12$mdJw5dIqhmneLSqqCvj8CuiHH11Zt70gonZkthImqhpCKzpiceHqy', `users`.`updated_at` = '2026-02-21 18:31:04.498338' WHERE `users`.`id` = 3
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_user_update_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL users
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
+WITH {{payloads/user_update_req.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/user_update_resp.yaml}}

@@ -1,14 +1,11 @@
 TEST test-7
 RECEIVE HTTP:GET http://localhost:3000/todos/user/3
 
-# Rails validates the user exists first
+# Rails validates the user exists first (pattern matched by table name)
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
-"""
 RETURNS {{payloads/mysql_user_single_read_result.yaml}}
 
-# Then queries todos for that user
+# Then queries todos for that user (needs WHERE clause for user_id filter)
 EXPECT READ:MYSQL todos
 USING_SQL """
 SELECT `todos`.* FROM `todos` WHERE `todos`.`user_id` = 3

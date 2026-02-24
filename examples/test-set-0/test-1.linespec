@@ -2,14 +2,6 @@ TEST test-1
 RECEIVE HTTP:POST http://localhost:3000/users
 WITH {{payloads/user_create_req.yaml}}
 
-# Rails transaction begin
-EXPECT WRITE:MYSQL users
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
-
 # Rails email uniqueness validation - should return empty result (no duplicate)
 EXPECT READ:MYSQL users
 USING_SQL """
@@ -17,26 +9,14 @@ SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'user_one@example.com' LIMI
 """
 RETURNS {{payloads/mysql_empty_result.yaml}}
 
-# The actual INSERT
+# The actual INSERT - no RETURNS needed, auto-transaction wraps it
 EXPECT WRITE:MYSQL users
-USING_SQL """
-INSERT INTO `users` (`name`, `email`, `password_digest`, `created_at`, `updated_at`) VALUES ('User One', 'user_one@example.com', '$2a$12$PiJJT7PT/lhKoKjCzaEcBOYDk8uLm0OecnUW9YzsfCrA/W.D8lCwu', '2026-02-21 18:31:04.179338', '2026-02-21 18:31:04.179338')
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_user_write_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL users
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
+WITH {{payloads/user_create_req.yaml}}
 
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}
 NOISE
-  id
-  password_digest
+  body.id
+  body.password_digest
   body.created_at
   body.updated_at

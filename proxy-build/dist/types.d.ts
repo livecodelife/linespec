@@ -18,7 +18,8 @@ export interface ExpectWriteMysqlStatement {
     table: string;
     sql?: string;
     withFile: string;
-    returnsFile: string;
+    returnsFile?: string;
+    transactional?: boolean;
 }
 export interface ExpectWritePostgresqlStatement {
     channel: 'WRITE_POSTGRESQL';

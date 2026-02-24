@@ -8,28 +8,7 @@ SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
 """
 RETURNS {{payloads/mysql_user_single_read_result.yaml}}
 
-# Rails transaction begin
+# The actual DELETE - simplified, no RETURNS needed
 EXPECT WRITE:MYSQL users
-USING_SQL """
-BEGIN
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
-
-# The actual DELETE
-EXPECT WRITE:MYSQL users
-USING_SQL """
-DELETE FROM `users` WHERE `users`.`id` = 3
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_delete_result.yaml}}
-
-# Rails transaction commit
-EXPECT WRITE:MYSQL users
-USING_SQL """
-COMMIT
-"""
-WITH {{payloads/mysql_no_input.yaml}}
-RETURNS {{payloads/mysql_ok_result.yaml}}
 
 RESPOND HTTP:204

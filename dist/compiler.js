@@ -43,6 +43,106 @@ function loadPayload(baseDir, filename) {
     const parsed = yaml.load(raw);
     return { raw, parsed };
 }
+function generateGenericOkResponse() {
+    return {
+        header: 0,
+        affected_rows: 1,
+        last_insert_id: 0,
+        status_flags: 2,
+        warnings: 0,
+        info: '',
+    };
+}
+function createTransactionMock(spec, mockIndex, query, created) {
+    const mysqlSpec = {
+        metadata: {
+            connID: '0',
+            requestOperation: 'COM_QUERY',
+            responseOperation: 'OK',
+            type: 'mocks',
+        },
+        requests: [{
+                header: {
+                    header: {
+                        payload_length: query.length + 1,
+                        sequence_id: 0,
+                    },
+                    packet_type: 'COM_QUERY',
+                },
+                message: { query },
+            }],
+        responses: [{
+                header: {
+                    header: {
+                        payload_length: 0,
+                        sequence_id: 1,
+                    },
+                    packet_type: 'OK',
+                },
+                message: generateGenericOkResponse(),
+            }],
+        created,
+        reqtimestampmock: new Date().toISOString(),
+        restimestampmock: new Date().toISOString(),
+    };
+    return {
+        version: 'api.keploy.io/v1beta1',
+        kind: 'MySQL',
+        name: `${spec.name}-mock-transaction-${mockIndex}`,
+        spec: mysqlSpec,
+    };
+}
+function generateInsertSql(table, payload) {
+    const columns = Object.keys(payload);
+    const values = columns.map(col => {
+        const val = payload[col];
+        if (typeof val === 'string') {
+            return `'${val.replace(/'/g, "''")}'`;
+        }
+        else if (typeof val === 'number' || typeof val === 'boolean') {
+            return String(val);
+        }
+        else if (val === null || val === undefined) {
+            return 'NULL';
+        }
+        else {
+            return `'${String(val).replace(/'/g, "''")}'`;
+        }
+    });
+    return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+}
+function generateUpdateSql(table, payload) {
+    const setClauses = Object.keys(payload)
+        .filter(col => col !== 'id')
+        .map(col => {
+        const val = payload[col];
+        let valueStr;
+        if (typeof val === 'string') {
+            valueStr = `'${val.replace(/'/g, "''")}'`;
+        }
+        else if (typeof val === 'number' || typeof val === 'boolean') {
+            valueStr = String(val);
+        }
+        else if (val === null || val === undefined) {
+            valueStr = 'NULL';
+        }
+        else {
+            valueStr = `'${String(val).replace(/'/g, "''")}'`;
+        }
+        return `${col} = ${valueStr}`;
+    });
+    const id = payload.id;
+    if (id !== undefined) {
+        return `UPDATE ${table} SET ${setClauses.join(', ')} WHERE id = ${id}`;
+    }
+    return `UPDATE ${table} SET ${setClauses.join(', ')}`;
+}
+function generateDeleteSql(table, payload) {
+    if (payload && payload.id !== undefined) {
+        return `DELETE FROM ${table} WHERE id = ${payload.id}`;
+    }
+    return `DELETE FROM ${table}`;
+}
 function statusMessage(code) {
     const messages = {
         200: 'OK',
@@ -295,6 +395,22 @@ function buildKMocks(spec, payloads) {
         }
     }
     let mockIndex = 0;
+    let transactionMockIndex = 0;
+    const writeMysqlExpects = [];
+    // First pass: collect WRITE_MYSQL expectations for transaction wrapping
+    for (let i = 0; i < spec.expects.length; i++) {
+        const expect = spec.expects[i];
+        if (expect.channel === 'WRITE_MYSQL') {
+            writeMysqlExpects.push({ index: i, expect });
+        }
+    }
+    // Add BEGIN mock if we have transactional WRITE_MYSQL expectations
+    if (writeMysqlExpects.length > 0) {
+        const firstWriteExpect = writeMysqlExpects[0].expect;
+        if (firstWriteExpect.transactional !== false) {
+            mocks.push(createTransactionMock(spec, transactionMockIndex++, 'BEGIN', Math.floor(Date.now() / 1000)));
+        }
+    }
     for (let i = 0; i < spec.expects.length; i++) {
         const expect = spec.expects[i];
         if (expect.channel === 'READ_MYSQL' || expect.channel === 'WRITE_MYSQL') {
@@ -321,7 +437,27 @@ function buildKMocks(spec, payloads) {
                 sql = `SELECT * FROM ${expect.table}`;
             }
             else {
-                sql = `INSERT INTO ${expect.table}`;
+                // WRITE_MYSQL - generate SQL from WITH payload if available
+                const withFile = expect.withFile;
+                if (withFile && payloads.has(withFile)) {
+                    const payload = payloads.get(withFile);
+                    if (typeof payload.parsed === 'object' && payload.parsed !== null) {
+                        // Check if this is an UPDATE (has id field) or INSERT
+                        if (payload.parsed.id !== undefined && Object.keys(payload.parsed).length > 1) {
+                            sql = generateUpdateSql(expect.table, payload.parsed);
+                        }
+                        else {
+                            sql = generateInsertSql(expect.table, payload.parsed);
+                        }
+                    }
+                    else {
+                        sql = `INSERT INTO ${expect.table}`;
+                    }
+                }
+                else {
+                    // No WITH file - assume DELETE operation
+                    sql = `DELETE FROM ${expect.table}`;
+                }
             }
             mysqlSpec.requests.push({
                 header: {
@@ -530,10 +666,23 @@ function buildKMocks(spec, payloads) {
                     });
                 }
             }
+            else if (isWrite) {
+                // For WRITE_MYSQL without RETURNS, generate a generic OK response
+                mysqlSpec.responses.push({
+                    header: {
+                        header: {
+                            payload_length: 0,
+                            sequence_id: 1,
+                        },
+                        packet_type: 'OK',
+                    },
+                    message: generateGenericOkResponse(),
+                });
+            }
             mocks.push({
                 version: 'api.keploy.io/v1beta1',
                 kind: 'MySQL',
-                name: `${spec.name}-mock-${i}`,
+                name: `${spec.name}-mock-${mockIndex++}`,
                 spec: mysqlSpec,
             });
         }
@@ -599,6 +748,13 @@ function buildKMocks(spec, payloads) {
                 name: `${spec.name}-mock-${i}`,
                 spec: eventSpec,
             });
+        }
+    }
+    // Add COMMIT mock after all WRITE_MYSQL expectations if transactional
+    if (writeMysqlExpects.length > 0) {
+        const lastWriteExpect = writeMysqlExpects[writeMysqlExpects.length - 1].expect;
+        if (lastWriteExpect.transactional !== false) {
+            mocks.push(createTransactionMock(spec, transactionMockIndex++, 'COMMIT', Math.floor(Date.now() / 1000) + 1));
         }
     }
     return mocks;

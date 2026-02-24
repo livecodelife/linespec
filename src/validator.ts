@@ -8,7 +8,7 @@ export { LineSpecError };
 export function validate(spec: TestSpec, baseDir: string): void {
   for (const expect of spec.expects) {
     if (
-      (expect.channel === 'HTTP' || expect.channel === 'WRITE_MYSQL' || expect.channel === 'WRITE_POSTGRESQL') &&
+      (expect.channel === 'HTTP' || expect.channel === 'WRITE_POSTGRESQL') &&
       !(expect as any).returnsFile
     ) {
       throw new LineSpecError(`RETURNS is required for EXPECT ${expect.channel}`);
@@ -17,7 +17,7 @@ export function validate(spec: TestSpec, baseDir: string): void {
 
   for (const expect of spec.expects) {
     if (
-      (expect.channel === 'WRITE_MYSQL' || expect.channel === 'WRITE_POSTGRESQL' || expect.channel === 'EVENT') &&
+      (expect.channel === 'WRITE_POSTGRESQL' || expect.channel === 'EVENT') &&
       !(expect as any).withFile
     ) {
       throw new LineSpecError(`WITH is required for EXPECT ${expect.channel}`);

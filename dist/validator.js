@@ -41,13 +41,13 @@ const lexer_1 = require("./lexer");
 Object.defineProperty(exports, "LineSpecError", { enumerable: true, get: function () { return lexer_1.LineSpecError; } });
 function validate(spec, baseDir) {
     for (const expect of spec.expects) {
-        if ((expect.channel === 'HTTP' || expect.channel === 'WRITE_MYSQL' || expect.channel === 'WRITE_POSTGRESQL') &&
+        if ((expect.channel === 'HTTP' || expect.channel === 'WRITE_POSTGRESQL') &&
             !expect.returnsFile) {
             throw new lexer_1.LineSpecError(`RETURNS is required for EXPECT ${expect.channel}`);
         }
     }
     for (const expect of spec.expects) {
-        if ((expect.channel === 'WRITE_MYSQL' || expect.channel === 'WRITE_POSTGRESQL' || expect.channel === 'EVENT') &&
+        if ((expect.channel === 'WRITE_POSTGRESQL' || expect.channel === 'EVENT') &&
             !expect.withFile) {
             throw new lexer_1.LineSpecError(`WITH is required for EXPECT ${expect.channel}`);
         }
