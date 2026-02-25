@@ -1,0 +1,17 @@
+TEST get_user_success
+
+RECEIVE HTTP:GET /api/v1/users/42
+WITH {{payloads/auth_token_request.yaml}}
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+WITH {{payloads/auth_token_request.yaml}}
+RETURNS {{payloads/authenticated_user.yaml}}
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
+"""
+RETURNS {{payloads/user_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user_response.json}}

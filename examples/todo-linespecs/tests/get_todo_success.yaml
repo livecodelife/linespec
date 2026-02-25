@@ -1,0 +1,33 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: get_todo_success
+spec:
+  metadata: {}
+  req:
+    method: GET
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/api/v1/todos/1
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+    body: ''
+    timestamp: '2026-02-25T21:41:20.442Z'
+  resp:
+    status_code: 200
+    header:
+      Content-Type: application/json; charset=utf-8
+    body: '{"id":1,"title":"Buy groceries","description":"Milk, eggs, and bread","completed":false,"user_id":42,"created_at":"2026-02-25T10:00:00Z","updated_at":"2026-02-25T10:00:00Z"}'
+    status_message: OK
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-25T21:41:20.442Z'
+  objects: []
+  created: 1772055680
+  app_port: 3000
+curl: |
+  curl --request GET \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --header 'Host: localhost:3000' \

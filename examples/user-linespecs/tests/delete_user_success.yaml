@@ -1,0 +1,32 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: delete_user_success
+spec:
+  metadata: {}
+  req:
+    method: DELETE
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/api/v1/users/42
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+    body: ''
+    timestamp: '2026-02-25T21:42:03.375Z'
+  resp:
+    status_code: 204
+    header: {}
+    body: ''
+    status_message: No Content
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-25T21:42:03.375Z'
+  objects: []
+  created: 1772055723
+  app_port: 3000
+curl: |
+  curl --request DELETE \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --header 'Host: localhost:3000' \
