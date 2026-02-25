@@ -4,9 +4,20 @@ LineSpec is a DSL compiler that generates Keploy-compatible KTests and KMocks fr
 
 ## Installation
 
+### From npm (recommended)
+
 ```bash
+npm install -g linespec
+```
+
+### From source (development)
+
+```bash
+git clone https://github.com/anomalyco/linespec.git
+cd linespec
 npm install
 npm run build
+npm link
 ```
 
 ## Usage

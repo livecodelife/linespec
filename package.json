@@ -6,12 +6,41 @@
   "bin": {
     "linespec": "./dist/cli.js"
   },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "dev": "ts-node src/cli.ts"
+    "dev": "ts-node src/cli.ts",
+    "prepublishOnly": "npm run build"
   },
   "type": "commonjs",
+  "keywords": [
+    "linespec",
+    "keploy",
+    "testing",
+    "mock",
+    "mysql",
+    "dsl",
+    "compiler",
+    "tdd"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anomalyco/linespec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anomalyco/linespec/issues"
+  },
+  "homepage": "https://github.com/anomalyco/linespec#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "commander": "^12.1.0",
     "js-yaml": "^4.1.0"

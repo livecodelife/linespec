@@ -1,0 +1,14 @@
+TEST test-11
+RECEIVE HTTP:DELETE http://localhost:3000/users/3
+
+# Rails loads the user first
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT `users`.* FROM `users` WHERE `users`.`id` = 3 LIMIT 1
+"""
+RETURNS {{payloads/mysql_user_single_read_result.yaml}}
+
+# The actual DELETE - simplified, no RETURNS needed
+EXPECT WRITE:MYSQL users
+
+RESPOND HTTP:204

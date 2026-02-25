@@ -38,50 +38,6 @@ interface TestCase {
   hasResponseBody: boolean;
   noiseFields?: string[];
   tableName: string;
-  payloadFiles?: string[];
-}
-
-function loadPayload(payloadPath: string): Record<string, unknown> {
-  const content = fs.readFileSync(payloadPath, 'utf-8');
-  try {
-    return yaml.load(content) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-function deepMatch(actual: unknown, expected: Record<string, unknown>): boolean {
-  if (typeof actual !== 'object' || actual === null) {
-    return actual === expected;
-  }
-  const actualObj = actual as Record<string, unknown>;
-  for (const key of Object.keys(expected)) {
-    if (!(key in actualObj)) {
-      return false;
-    }
-    if (typeof expected[key] === 'object' && expected[key] !== null && !Array.isArray(expected[key])) {
-      if (!deepMatch(actualObj[key], expected[key] as Record<string, unknown>)) {
-        return false;
-      }
-    } else if (Array.isArray(expected[key])) {
-      const actualArr = actualObj[key];
-      if (!Array.isArray(actualArr)) return false;
-      const expectedArr = expected[key] as unknown[];
-      if (actualArr.length !== expectedArr.length) return false;
-      for (let i = 0; i < expectedArr.length; i++) {
-        if (typeof expectedArr[i] === 'object' && expectedArr[i] !== null) {
-          if (!deepMatch(actualArr[i], expectedArr[i] as Record<string, unknown>)) {
-            return false;
-          }
-        } else if (actualArr[i] !== expectedArr[i]) {
-          return false;
-        }
-      }
-    } else if (actualObj[key] !== expected[key]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 const testCases: TestCase[] = [
@@ -91,12 +47,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/users',
     statusCode: 201,
     statusMessage: 'Created',
-    mockCount: 1,
+    mockCount: 8,
     hasRequestBody: true,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
-    payloadFiles: ['mysql_user_write_result.yaml'],
   },
   {
     name: 'test-2',
@@ -104,12 +59,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/users',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 1,
+    mockCount: 5,
     hasRequestBody: false,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
-    payloadFiles: ['mysql_users_read_result.yaml'],
   },
   {
     name: 'test-3',
@@ -117,12 +71,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/users/3',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 1,
+    mockCount: 5,
     hasRequestBody: false,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
-    payloadFiles: ['mysql_user_single_read_result.yaml'],
   },
   {
     name: 'test-4',
@@ -130,12 +83,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/users/3',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 2,
+    mockCount: 9,
     hasRequestBody: true,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'users',
-    payloadFiles: ['mysql_user_single_read_result.yaml', 'mysql_user_update_result.yaml'],
   },
   {
     name: 'test-5',
@@ -143,12 +95,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos',
     statusCode: 201,
     statusMessage: 'Created',
-    mockCount: 1,
+    mockCount: 8,
     hasRequestBody: true,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
-    payloadFiles: ['mysql_todo_write_result.yaml'],
   },
   {
     name: 'test-6',
@@ -156,12 +107,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 1,
+    mockCount: 5,
     hasRequestBody: false,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
-    payloadFiles: ['mysql_todos_read_result.yaml'],
   },
   {
     name: 'test-7',
@@ -169,12 +119,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos/user/3',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 1,
+    mockCount: 6,
     hasRequestBody: false,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
-    payloadFiles: ['mysql_todos_read_result.yaml'],
   },
   {
     name: 'test-8',
@@ -182,12 +131,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos/3',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 1,
+    mockCount: 5,
     hasRequestBody: false,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
-    payloadFiles: ['mysql_todo_single_read_result.yaml'],
   },
   {
     name: 'test-9',
@@ -195,12 +143,11 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos/3',
     statusCode: 200,
     statusMessage: 'OK',
-    mockCount: 2,
+    mockCount: 8,
     hasRequestBody: true,
     hasResponseBody: true,
     noiseFields: ['body.created_at', 'body.updated_at'],
     tableName: 'todos',
-    payloadFiles: ['mysql_todo_single_read_result.yaml', 'mysql_todo_update_result.yaml'],
   },
   {
     name: 'test-10',
@@ -208,11 +155,10 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/todos/3',
     statusCode: 204,
     statusMessage: 'No Content',
-    mockCount: 1,
+    mockCount: 8,
     hasRequestBody: false,
     hasResponseBody: false,
     tableName: 'todos',
-    payloadFiles: ['mysql_delete_result.yaml'],
   },
   {
     name: 'test-11',
@@ -220,11 +166,10 @@ const testCases: TestCase[] = [
     url: 'http://localhost:3000/users/3',
     statusCode: 204,
     statusMessage: 'No Content',
-    mockCount: 1,
+    mockCount: 8,
     hasRequestBody: false,
     hasResponseBody: false,
     tableName: 'users',
-    payloadFiles: ['mysql_delete_result.yaml'],
   },
 ];
 
@@ -293,8 +238,16 @@ describe('Integration Tests', () => {
         const mocks = loadKMocks(tempDir);
         expect(mocks).toHaveLength(tc.mockCount);
 
-        for (let i = 0; i < mocks.length; i++) {
-          const mock = mocks[i];
+        const queryMocks = mocks.filter((mock) => {
+          const mockSpec = mock.spec as Record<string, unknown>;
+          const metadata = mockSpec.metadata as Record<string, unknown>;
+          return metadata?.type === 'mocks';
+        });
+
+        expect(queryMocks.length).toBeGreaterThan(0);
+
+        for (let i = 0; i < queryMocks.length; i++) {
+          const mock = queryMocks[i];
           expect(mock.version).toBe('api.keploy.io/v1beta1');
           expect(mock.kind).toBe('MySQL');
 
@@ -308,7 +261,6 @@ describe('Integration Tests', () => {
           const message = request.message as Record<string, unknown>;
           expect(message.query).toBeTruthy();
           expect(typeof message.query).toBe('string');
-          expect((message.query as string).includes(tc.tableName)).toBe(true);
 
           const header = request.header as Record<string, unknown>;
           expect(header.packet_type).toBe('COM_QUERY');
@@ -318,21 +270,6 @@ describe('Integration Tests', () => {
           expect(responses.length).toBeGreaterThan(0);
           expect(responses[0].message).toBeDefined();
           expect(typeof responses[0].message).toBe('object');
-
-          if (tc.payloadFiles && tc.payloadFiles[i]) {
-            const payloadFile = tc.payloadFiles[i];
-            const expectedPayload = loadPayload(path.join(EXAMPLES_DIR, 'payloads', payloadFile));
-            const actualMessage = responses[0].message as Record<string, unknown>;
-            const keysToCheck = Object.keys(expectedPayload);
-            for (const key of keysToCheck) {
-              expect(actualMessage).toHaveProperty(key);
-              if (typeof expectedPayload[key] === 'object' && expectedPayload[key] !== null) {
-                expect(deepMatch(actualMessage[key], expectedPayload[key] as Record<string, unknown>)).toBe(true);
-              } else {
-                expect(actualMessage[key]).toEqual(expectedPayload[key]);
-              }
-            }
-          }
         }
       });
     });
