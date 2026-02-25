@@ -43,6 +43,19 @@ function loadPayload(baseDir, filename) {
     const parsed = yaml.load(raw);
     return { raw, parsed };
 }
+// Convert ISO 8601 timestamp to MySQL DATETIME format
+function toMySqlDateTime(value) {
+    if (typeof value !== 'string')
+        return String(value);
+    // Check if it's an ISO 8601 timestamp (e.g., "2026-02-25T10:00:00Z" or "2026-02-25T10:00:00+00:00")
+    const isoPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
+    const match = value.match(isoPattern);
+    if (match) {
+        // Convert to MySQL format: "YYYY-MM-DD HH:MM:SS"
+        return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+    }
+    return value;
+}
 function generateGenericOkResponse() {
     return {
         header: 0,
@@ -528,7 +541,7 @@ function buildKMocks(spec, payloads) {
                             else if (col === 'created_at' || col === 'updated_at' || col.endsWith('_at')) {
                                 colType = 12; // MYSQL_TYPE_DATETIME
                                 colLength = 26;
-                                colFlags = 4225; // NOT_NULL + BINARY
+                                colFlags = 128; // BINARY only (NOT_NULL flag confuses Rails mysql2 adapter)
                                 colCharset = 63; // Binary
                                 colDecimals = 6;
                             }
@@ -580,9 +593,14 @@ function buildKMocks(spec, payloads) {
                                 const val = rowData[col];
                                 const colDef = columns.find(c => c.name === col);
                                 // Convert value to string, with special handling for booleans (MySQL TINYINT is "0" or "1")
+                                // and DATETIME columns (convert ISO 8601 to MySQL format)
                                 let strValue;
                                 if (typeof val === 'boolean') {
                                     strValue = val ? '1' : '0';
+                                }
+                                else if (colDef?.type === 12) {
+                                    // DATETIME column - convert ISO 8601 to MySQL format
+                                    strValue = toMySqlDateTime(val);
                                 }
                                 else {
                                     strValue = String(val);
@@ -657,6 +675,130 @@ function buildKMocks(spec, payloads) {
                             });
                         }
                     }
+                }
+                else if (responseOp === 'TextResultSet' && typeof payload.parsed === 'object' && payload.parsed !== null) {
+                    // Payload is a single row object (not wrapped in 'rows' array)
+                    // Convert it to proper TextResultSet format
+                    const rowData = payload.parsed;
+                    let seqId = 2;
+                    const columns = Object.keys(rowData).map(col => {
+                        const value = rowData[col];
+                        let colType = 253;
+                        let colLength = 1020;
+                        let colFlags = 0;
+                        let colCharset = 255;
+                        let colDecimals = 0;
+                        if (col === 'id') {
+                            colType = 8;
+                            colLength = 20;
+                            colFlags = 16899;
+                            colCharset = 63;
+                        }
+                        else if (col === 'user_id' || col.endsWith('_id')) {
+                            colType = 8;
+                            colLength = 20;
+                            colFlags = 20489;
+                            colCharset = 63;
+                        }
+                        else if (col === 'completed') {
+                            colType = 1;
+                            colLength = 1;
+                            colFlags = 0;
+                            colCharset = 63;
+                        }
+                        else if (col === 'created_at' || col === 'updated_at' || col.endsWith('_at')) {
+                            colType = 12;
+                            colLength = 26;
+                            colFlags = 128;
+                            colCharset = 63;
+                            colDecimals = 6;
+                        }
+                        else if (col === 'description') {
+                            colType = 252;
+                            colLength = 262140;
+                            colFlags = 16;
+                            colCharset = 255;
+                        }
+                        else if (typeof value === 'string' && value.length > 255) {
+                            colType = 252;
+                            colLength = 262140;
+                            colFlags = 16;
+                            colCharset = 255;
+                        }
+                        else if (typeof value === 'string') {
+                            colType = 253;
+                            colLength = 1020;
+                            colFlags = 0;
+                            colCharset = 255;
+                        }
+                        return {
+                            header: {
+                                payload_length: 0,
+                                sequence_id: seqId++,
+                            },
+                            catalog: 'def',
+                            schema: expect.table ? `todo_api_development` : '',
+                            table: expect.table,
+                            orgTable: expect.table,
+                            name: col,
+                            orgName: col,
+                            fixed_length: 12,
+                            character_set: colCharset,
+                            column_length: colLength,
+                            type: colType,
+                            flags: colFlags,
+                            decimals: colDecimals,
+                            filler: [0, 0],
+                            defaultValue: '',
+                        };
+                    });
+                    // Convert the single row to Keploy format
+                    const rowSeqId = seqId + 1;
+                    const values = Object.keys(rowData).map(col => {
+                        const val = rowData[col];
+                        const colDef = columns.find(c => c.name === col);
+                        let strValue;
+                        if (typeof val === 'boolean') {
+                            strValue = val ? '1' : '0';
+                        }
+                        else if (colDef?.type === 12) {
+                            strValue = toMySqlDateTime(val);
+                        }
+                        else {
+                            strValue = String(val);
+                        }
+                        return {
+                            type: colDef?.type ?? 253,
+                            name: col,
+                            value: strValue,
+                            unsigned: false,
+                        };
+                    });
+                    mysqlSpec.responses.push({
+                        header: {
+                            header: {
+                                payload_length: 0,
+                                sequence_id: 1,
+                            },
+                            packet_type: responseOp,
+                        },
+                        message: {
+                            columnCount: columns.length,
+                            columns: columns,
+                            eofAfterColumns: [5, 0, 0, seqId, 254, 0, 0, 34, 0],
+                            rows: [{
+                                    header: {
+                                        payload_length: 0,
+                                        sequence_id: rowSeqId,
+                                    },
+                                    values: values,
+                                }],
+                            FinalResponse: {
+                                data: [5, 0, 0, rowSeqId + 1, 254, 0, 0, 34, 0],
+                                type: 'EOF',
+                            },
+                        },
+                    });
                 }
                 else {
                     mysqlSpec.responses.push({
