@@ -1,6 +1,6 @@
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-handshake-0
+name: authenticate_user_invalid_token-mock-handshake-0
 spec:
   metadata:
     connID: '0'
@@ -173,13 +173,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055713
+  reqtimestampmock: '2026-02-25T21:41:53.059Z'
+  restimestampmock: '2026-02-25T21:41:53.059Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-handshake-2
+name: authenticate_user_invalid_token-mock-handshake-2
 spec:
   metadata:
     connID: '2'
@@ -352,13 +352,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055713
+  reqtimestampmock: '2026-02-25T21:41:53.059Z'
+  restimestampmock: '2026-02-25T21:41:53.059Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-handshake-4
+name: authenticate_user_invalid_token-mock-handshake-4
 spec:
   metadata:
     connID: '4'
@@ -531,13 +531,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055713
+  reqtimestampmock: '2026-02-25T21:41:53.059Z'
+  restimestampmock: '2026-02-25T21:41:53.059Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-handshake-6
+name: authenticate_user_invalid_token-mock-handshake-6
 spec:
   metadata:
     connID: '6'
@@ -710,13 +710,3389 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055713
+  reqtimestampmock: '2026-02-25T21:41:53.059Z'
+  restimestampmock: '2026-02-25T21:41:53.059Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-transaction-0
+name: authenticate_user_invalid_token-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 72
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT
+          1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 2
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: error
+            orgName: error
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: message
+            orgName: message
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 4
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            values:
+              - type: 253
+                name: error
+                value: Unauthorized
+                unsigned: false
+              - type: 253
+                name: message
+                value: Invalid or expired token
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 6
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055713
+  reqtimestampmock: '2026-02-25T21:41:53.059Z'
+  restimestampmock: '2026-02-25T21:41:53.059Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_invalid_token-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.364Z'
+  restimestampmock: '2026-02-25T21:42:03.364Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_invalid_token-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.364Z'
+  restimestampmock: '2026-02-25T21:42:03.364Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_invalid_token-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.364Z'
+  restimestampmock: '2026-02-25T21:42:03.364Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_invalid_token-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.364Z'
+  restimestampmock: '2026-02-25T21:42:03.364Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_invalid_token-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 72
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT
+          1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 2
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: error
+            orgName: error
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: message
+            orgName: message
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 4
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            values:
+              - type: 253
+                name: error
+                value: Unauthorized
+                unsigned: false
+              - type: 253
+                name: message
+                value: Invalid or expired token
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 6
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.364Z'
+  restimestampmock: '2026-02-25T21:42:03.364Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_success-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.370Z'
+  restimestampmock: '2026-02-25T21:42:03.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_success-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.370Z'
+  restimestampmock: '2026-02-25T21:42:03.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_success-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.370Z'
+  restimestampmock: '2026-02-25T21:42:03.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_success-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.370Z'
+  restimestampmock: '2026-02-25T21:42:03.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: authenticate_user_success-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 72
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT
+          1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 4
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: id
+            orgName: id
+            fixed_length: 12
+            character_set: 63
+            column_length: 20
+            type: 8
+            flags: 16899
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 4
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: created_at
+            orgName: created_at
+            fixed_length: 12
+            character_set: 63
+            column_length: 26
+            type: 12
+            flags: 128
+            decimals: 6
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 6
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 7
+            values:
+              - type: 8
+                name: id
+                value: '42'
+                unsigned: false
+              - type: 253
+                name: name
+                value: John Doe
+                unsigned: false
+              - type: 253
+                name: email
+                value: john@example.com
+                unsigned: false
+              - type: 12
+                name: created_at
+                value: '2026-01-01 00:00:00'
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 8
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.370Z'
+  restimestampmock: '2026-02-25T21:42:03.370Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_already_exists-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.372Z'
+  restimestampmock: '2026-02-25T21:42:03.372Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_already_exists-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.372Z'
+  restimestampmock: '2026-02-25T21:42:03.372Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_already_exists-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.372Z'
+  restimestampmock: '2026-02-25T21:42:03.372Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_already_exists-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.372Z'
+  restimestampmock: '2026-02-25T21:42:03.372Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_already_exists-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT
+          1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 4
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: id
+            orgName: id
+            fixed_length: 12
+            character_set: 63
+            column_length: 20
+            type: 8
+            flags: 16899
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 4
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: created_at
+            orgName: created_at
+            fixed_length: 12
+            character_set: 63
+            column_length: 26
+            type: 12
+            flags: 128
+            decimals: 6
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 6
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 7
+            values:
+              - type: 8
+                name: id
+                value: '42'
+                unsigned: false
+              - type: 253
+                name: name
+                value: John Doe
+                unsigned: false
+              - type: 253
+                name: email
+                value: john@example.com
+                unsigned: false
+              - type: 12
+                name: created_at
+                value: '2026-01-01 00:00:00'
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 8
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.372Z'
+  restimestampmock: '2026-02-25T21:42:03.372Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_success-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_success-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_success-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_success-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_user_success-mock-transaction-0
 spec:
   metadata:
     connID: '0'
@@ -744,32 +4120,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
----
-version: api.keploy.io/v1beta1
-kind: Http
-name: create_todo_success-mock-0
-spec:
-  metadata: {}
-  req:
-    method: GET
-    url: http://user-service.local/api/v1/users/auth
-    header:
-      Content-Type: application/json
-    body: '{"authorization":"Bearer token_abc123xyz"}'
-  resp:
-    status_code: 200
-    header:
-      Content-Type: application/json
-    body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-25T21:41:20.433Z'
-  resTimestampMock: '2026-02-25T21:41:20.433Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-0
+name: create_user_success-mock-0
 spec:
   metadata:
     connID: '0'
@@ -779,13 +4136,13 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 120
+          payload_length: 100
           sequence_id: 0
         packet_type: COM_QUERY
       message:
         query: >-
-          INSERT INTO todos (title, description, completed, user_id) VALUES
-          ('Buy groceries', 'Milk, eggs, and bread', false, 42)
+          INSERT INTO users (name, email, password) VALUES ('John Doe',
+          'john@example.com', 'SecurePass123!')
   responses:
     - header:
         header:
@@ -799,13 +4156,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: create_todo_success-mock-transaction-1
+name: create_user_success-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -833,13 +4190,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055681
-  reqtimestampmock: '2026-02-25T21:41:20.433Z'
-  restimestampmock: '2026-02-25T21:41:20.433Z'
+  created: 1772055724
+  reqtimestampmock: '2026-02-25T21:42:03.373Z'
+  restimestampmock: '2026-02-25T21:42:03.373Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-handshake-0
+name: delete_user_success-mock-handshake-0
 spec:
   metadata:
     connID: '0'
@@ -1012,13 +4369,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-handshake-2
+name: delete_user_success-mock-handshake-2
 spec:
   metadata:
     connID: '2'
@@ -1191,13 +4548,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-handshake-4
+name: delete_user_success-mock-handshake-4
 spec:
   metadata:
     connID: '4'
@@ -1370,13 +4727,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-handshake-6
+name: delete_user_success-mock-handshake-6
 spec:
   metadata:
     connID: '6'
@@ -1549,13 +4906,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-transaction-0
+name: delete_user_success-mock-transaction-0
 spec:
   metadata:
     connID: '0'
@@ -1583,13 +4940,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: Http
-name: delete_todo_success-mock-0
+name: delete_user_success-mock-0
 spec:
   metadata: {}
   req:
@@ -1603,12 +4960,12 @@ spec:
     header:
       Content-Type: application/json
     body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-25T21:41:20.439Z'
-  resTimestampMock: '2026-02-25T21:41:20.439Z'
+  reqTimestampMock: '2026-02-25T21:42:03.375Z'
+  resTimestampMock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-0
+name: delete_user_success-mock-0
 spec:
   metadata:
     connID: '0'
@@ -1618,13 +4975,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 80
+          payload_length: 54
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: >-
-          SELECT * FROM `todos` WHERE `todos`.`id` = 1 AND `todos`.`user_id` =
-          42 LIMIT 1
+        query: SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
   responses:
     - header:
         header:
@@ -1632,15 +4987,15 @@ spec:
           sequence_id: 1
         packet_type: TextResultSet
       message:
-        columnCount: 7
+        columnCount: 4
         columns:
           - header:
               payload_length: 0
               sequence_id: 2
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
             name: id
             orgName: id
             fixed_length: 12
@@ -1658,10 +5013,10 @@ spec:
               sequence_id: 3
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: title
-            orgName: title
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
             fixed_length: 12
             character_set: 255
             column_length: 1020
@@ -1677,15 +5032,15 @@ spec:
               sequence_id: 4
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: description
-            orgName: description
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
             fixed_length: 12
             character_set: 255
-            column_length: 262140
-            type: 252
-            flags: 16
+            column_length: 1020
+            type: 253
+            flags: 0
             decimals: 0
             filler:
               - 0
@@ -1696,67 +5051,10 @@ spec:
               sequence_id: 5
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: completed
-            orgName: completed
-            fixed_length: 12
-            character_set: 63
-            column_length: 1
-            type: 1
-            flags: 0
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 6
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: user_id
-            orgName: user_id
-            fixed_length: 12
-            character_set: 63
-            column_length: 20
-            type: 8
-            flags: 20489
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 7
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
             name: created_at
             orgName: created_at
-            fixed_length: 12
-            character_set: 63
-            column_length: 26
-            type: 12
-            flags: 128
-            decimals: 6
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 8
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: updated_at
-            orgName: updated_at
             fixed_length: 12
             character_set: 63
             column_length: 26
@@ -1771,7 +5069,7 @@ spec:
           - 5
           - 0
           - 0
-          - 9
+          - 6
           - 254
           - 0
           - 0
@@ -1780,55 +5078,43 @@ spec:
         rows:
           - header:
               payload_length: 0
-              sequence_id: 10
+              sequence_id: 7
             values:
               - type: 8
                 name: id
-                value: '1'
+                value: '42'
                 unsigned: false
               - type: 253
-                name: title
-                value: Buy groceries
+                name: name
+                value: John Doe
                 unsigned: false
-              - type: 252
-                name: description
-                value: Milk, eggs, and bread
-                unsigned: false
-              - type: 1
-                name: completed
-                value: '0'
-                unsigned: false
-              - type: 8
-                name: user_id
-                value: '42'
+              - type: 253
+                name: email
+                value: john@example.com
                 unsigned: false
               - type: 12
                 name: created_at
-                value: '2026-02-25 10:00:00'
-                unsigned: false
-              - type: 12
-                name: updated_at
-                value: '2026-02-25 10:00:00'
+                value: '2026-01-01 00:00:00'
                 unsigned: false
         FinalResponse:
           data:
             - 5
             - 0
             - 0
-            - 11
+            - 8
             - 254
             - 0
             - 0
             - 34
             - 0
           type: EOF
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.439Z'
-  restimestampmock: '2026-02-25T21:41:20.439Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-1
+name: delete_user_success-mock-1
 spec:
   metadata:
     connID: '0'
@@ -1838,11 +5124,13 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 43
+          payload_length: 114
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: UPDATE todos SET user_id = 42 WHERE id = 1
+        query: >-
+          UPDATE users SET name = 'John Doe', email = 'john@example.com',
+          created_at = '2026-01-01T00:00:00Z' WHERE id = 42
   responses:
     - header:
         header:
@@ -1856,13 +5144,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.440Z'
-  restimestampmock: '2026-02-25T21:41:20.440Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: delete_todo_success-mock-transaction-1
+name: delete_user_success-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -1890,13 +5178,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055681
-  reqtimestampmock: '2026-02-25T21:41:20.440Z'
-  restimestampmock: '2026-02-25T21:41:20.440Z'
+  created: 1772055724
+  reqtimestampmock: '2026-02-25T21:42:03.375Z'
+  restimestampmock: '2026-02-25T21:42:03.375Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: get_todo_success-mock-handshake-0
+name: get_user_not_found-mock-handshake-0
 spec:
   metadata:
     connID: '0'
@@ -2069,13 +5357,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.442Z'
-  restimestampmock: '2026-02-25T21:41:20.442Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.377Z'
+  restimestampmock: '2026-02-25T21:42:03.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: get_todo_success-mock-handshake-2
+name: get_user_not_found-mock-handshake-2
 spec:
   metadata:
     connID: '2'
@@ -2248,13 +5536,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.442Z'
-  restimestampmock: '2026-02-25T21:41:20.442Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.377Z'
+  restimestampmock: '2026-02-25T21:42:03.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: get_todo_success-mock-handshake-4
+name: get_user_not_found-mock-handshake-4
 spec:
   metadata:
     connID: '4'
@@ -2427,13 +5715,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.442Z'
-  restimestampmock: '2026-02-25T21:41:20.442Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.377Z'
+  restimestampmock: '2026-02-25T21:42:03.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: get_todo_success-mock-handshake-6
+name: get_user_not_found-mock-handshake-6
 spec:
   metadata:
     connID: '6'
@@ -2606,13 +5894,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.442Z'
-  restimestampmock: '2026-02-25T21:41:20.442Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.377Z'
+  restimestampmock: '2026-02-25T21:42:03.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: Http
-name: get_todo_success-mock-0
+name: get_user_not_found-mock-0
 spec:
   metadata: {}
   req:
@@ -2626,12 +5914,12 @@ spec:
     header:
       Content-Type: application/json
     body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-25T21:41:20.442Z'
-  resTimestampMock: '2026-02-25T21:41:20.442Z'
+  reqTimestampMock: '2026-02-25T21:42:03.377Z'
+  resTimestampMock: '2026-02-25T21:42:03.377Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: get_todo_success-mock-0
+name: get_user_not_found-mock-0
 spec:
   metadata:
     connID: '0'
@@ -2641,13 +5929,11 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 80
+          payload_length: 55
           sequence_id: 0
         packet_type: COM_QUERY
       message:
-        query: >-
-          SELECT * FROM `todos` WHERE `todos`.`id` = 1 AND `todos`.`user_id` =
-          42 LIMIT 1
+        query: SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
   responses:
     - header:
         header:
@@ -2655,15 +5941,853 @@ spec:
           sequence_id: 1
         packet_type: TextResultSet
       message:
-        columnCount: 7
+        columnCount: 2
         columns:
           - header:
               payload_length: 0
               sequence_id: 2
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
+            name: error
+            orgName: error
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: message
+            orgName: message
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 4
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            values:
+              - type: 253
+                name: error
+                value: Not Found
+                unsigned: false
+              - type: 253
+                name: message
+                value: User with ID 42 not found
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 6
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.377Z'
+  restimestampmock: '2026-02-25T21:42:03.377Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: get_user_success-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.378Z'
+  restimestampmock: '2026-02-25T21:42:03.378Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: get_user_success-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.378Z'
+  restimestampmock: '2026-02-25T21:42:03.378Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: get_user_success-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.378Z'
+  restimestampmock: '2026-02-25T21:42:03.378Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: get_user_success-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.378Z'
+  restimestampmock: '2026-02-25T21:42:03.378Z'
+---
+version: api.keploy.io/v1beta1
+kind: Http
+name: get_user_success-mock-0
+spec:
+  metadata: {}
+  req:
+    method: GET
+    url: http://user-service.local/api/v1/users/auth
+    header:
+      Content-Type: application/json
+    body: '{"authorization":"Bearer token_abc123xyz"}'
+  resp:
+    status_code: 200
+    header:
+      Content-Type: application/json
+    body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
+  reqTimestampMock: '2026-02-25T21:42:03.378Z'
+  resTimestampMock: '2026-02-25T21:42:03.378Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: get_user_success-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 54
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 4
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
             name: id
             orgName: id
             fixed_length: 12
@@ -2681,10 +6805,10 @@ spec:
               sequence_id: 3
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: title
-            orgName: title
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
             fixed_length: 12
             character_set: 255
             column_length: 1020
@@ -2700,15 +6824,15 @@ spec:
               sequence_id: 4
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: description
-            orgName: description
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
             fixed_length: 12
             character_set: 255
-            column_length: 262140
-            type: 252
-            flags: 16
+            column_length: 1020
+            type: 253
+            flags: 0
             decimals: 0
             filler:
               - 0
@@ -2719,67 +6843,10 @@ spec:
               sequence_id: 5
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: completed
-            orgName: completed
-            fixed_length: 12
-            character_set: 63
-            column_length: 1
-            type: 1
-            flags: 0
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 6
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: user_id
-            orgName: user_id
-            fixed_length: 12
-            character_set: 63
-            column_length: 20
-            type: 8
-            flags: 20489
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 7
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
             name: created_at
             orgName: created_at
-            fixed_length: 12
-            character_set: 63
-            column_length: 26
-            type: 12
-            flags: 128
-            decimals: 6
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 8
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: updated_at
-            orgName: updated_at
             fixed_length: 12
             character_set: 63
             column_length: 26
@@ -2794,7 +6861,7 @@ spec:
           - 5
           - 0
           - 0
-          - 9
+          - 6
           - 254
           - 0
           - 0
@@ -2803,55 +6870,43 @@ spec:
         rows:
           - header:
               payload_length: 0
-              sequence_id: 10
+              sequence_id: 7
             values:
               - type: 8
                 name: id
-                value: '1'
+                value: '42'
                 unsigned: false
               - type: 253
-                name: title
-                value: Buy groceries
+                name: name
+                value: John Doe
                 unsigned: false
-              - type: 252
-                name: description
-                value: Milk, eggs, and bread
-                unsigned: false
-              - type: 1
-                name: completed
-                value: '0'
-                unsigned: false
-              - type: 8
-                name: user_id
-                value: '42'
+              - type: 253
+                name: email
+                value: john@example.com
                 unsigned: false
               - type: 12
                 name: created_at
-                value: '2026-02-25 10:00:00'
-                unsigned: false
-              - type: 12
-                name: updated_at
-                value: '2026-02-25 10:00:00'
+                value: '2026-01-01 00:00:00'
                 unsigned: false
         FinalResponse:
           data:
             - 5
             - 0
             - 0
-            - 11
+            - 8
             - 254
             - 0
             - 0
             - 34
             - 0
           type: EOF
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.442Z'
-  restimestampmock: '2026-02-25T21:41:20.442Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.378Z'
+  restimestampmock: '2026-02-25T21:42:03.378Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: list_todos_success-mock-handshake-0
+name: login_success-mock-handshake-0
 spec:
   metadata:
     connID: '0'
@@ -3024,13 +7079,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.444Z'
-  restimestampmock: '2026-02-25T21:41:20.444Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: list_todos_success-mock-handshake-2
+name: login_success-mock-handshake-2
 spec:
   metadata:
     connID: '2'
@@ -3203,13 +7258,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.444Z'
-  restimestampmock: '2026-02-25T21:41:20.444Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: list_todos_success-mock-handshake-4
+name: login_success-mock-handshake-4
 spec:
   metadata:
     connID: '4'
@@ -3382,13 +7437,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.444Z'
-  restimestampmock: '2026-02-25T21:41:20.444Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: list_todos_success-mock-handshake-6
+name: login_success-mock-handshake-6
 spec:
   metadata:
     connID: '6'
@@ -3561,998 +7616,13 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.444Z'
-  restimestampmock: '2026-02-25T21:41:20.444Z'
----
-version: api.keploy.io/v1beta1
-kind: Http
-name: list_todos_success-mock-0
-spec:
-  metadata: {}
-  req:
-    method: GET
-    url: http://user-service.local/api/v1/users/auth
-    header:
-      Content-Type: application/json
-    body: '{"authorization":"Bearer token_abc123xyz"}'
-  resp:
-    status_code: 200
-    header:
-      Content-Type: application/json
-    body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-25T21:41:20.444Z'
-  resTimestampMock: '2026-02-25T21:41:20.444Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: list_todos_success-mock-0
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: COM_QUERY
-    responseOperation: TextResultSet
-    type: mocks
-  requests:
-    - header:
-        header:
-          payload_length: 51
-          sequence_id: 0
-        packet_type: COM_QUERY
-      message:
-        query: SELECT * FROM `todos` WHERE `todos`.`user_id` = 42
-  responses:
-    - header:
-        header:
-          payload_length: 0
-          sequence_id: 1
-        packet_type: TextResultSet
-      message:
-        columnCount: 7
-        columns:
-          - header:
-              payload_length: 0
-              sequence_id: 2
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: id
-            orgName: id
-            fixed_length: 12
-            character_set: 63
-            column_length: 20
-            type: 8
-            flags: 16899
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 3
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: title
-            orgName: title
-            fixed_length: 12
-            character_set: 255
-            column_length: 1020
-            type: 253
-            flags: 0
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 4
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: description
-            orgName: description
-            fixed_length: 12
-            character_set: 255
-            column_length: 262140
-            type: 252
-            flags: 16
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 5
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: completed
-            orgName: completed
-            fixed_length: 12
-            character_set: 63
-            column_length: 1
-            type: 1
-            flags: 0
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 6
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: user_id
-            orgName: user_id
-            fixed_length: 12
-            character_set: 63
-            column_length: 20
-            type: 8
-            flags: 20489
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 7
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: created_at
-            orgName: created_at
-            fixed_length: 12
-            character_set: 63
-            column_length: 26
-            type: 12
-            flags: 128
-            decimals: 6
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 8
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: updated_at
-            orgName: updated_at
-            fixed_length: 12
-            character_set: 63
-            column_length: 26
-            type: 12
-            flags: 128
-            decimals: 6
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-        eofAfterColumns:
-          - 5
-          - 0
-          - 0
-          - 9
-          - 254
-          - 0
-          - 0
-          - 34
-          - 0
-        rows:
-          - header:
-              payload_length: 0
-              sequence_id: 10
-            values:
-              - type: 8
-                name: id
-                value: '1'
-                unsigned: false
-              - type: 253
-                name: title
-                value: Buy groceries
-                unsigned: false
-              - type: 252
-                name: description
-                value: Milk, eggs, and bread
-                unsigned: false
-              - type: 1
-                name: completed
-                value: '0'
-                unsigned: false
-              - type: 8
-                name: user_id
-                value: '42'
-                unsigned: false
-              - type: 12
-                name: created_at
-                value: '2026-02-25 10:00:00'
-                unsigned: false
-              - type: 12
-                name: updated_at
-                value: '2026-02-25 10:00:00'
-                unsigned: false
-          - header:
-              payload_length: 0
-              sequence_id: 11
-            values:
-              - type: 8
-                name: id
-                value: '2'
-                unsigned: false
-              - type: 253
-                name: title
-                value: Finish report
-                unsigned: false
-              - type: 252
-                name: description
-                value: Complete the quarterly report
-                unsigned: false
-              - type: 1
-                name: completed
-                value: '1'
-                unsigned: false
-              - type: 8
-                name: user_id
-                value: '42'
-                unsigned: false
-              - type: 12
-                name: created_at
-                value: '2026-02-25 09:00:00'
-                unsigned: false
-              - type: 12
-                name: updated_at
-                value: '2026-02-25 09:30:00'
-                unsigned: false
-        FinalResponse:
-          data:
-            - 5
-            - 0
-            - 0
-            - 12
-            - 254
-            - 0
-            - 0
-            - 34
-            - 0
-          type: EOF
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.444Z'
-  restimestampmock: '2026-02-25T21:41:20.444Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: update_todo_success-mock-handshake-0
-spec:
-  metadata:
-    connID: '0'
-    requestOperation: HandshakeV10
-    responseOperation: OK
-    type: config
-  requests:
-    - header:
-        header:
-          payload_length: 241
-          sequence_id: 1
-        packet_type: HandshakeResponse41
-      message:
-        capability_flags: 2159977103
-        max_packet_size: 1073741824
-        character_set: 45
-        filler:
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-        username: todo_user
-        auth_response:
-          - 105
-          - 48
-          - 238
-          - 137
-          - 38
-          - 102
-          - 183
-          - 51
-          - 114
-          - 211
-          - 197
-          - 150
-          - 126
-          - 76
-          - 108
-          - 109
-          - 98
-          - 56
-          - 45
-          - 95
-          - 240
-          - 241
-          - 240
-          - 33
-          - 200
-          - 82
-          - 196
-          - 158
-          - 90
-          - 27
-          - 145
-          - 225
-        database: todo_api_development
-        auth_plugin_name: caching_sha2_password
-        connection_attributes:
-          _client_name: libmariadb
-          _client_version: 3.3.17
-          _os: Linux
-          _pid: '33'
-          _platform: aarch64
-          _server_host: db
-          program_name: ./bin/rails
-        zstdcompressionlevel: 0
-    - header:
-        header:
-          payload_length: 1
-          sequence_id: 3
-        packet_type: RequestPublicKey
-      message: request_public_key
-    - header:
-        header:
-          payload_length: 256
-          sequence_id: 5
-        packet_type: encrypted_password
-      message: >-
-        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
-  responses:
-    - header:
-        header:
-          payload_length: 73
-          sequence_id: 0
-        packet_type: HandshakeV10
-      message:
-        protocol_version: 10
-        server_version: 8.4.8
-        connection_id: 1
-        auth_plugin_data:
-          - 48
-          - 126
-          - 12
-          - 99
-          - 79
-          - 37
-          - 14
-          - 27
-          - 21
-          - 71
-          - 32
-          - 99
-          - 63
-          - 42
-          - 63
-          - 39
-          - 1
-          - 114
-          - 119
-          - 14
-          - 0
-        filler: 0
-        capability_flags: 3758096383
-        character_set: 255
-        status_flags: 2
-        auth_plugin_name: caching_sha2_password
-    - header:
-        header:
-          payload_length: 2
-          sequence_id: 2
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: PerformFullAuthentication
-    - header:
-        header:
-          payload_length: 452
-          sequence_id: 4
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
-          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
-          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
-          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
-          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
-          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
-          WQIDAQAB
-          -----END PUBLIC KEY-----
-    - header:
-        header:
-          payload_length: 32
-          sequence_id: 6
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: update_todo_success-mock-handshake-2
-spec:
-  metadata:
-    connID: '2'
-    requestOperation: HandshakeV10
-    responseOperation: OK
-    type: config
-  requests:
-    - header:
-        header:
-          payload_length: 241
-          sequence_id: 1
-        packet_type: HandshakeResponse41
-      message:
-        capability_flags: 2159977103
-        max_packet_size: 1073741824
-        character_set: 45
-        filler:
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-        username: todo_user
-        auth_response:
-          - 105
-          - 48
-          - 238
-          - 137
-          - 38
-          - 102
-          - 183
-          - 51
-          - 114
-          - 211
-          - 197
-          - 150
-          - 126
-          - 76
-          - 108
-          - 109
-          - 98
-          - 56
-          - 45
-          - 95
-          - 240
-          - 241
-          - 240
-          - 33
-          - 200
-          - 82
-          - 196
-          - 158
-          - 90
-          - 27
-          - 145
-          - 225
-        database: todo_api_development
-        auth_plugin_name: caching_sha2_password
-        connection_attributes:
-          _client_name: libmariadb
-          _client_version: 3.3.17
-          _os: Linux
-          _pid: '33'
-          _platform: aarch64
-          _server_host: db
-          program_name: ./bin/rails
-        zstdcompressionlevel: 0
-    - header:
-        header:
-          payload_length: 1
-          sequence_id: 3
-        packet_type: RequestPublicKey
-      message: request_public_key
-    - header:
-        header:
-          payload_length: 256
-          sequence_id: 5
-        packet_type: encrypted_password
-      message: >-
-        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
-  responses:
-    - header:
-        header:
-          payload_length: 73
-          sequence_id: 0
-        packet_type: HandshakeV10
-      message:
-        protocol_version: 10
-        server_version: 8.4.8
-        connection_id: 3
-        auth_plugin_data:
-          - 48
-          - 126
-          - 12
-          - 99
-          - 79
-          - 37
-          - 14
-          - 27
-          - 21
-          - 71
-          - 32
-          - 99
-          - 63
-          - 42
-          - 63
-          - 39
-          - 1
-          - 114
-          - 119
-          - 14
-          - 0
-        filler: 0
-        capability_flags: 3758096383
-        character_set: 255
-        status_flags: 2
-        auth_plugin_name: caching_sha2_password
-    - header:
-        header:
-          payload_length: 2
-          sequence_id: 2
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: PerformFullAuthentication
-    - header:
-        header:
-          payload_length: 452
-          sequence_id: 4
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
-          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
-          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
-          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
-          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
-          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
-          WQIDAQAB
-          -----END PUBLIC KEY-----
-    - header:
-        header:
-          payload_length: 32
-          sequence_id: 6
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: update_todo_success-mock-handshake-4
-spec:
-  metadata:
-    connID: '4'
-    requestOperation: HandshakeV10
-    responseOperation: OK
-    type: config
-  requests:
-    - header:
-        header:
-          payload_length: 241
-          sequence_id: 1
-        packet_type: HandshakeResponse41
-      message:
-        capability_flags: 2159977103
-        max_packet_size: 1073741824
-        character_set: 45
-        filler:
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-        username: todo_user
-        auth_response:
-          - 105
-          - 48
-          - 238
-          - 137
-          - 38
-          - 102
-          - 183
-          - 51
-          - 114
-          - 211
-          - 197
-          - 150
-          - 126
-          - 76
-          - 108
-          - 109
-          - 98
-          - 56
-          - 45
-          - 95
-          - 240
-          - 241
-          - 240
-          - 33
-          - 200
-          - 82
-          - 196
-          - 158
-          - 90
-          - 27
-          - 145
-          - 225
-        database: todo_api_development
-        auth_plugin_name: caching_sha2_password
-        connection_attributes:
-          _client_name: libmariadb
-          _client_version: 3.3.17
-          _os: Linux
-          _pid: '33'
-          _platform: aarch64
-          _server_host: db
-          program_name: ./bin/rails
-        zstdcompressionlevel: 0
-    - header:
-        header:
-          payload_length: 1
-          sequence_id: 3
-        packet_type: RequestPublicKey
-      message: request_public_key
-    - header:
-        header:
-          payload_length: 256
-          sequence_id: 5
-        packet_type: encrypted_password
-      message: >-
-        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
-  responses:
-    - header:
-        header:
-          payload_length: 73
-          sequence_id: 0
-        packet_type: HandshakeV10
-      message:
-        protocol_version: 10
-        server_version: 8.4.8
-        connection_id: 5
-        auth_plugin_data:
-          - 48
-          - 126
-          - 12
-          - 99
-          - 79
-          - 37
-          - 14
-          - 27
-          - 21
-          - 71
-          - 32
-          - 99
-          - 63
-          - 42
-          - 63
-          - 39
-          - 1
-          - 114
-          - 119
-          - 14
-          - 0
-        filler: 0
-        capability_flags: 3758096383
-        character_set: 255
-        status_flags: 2
-        auth_plugin_name: caching_sha2_password
-    - header:
-        header:
-          payload_length: 2
-          sequence_id: 2
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: PerformFullAuthentication
-    - header:
-        header:
-          payload_length: 452
-          sequence_id: 4
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
-          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
-          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
-          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
-          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
-          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
-          WQIDAQAB
-          -----END PUBLIC KEY-----
-    - header:
-        header:
-          payload_length: 32
-          sequence_id: 6
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: update_todo_success-mock-handshake-6
-spec:
-  metadata:
-    connID: '6'
-    requestOperation: HandshakeV10
-    responseOperation: OK
-    type: config
-  requests:
-    - header:
-        header:
-          payload_length: 241
-          sequence_id: 1
-        packet_type: HandshakeResponse41
-      message:
-        capability_flags: 2159977103
-        max_packet_size: 1073741824
-        character_set: 45
-        filler:
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-          - 0
-        username: todo_user
-        auth_response:
-          - 105
-          - 48
-          - 238
-          - 137
-          - 38
-          - 102
-          - 183
-          - 51
-          - 114
-          - 211
-          - 197
-          - 150
-          - 126
-          - 76
-          - 108
-          - 109
-          - 98
-          - 56
-          - 45
-          - 95
-          - 240
-          - 241
-          - 240
-          - 33
-          - 200
-          - 82
-          - 196
-          - 158
-          - 90
-          - 27
-          - 145
-          - 225
-        database: todo_api_development
-        auth_plugin_name: caching_sha2_password
-        connection_attributes:
-          _client_name: libmariadb
-          _client_version: 3.3.17
-          _os: Linux
-          _pid: '33'
-          _platform: aarch64
-          _server_host: db
-          program_name: ./bin/rails
-        zstdcompressionlevel: 0
-    - header:
-        header:
-          payload_length: 1
-          sequence_id: 3
-        packet_type: RequestPublicKey
-      message: request_public_key
-    - header:
-        header:
-          payload_length: 256
-          sequence_id: 5
-        packet_type: encrypted_password
-      message: >-
-        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
-  responses:
-    - header:
-        header:
-          payload_length: 73
-          sequence_id: 0
-        packet_type: HandshakeV10
-      message:
-        protocol_version: 10
-        server_version: 8.4.8
-        connection_id: 7
-        auth_plugin_data:
-          - 48
-          - 126
-          - 12
-          - 99
-          - 79
-          - 37
-          - 14
-          - 27
-          - 21
-          - 71
-          - 32
-          - 99
-          - 63
-          - 42
-          - 63
-          - 39
-          - 1
-          - 114
-          - 119
-          - 14
-          - 0
-        filler: 0
-        capability_flags: 3758096383
-        character_set: 255
-        status_flags: 2
-        auth_plugin_name: caching_sha2_password
-    - header:
-        header:
-          payload_length: 2
-          sequence_id: 2
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: PerformFullAuthentication
-    - header:
-        header:
-          payload_length: 452
-          sequence_id: 4
-        packet_type: AuthMoreData
-      message:
-        status_tag: 1
-        data: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
-          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
-          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
-          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
-          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
-          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
-          WQIDAQAB
-          -----END PUBLIC KEY-----
-    - header:
-        header:
-          payload_length: 32
-          sequence_id: 6
-        packet_type: OK
-      message:
-        header: 0
-        affected_rows: 0
-        last_insert_id: 0
-        status_flags: 16386
-        warnings: 0
-        info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
----
-version: api.keploy.io/v1beta1
-kind: MySQL
-name: update_todo_success-mock-transaction-0
+name: login_success-mock-transaction-0
 spec:
   metadata:
     connID: '0'
@@ -4580,32 +7650,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
----
-version: api.keploy.io/v1beta1
-kind: Http
-name: update_todo_success-mock-0
-spec:
-  metadata: {}
-  req:
-    method: GET
-    url: http://user-service.local/api/v1/users/auth
-    header:
-      Content-Type: application/json
-    body: '{"authorization":"Bearer token_abc123xyz"}'
-  resp:
-    status_code: 200
-    header:
-      Content-Type: application/json
-    body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-25T21:41:20.447Z'
-  resTimestampMock: '2026-02-25T21:41:20.447Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: update_todo_success-mock-0
+name: login_success-mock-0
 spec:
   metadata:
     connID: '0'
@@ -4615,13 +7666,13 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 80
+          payload_length: 73
           sequence_id: 0
         packet_type: COM_QUERY
       message:
         query: >-
-          SELECT * FROM `todos` WHERE `todos`.`id` = 1 AND `todos`.`user_id` =
-          42 LIMIT 1
+          SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT
+          1
   responses:
     - header:
         header:
@@ -4629,15 +7680,15 @@ spec:
           sequence_id: 1
         packet_type: TextResultSet
       message:
-        columnCount: 7
+        columnCount: 4
         columns:
           - header:
               payload_length: 0
               sequence_id: 2
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
             name: id
             orgName: id
             fixed_length: 12
@@ -4655,10 +7706,10 @@ spec:
               sequence_id: 3
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: title
-            orgName: title
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
             fixed_length: 12
             character_set: 255
             column_length: 1020
@@ -4674,15 +7725,15 @@ spec:
               sequence_id: 4
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: description
-            orgName: description
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
             fixed_length: 12
             character_set: 255
-            column_length: 262140
-            type: 252
-            flags: 16
+            column_length: 1020
+            type: 253
+            flags: 0
             decimals: 0
             filler:
               - 0
@@ -4693,67 +7744,10 @@ spec:
               sequence_id: 5
             catalog: def
             schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: completed
-            orgName: completed
-            fixed_length: 12
-            character_set: 63
-            column_length: 1
-            type: 1
-            flags: 0
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 6
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: user_id
-            orgName: user_id
-            fixed_length: 12
-            character_set: 63
-            column_length: 20
-            type: 8
-            flags: 20489
-            decimals: 0
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 7
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
+            table: users
+            orgTable: users
             name: created_at
             orgName: created_at
-            fixed_length: 12
-            character_set: 63
-            column_length: 26
-            type: 12
-            flags: 128
-            decimals: 6
-            filler:
-              - 0
-              - 0
-            defaultValue: ''
-          - header:
-              payload_length: 0
-              sequence_id: 8
-            catalog: def
-            schema: todo_api_development
-            table: todos
-            orgTable: todos
-            name: updated_at
-            orgName: updated_at
             fixed_length: 12
             character_set: 63
             column_length: 26
@@ -4768,7 +7762,7 @@ spec:
           - 5
           - 0
           - 0
-          - 9
+          - 6
           - 254
           - 0
           - 0
@@ -4777,55 +7771,43 @@ spec:
         rows:
           - header:
               payload_length: 0
-              sequence_id: 10
+              sequence_id: 7
             values:
               - type: 8
                 name: id
-                value: '1'
+                value: '42'
                 unsigned: false
               - type: 253
-                name: title
-                value: Buy groceries
+                name: name
+                value: John Doe
                 unsigned: false
-              - type: 252
-                name: description
-                value: Milk, eggs, and bread
-                unsigned: false
-              - type: 1
-                name: completed
-                value: '0'
-                unsigned: false
-              - type: 8
-                name: user_id
-                value: '42'
+              - type: 253
+                name: email
+                value: john@example.com
                 unsigned: false
               - type: 12
                 name: created_at
-                value: '2026-02-25 10:00:00'
-                unsigned: false
-              - type: 12
-                name: updated_at
-                value: '2026-02-25 10:00:00'
+                value: '2026-01-01 00:00:00'
                 unsigned: false
         FinalResponse:
           data:
             - 5
             - 0
             - 0
-            - 11
+            - 8
             - 254
             - 0
             - 0
             - 34
             - 0
           type: EOF
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: update_todo_success-mock-1
+name: login_success-mock-1
 spec:
   metadata:
     connID: '0'
@@ -4835,13 +7817,13 @@ spec:
   requests:
     - header:
         header:
-          payload_length: 120
+          payload_length: 78
           sequence_id: 0
         packet_type: COM_QUERY
       message:
         query: >-
-          INSERT INTO todos (title, description, completed, user_id) VALUES
-          ('Buy groceries', 'Milk, eggs, and bread', false, 42)
+          INSERT INTO users (token, user) VALUES ('token_abc123xyz', '[object
+          Object]')
   responses:
     - header:
         header:
@@ -4855,13 +7837,13 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055680
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
-name: update_todo_success-mock-transaction-1
+name: login_success-mock-transaction-1
 spec:
   metadata:
     connID: '0'
@@ -4889,6 +7871,994 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772055681
-  reqtimestampmock: '2026-02-25T21:41:20.447Z'
-  restimestampmock: '2026-02-25T21:41:20.447Z'
+  created: 1772055724
+  reqtimestampmock: '2026-02-25T21:42:03.380Z'
+  restimestampmock: '2026-02-25T21:42:03.380Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-handshake-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 1
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-handshake-2
+spec:
+  metadata:
+    connID: '2'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 3
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-handshake-4
+spec:
+  metadata:
+    connID: '4'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 5
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-handshake-6
+spec:
+  metadata:
+    connID: '6'
+    requestOperation: HandshakeV10
+    responseOperation: OK
+    type: config
+  requests:
+    - header:
+        header:
+          payload_length: 241
+          sequence_id: 1
+        packet_type: HandshakeResponse41
+      message:
+        capability_flags: 2159977103
+        max_packet_size: 1073741824
+        character_set: 45
+        filler:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+        username: todo_user
+        auth_response:
+          - 105
+          - 48
+          - 238
+          - 137
+          - 38
+          - 102
+          - 183
+          - 51
+          - 114
+          - 211
+          - 197
+          - 150
+          - 126
+          - 76
+          - 108
+          - 109
+          - 98
+          - 56
+          - 45
+          - 95
+          - 240
+          - 241
+          - 240
+          - 33
+          - 200
+          - 82
+          - 196
+          - 158
+          - 90
+          - 27
+          - 145
+          - 225
+        database: todo_api_development
+        auth_plugin_name: caching_sha2_password
+        connection_attributes:
+          _client_name: libmariadb
+          _client_version: 3.3.17
+          _os: Linux
+          _pid: '33'
+          _platform: aarch64
+          _server_host: db
+          program_name: ./bin/rails
+        zstdcompressionlevel: 0
+    - header:
+        header:
+          payload_length: 1
+          sequence_id: 3
+        packet_type: RequestPublicKey
+      message: request_public_key
+    - header:
+        header:
+          payload_length: 256
+          sequence_id: 5
+        packet_type: encrypted_password
+      message: >-
+        gg6t94LVF1DKSd/qJkdTwIaIofQdo5D5v8OD/rrB75cATAkbjp6+VkIDUTeMY+sVnlroCydyQTJ+W5SpZsrivP2pXrl/afv4uHvLb7PrrevlORNO3j690LMfL5xBDqA2DW7Q2wd7oIXkpIqzpqpGWClVG05N0FrpqpmPtLnI90w6RvgsxvX8ikArGj/ytpPz9Qa4QPPP7Mpa8/Ur2w/bOEggjPhRCDQgr+MWoqxwiJzUTk9raWUGVxpgmVEUkv8bj66IhKvJCPZascFHiETkJtd0nZ72w9aNdLOsxq52GzURuxkvY9Zmk3J73Pgp5l4MB7/eTvwLN9cllrNYQdXxqg==
+  responses:
+    - header:
+        header:
+          payload_length: 73
+          sequence_id: 0
+        packet_type: HandshakeV10
+      message:
+        protocol_version: 10
+        server_version: 8.4.8
+        connection_id: 7
+        auth_plugin_data:
+          - 48
+          - 126
+          - 12
+          - 99
+          - 79
+          - 37
+          - 14
+          - 27
+          - 21
+          - 71
+          - 32
+          - 99
+          - 63
+          - 42
+          - 63
+          - 39
+          - 1
+          - 114
+          - 119
+          - 14
+          - 0
+        filler: 0
+        capability_flags: 3758096383
+        character_set: 255
+        status_flags: 2
+        auth_plugin_name: caching_sha2_password
+    - header:
+        header:
+          payload_length: 2
+          sequence_id: 2
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: PerformFullAuthentication
+    - header:
+        header:
+          payload_length: 452
+          sequence_id: 4
+        packet_type: AuthMoreData
+      message:
+        status_tag: 1
+        data: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5YpAjnA8WPNgJSHXhx4
+          wef99MJKkN69+y2IFlkOFkwBYZOFLnOjGhqEFqxTxQ8PhFIWa3BCR1EcJOVCMuo6
+          5BUQd+dN52YxTX14W3/e2/kD2mu7G2pBAYud5uFbNdn01Llx0edtm3RubymLW2pV
+          2DVRBsDZUjBXpN03bv7ih88zpUpu2KJxauRiMpaNz8zuxLYhOLSWYQkPyFnEY9T6
+          R2qawOxpw7SmvoTWJtpqzJhcwINBMMlrD52CKFD4fAqAbvvo/QOcwzFcx0WY6T/F
+          pE0SWXkChqJQwXQbz0csEPgZofzLY8W4bKqSOQCky7NSor1ZykEOE23zwNHaJ7ks
+          WQIDAQAB
+          -----END PUBLIC KEY-----
+    - header:
+        header:
+          payload_length: 32
+          sequence_id: 6
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 0
+        last_insert_id: 0
+        status_flags: 16386
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-transaction-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 6
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: BEGIN
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: Http
+name: update_user_success-mock-0
+spec:
+  metadata: {}
+  req:
+    method: GET
+    url: http://user-service.local/api/v1/users/auth
+    header:
+      Content-Type: application/json
+    body: '{"authorization":"Bearer token_abc123xyz"}'
+  resp:
+    status_code: 200
+    header:
+      Content-Type: application/json
+    body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
+  reqTimestampMock: '2026-02-25T21:42:03.382Z'
+  resTimestampMock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: TextResultSet
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 54
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: TextResultSet
+      message:
+        columnCount: 4
+        columns:
+          - header:
+              payload_length: 0
+              sequence_id: 2
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: id
+            orgName: id
+            fixed_length: 12
+            character_set: 63
+            column_length: 20
+            type: 8
+            flags: 16899
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 3
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: name
+            orgName: name
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 4
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: email
+            orgName: email
+            fixed_length: 12
+            character_set: 255
+            column_length: 1020
+            type: 253
+            flags: 0
+            decimals: 0
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+          - header:
+              payload_length: 0
+              sequence_id: 5
+            catalog: def
+            schema: todo_api_development
+            table: users
+            orgTable: users
+            name: created_at
+            orgName: created_at
+            fixed_length: 12
+            character_set: 63
+            column_length: 26
+            type: 12
+            flags: 128
+            decimals: 6
+            filler:
+              - 0
+              - 0
+            defaultValue: ''
+        eofAfterColumns:
+          - 5
+          - 0
+          - 0
+          - 6
+          - 254
+          - 0
+          - 0
+          - 34
+          - 0
+        rows:
+          - header:
+              payload_length: 0
+              sequence_id: 7
+            values:
+              - type: 8
+                name: id
+                value: '42'
+                unsigned: false
+              - type: 253
+                name: name
+                value: John Doe
+                unsigned: false
+              - type: 253
+                name: email
+                value: john@example.com
+                unsigned: false
+              - type: 12
+                name: created_at
+                value: '2026-01-01 00:00:00'
+                unsigned: false
+        FinalResponse:
+          data:
+            - 5
+            - 0
+            - 0
+            - 8
+            - 254
+            - 0
+            - 0
+            - 34
+            - 0
+          type: EOF
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-1
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 72
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          INSERT INTO users (name, email) VALUES ('Jane Doe',
+          'jane@example.com')
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1772055723
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: update_user_success-mock-transaction-1
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+  requests:
+    - header:
+        header:
+          payload_length: 7
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: COMMIT
+  responses:
+    - header:
+        header:
+          payload_length: 0
+          sequence_id: 1
+        packet_type: OK
+      message:
+        header: 0
+        affected_rows: 1
+        last_insert_id: 0
+        status_flags: 2
+        warnings: 0
+        info: ''
+  created: 1772055724
+  reqtimestampmock: '2026-02-25T21:42:03.382Z'
+  restimestampmock: '2026-02-25T21:42:03.382Z'
