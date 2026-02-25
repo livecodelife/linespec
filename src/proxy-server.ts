@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { startProxy } from './mysql-proxy';
+import { startProxy, proxyEvents } from './mysql-proxy';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -11,6 +11,7 @@ interface ProxyOptions {
   upstreamHost: string;
   upstreamPort: number;
   listenPort: number;
+  errorFile?: string;
 }
 
 function parseArgs(): ProxyOptions {
@@ -35,6 +36,9 @@ function parseArgs(): ProxyOptions {
     } else if (args[i] === '--port' && i + 1 < args.length) {
       options.listenPort = parseInt(args[i + 1], 10);
       i++;
+    } else if (args[i] === '--error-file' && i + 1 < args.length) {
+      options.errorFile = args[i + 1];
+      i++;
     }
   }
 
@@ -53,6 +57,24 @@ async function main() {
   const docs = yaml.loadAll(raw) as KMock[];
 
   console.error(`Loaded ${docs.length} mock documents from ${options.mocksFile}`);
+
+  // Set up error file if specified
+  if (options.errorFile) {
+    // Clear any previous errors
+    if (fs.existsSync(options.errorFile)) {
+      fs.unlinkSync(options.errorFile);
+    }
+    
+    // Listen for verification errors and write them to file
+    proxyEvents.on('verificationError', (error: string) => {
+      try {
+        fs.writeFileSync(options.errorFile!, JSON.stringify({ error, timestamp: Date.now() }));
+        console.error(`[proxy-server] Verification error written to ${options.errorFile}`);
+      } catch (err) {
+        console.error(`[proxy-server] Failed to write error file: ${err}`);
+      }
+    });
+  }
 
   const server = await startProxy(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
 

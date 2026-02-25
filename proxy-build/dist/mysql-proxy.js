@@ -33,13 +33,33 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.proxyEvents = void 0;
+exports.getLastVerificationError = getLastVerificationError;
+exports.clearVerificationErrors = clearVerificationErrors;
+exports.setVerificationError = setVerificationError;
 exports.startProxy = startProxy;
 const net = __importStar(require("net"));
+const events_1 = require("events");
+// Global event emitter for proxy events
+exports.proxyEvents = new events_1.EventEmitter();
 // Debug logging helper
 function logPacketBytes(label, data, maxBytes = 200) {
     const hex = data.slice(0, Math.min(data.length, maxBytes)).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
     const truncated = data.length > maxBytes ? `... (${data.length} bytes total)` : '';
     console.error(`[mysql-proxy] ${label}: ${hex}${truncated}`);
+}
+// Global state to track verification errors
+const proxyState = {
+    verificationErrors: new Map(),
+};
+function getLastVerificationError(testName) {
+    return proxyState.verificationErrors.get(testName);
+}
+function clearVerificationErrors() {
+    proxyState.verificationErrors.clear();
+}
+function setVerificationError(testName, error) {
+    proxyState.verificationErrors.set(testName, error);
 }
 function readPackets(stateBuf) {
     const packets = [];
@@ -355,6 +375,41 @@ function buildMockQueue(mocks) {
     queue.sort((a, b) => a.created - b.created);
     return queue;
 }
+function checkVerificationRules(query, rules) {
+    if (!rules || rules.length === 0) {
+        return { success: true };
+    }
+    for (const rule of rules) {
+        switch (rule.type) {
+            case 'CONTAINS':
+                if (!query.includes(rule.pattern)) {
+                    return {
+                        success: false,
+                        error: `VERIFY FAILED: Query does not contain '${rule.pattern}'.\nActual query: ${query}`
+                    };
+                }
+                break;
+            case 'NOT_CONTAINS':
+                if (query.includes(rule.pattern)) {
+                    return {
+                        success: false,
+                        error: `VERIFY FAILED: Query should NOT contain '${rule.pattern}' but it does.\nActual query: ${query}`
+                    };
+                }
+                break;
+            case 'MATCHES':
+                const regex = new RegExp(rule.pattern, 'i');
+                if (!regex.test(query)) {
+                    return {
+                        success: false,
+                        error: `VERIFY FAILED: Query does not match pattern /${rule.pattern}/.\nActual query: ${query}`
+                    };
+                }
+                break;
+        }
+    }
+    return { success: true };
+}
 function findAndConsumeMock(queue, requestOperation, query) {
     console.error(`[mysql-proxy] findAndConsumeMock called with operation=${requestOperation}, query="${query}"`);
     console.error(`[mysql-proxy] Queue length: ${queue.length}`);
@@ -367,7 +422,7 @@ function findAndConsumeMock(queue, requestOperation, query) {
         }
         if (requestOperation === 'COM_PING') {
             queue.splice(i, 1);
-            return spec;
+            return { spec };
         }
         if (requestOperation === 'COM_QUERY' && query) {
             for (const req of spec.requests) {
@@ -393,10 +448,17 @@ function findAndConsumeMock(queue, requestOperation, query) {
                     // Try exact match first (normalized)
                     if (normalizedQuery === normalizedMock) {
                         console.error(`[mysql-proxy] EXACT MATCH found for query: "${query}"`);
+                        // Check verification rules
+                        const verifyResult = checkVerificationRules(query, spec.metadata.verify);
+                        if (!verifyResult.success) {
+                            console.error(`[mysql-proxy] VERIFICATION FAILED: ${verifyResult.error}`);
+                            exports.proxyEvents.emit('verificationError', verifyResult.error);
+                            return { spec: null, verificationError: verifyResult.error };
+                        }
                         if (isWriteOp) {
                             queue.splice(i, 1);
                         }
-                        return spec;
+                        return { spec };
                     }
                     // For SELECT queries, match by table name appearing in the query (but not schema queries)
                     if (normalizedMock.startsWith('select ')) {
@@ -440,7 +502,14 @@ function findAndConsumeMock(queue, requestOperation, query) {
                                 normalizedQuery.includes(`join ${tableName}`);
                             if (hasTable) {
                                 console.error(`[mysql-proxy] TABLE MATCH for ${requestOperation}: ${tableName}`);
-                                return spec;
+                                // Check verification rules
+                                const verifyResult = checkVerificationRules(query, spec.metadata.verify);
+                                if (!verifyResult.success) {
+                                    console.error(`[mysql-proxy] VERIFICATION FAILED: ${verifyResult.error}`);
+                                    exports.proxyEvents.emit('verificationError', verifyResult.error);
+                                    return { spec: null, verificationError: verifyResult.error };
+                                }
+                                return { spec };
                             }
                         }
                     }
@@ -474,10 +543,17 @@ function findAndConsumeMock(queue, requestOperation, query) {
                         console.error(`[mysql-proxy] Pattern matching for ${opPrefix} on table ${tableName}, query starts with: "${normalizedQuery.substring(0, 50)}"`);
                         if (tableName && normalizedQuery.startsWith(`${opPrefix} ${tableName}`)) {
                             console.error(`[mysql-proxy] Pattern match for ${requestOperation}: ${opPrefix} ${tableName}*`);
+                            // Check verification rules
+                            const verifyResult = checkVerificationRules(query, spec.metadata.verify);
+                            if (!verifyResult.success) {
+                                console.error(`[mysql-proxy] VERIFICATION FAILED: ${verifyResult.error}`);
+                                exports.proxyEvents.emit('verificationError', verifyResult.error);
+                                return { spec: null, verificationError: verifyResult.error };
+                            }
                             if (isWriteOp) {
                                 queue.splice(i, 1);
                             }
-                            return spec;
+                            return { spec };
                         }
                     }
                 }
@@ -485,7 +561,7 @@ function findAndConsumeMock(queue, requestOperation, query) {
         }
     }
     console.error(`[mysql-proxy] No match found for query: "${query}" - passing through to DB`);
-    return null;
+    return { spec: null };
 }
 function isResponseComplete(payload, passthroughState) {
     if (!passthroughState.active) {
@@ -598,7 +674,12 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             }
             const commandByte = packet.payload[0];
             if (commandByte === 0x0e) {
-                const mock = findAndConsumeMock(queue, 'COM_PING');
+                const { spec: mock, verificationError } = findAndConsumeMock(queue, 'COM_PING');
+                if (verificationError) {
+                    console.error('[mysql-proxy] VERIFICATION FAILED for COM_PING: ' + verificationError);
+                    clientSocket.destroy(new Error(verificationError));
+                    return;
+                }
                 if (mock) {
                     console.error('[mysql-proxy] Using mock for COM_PING');
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
@@ -618,7 +699,13 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             }
             if (commandByte === 0x03) {
                 const query = packet.payload.slice(1).toString('utf8');
-                const mock = findAndConsumeMock(queue, 'COM_QUERY', query);
+                const { spec: mock, verificationError } = findAndConsumeMock(queue, 'COM_QUERY', query);
+                if (verificationError) {
+                    console.error('[mysql-proxy] VERIFICATION FAILED for query: ' + query);
+                    console.error('[mysql-proxy] Error: ' + verificationError);
+                    clientSocket.destroy(new Error(verificationError));
+                    return;
+                }
                 if (mock) {
                     console.error('[mysql-proxy] Using mock for: ' + query);
                     const response = serializeResponses(mock.responses, packet.seqId + 1);

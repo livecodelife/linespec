@@ -62,6 +62,10 @@ function parseArgs() {
             options.listenPort = parseInt(args[i + 1], 10);
             i++;
         }
+        else if (args[i] === '--error-file' && i + 1 < args.length) {
+            options.errorFile = args[i + 1];
+            i++;
+        }
     }
     return options;
 }
@@ -74,6 +78,23 @@ async function main() {
     const raw = fs.readFileSync(options.mocksFile, 'utf-8');
     const docs = yaml.loadAll(raw);
     console.error(`Loaded ${docs.length} mock documents from ${options.mocksFile}`);
+    // Set up error file if specified
+    if (options.errorFile) {
+        // Clear any previous errors
+        if (fs.existsSync(options.errorFile)) {
+            fs.unlinkSync(options.errorFile);
+        }
+        // Listen for verification errors and write them to file
+        mysql_proxy_1.proxyEvents.on('verificationError', (error) => {
+            try {
+                fs.writeFileSync(options.errorFile, JSON.stringify({ error, timestamp: Date.now() }));
+                console.error(`[proxy-server] Verification error written to ${options.errorFile}`);
+            }
+            catch (err) {
+                console.error(`[proxy-server] Failed to write error file: ${err}`);
+            }
+        });
+    }
     const server = await (0, mysql_proxy_1.startProxy)(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
     console.error(`MySQL proxy listening on port ${options.listenPort} -> ${options.upstreamHost}:${options.upstreamPort}`);
     console.error('Press Ctrl+C to stop');

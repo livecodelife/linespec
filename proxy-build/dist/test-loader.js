@@ -78,5 +78,5 @@ function loadTestSet(dir) {
             throw err;
         }
     }
-    return { tests, mocks };
+    return { dir, tests, mocks };
 }

@@ -12,6 +12,7 @@ import {
   KTestAssertions,
   ExpectStatement,
   ExpectWriteMysqlStatement,
+  VerifyRule,
 } from './types';
 
 export interface CompileOptions {
@@ -431,13 +432,20 @@ function buildKMocks(spec: TestSpec, payloads: Map<string, PayloadFile>): KMock[
     if (expect.channel === 'READ_MYSQL' || expect.channel === 'WRITE_MYSQL') {
       const isWrite = expect.channel === 'WRITE_MYSQL';
       const responseOp = isWrite ? 'OK' : 'TextResultSet';
+      const verifyRules = (expect as any).verify as VerifyRule[] | undefined;
+      const metadata: KMockMysqlSpec['metadata'] = {
+        connID: '0',
+        requestOperation: 'COM_QUERY',
+        responseOperation: responseOp,
+        type: 'mocks',
+      };
+      
+      if (verifyRules && verifyRules.length > 0) {
+        metadata.verify = verifyRules;
+      }
+      
       const mysqlSpec: KMockMysqlSpec = {
-        metadata: {
-          connID: '0',
-          requestOperation: 'COM_QUERY',
-          responseOperation: responseOp,
-          type: 'mocks',
-        },
+        metadata,
         requests: [],
         responses: [],
         created: Math.floor(Date.now() / 1000),

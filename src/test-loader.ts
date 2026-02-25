@@ -50,5 +50,5 @@ export function loadTestSet(dir: string): LoadedTestSet {
     }
   }
 
-  return { tests, mocks };
+  return { dir, tests, mocks };
 }

@@ -9,6 +9,7 @@ import {
   ExpectWriteMysqlStatement,
   ExpectWritePostgresqlStatement,
   ExpectEventStatement,
+  VerifyRule,
 } from './types';
 import * as path from 'path';
 
@@ -31,6 +32,26 @@ function expectType(tokens: Token[], pos: { value: number }, type: Token['type']
     throw new LineSpecError(`Expected ${type} but got ${token.type}`, token.line);
   }
   return token;
+}
+
+function parseVerifyRule(value: string, line: number): VerifyRule {
+  // Format: query CONTAINS 'string' or query NOT_CONTAINS 'string' or query MATCHES /regex/
+  const containsMatch = value.match(/^query\s+CONTAINS\s+['"](.+?)['"]$/i);
+  if (containsMatch) {
+    return { type: 'CONTAINS', pattern: containsMatch[1] };
+  }
+  
+  const notContainsMatch = value.match(/^query\s+NOT_CONTAINS\s+['"](.+?)['"]$/i);
+  if (notContainsMatch) {
+    return { type: 'NOT_CONTAINS', pattern: notContainsMatch[1] };
+  }
+  
+  const matchesMatch = value.match(/^query\s+MATCHES\s\/(.+?)\/$/i);
+  if (matchesMatch) {
+    return { type: 'MATCHES', pattern: matchesMatch[1] };
+  }
+  
+  throw new LineSpecError(`Invalid VERIFY format: ${value}. Expected: VERIFY query CONTAINS 'string', VERIFY query NOT_CONTAINS 'string', or VERIFY query MATCHES /regex/`, line);
 }
 
 function parseExpectChannel(
@@ -169,6 +190,18 @@ export function parse(tokens: Token[], filename: string): TestSpec {
     // Set transactional flag for WRITE_MYSQL
     if (expectPartial.channel === 'WRITE_MYSQL') {
       (expectPartial as ExpectWriteMysqlStatement).transactional = transactional;
+    }
+
+    // Parse VERIFY clauses
+    const verifyRules: VerifyRule[] = [];
+    while (peek(tokens, pos.value)?.type === 'VERIFY') {
+      const verifyToken = consume(tokens, pos);
+      const rule = parseVerifyRule(verifyToken.value, verifyToken.line);
+      verifyRules.push(rule);
+    }
+    
+    if (verifyRules.length > 0) {
+      (expectPartial as any).verify = verifyRules;
     }
 
     expects.push(expectPartial);

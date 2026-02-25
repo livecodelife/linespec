@@ -1,5 +1,5 @@
 export interface Token {
-  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION';
+  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY';
   value: string;
   line: number;
 }
@@ -73,6 +73,8 @@ export function tokenize(source: string): Token[] {
       tokens.push({ type: 'RESPOND', value: match[1].trim(), line: lineNo });
     } else if ((match = line.match(/^NO\s+TRANSACTION$/))) {
       tokens.push({ type: 'NO_TRANSACTION', value: 'NO_TRANSACTION', line: lineNo });
+    } else if ((match = line.match(/^VERIFY\s+(.+)$/))) {
+      tokens.push({ type: 'VERIFY', value: match[1].trim(), line: lineNo });
     } else if (line === 'NOISE') {
       noiseLines = [];
       noiseStartLine = lineNo;

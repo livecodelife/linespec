@@ -586,6 +586,13 @@ async function runTests(testSet, options) {
     const overridePath = useCompose
         ? path.join(path.dirname(composePath), '.linespec-compose-override.yml')
         : '';
+    // Define error file path for Docker proxy mode
+    const errorDirPath = useCompose
+        ? path.resolve(testSet.dir, '.linespec-errors')
+        : '';
+    const errorFilePath = useCompose
+        ? path.join(errorDirPath, 'verification-errors.json')
+        : '';
     let proxyServer = null;
     const dbPort = options.dbPort ?? 3306;
     try {
@@ -701,6 +708,10 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
             await spawnProcess('docker', [
                 'rm', '-f', proxyContainerName
             ]);
+            // Create error directory before mounting
+            if (!fs.existsSync(errorDirPath)) {
+                fs.mkdirSync(errorDirPath, { recursive: true });
+            }
             const networkName = getNetworkName(options.composePath, composeParsed);
             const upstreamHost = getDbUpstreamHost(composeParsed);
             const upstreamPort = getDbUpstreamPort(composeParsed);
@@ -711,12 +722,14 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
                 '--name', proxyContainerName,
                 '--network', networkName,
                 '-p', `${proxyPort}:${internalProxyPort}`,
+                '-v', `${errorDirPath}:/app/errors`,
                 proxyImageName,
                 'node', 'dist/proxy-server.js',
                 '--mocks', 'mocks.yaml',
                 '--upstream-host', upstreamHost,
                 '--upstream-port', String(upstreamPort),
-                '--port', String(internalProxyPort)
+                '--port', String(internalProxyPort),
+                '--error-file', '/app/errors/verification-errors.json'
             ]);
             await new Promise((resolve) => setTimeout(resolve, 2000));
             process.stdout.write('→ Waiting for proxy to be ready...\n');
@@ -813,8 +826,51 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         let passed = 0;
         let failed = 0;
         const results = [];
+        // Track verification errors per test
+        const verificationErrors = new Map();
+        // Listen for verification errors from the proxy
+        const onVerificationError = (error) => {
+            // Store the error for the current test
+            const currentTest = testSet.tests[results.length]?.name;
+            if (currentTest) {
+                verificationErrors.set(currentTest, error);
+            }
+        };
+        mysql_proxy_1.proxyEvents.on('verificationError', onVerificationError);
         for (const { name, ktest } of testSet.tests) {
+            // Clear any previous verification error for this test
+            verificationErrors.delete(name);
             const result = await runHttpTest(ktest, options.serviceUrl, name);
+            // Check if there was a verification error for this test
+            // First check the event listener (for local proxy mode)
+            let verificationError = verificationErrors.get(name);
+            // If using Docker proxy, also check the error file
+            if (useCompose && !verificationError && fs.existsSync(errorFilePath)) {
+                try {
+                    const errorContent = fs.readFileSync(errorFilePath, 'utf-8');
+                    if (errorContent) {
+                        const errorData = JSON.parse(errorContent);
+                        if (errorData.error) {
+                            verificationError = errorData.error;
+                            verificationErrors.set(name, errorData.error);
+                            // Clear the file after reading
+                            fs.unlinkSync(errorFilePath);
+                        }
+                    }
+                }
+                catch {
+                    // Ignore file read errors
+                }
+            }
+            if (verificationError && result.pass) {
+                // If verification failed but HTTP test passed, mark as failed
+                result.pass = false;
+                result.reason = `SQL Verification Failed: ${verificationError}`;
+            }
+            else if (verificationError && !result.pass) {
+                // If both failed, append verification error to reason
+                result.reason = `${result.reason}\nSQL Verification Failed: ${verificationError}`;
+            }
             results.push(result);
             if (result.pass) {
                 passed++;
@@ -822,12 +878,22 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
             }
             else {
                 failed++;
-                process.stdout.write(`✗ ${name} FAIL (${result.reason})\n`);
+                process.stdout.write(`✗ ${name} FAIL\n`);
+                // Print detailed failure information
+                if (verificationError) {
+                    process.stdout.write(`\n  🔒 SQL Verification Error:\n`);
+                    const lines = verificationError.split('\n');
+                    for (const line of lines) {
+                        process.stdout.write(`    ${line}\n`);
+                    }
+                    process.stdout.write(`\n`);
+                }
                 if (result.expectedStatus !== undefined && result.actualStatus !== undefined) {
                     process.stdout.write(`  Expected status : ${result.expectedStatus}\n`);
                     process.stdout.write(`  Actual status   : ${result.actualStatus}\n`);
                 }
                 if (result.diff) {
+                    process.stdout.write(`  Body diff:\n`);
                     const diffLines = result.diff.split('\n');
                     for (const line of diffLines) {
                         if (line.includes(' ~ ')) {
@@ -839,16 +905,18 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
                                 process.stdout.write(`\x1b[31m${leftCol}\x1b[0m  ~  \x1b[32m${rightCol}\x1b[0m\n`);
                             }
                             else {
-                                process.stdout.write(`${line}\n`);
+                                process.stdout.write(`    ${line}\n`);
                             }
                         }
                         else {
-                            process.stdout.write(`${line}\n`);
+                            process.stdout.write(`    ${line}\n`);
                         }
                     }
                 }
             }
         }
+        // Remove the event listener
+        mysql_proxy_1.proxyEvents.off('verificationError', onVerificationError);
         if (options.reportDir) {
             fs.mkdirSync(options.reportDir, { recursive: true });
             const summary = {
@@ -859,12 +927,17 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
                     name: r.name,
                     pass: r.pass,
                     reason: r.reason,
+                    verificationError: verificationErrors.get(r.name),
                 })),
             };
             fs.writeFileSync(path.join(options.reportDir, 'summary.json'), JSON.stringify(summary, null, 2));
             for (const result of results) {
                 const safeName = result.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-                fs.writeFileSync(path.join(options.reportDir, `${safeName}.json`), JSON.stringify(result, null, 2));
+                const reportData = {
+                    ...result,
+                    verificationError: verificationErrors.get(result.name),
+                };
+                fs.writeFileSync(path.join(options.reportDir, `${safeName}.json`), JSON.stringify(reportData, null, 2));
             }
             process.stdout.write(`→ Report written to ${options.reportDir}/\n`);
         }

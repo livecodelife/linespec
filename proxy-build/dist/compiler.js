@@ -416,13 +416,18 @@ function buildKMocks(spec, payloads) {
         if (expect.channel === 'READ_MYSQL' || expect.channel === 'WRITE_MYSQL') {
             const isWrite = expect.channel === 'WRITE_MYSQL';
             const responseOp = isWrite ? 'OK' : 'TextResultSet';
+            const verifyRules = expect.verify;
+            const metadata = {
+                connID: '0',
+                requestOperation: 'COM_QUERY',
+                responseOperation: responseOp,
+                type: 'mocks',
+            };
+            if (verifyRules && verifyRules.length > 0) {
+                metadata.verify = verifyRules;
+            }
             const mysqlSpec = {
-                metadata: {
-                    connID: '0',
-                    requestOperation: 'COM_QUERY',
-                    responseOperation: responseOp,
-                    type: 'mocks',
-                },
+                metadata,
                 requests: [],
                 responses: [],
                 created: Math.floor(Date.now() / 1000),

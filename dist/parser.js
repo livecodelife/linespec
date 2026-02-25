@@ -56,6 +56,22 @@ function expectType(tokens, pos, type) {
     }
     return token;
 }
+function parseVerifyRule(value, line) {
+    // Format: query CONTAINS 'string' or query NOT_CONTAINS 'string' or query MATCHES /regex/
+    const containsMatch = value.match(/^query\s+CONTAINS\s+['"](.+?)['"]$/i);
+    if (containsMatch) {
+        return { type: 'CONTAINS', pattern: containsMatch[1] };
+    }
+    const notContainsMatch = value.match(/^query\s+NOT_CONTAINS\s+['"](.+?)['"]$/i);
+    if (notContainsMatch) {
+        return { type: 'NOT_CONTAINS', pattern: notContainsMatch[1] };
+    }
+    const matchesMatch = value.match(/^query\s+MATCHES\s\/(.+?)\/$/i);
+    if (matchesMatch) {
+        return { type: 'MATCHES', pattern: matchesMatch[1] };
+    }
+    throw new lexer_1.LineSpecError(`Invalid VERIFY format: ${value}. Expected: VERIFY query CONTAINS 'string', VERIFY query NOT_CONTAINS 'string', or VERIFY query MATCHES /regex/`, line);
+}
 function parseExpectChannel(value, line) {
     const eventMatch = value.match(/^(EVENT|MESSAGE):(.+)$/i);
     if (eventMatch) {
@@ -168,6 +184,16 @@ function parse(tokens, filename) {
         // Set transactional flag for WRITE_MYSQL
         if (expectPartial.channel === 'WRITE_MYSQL') {
             expectPartial.transactional = transactional;
+        }
+        // Parse VERIFY clauses
+        const verifyRules = [];
+        while (peek(tokens, pos.value)?.type === 'VERIFY') {
+            const verifyToken = consume(tokens, pos);
+            const rule = parseVerifyRule(verifyToken.value, verifyToken.line);
+            verifyRules.push(rule);
+        }
+        if (verifyRules.length > 0) {
+            expectPartial.verify = verifyRules;
         }
         expects.push(expectPartial);
     }

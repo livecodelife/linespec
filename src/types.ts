@@ -1,5 +1,10 @@
 export type ExpectChannel = 'HTTP' | 'READ_MYSQL' | 'WRITE_MYSQL' | 'WRITE_POSTGRESQL' | 'EVENT';
 
+export interface VerifyRule {
+  type: 'CONTAINS' | 'NOT_CONTAINS' | 'MATCHES';
+  pattern: string;
+}
+
 export interface ExpectHttpStatement {
   channel: 'HTTP';
   method: string;
@@ -14,6 +19,7 @@ export interface ExpectReadMysqlStatement {
   sql?: string;
   withFile?: string;
   returnsFile: string;
+  verify?: VerifyRule[];
 }
 
 export interface ExpectWriteMysqlStatement {
@@ -23,6 +29,7 @@ export interface ExpectWriteMysqlStatement {
   withFile: string;
   returnsFile?: string;
   transactional?: boolean;
+  verify?: VerifyRule[];
 }
 
 export interface ExpectWritePostgresqlStatement {
@@ -131,6 +138,7 @@ export interface KMockMysqlSpec {
     requestOperation: string;
     responseOperation: string;
     type: string;
+    verify?: VerifyRule[];
   };
   requests: Array<{
     header: {
@@ -207,6 +215,7 @@ export interface LoadedMock {
 }
 
 export interface LoadedTestSet {
+  dir: string;
   tests: LoadedKTest[];
   mocks: LoadedMock[];
 }
