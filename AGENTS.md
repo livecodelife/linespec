@@ -285,6 +285,73 @@ The compiler sets the `packet_type` dynamically:
 8. Report written to `linespec-report/`
 9. `docker compose down` and proxy teardown
 
+### Docker Compose Testing Infrastructure
+
+When running tests with `--compose`, LineSpec manages Docker containers automatically:
+
+**Startup Sequence:**
+
+1. **Clean existing containers** (`docker compose down -v`)
+   - Ensures fresh database state by removing old containers and volumes
+   - Prevents conflicts with previously running services
+
+2. **Start database service** (`docker compose up -d db`)
+   - Only the database container is started initially
+   - Waits for database to be ready (TCP connection check)
+
+3. **Build MySQL proxy container**
+   - Creates a custom Docker image with the proxy server
+   - Copies mocks.yaml and compiled code into the image
+   - Proxy intercepts all database traffic between app and real DB
+
+4. **Start proxy container** (`docker run -d linespec-proxy`)
+   - Runs on the same Docker network as the compose services
+   - Listens on standard MySQL port 3306
+   - Routes queries to real DB or returns mock responses
+
+5. **Generate compose override** (`.linespec-compose-override.yml`)
+   - Rewrites `DATABASE_URL` to point to proxy container
+   - Updates all DB host variables: `DB_HOST`, `DATABASE_HOST`, `MYSQL_HOST`, `POSTGRES_HOST`
+   - Updates all DB port variables to 3306
+   - Preserves other DB-related env vars (DB_NAME, credentials, etc.)
+
+6. **Start web service with override**
+   ```bash
+   docker compose -f docker-compose.yml -f .linespec-compose-override.yml up -d web
+   ```
+   - Web service now connects to proxy instead of real database
+   - Proxy determines which queries to mock vs. pass through
+
+**Shutdown Sequence:**
+
+1. **Remove web service** (`docker compose rm -fs web`)
+   - Stops and removes only the web container
+   - Keeps database running for next test run
+
+2. **Clean up proxy**
+   - Stops and removes the proxy container
+   - Proxy server process is terminated
+
+3. **Remove override file**
+   - Deletes `.linespec-compose-override.yml`
+   - Cleans up temporary files
+
+**Example Override File:**
+```yaml
+version: "3.8"
+services:
+  web:
+    environment:
+      DATABASE_URL: mysql2://user:pass@linespec-proxy:3306/mydb
+      DB_HOST: linespec-proxy
+      DB_PORT: "3306"
+```
+
+**Proxy Query Routing:**
+- Infrastructure queries (SET NAMES, COM_PING, SHOW, etc.) → Real database
+- App-level queries (SELECT, INSERT, UPDATE, DELETE) → Mocks.yaml matching
+- If no mock matches → Pass through to real database
+
 ### Proxy Pattern Matching
 
 The proxy matches queries using a hierarchy:
