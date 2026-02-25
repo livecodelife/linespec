@@ -168,4 +168,58 @@ program
     }
   });
 
+program
+  .command('docs')
+  .description('Show documentation paths and AI agent guidelines')
+  .option('-l, --linespec', 'Open LineSpec language reference')
+  .option('-a, --agents', 'Open AI agent guidelines')
+  .option('-r, --readme', 'Open README')
+  .action((options: { linespec?: boolean; agents?: boolean; readme?: boolean }) => {
+    const pkgDir = path.dirname(require.resolve('../package.json'));
+    const docsDir = path.join(pkgDir, 'docs');
+    
+    if (options.linespec) {
+      const linespecPath = path.join(docsDir, 'LINESPEC.md');
+      if (fs.existsSync(linespecPath)) {
+        console.log(linespecPath);
+      } else {
+        console.error('LINESPEC.md not found in package');
+        process.exit(1);
+      }
+    } else if (options.agents) {
+      const agentsPath = path.join(docsDir, 'AGENTS.md');
+      if (fs.existsSync(agentsPath)) {
+        console.log(agentsPath);
+      } else {
+        console.error('AGENTS.md not found in package');
+        process.exit(1);
+      }
+    } else if (options.readme) {
+      const readmePath = path.join(docsDir, 'README.md');
+      if (fs.existsSync(readmePath)) {
+        console.log(readmePath);
+      } else {
+        console.error('README.md not found in package');
+        process.exit(1);
+      }
+    } else {
+      console.log('Documentation files location:');
+      console.log(`  ${docsDir}`);
+      console.log('');
+      console.log('Available documentation:');
+      console.log('  LINESPEC.md   - Complete language reference');
+      console.log('  AGENTS.md     - Guidelines for AI agents');
+      console.log('  README.md     - General usage guide');
+      console.log('');
+      console.log('Usage:');
+      console.log('  linespec docs --linespec   # Print path to LINESPEC.md');
+      console.log('  linespec docs --agents     # Print path to AGENTS.md');
+      console.log('  linespec docs --readme     # Print path to README.md');
+      console.log('');
+      console.log('AI Agent Note:');
+      console.log('  When helping users write LineSpec files, read AGENTS.md first');
+      console.log('  for project context, then refer to LINESPEC.md for syntax.');
+    }
+  });
+
 program.parse(process.argv);

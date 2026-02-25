@@ -8,8 +8,11 @@
   },
   "files": [
     "dist/**/*",
+    "docs/**/*",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "LINESPEC.md",
+    "AGENTS.md"
   ],
   "scripts": {
     "build": "tsc",
