@@ -172,6 +172,77 @@ Compiled To:
 
 ---
 
+### VERIFY (SQL Validation)
+
+The `VERIFY` clause validates the actual SQL query executed by the application at runtime. It can be attached to any MySQL EXPECT statement to enforce query structure, security policies, or correctness constraints.
+
+Use cases include:
+- Security: Ensuring passwords are hashed before storage
+- Compliance: Verifying sensitive data is not logged in plain text
+- Correctness: Confirming proper SQL structure (e.g., required columns, proper table names)
+- Injection prevention: Validating query patterns match expected templates
+
+Syntax:
+
+```
+EXPECT <CHANNEL> <resource>
+[USING_SQL """<SQL>"""]
+WITH {{<input_payload>}}
+VERIFY query CONTAINS '<string>'
+VERIFY query NOT_CONTAINS '<string>'
+VERIFY query MATCHES /<regex>/
+```
+
+Operators:
+
+* `CONTAINS` — Query must include the specified string
+* `NOT_CONTAINS` — Query must NOT include the specified string
+* `MATCHES` — Query must match the specified regex pattern
+
+Example — Password Hashing (Security):
+
+```
+TEST create-user-with-hashing
+RECEIVE HTTP:POST /api/v1/users
+WITH {{user_create_request.yaml}}
+
+# Ensure password is hashed before storage
+EXPECT WRITE:MYSQL users
+WITH {{user_with_hashed_password.yaml}}
+VERIFY query CONTAINS 'password_digest'
+VERIFY query NOT_CONTAINS 'password'
+
+RESPOND HTTP:201
+```
+
+Example — Query Structure Validation:
+
+```
+TEST create-order-audit
+RECEIVE HTTP:POST /api/v1/orders
+WITH {{order_request.yaml}}
+
+# Ensure all inserts include created_at for audit trails
+EXPECT WRITE:MYSQL orders
+WITH {{order_data.yaml}}
+VERIFY query CONTAINS 'created_at'
+VERIFY query MATCHES /INSERT INTO orders \([^)]+\) VALUES \([^)]+\)/
+
+RESPOND HTTP:201
+```
+
+Compiled To:
+
+* KMock with `spec.metadata.verify` array containing validation rules
+
+Runtime Behavior:
+
+* When the proxy matches a query to the mock, it checks all VERIFY rules
+* If any rule fails, the test fails with 🔒 SQL Verification Error
+* The actual query is shown in the error message for debugging
+
+---
+
 ### EXPECT EVENT
 
 ```
@@ -345,6 +416,6 @@ It is a strict behavioral specification language designed to:
 * Be readable by humans
 * Be trivial to parse
 * Compile deterministically
-* Mirror Keploy’s runtime model
+* Mirror Keploy's runtime model
 
 No inference. No heuristics. No ambiguity.

@@ -15,6 +15,6 @@ RETURNS {{payloads/mysql_todos_read_result.yaml}}
 RESPOND HTTP:200
 WITH {{payloads/todos_list_resp.yaml}}
 NOISE
-  id
+  body.id
   body.created_at
   body.updated_at

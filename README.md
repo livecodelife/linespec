@@ -139,10 +139,10 @@ EXPECT <CHANNEL> <resource>
 
 Supported channels:
 - `HTTP:<METHOD> <URL>` - External HTTP calls
-- `READ_MYSQL <table>` - Database reads (requires `RETURNS`)
-- `WRITE_MYSQL <table>` - Database writes (auto-transactional by default)
-- `WRITE_POSTGRESQL <table>` - PostgreSQL writes
-- `EVENT <topic>` - Message queue events
+  - `READ_MYSQL <table>` - Database reads (requires `RETURNS`)
+  - `WRITE_MYSQL <table>` - Database writes (auto-transactional by default)
+  - `WRITE_POSTGRESQL <table>` - PostgreSQL writes
+  - `EVENT <topic>` - Message queue events
 
 **MySQL Write Operations:**
 
@@ -152,6 +152,16 @@ For `WRITE_MYSQL`, the system provides powerful conveniences:
 2. **SQL generation** - If `USING_SQL` is not provided, SQL is automatically generated from the `WITH` payload:
    - `INSERT INTO <table> (columns...) VALUES (values...)` from the payload data
 3. **Generic responses** - Write operations don't need `RETURNS`; a generic OK response is auto-generated.
+4. **SQL Verification** - Use `VERIFY` clauses to validate actual SQL queries at runtime for security, correctness, or compliance:
+
+   ```linespec
+   EXPECT WRITE:MYSQL users
+   WITH {{payloads/user_data.yaml}}
+   VERIFY query CONTAINS 'password_digest'
+   VERIFY query NOT_CONTAINS 'password'
+   ```
+
+   Common use cases include password hashing verification, audit trail enforcement, and SQL injection prevention.
 
 Use `NO TRANSACTION` to disable auto-transaction wrapping for non-transactional ORMs:
 
@@ -210,6 +220,42 @@ NOISE
   body.updated_at
 ```
 
+### Write with SQL Verification
+
+Use `VERIFY` clauses to validate the actual SQL executed by your application:
+
+```linespec
+TEST create-user-secure
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+
+# VERIFY validates the actual SQL query at runtime
+# Example: ensure password is hashed (no plain text 'password' field)
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_with_password_digest.yaml}}
+VERIFY query CONTAINS 'password_digest'
+VERIFY query NOT_CONTAINS 'password'
+
+RESPOND HTTP:201
+WITH {{payloads/user_create_resp.yaml}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at
+```
+
+When verification fails, the test output shows:
+```
+✗ create-user-secure FAIL
+
+  🔒 SQL Verification Error:
+    VERIFY FAILED: Query does not contain 'password_digest'.
+    Actual query: INSERT INTO `users` (`name`, `email`, `password`) ...
+
+  Expected status : 201
+  Actual status   : 500
+```
+
 ### Read Operation with Custom SQL
 
 ```linespec
@@ -240,6 +286,26 @@ NO TRANSACTION
 WITH {{payloads/item_create_req.yaml}}
 
 RESPOND HTTP:201
+```
+
+## VERIFY Operators
+
+The `VERIFY` clause supports three operators for SQL validation:
+
+| Operator | Description |
+|----------|-------------|
+| `CONTAINS '<string>'` | Query must include the specified string |
+| `NOT_CONTAINS '<string>'` | Query must NOT include the specified string |
+| `MATCHES /regex/` | Query must match the specified regex pattern |
+
+Multiple VERIFY clauses can be attached to a single EXPECT statement:
+
+```linespec
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_data.yaml}}
+VERIFY query CONTAINS 'password_digest'
+VERIFY query NOT_CONTAINS 'password'
+VERIFY query MATCHES /INSERT INTO users/
 ```
 
 ## Generated Output

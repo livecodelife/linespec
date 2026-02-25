@@ -166,6 +166,9 @@ EXPECT <CHANNEL> <resource>
 """]
 [WITH {{payloads/input.yaml}}]
 [RETURNS {{payloads/output.yaml}}]
+[VERIFY query CONTAINS 'string']
+[VERIFY query NOT_CONTAINS 'string']
+[VERIFY query MATCHES /regex/]
 
 RESPOND HTTP:<STATUS_CODE>
 [WITH {{payloads/response.yaml}}]
@@ -292,8 +295,10 @@ These queries always pass through to the real database (never matched against mo
   - `WRITE_MYSQL` - Database writes (auto-transactional, optional `RETURNS`)
   - `WRITE_POSTGRESQL` - PostgreSQL writes
   - `EVENT` - Message queue events
+  - `VERIFY` - SQL query validation (attached to EXPECT statements)
 - `RESPOND` - Response (exactly one required, must be last)
 - `NOISE` - Response noise filter (optional, follows RESPOND)
+- `NO TRANSACTION` - Disable auto-transaction for WRITE_MYSQL
 
 ### Custom Errors
 All parsing and validation errors extend `LineSpecError` with optional line numbers for error reporting.
@@ -406,6 +411,52 @@ EXPECT WRITE:MYSQL users
 WITH {{payloads/user_create_req.yaml}}
 
 RESPOND HTTP:201
+```
+
+### Verifying SQL Query Structure
+
+Use VERIFY clauses to validate the actual SQL executed by the application at runtime. This enables security checks, compliance validation, and correctness enforcement.
+
+**Common use cases:**
+- **Security:** Ensure passwords are hashed before storage
+- **Compliance:** Verify audit fields (created_at, updated_by) are included
+- **Correctness:** Confirm proper table names and column sets
+- **Injection prevention:** Validate query patterns match expected templates
+
+```linespec
+TEST create-user-secure
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+
+# Example: Ensure password is hashed (no plain text 'password' in SQL)
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_with_hashed_password.yaml}}
+VERIFY query CONTAINS 'password_digest'
+VERIFY query NOT_CONTAINS 'password'
+
+RESPOND HTTP:201
+WITH {{payloads/user_create_resp.yaml}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at
+```
+
+Verification operators:
+- `CONTAINS 'string'` — Query must include the string
+- `NOT_CONTAINS 'string'` — Query must NOT include the string  
+- `MATCHES /regex/` — Query must match the regex pattern
+
+When verification fails, the test runner displays:
+```
+✗ test-1 FAIL
+
+  🔒 SQL Verification Error:
+    VERIFY FAILED: Query does not contain 'password_digest'.
+    Actual query: INSERT INTO `users` (`name`, `email`, `password`, ...) ...
+
+  Expected status : 201
+  Actual status   : 500
 ```
 
 ### Non-Transactional ORM

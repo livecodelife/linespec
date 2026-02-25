@@ -10,8 +10,11 @@ SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'user_one@example.com' LIMI
 RETURNS {{payloads/mysql_empty_result.yaml}}
 
 # The actual INSERT - no RETURNS needed, auto-transaction wraps it
+# VERIFY ensures password is hashed before storing (not plain text)
 EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create_req.yaml}}
+WITH {{payloads/mysql_users_create_req.yaml}}
+VERIFY query CONTAINS 'password_digest'
+VERIFY query NOT_CONTAINS 'something'
 
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}

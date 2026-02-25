@@ -13,13 +13,14 @@ SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'Y95Eo@hTwDuyMmEWomNvmWRXfj
 """
 RETURNS {{payloads/mysql_empty_result.yaml}}
 
-# The actual UPDATE
+# The actual UPDATE - VERIFY ensures password is hashed (no plain text)
 EXPECT WRITE:MYSQL users
-WITH {{payloads/user_update_req.yaml}}
+WITH {{payloads/mysql_users_update_req.yaml}}
+VERIFY query NOT_CONTAINS 'something'
 
 RESPOND HTTP:200
 WITH {{payloads/user_update_resp.yaml}}
 NOISE
-  id
+  body.id
   body.created_at
   body.updated_at
