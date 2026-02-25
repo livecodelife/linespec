@@ -17,6 +17,5 @@ RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}
 NOISE
   body.id
-  body.password_digest
   body.created_at
   body.updated_at

@@ -35,15 +35,69 @@ function parseComposeFile(composePath: string): Record<string, unknown> {
   return yaml.load(content) as Record<string, unknown>;
 }
 
+function getDbServiceName(composeParsed: Record<string, unknown>): string | null {
+  const services = composeParsed.services as Record<string, unknown>;
+  if (!services) return null;
+
+  // Look for common database service names
+  const commonDbNames = ['db', 'database', 'mysql', 'postgres', 'postgresql'];
+  
+  for (const name of commonDbNames) {
+    if (services[name]) {
+      return name;
+    }
+  }
+
+  // Try to detect by image or ports
+  for (const [name, service] of Object.entries(services)) {
+    const svc = service as Record<string, unknown>;
+    
+    // Check image name
+    const image = (svc.image as string) || '';
+    if (image.includes('mysql') || image.includes('postgres') || image.includes('mariadb')) {
+      return name;
+    }
+    
+    // Check for common DB ports
+    const ports = svc.ports as string[];
+    if (ports) {
+      for (const port of ports) {
+        if (port.includes('3306') || port.includes('5432')) {
+          return name;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function getDbUpstreamHost(composeParsed: Record<string, unknown>): string {
+  const dbServiceName = getDbServiceName(composeParsed);
+  return dbServiceName || 'db';
+}
+
 function getDbUpstreamPort(composeParsed: Record<string, unknown>): number {
+  const dbServiceName = getDbServiceName(composeParsed);
+  if (!dbServiceName) return 3306;
+  
   try {
     const services = composeParsed.services as Record<string, unknown>;
-    const db = services.db as Record<string, unknown>;
+    const db = services[dbServiceName] as Record<string, unknown>;
     const ports = db.ports as string[];
     if (ports && ports.length > 0) {
+      // Get the internal container port (after the colon)
       const portMapping = ports[0];
       const parts = portMapping.split(':');
-      return parseInt(parts[0], 10);
+      if (parts.length >= 2) {
+        return parseInt(parts[parts.length - 1], 10);
+      }
+    }
+    
+    // Try to infer from image
+    const image = (db.image as string) || '';
+    if (image.includes('postgres')) {
+      return 5432;
     }
   } catch {
     // ignore and return default
@@ -51,21 +105,86 @@ function getDbUpstreamPort(composeParsed: Record<string, unknown>): number {
   return 3306;
 }
 
+function getNetworkName(composePath: string, composeParsed: Record<string, unknown>): string {
+  // First, check if there's an explicit network configuration
+  const networks = composeParsed.networks as Record<string, unknown>;
+  if (networks && Object.keys(networks).length > 0) {
+    const firstNetwork = Object.keys(networks)[0];
+    if (firstNetwork !== 'default') {
+      return firstNetwork;
+    }
+  }
+  
+  // Otherwise, use Docker Compose's default naming convention
+  // The network name is based on the project name (directory name) + _default
+  // Resolve to absolute path first to handle relative paths correctly
+  const absolutePath = path.resolve(composePath);
+  const composeDir = path.basename(path.dirname(absolutePath));
+  return `${composeDir}_default`;
+}
+
 function extractDbName(composeParsed: Record<string, unknown>): string | null {
-  try {
-    const services = composeParsed.services as Record<string, unknown>;
-    const web = services.web as Record<string, unknown>;
-    const env = (web.environment as Record<string, string>) ?? {};
-    const databaseUrl = env.DATABASE_URL;
-    if (databaseUrl) {
-      const match = databaseUrl.match(/\/([^/?]+)(\?|$)/);
-      if (match) {
-        return match[1];
+  const services = composeParsed.services as Record<string, unknown>;
+  if (!services) return null;
+  
+  // Find the web/app service (not the DB service)
+  const appServiceNames = ['web', 'app', 'api', 'server'];
+  let appService: Record<string, unknown> | null = null;
+  
+  for (const name of appServiceNames) {
+    if (services[name]) {
+      appService = services[name] as Record<string, unknown>;
+      break;
+    }
+  }
+  
+  // If no known app service, use the first non-DB service
+  if (!appService) {
+    const dbServiceName = getDbServiceName(composeParsed);
+    for (const [name, service] of Object.entries(services)) {
+      if (name !== dbServiceName) {
+        appService = service as Record<string, unknown>;
+        break;
       }
     }
-  } catch {
-    // ignore
   }
+  
+  if (!appService) return null;
+  
+  const env = normalizeEnv(appService.environment);
+  
+  // Try DATABASE_URL first
+  const databaseUrl = env.DATABASE_URL;
+  if (databaseUrl) {
+    const match = databaseUrl.match(/\/([^/?]+)(\?|$)/);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  // Try Rails-style DATABASE_NAME
+  if (env.DATABASE_NAME) {
+    return env.DATABASE_NAME;
+  }
+  
+  // Try DB_NAME
+  if (env.DB_NAME) {
+    return env.DB_NAME;
+  }
+  
+  // Try MYSQL_DATABASE (from DB service env)
+  const dbServiceName = getDbServiceName(composeParsed);
+  if (dbServiceName && services[dbServiceName]) {
+    const dbService = services[dbServiceName] as Record<string, unknown>;
+    const dbEnv = normalizeEnv(dbService.environment);
+    if (dbEnv.MYSQL_DATABASE) {
+      return dbEnv.MYSQL_DATABASE;
+    }
+    if (dbEnv.POSTGRES_DB) {
+      return dbEnv.POSTGRES_DB;
+    }
+  }
+  
   return null;
 }
 
@@ -118,13 +237,42 @@ async function createDatabase(host: string, port: number, dbName: string): Promi
   });
 }
 
+function normalizeEnv(env: unknown): Record<string, string> {
+  if (!env) {
+    return {};
+  }
+  
+  // Handle object format: { KEY: 'value' }
+  if (typeof env === 'object' && !Array.isArray(env)) {
+    return env as Record<string, string>;
+  }
+  
+  // Handle array format: ['KEY=value', 'KEY2=value2']
+  if (Array.isArray(env)) {
+    const result: Record<string, string> = {};
+    for (const item of env) {
+      if (typeof item === 'string') {
+        const eqIndex = item.indexOf('=');
+        if (eqIndex > 0) {
+          const key = item.substring(0, eqIndex);
+          const value = item.substring(eqIndex + 1);
+          result[key] = value;
+        }
+      }
+    }
+    return result;
+  }
+  
+  return {};
+}
+
 function buildOverrideContent(composeParsed: Record<string, unknown>, proxyPort: number): string {
   const services = composeParsed.services as Record<string, unknown>;
   if (!services || !services.web) {
     throw new Error('Compose file must have a "web" service defined');
   }
   const web = services.web as Record<string, unknown>;
-  const env = (web.environment as Record<string, string>) ?? {};
+  const env = normalizeEnv(web.environment);
   
   let databaseUrl = env.DATABASE_URL;
   if (databaseUrl) {
@@ -139,9 +287,12 @@ function buildOverrideContent(composeParsed: Record<string, unknown>, proxyPort:
 
   if (env.DB_HOST) {
     overrideEnv.DB_HOST = 'host.docker.internal';
+    if (!env.DB_PORT) {
+      overrideEnv.DB_PORT = String(proxyPort);
+    }
   }
 
-  if (env.DB_PORT) {
+  if (env.DB_PORT && !overrideEnv.DB_PORT) {
     overrideEnv.DB_PORT = String(proxyPort);
   }
 
@@ -160,17 +311,20 @@ function buildOverrideContent(composeParsed: Record<string, unknown>, proxyPort:
   return yaml.dump(overrideObject);
 }
 
-function buildOverrideContentForContainer(composeParsed: Record<string, unknown>, proxyPort: number): string {
+function buildOverrideContentForContainer(composeParsed: Record<string, unknown>, proxyHost: string = 'linespec-proxy'): string {
   const services = composeParsed.services as Record<string, unknown>;
   if (!services || !services.web) {
     throw new Error('Compose file must have a "web" service defined');
   }
   const web = services.web as Record<string, unknown>;
-  const env = (web.environment as Record<string, string>) ?? {};
+  const env = normalizeEnv(web.environment);
+  
+  // For inter-container communication, use the standard MySQL port 3306
+  const internalProxyPort = 3306;
   
   let databaseUrl = env.DATABASE_URL;
   if (databaseUrl) {
-    databaseUrl = databaseUrl.replace(/@[^@/:]+:\d+\//, `@linespec-proxy:3307/`);
+    databaseUrl = databaseUrl.replace(/@[^@/:]+:\d+\//, `@${proxyHost}:${internalProxyPort}/`);
   }
 
   const overrideEnv: Record<string, string> = {};
@@ -179,16 +333,79 @@ function buildOverrideContentForContainer(composeParsed: Record<string, unknown>
     overrideEnv.DATABASE_URL = databaseUrl;
   }
 
+  // Handle various DB host environment variable patterns
   if (env.DB_HOST) {
-    overrideEnv.DB_HOST = 'linespec-proxy';
+    overrideEnv.DB_HOST = proxyHost;
+    if (!env.DB_PORT) {
+      overrideEnv.DB_PORT = String(internalProxyPort);
+    }
+  }
+  if (env.DATABASE_HOST) {
+    overrideEnv.DATABASE_HOST = proxyHost;
+    if (!env.DATABASE_PORT) {
+      overrideEnv.DATABASE_PORT = String(internalProxyPort);
+    }
+  }
+  if (env.MYSQL_HOST) {
+    overrideEnv.MYSQL_HOST = proxyHost;
+    if (!env.MYSQL_PORT) {
+      overrideEnv.MYSQL_PORT = String(internalProxyPort);
+    }
+  }
+  if (env.POSTGRES_HOST) {
+    overrideEnv.POSTGRES_HOST = proxyHost;
+    if (!env.POSTGRES_PORT) {
+      overrideEnv.POSTGRES_PORT = String(internalProxyPort);
+    }
   }
 
-  if (env.DB_PORT) {
-    overrideEnv.DB_PORT = String(proxyPort);
+  // Handle various DB port environment variable patterns (only if host wasn't already handled above)
+  if (env.DB_PORT && !overrideEnv.DB_PORT) {
+    overrideEnv.DB_PORT = String(internalProxyPort);
+  }
+  if (env.DATABASE_PORT && !overrideEnv.DATABASE_PORT) {
+    overrideEnv.DATABASE_PORT = String(internalProxyPort);
+  }
+  if (env.MYSQL_PORT && !overrideEnv.MYSQL_PORT) {
+    overrideEnv.MYSQL_PORT = String(internalProxyPort);
+  }
+  if (env.POSTGRES_PORT && !overrideEnv.POSTGRES_PORT) {
+    overrideEnv.POSTGRES_PORT = String(internalProxyPort);
   }
 
+  // Preserve other DB-related env vars
   if (env.DB_NAME) {
     overrideEnv.DB_NAME = env.DB_NAME;
+  }
+  if (env.DATABASE_NAME) {
+    overrideEnv.DATABASE_NAME = env.DATABASE_NAME;
+  }
+  if (env.MYSQL_DATABASE) {
+    overrideEnv.MYSQL_DATABASE = env.MYSQL_DATABASE;
+  }
+  if (env.POSTGRES_DB) {
+    overrideEnv.POSTGRES_DB = env.POSTGRES_DB;
+  }
+  if (env.DB_USERNAME) {
+    overrideEnv.DB_USERNAME = env.DB_USERNAME;
+  }
+  if (env.DATABASE_USERNAME) {
+    overrideEnv.DATABASE_USERNAME = env.DATABASE_USERNAME;
+  }
+  if (env.MYSQL_USER) {
+    overrideEnv.MYSQL_USER = env.MYSQL_USER;
+  }
+  if (env.DB_PASSWORD) {
+    overrideEnv.DB_PASSWORD = env.DB_PASSWORD;
+  }
+  if (env.DATABASE_PASSWORD) {
+    overrideEnv.DATABASE_PASSWORD = env.DATABASE_PASSWORD;
+  }
+  if (env.MYSQL_PASSWORD) {
+    overrideEnv.MYSQL_PASSWORD = env.MYSQL_PASSWORD;
+  }
+  if (env.POSTGRES_PASSWORD) {
+    overrideEnv.POSTGRES_PASSWORD = env.POSTGRES_PASSWORD;
   }
 
   const overrideObject = {
@@ -483,8 +700,6 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
       process.stdout.write('→ Building proxy Docker image...\n');
       const proxyImageName = 'linespec-mysql-proxy:latest';
       
-      const testDir = path.dirname(options.composePath!);
-      const mocksPath = path.join(testDir, 'linespec-tests', 'mocks.yaml');
       const proxyBuildDir = path.join(__dirname, '..', 'proxy-build');
       const proxyBuildDockerfile = path.join(proxyBuildDir, 'Dockerfile');
       
@@ -498,9 +713,9 @@ COPY mocks.yaml ./
 
 RUN npm install --omit=dev
 
-EXPOSE 3307
+EXPOSE 3306
 
-CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
+CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
 `;
       
       if (!fs.existsSync(proxyBuildDir)) {
@@ -526,7 +741,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
         // ignore
       }
       
-      const mocksContent = fs.readFileSync(mocksPath);
+      const mocksContent = testSet.mocks.map((m) => yaml.dump(m.mock)).join('---\n');
       fs.writeFileSync(path.join(proxyBuildDir, 'mocks.yaml'), mocksContent);
       
       const srcDistDir = path.join(__dirname, '..', 'dist');
@@ -551,24 +766,110 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3307"]
         'rm', '-f', proxyContainerName
       ]);
       
+      const networkName = getNetworkName(options.composePath!, composeParsed);
+      const upstreamHost = getDbUpstreamHost(composeParsed);
+      const upstreamPort = getDbUpstreamPort(composeParsed);
+
+      // Use standard MySQL port 3306 so Rails apps don't need custom port configuration
+      const internalProxyPort = 3306;
+
       await spawnProcess('docker', [
         'run', '-d',
         '--name', proxyContainerName,
-        '--network', 'todo-api_todo-network',
-        '-p', `${proxyPort}:3307`,
+        '--network', networkName,
+        '-p', `${proxyPort}:${internalProxyPort}`,
         proxyImageName,
         'node', 'dist/proxy-server.js',
         '--mocks', 'mocks.yaml',
-        '--upstream-host', 'db',
-        '--upstream-port', '3306',
-        '--port', '3307'
+        '--upstream-host', upstreamHost,
+        '--upstream-port', String(upstreamPort),
+        '--port', String(internalProxyPort)
       ]);
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      process.stdout.write(`✓ MySQL proxy running in container ${proxyContainerName}:3307 → db:3306\n`);
+      process.stdout.write('→ Waiting for proxy to be ready...\n');
+      const maxProxyRetries = 30;
+      let proxyReady = false;
+      
+      for (let i = 0; i < maxProxyRetries; i++) {
+        try {
+          const conn = require('net');
+          await new Promise<void>((resolve, reject) => {
+            const socket = new conn.Socket();
+            socket.setTimeout(1000);
+            socket.on('connect', () => {
+              socket.destroy();
+              resolve();
+            });
+            socket.on('timeout', () => {
+              socket.destroy();
+              reject(new Error('timeout'));
+            });
+            socket.on('error', reject);
+            socket.connect(proxyPort, 'localhost');
+          });
+          proxyReady = true;
+          break;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          process.stdout.write('…waiting for proxy\n');
+        }
+      }
+      
+      if (!proxyReady) {
+        throw new Error('Proxy did not become ready within timeout');
+      }
 
-      const overrideContent = buildOverrideContentForContainer(composeParsed, proxyPort);
+      process.stdout.write(`✓ MySQL proxy running in container ${proxyContainerName}:${internalProxyPort} → ${upstreamHost}:${upstreamPort} (network: ${networkName})\n`);
+
+      process.stdout.write('→ Verifying proxy is accessible from Docker network...\n');
+      let networkVerified = false;
+      const maxNetworkRetries = 10;
+      
+      for (let i = 0; i < maxNetworkRetries; i++) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const proc = spawn('docker', [
+              'run', '--rm',
+              '--network', networkName,
+              'alpine:latest',
+              'sh', '-c',
+              `timeout 2 nc -z ${proxyContainerName} ${internalProxyPort} && echo 'connected' || echo 'failed'`
+            ], { stdio: ['inherit', 'pipe', 'pipe'] });
+            
+            let output = '';
+            proc.stdout?.on('data', (data) => { output += data.toString(); });
+            proc.stderr?.on('data', (data) => { });
+            
+            proc.on('close', (code) => {
+              if (output.includes('connected')) {
+                resolve();
+              } else {
+                reject(new Error('connection failed'));
+              }
+            });
+            
+            proc.on('error', reject);
+          });
+          networkVerified = true;
+          break;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          process.stdout.write('…waiting for network connectivity\n');
+        }
+      }
+      
+      if (!networkVerified) {
+        throw new Error('Proxy not accessible from Docker network within timeout');
+      }
+      
+      process.stdout.write('✓ Proxy accessible from Docker network\n');
+
+      process.stdout.write('→ Waiting for proxy to fully initialize...\n');
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const overrideContent = buildOverrideContentForContainer(composeParsed);
       fs.writeFileSync(overridePath, overrideContent);
       process.stdout.write(`→ Generated override: ${overridePath}\n`);
 

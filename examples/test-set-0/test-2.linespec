@@ -11,6 +11,5 @@ RESPOND HTTP:200
 WITH {{payloads/users_list_resp.yaml}}
 NOISE
   id
-  password_digest
   body.created_at
   body.updated_at
