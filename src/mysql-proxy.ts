@@ -752,11 +752,14 @@ function handleConnection(
         }
         if (mock) {
           console.error('[mysql-proxy] Using mock for: ' + query);
+          proxyEvents.emit('queryExecuted', { query, matched: true, timestamp: Date.now() });
           const response = serializeResponses(mock.responses, packet.seqId + 1);
           logPacketBytes('SENDING COM_QUERY MOCK RESPONSE', response);
           clientSocket.write(response);
         } else {
-          console.error('[mysql-proxy] Passing through to db: ' + query);
+          console.error(`[mysql-proxy] Passing through to db: ` + query);
+          proxyEvents.emit('queryExecuted', { query, matched: false, timestamp: Date.now() });
+          proxyEvents.emit('queryPassthrough', { query, timestamp: Date.now() });
           passthroughState.active = true;
           passthroughState.responsePhase = 'first';
           passthroughState.columnsRemaining = 0;

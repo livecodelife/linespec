@@ -419,9 +419,9 @@ function buildOverrideContentForContainer(composeParsed: Record<string, unknown>
   return yaml.dump(overrideObject);
 }
 
-function spawnProcess(cmd: string, args: string[]): Promise<void> {
+function spawnProcess(cmd: string, args: string[], quiet: boolean = false): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(cmd, args, { stdio: 'inherit' });
+    const proc = spawn(cmd, args, { stdio: quiet ? 'pipe' : 'inherit' });
     proc.on('error', reject);
     proc.on('close', (code) => {
       if (code === 0) {
@@ -641,6 +641,15 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
 
   let proxyServer: net.Server | null = null;
   const dbPort = options.dbPort ?? 3306;
+  
+  // Variables for Docker proxy mode (declared here for scope access in test loop)
+  let proxyImageName = '';
+  let proxyBuildDir = '';
+  let proxyContainerName = '';
+  let networkName = '';
+  let upstreamHost = '';
+  let upstreamPort = 3306;
+  let internalProxyPort = 3306;
 
   try {
     const proxyPort = await findFreePort();
@@ -650,7 +659,7 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
       const composeParsed = parseComposeFile(options.composePath!);
       const dbUpstreamPort = getDbUpstreamPort(composeParsed);
 
-      process.stdout.write('→ Starting db service...\n');
+      process.stdout.write('→ Starting services...\n');
       
       // Clean up previous database state to ensure fresh start
       try {
@@ -658,7 +667,7 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
           'compose',
           '-f', options.composePath!,
           'down', '-v'
-        ]);
+        ], true);
       } catch {
         // Ignore errors - containers might not exist
       }
@@ -667,9 +676,8 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
         'compose',
         '-f', options.composePath!,
         'up', '-d', 'db'
-      ]);
+      ], true);
 
-      process.stdout.write('→ Waiting for db to be ready...\n');
       const dbHost = 'localhost';
       const maxRetries = 30;
       let dbReady = false;
@@ -695,7 +703,6 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
           break;
         } catch {
           await new Promise((resolve) => setTimeout(resolve, 2000));
-          process.stdout.write('…waiting for db\n');
         }
       }
       
@@ -705,10 +712,9 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
       
       process.stdout.write('✓ Database ready\n');
 
-      process.stdout.write('→ Building proxy Docker image...\n');
-      const proxyImageName = 'linespec-mysql-proxy:latest';
+      proxyImageName = 'linespec-mysql-proxy:latest';
       
-      const proxyBuildDir = path.join(__dirname, '..', 'proxy-build');
+      proxyBuildDir = path.join(__dirname, '..', 'proxy-build');
       const proxyBuildDockerfile = path.join(proxyBuildDir, 'Dockerfile');
       
       const proxyBuildDockerfileContent = `FROM node:20-alpine
@@ -763,48 +769,54 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         }
       }
       
+      process.stdout.write('→ Building proxy image...\n');
       await spawnProcess('docker', [
         'build', '--no-cache', '-t', proxyImageName, '-f', proxyBuildDockerfile, proxyBuildDir
       ]);
 
-      const proxyContainerName = 'linespec-proxy';
-
-      process.stdout.write('→ Starting proxy container...\n');
-      await spawnProcess('docker', [
-        'rm', '-f', proxyContainerName
-      ]);
+      process.stdout.write('✓ Proxy image built\n');
       
-      // Create error directory before mounting
+      // Pre-calculate these values for use in the test loop
+      proxyContainerName = 'linespec-proxy';
+      networkName = getNetworkName(options.composePath!, composeParsed);
+      upstreamHost = getDbUpstreamHost(composeParsed);
+      upstreamPort = getDbUpstreamPort(composeParsed);
+      internalProxyPort = 3306;
+      
+      // Ensure error directory exists
       if (!fs.existsSync(errorDirPath)) {
         fs.mkdirSync(errorDirPath, { recursive: true });
       }
       
-      const networkName = getNetworkName(options.composePath!, composeParsed);
-      const upstreamHost = getDbUpstreamHost(composeParsed);
-      const upstreamPort = getDbUpstreamPort(composeParsed);
-
-      // Use standard MySQL port 3306 so Rails apps don't need custom port configuration
-      const internalProxyPort = 3306;
-
+      // Clean up any existing proxy
+      try {
+        await spawnProcess('docker', ['rm', '-f', proxyContainerName], true);
+      } catch {
+        // Ignore errors if container doesn't exist
+      }
+      
+      // Start initial proxy with empty mocks (will be replaced per-test)
+      fs.writeFileSync(path.join(proxyBuildDir, 'mocks.yaml'), '');
+      
       await spawnProcess('docker', [
         'run', '-d',
         '--name', proxyContainerName,
         '--network', networkName,
         '-p', `${proxyPort}:${internalProxyPort}`,
+        '-v', `${proxyBuildDir}:/app/mocks:ro`,
         '-v', `${errorDirPath}:/app/errors`,
         proxyImageName,
         'node', 'dist/proxy-server.js',
-        '--mocks', 'mocks.yaml',
+        '--mocks', '/app/mocks/mocks.yaml',
         '--upstream-host', upstreamHost,
         '--upstream-port', String(upstreamPort),
         '--port', String(internalProxyPort),
-        '--error-file', '/app/errors/verification-errors.json'
-      ]);
+        '--error-file', '/app/errors/verification-errors.json',
+        '--passthrough-file', '/app/errors/passthrough-queries.json',
+        '--query-log-file', '/app/errors/query-log.json'
+      ], true);
 
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      process.stdout.write('→ Waiting for proxy to be ready...\n');
-      const maxProxyRetries = 30;
+      const maxProxyRetries = 15;
       let proxyReady = false;
       
       for (let i = 0; i < maxProxyRetries; i++) {
@@ -828,7 +840,6 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
           break;
         } catch {
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          process.stdout.write('…waiting for proxy\n');
         }
       }
       
@@ -836,9 +847,6 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         throw new Error('Proxy did not become ready within timeout');
       }
 
-      process.stdout.write(`✓ MySQL proxy running in container ${proxyContainerName}:${internalProxyPort} → ${upstreamHost}:${upstreamPort} (network: ${networkName})\n`);
-
-      process.stdout.write('→ Verifying proxy is accessible from Docker network...\n');
       let networkVerified = false;
       const maxNetworkRetries = 10;
       
@@ -871,17 +879,14 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
           break;
         } catch {
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          process.stdout.write('…waiting for network connectivity\n');
         }
       }
       
       if (!networkVerified) {
         throw new Error('Proxy not accessible from Docker network within timeout');
       }
-      
-      process.stdout.write('✓ Proxy accessible from Docker network\n');
 
-      process.stdout.write('→ Waiting for proxy to fully initialize...\n');
+      process.stdout.write(`✓ MySQL proxy ready (${proxyContainerName}:${internalProxyPort})\n`);
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const overrideContent = buildOverrideContentForContainer(composeParsed);
@@ -894,16 +899,14 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         '-f', options.composePath!,
         '-f', overridePath,
         'up', '-d', '--no-deps', '--no-recreate', '--build', 'web'
-      ]);
+      ], true);
     } else {
       proxyServer = await startProxy(mocks, 'localhost', dbPort, proxyPort);
-      process.stdout.write(`✓ MySQL proxy listening on port ${proxyPort} → localhost:${dbPort}\n`);
-      process.stdout.write(`→ Configure your app to connect to localhost:${proxyPort} instead of localhost:${dbPort}\n`);
-      process.stdout.write('→ Waiting for service (ensure it is already running)...\n');
+      process.stdout.write(`✓ MySQL proxy listening on port ${proxyPort}\n`);
     }
 
     await pollUntilHealthy(options.serviceUrl, 120000);
-    process.stdout.write(`✓ Service healthy at ${options.serviceUrl}\n`);
+    process.stdout.write(`✓ Service ready at ${options.serviceUrl}\n`);
 
     let passed = 0;
     let failed = 0;
@@ -911,6 +914,14 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
     
     // Track verification errors per test
     const verificationErrors = new Map<string, string>();
+    
+    // Track queries that passed through to real database
+    const passthroughQueries = new Map<string, string[]>();
+    const allPassthroughQueries: string[] = [];
+    
+    // Track all queries executed (matched or passthrough)
+    const testQueries = new Map<string, Array<{ query: string; matched: boolean; timestamp: number }>>();
+    const allQueries: Array<{ query: string; matched: boolean; timestamp: number }> = [];
     
     // Listen for verification errors from the proxy
     const onVerificationError = (error: string) => {
@@ -921,10 +932,136 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
       }
     };
     proxyEvents.on('verificationError', onVerificationError);
+    
+    // Listen for passthrough queries from the proxy
+    const onQueryPassthrough = (data: { query: string; timestamp: number }) => {
+      const currentTest = testSet.tests[results.length]?.name;
+      if (currentTest) {
+        const queries = passthroughQueries.get(currentTest) || [];
+        queries.push(data.query);
+        passthroughQueries.set(currentTest, queries);
+      }
+      allPassthroughQueries.push(data.query);
+    };
+    proxyEvents.on('queryPassthrough', onQueryPassthrough);
+    
+    // Listen for all query executions from the proxy
+    const onQueryExecuted = (data: { query: string; matched: boolean; timestamp: number }) => {
+      const currentTest = testSet.tests[results.length]?.name;
+      if (currentTest) {
+        const queries = testQueries.get(currentTest) || [];
+        queries.push(data);
+        testQueries.set(currentTest, queries);
+      }
+      allQueries.push(data);
+    };
+    proxyEvents.on('queryExecuted', onQueryExecuted);
 
     for (const { name, ktest } of testSet.tests) {
       // Clear any previous verification error for this test
       verificationErrors.delete(name);
+      
+      // Get mocks for this specific test
+      const testMocks = testSet.mocksByTest.get(name) || [];
+      
+      if (testMocks.length === 0) {
+        process.stdout.write(`⚠ Warning: No mocks found for test "${name}"\n`);
+      }
+      
+      // Write test-specific mocks file (YAML document stream format)
+      const testMocksYaml = testMocks.map(m => yaml.dump(m.mock)).join('---\n');
+      const testMocksPath = path.join(testSet.dir, `mocks-${name}.yaml`);
+      fs.writeFileSync(testMocksPath, testMocksYaml);
+      
+      if (useCompose) {
+        // Restart proxy with only this test's mocks
+        process.stdout.write(`→ ${name}: `);
+        
+        try {
+          // Stop and force remove existing proxy (quietly)
+          await spawnProcess('docker', ['stop', '-t', '1', proxyContainerName], true);
+          await spawnProcess('docker', ['rm', '-f', proxyContainerName], true);
+        } catch {
+          // Container might not exist, ignore error
+        }
+        
+        // Clear error files
+        const errorFiles = ['verification-errors.json', 'passthrough-queries.json', 'query-log.json'];
+        for (const file of errorFiles) {
+          const filePath = path.join(errorDirPath, file);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+        
+        // Start proxy with test-specific mocks
+        const absoluteMocksDir = path.resolve(testSet.dir);
+        
+        // Ensure port is free by waiting a bit after container removal
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
+        await spawnProcess('docker', [
+          'run', '-d',
+          '--name', proxyContainerName,
+          '--network', networkName,
+          '-p', `${proxyPort}:${internalProxyPort}`,
+          '-v', `${absoluteMocksDir}:/app/mocks:ro`,
+          '-v', `${errorDirPath}:/app/errors`,
+          proxyImageName,
+          'node', 'dist/proxy-server.js',
+          '--mocks', `/app/mocks/mocks-${name}.yaml`,
+          '--upstream-host', upstreamHost,
+          '--upstream-port', String(upstreamPort),
+          '--port', String(internalProxyPort),
+          '--error-file', '/app/errors/verification-errors.json',
+          '--passthrough-file', '/app/errors/passthrough-queries.json',
+          '--query-log-file', '/app/errors/query-log.json'
+        ], true);
+        
+        // Wait for proxy to be ready (increased wait time)
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        
+        let proxyReady = false;
+        for (let i = 0; i < 20; i++) {
+          try {
+            const conn = require('net');
+            await new Promise<void>((resolve, reject) => {
+              const socket = new conn.Socket();
+              socket.setTimeout(1000);
+              socket.on('connect', () => {
+                socket.destroy();
+                resolve();
+              });
+              socket.on('timeout', () => {
+                socket.destroy();
+                reject(new Error('timeout'));
+              });
+              socket.on('error', reject);
+              socket.connect(proxyPort, 'localhost');
+            });
+            proxyReady = true;
+            break;
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+        
+        if (!proxyReady) {
+          throw new Error(`Proxy did not become ready for test "${name}"`);
+        }
+        
+        // Additional wait to ensure proxy has loaded mocks
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
+        // Wait for web service to be healthy after proxy restart
+        // This ensures the service has reconnected to the new proxy
+        try {
+          await pollUntilHealthy(options.serviceUrl, 30000);
+        } catch (healthErr) {
+          process.stdout.write(`⚠ Service health check failed: ${(healthErr as Error).message}\n`);
+          // Continue anyway - the test might still pass
+        }
+      }
       
       const result = await runHttpTest(ktest, options.serviceUrl, name);
       
@@ -947,6 +1084,54 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
           }
         } catch {
           // Ignore file read errors
+        }
+      }
+      
+      // In Docker mode, read passthrough queries from file
+      if (useCompose) {
+        const passthroughFilePath = path.join(errorDirPath, 'passthrough-queries.json');
+        if (fs.existsSync(passthroughFilePath)) {
+          try {
+            const content = fs.readFileSync(passthroughFilePath, 'utf-8');
+            if (content) {
+              const data = JSON.parse(content);
+              if (data.queries && Array.isArray(data.queries)) {
+                for (const query of data.queries) {
+                  allPassthroughQueries.push(query);
+                  const queries = passthroughQueries.get(name) || [];
+                  queries.push(query);
+                  passthroughQueries.set(name, queries);
+                }
+                // Clear the file after reading
+                fs.unlinkSync(passthroughFilePath);
+              }
+            }
+          } catch {
+            // Ignore file read errors
+          }
+        }
+        
+        // Read query log to see all executed queries
+        const queryLogPath = path.join(errorDirPath, 'query-log.json');
+        if (fs.existsSync(queryLogPath)) {
+          try {
+            const content = fs.readFileSync(queryLogPath, 'utf-8');
+            if (content) {
+              const data = JSON.parse(content);
+              if (data.queries && Array.isArray(data.queries)) {
+                for (const q of data.queries) {
+                  allQueries.push(q);
+                  const queries = testQueries.get(name) || [];
+                  queries.push(q);
+                  testQueries.set(name, queries);
+                }
+                // Clear the file after reading
+                fs.unlinkSync(queryLogPath);
+              }
+            }
+          } catch {
+            // Ignore file read errors
+          }
         }
       }
       
@@ -1004,8 +1189,10 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
       }
     }
     
-    // Remove the event listener
+    // Remove the event listeners
     proxyEvents.off('verificationError', onVerificationError);
+    proxyEvents.off('queryPassthrough', onQueryPassthrough);
+    proxyEvents.off('queryExecuted', onQueryExecuted);
 
     if (options.reportDir) {
       fs.mkdirSync(options.reportDir, { recursive: true });
@@ -1014,11 +1201,13 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         passed,
         failed,
         total: passed + failed,
+        passthroughQueries: Array.from(new Set(allPassthroughQueries)),
         tests: results.map((r) => ({
           name: r.name,
           pass: r.pass,
           reason: r.reason,
           verificationError: verificationErrors.get(r.name),
+          passthroughQueries: passthroughQueries.get(r.name),
         })),
       };
       fs.writeFileSync(path.join(options.reportDir, 'summary.json'), JSON.stringify(summary, null, 2));
@@ -1028,6 +1217,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
         const reportData = {
           ...result,
           verificationError: verificationErrors.get(result.name),
+          passthroughQueries: passthroughQueries.get(result.name),
         };
         fs.writeFileSync(
           path.join(options.reportDir, `${safeName}.json`),
@@ -1036,6 +1226,23 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
       }
 
       process.stdout.write(`→ Report written to ${options.reportDir}/\n`);
+    }
+    
+    // Print diagnostic information if tests failed with passthrough queries
+    if (failed > 0 && allPassthroughQueries.length > 0) {
+      process.stdout.write(`\n⚠️  DIAGNOSTIC: ${allPassthroughQueries.length} SQL queries passed through to the real database\n`);
+      process.stdout.write(`   This indicates the tests may not match the mocks properly.\n`);
+      process.stdout.write(`   Check that your SQL queries in the test expectations match what the application actually executes.\n\n`);
+      
+      const uniqueQueries = Array.from(new Set(allPassthroughQueries.slice(0, 5)));
+      process.stdout.write(`   Sample queries that passed through:\n`);
+      for (const query of uniqueQueries) {
+        process.stdout.write(`     - ${query.substring(0, 80)}${query.length > 80 ? '...' : ''}\n`);
+      }
+      if (allPassthroughQueries.length > 5) {
+        process.stdout.write(`     ... and ${allPassthroughQueries.length - 5} more\n`);
+      }
+      process.stdout.write(`\n`);
     }
 
     process.stdout.write(`\nsummary: ${passed} passed, ${failed} failed\n`);
@@ -1053,7 +1260,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
           'compose',
           '-f', options.composePath!,
           'rm', '-fs', 'web'
-        ]);
+        ], true);
       } catch {
         // ignore cleanup errors
       }

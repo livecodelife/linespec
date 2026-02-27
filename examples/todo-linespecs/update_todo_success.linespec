@@ -2,6 +2,8 @@ TEST update_todo_success
 
 RECEIVE HTTP:PATCH /api/v1/todos/1
 WITH {{payloads/update_todo_request.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
 
 EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
 WITH {{payloads/auth_token_request.yaml}}

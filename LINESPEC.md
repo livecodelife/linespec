@@ -82,7 +82,10 @@ Syntax:
 
 ```
 RECEIVE HTTP:<METHOD> <PATH>
-WITH {{<body_file>}}
+[WITH {{<body_file>}}]
+[HEADERS
+  <header_name>: <header_value>
+  ...]
 ```
 
 Example:
@@ -90,6 +93,10 @@ Example:
 ```
 RECEIVE HTTP:POST /api/v1/todos
 WITH {{todo.yaml}}
+
+RECEIVE HTTP:GET /api/v1/users/42
+HEADERS
+  Authorization: Bearer token_abc123xyz
 ```
 
 Rules:
@@ -100,6 +107,9 @@ Rules:
 * Path is required
 * WITH is required for HTTP requests with a body
 * Body must reference an external YAML or JSON file
+* HEADERS is optional and supports multiple header lines with indentation
+* Headers are added to the HTTP request (Authorization, X-Custom-Header, etc.)
+* WITH must come before HEADERS if both are present
 
 Compiled To:
 
@@ -149,10 +159,24 @@ Compiled To:
 
 ### EXPECT WRITE:MYSQL
 
+Auto-detect operation type from payload:
+
 ```
 EXPECT WRITE:MYSQL <table_name>
 WITH {{<input_payload>}}
-RETURNS {{<db_result>}}
+```
+
+Explicit operation type:
+
+```
+EXPECT WRITE:MYSQL INSERT <table_name>
+WITH {{<input_payload>}}
+
+EXPECT WRITE:MYSQL UPDATE <table_name>
+WITH {{<input_payload>}}
+
+EXPECT WRITE:MYSQL DELETE <table_name>
+WITH {{<input_payload>}}
 ```
 
 Optional explicit SQL:
@@ -163,12 +187,26 @@ USING_SQL """
 <SQL statement>
 """
 WITH {{<input_payload>}}
-RETURNS {{<db_result>}}
 ```
 
 Compiled To:
 
 * KMock of kind: MySQL
+
+**Auto-Detection Rules (INSERT vs UPDATE only):**
+* INSERT: Generated when payload has no `id` field OR only has `id` field with no other fields
+* UPDATE: Generated when payload has `id` field AND other fields to update
+* DELETE: Never auto-detected - must specify explicitly
+
+**Explicit Operations:**
+* **INSERT**: Add new records. WITH file provides field values.
+* **UPDATE**: Modify existing records. WITH file must include `id` field AND fields to update.
+* **DELETE**: Remove records. WITH file must include `id` field to identify which record.
+
+**Requirements:**
+* DELETE always requires a WITH file with an `id` field
+* Without explicit operation AND without WITH file: compiler error
+* Without explicit operation but WITH file present: auto-detects INSERT or UPDATE only
 
 ---
 
@@ -240,6 +278,53 @@ Runtime Behavior:
 * When the proxy matches a query to the mock, it checks all VERIFY rules
 * If any rule fails, the test fails with 🔒 SQL Verification Error
 * The actual query is shown in the error message for debugging
+
+---
+
+### EXPECT READ:MYSQL with Empty Results
+
+For queries that return no rows (e.g., "not found" scenarios), use `RETURNS EMPTY` instead of a payload file:
+
+```
+EXPECT READ:MYSQL <table_name>
+USING_SQL """
+<SQL statement that returns no rows>
+"""
+RETURNS EMPTY
+```
+
+The compiler automatically generates proper MySQL TextResultSet column definitions based on other expectations in the same test, or uses sensible defaults for common Rails conventions.
+
+**Example — User Not Found:**
+
+```
+TEST get-user-not-found
+RECEIVE HTTP:GET /api/v1/users/999
+HEADERS
+  Authorization: Bearer token_abc123xyz
+
+# First query finds the authenticated user
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
+"""
+RETURNS {{user_response.yaml}}
+
+# Second query finds no user with id=999
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
+"""
+RETURNS EMPTY
+
+RESPOND HTTP:404
+WITH {{user_not_found_error.yaml}}
+```
+
+**Benefits:**
+- No need to write complex MySQL protocol payload files
+- Column definitions are inferred automatically
+- Human-readable and maintainable
 
 ---
 

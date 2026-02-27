@@ -31,6 +31,7 @@ export function loadTestSet(dir: string): LoadedTestSet {
 
   const mocksPath = path.join(dir, 'mocks.yaml');
   const mocks: LoadedMock[] = [];
+  const mocksByTest = new Map<string, LoadedMock[]>();
 
   if (fs.existsSync(mocksPath)) {
     try {
@@ -40,6 +41,16 @@ export function loadTestSet(dir: string): LoadedTestSet {
       for (const mock of docs) {
         if (mock && typeof mock.name === 'string') {
           mocks.push({ name: mock.name, mock });
+          
+          // Parse test name from mock name (format: {test-name}-mock-{number} or {test-name}-mock-{type}-{number})
+          const match = mock.name.match(/^(.+)-mock-/);
+          if (match) {
+            const testName = match[1];
+            if (!mocksByTest.has(testName)) {
+              mocksByTest.set(testName, []);
+            }
+            mocksByTest.get(testName)!.push({ name: mock.name, mock });
+          }
         }
       }
     } catch (err) {
@@ -50,5 +61,5 @@ export function loadTestSet(dir: string): LoadedTestSet {
     }
   }
 
-  return { dir, tests, mocks };
+  return { dir, tests, mocks, mocksByTest };
 }

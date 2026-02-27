@@ -1,5 +1,5 @@
 export interface Token {
-  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY';
+  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY' | 'HEADERS';
   value: string;
   line: number;
 }
@@ -21,6 +21,8 @@ export function tokenize(source: string): Token[] {
   let sqlStartLine: number | undefined;
   let noiseLines: string[] | undefined;
   let noiseStartLine: number | undefined;
+  let headersLines: string[] | undefined;
+  let headersStartLine: number | undefined;
 
   for (let i = 0; i < lines.length; i++) {
     lineNo = i + 1;
@@ -34,6 +36,19 @@ export function tokenize(source: string): Token[] {
         tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine! });
         noiseLines = undefined;
         noiseStartLine = undefined;
+        i--;
+        continue;
+      }
+    }
+
+    if (headersLines !== undefined) {
+      if (line.startsWith(' ') || line.startsWith('\t')) {
+        headersLines.push(line.trim());
+        continue;
+      } else {
+        tokens.push({ type: 'HEADERS', value: headersLines.join('\n'), line: headersStartLine! });
+        headersLines = undefined;
+        headersStartLine = undefined;
         i--;
         continue;
       }
@@ -67,6 +82,8 @@ export function tokenize(source: string): Token[] {
       tokens.push({ type: 'WITH', value: match[1], line: lineNo });
     } else if ((match = line.match(/^RETURNS\s+\{\{(.+?)\}\}$/))) {
       tokens.push({ type: 'RETURNS', value: match[1], line: lineNo });
+    } else if ((match = line.match(/^RETURNS\s+EMPTY$/))) {
+      tokens.push({ type: 'RETURNS', value: 'EMPTY', line: lineNo });
     } else if ((match = line.match(/^USING_SQL\s+"""$/))) {
       sqlStartLine = i + 1;
     } else if ((match = line.match(/^RESPOND\s+(.+)$/))) {
@@ -78,6 +95,9 @@ export function tokenize(source: string): Token[] {
     } else if (line === 'NOISE') {
       noiseLines = [];
       noiseStartLine = lineNo;
+    } else if (line === 'HEADERS') {
+      headersLines = [];
+      headersStartLine = lineNo;
     } else {
       throw new LineSpecError(`Unrecognized line: ${lines[i]}`, lineNo);
     }
@@ -89,6 +109,10 @@ export function tokenize(source: string): Token[] {
 
   if (noiseLines !== undefined) {
     tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine! });
+  }
+
+  if (headersLines !== undefined) {
+    tokens.push({ type: 'HEADERS', value: headersLines.join('\n'), line: headersStartLine! });
   }
 
   return tokens;

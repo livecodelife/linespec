@@ -61,6 +61,7 @@ function loadTestSet(dir) {
     }
     const mocksPath = path.join(dir, 'mocks.yaml');
     const mocks = [];
+    const mocksByTest = new Map();
     if (fs.existsSync(mocksPath)) {
         try {
             const raw = fs.readFileSync(mocksPath, 'utf-8');
@@ -68,6 +69,15 @@ function loadTestSet(dir) {
             for (const mock of docs) {
                 if (mock && typeof mock.name === 'string') {
                     mocks.push({ name: mock.name, mock });
+                    // Parse test name from mock name (format: {test-name}-mock-{number} or {test-name}-mock-{type}-{number})
+                    const match = mock.name.match(/^(.+)-mock-/);
+                    if (match) {
+                        const testName = match[1];
+                        if (!mocksByTest.has(testName)) {
+                            mocksByTest.set(testName, []);
+                        }
+                        mocksByTest.get(testName).push({ name: mock.name, mock });
+                    }
                 }
             }
         }
@@ -78,5 +88,5 @@ function loadTestSet(dir) {
             throw err;
         }
     }
-    return { dir, tests, mocks };
+    return { dir, tests, mocks, mocksByTest };
 }

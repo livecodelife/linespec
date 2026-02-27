@@ -13,13 +13,14 @@ spec:
       Accept: application/json
       Host: localhost:3000
       Content-Length: '109'
+      Authorization: Bearer token_abc123xyz
     body: |-
       {
         "title": "Buy groceries",
         "description": "Milk, eggs, and bread - organic only",
         "completed": false
       }
-    timestamp: '2026-02-25T21:41:20.447Z'
+    timestamp: '2026-02-25T23:48:31.119Z'
   resp:
     status_code: 200
     header:
@@ -28,12 +29,12 @@ spec:
     status_message: OK
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-02-25T21:41:20.447Z'
+    timestamp: '2026-02-25T23:48:31.119Z'
   objects: []
   assertions:
     noise:
       body.updated_at: []
-  created: 1772055680
+  created: 1772063311
   app_port: 3000
 curl: |-
   curl --request PATCH \
@@ -41,6 +42,7 @@ curl: |-
   --header 'Accept: application/json' \
   --header 'Host: localhost:3000' \
   --header 'Content-Length: 109' \
+  --header 'Authorization: Bearer token_abc123xyz' \
   --data "{
     "title": "Buy groceries",
     "description": "Milk, eggs, and bread - organic only",

@@ -189,6 +189,7 @@ EXPECT <CHANNEL> <resource>
 """]
 [WITH {{payloads/input.yaml}}]
 [RETURNS {{payloads/output.yaml}}]
+[RETURNS EMPTY]
 [VERIFY query CONTAINS 'string']
 [VERIFY query NOT_CONTAINS 'string']
 [VERIFY query MATCHES /regex/]
@@ -434,15 +435,17 @@ rows:
 The compiler infers MySQL column types from the data (e.g., `id` → BIGINT, `created_at` → DATETIME).
 
 ### Empty Result Payloads
-For queries returning no rows:
-```yaml
-columnCount: 1
-columns:
-  - name: one
-    type: 8
-    # ... column definition
-rows: []
+For queries returning no rows, use `RETURNS EMPTY` instead of creating complex payload files:
+
+```linespec
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
+"""
+RETURNS EMPTY
 ```
+
+The compiler automatically generates proper MySQL TextResultSet column definitions. Only use manual payload files if you need specific column configurations.
 
 ---
 
@@ -494,7 +497,7 @@ EXPECT READ:MYSQL users
 USING_SQL """
 SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'user@example.com' LIMIT 1
 """
-RETURNS {{payloads/mysql_empty_result.yaml}}
+RETURNS EMPTY
 
 # The actual INSERT
 EXPECT WRITE:MYSQL users

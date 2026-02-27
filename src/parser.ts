@@ -87,10 +87,24 @@ function parseExpectChannel(
     return expect;
   }
 
-  if (/^WRITE:MYSQL$/i.test(channelPart)) {
+  const writeMysqlMatch = channelPart.match(/^WRITE:MYSQL$/i);
+  if (writeMysqlMatch) {
+    // Parse optional operation type from rest (e.g., "DELETE users" or just "users")
+    const operationMatch = rest.match(/^(INSERT|UPDATE|DELETE)\s+(.+)$/i);
+    let operation: 'INSERT' | 'UPDATE' | 'DELETE' | undefined;
+    let table: string;
+    
+    if (operationMatch) {
+      operation = operationMatch[1].toUpperCase() as 'INSERT' | 'UPDATE' | 'DELETE';
+      table = operationMatch[2];
+    } else {
+      table = rest;
+    }
+    
     const expect: ExpectWriteMysqlStatement = {
       channel: 'WRITE_MYSQL',
-      table: rest,
+      table,
+      operation,
       withFile: '',
       returnsFile: '',
       transactional: true, // Default to transactional
@@ -147,11 +161,27 @@ export function parse(tokens: Token[], filename: string): TestSpec {
     receiveWithFile = withToken.value;
   }
 
+  let receiveHeaders: Record<string, string> | undefined;
+  if (peek(tokens, pos.value)?.type === 'HEADERS') {
+    const headersToken = consume(tokens, pos);
+    const headerLines = headersToken.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+    receiveHeaders = {};
+    for (const line of headerLines) {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex > 0) {
+        const key = line.substring(0, colonIndex).trim();
+        const value = line.substring(colonIndex + 1).trim();
+        receiveHeaders[key] = value;
+      }
+    }
+  }
+
   const receive: ReceiveStatement = {
     channel: 'HTTP',
     method,
     path: pathValue,
     withFile: receiveWithFile,
+    headers: receiveHeaders,
   };
 
   const expects: ExpectStatement[] = [];
@@ -180,7 +210,11 @@ export function parse(tokens: Token[], filename: string): TestSpec {
 
     if (peek(tokens, pos.value)?.type === 'RETURNS') {
       const returnsToken = consume(tokens, pos);
-      (expectPartial as any).returnsFile = returnsToken.value;
+      if (returnsToken.value === 'EMPTY') {
+        (expectPartial as ExpectReadMysqlStatement).returnsEmpty = true;
+      } else {
+        (expectPartial as any).returnsFile = returnsToken.value;
+      }
     }
 
     if (sql) {

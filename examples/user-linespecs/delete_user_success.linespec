@@ -1,6 +1,8 @@
 TEST delete_user_success
 
 RECEIVE HTTP:DELETE /api/v1/users/42
+HEADERS
+  Authorization: Bearer token_abc123xyz
 
 EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
 WITH {{payloads/auth_token_request.yaml}}
@@ -12,7 +14,7 @@ SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
 """
 RETURNS {{payloads/user_response.json}}
 
-EXPECT WRITE:MYSQL users
+EXPECT WRITE:MYSQL DELETE users
 WITH {{payloads/user_response.json}}
 
 RESPOND HTTP:204

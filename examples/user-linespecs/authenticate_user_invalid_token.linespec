@@ -1,13 +1,15 @@
 TEST authenticate_user_invalid_token
 
 RECEIVE HTTP:GET /api/v1/users/auth
-WITH {{payloads/auth_token_request.yaml}}
+HEADERS
+  Authorization: Bearer invalid_token_xyz
 
+# Token lookup returns empty - user not found
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
+SELECT * FROM `users` WHERE `users`.`token` = 'invalid_token_xyz' LIMIT 1
 """
-RETURNS {{payloads/auth_error_response.json}}
+RETURNS EMPTY
 
 RESPOND HTTP:401
 WITH {{payloads/auth_error_response.json}}

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LineSpecError } from './lexer';
-import { TestSpec } from './types';
+import { TestSpec, ExpectReadMysqlStatement } from './types';
 
 export { LineSpecError };
 
@@ -12,6 +12,14 @@ export function validate(spec: TestSpec, baseDir: string): void {
       !(expect as any).returnsFile
     ) {
       throw new LineSpecError(`RETURNS is required for EXPECT ${expect.channel}`);
+    }
+    
+    // READ_MYSQL requires RETURNS or RETURNS EMPTY
+    if (expect.channel === 'READ_MYSQL') {
+      const readExpect = expect as ExpectReadMysqlStatement;
+      if (!readExpect.returnsFile && !readExpect.returnsEmpty) {
+        throw new LineSpecError(`RETURNS is required for EXPECT READ:MYSQL (use RETURNS EMPTY for empty results)`);
+      }
     }
   }
 

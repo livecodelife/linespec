@@ -70,17 +70,23 @@ Expected output:
 
 ```
 ✓ Loaded 11 tests and 38 mocks from keploy-examples/test-set-0
-✓ MySQL proxy listening on port 54321 → localhost:3306
-✓ Service healthy at http://localhost:3000
-✓ test-1 PASS
-✗ test-2 FAIL (body mismatch)
+→ Starting services...
+✓ Database ready
+→ Building proxy image...
+✓ Proxy image built
+✓ MySQL proxy ready (linespec-proxy:3306)
+✓ Service ready at http://localhost:3000
+→ test-1: ✓ test-1 PASS
+→ test-2: ✗ test-2 FAIL
+
   Expected status : 200
   Actual status   : 200
-  {                                           {
-    "id": 1,                                    "id": 1,
-    "title": "Buy milk"              ~          "title": "Buy bread"
-  }                                           }
-✓ test-3 PASS
+  Body diff:
+    {                                           {
+      "id": 1,                                    "id": 1,
+      "title": "Buy milk"              ~          "title": "Buy bread"
+    }                                           }
+→ test-3: ✓ test-3 PASS
 …
 → Report written to keploy-examples/test-set-0/linespec-report/
 
@@ -193,6 +199,22 @@ RETURNS {{payloads/users_list.yaml}}
 
 If `USING_SQL` is not provided, generates: `SELECT * FROM <table>`
 
+**Empty Results:**
+
+For queries that return no rows (e.g., "user not found"), use `RETURNS EMPTY` instead of a payload file:
+
+```linespec
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
+"""
+RETURNS EMPTY
+```
+
+The compiler automatically generates proper MySQL TextResultSet column definitions.
+
+---
+
 ### RESPOND
 
 Specifies the HTTP response (required, must be last):
@@ -282,6 +304,34 @@ RETURNS {{payloads/user_single_resp.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/user_single_resp.yaml}}
+```
+
+### Read Operation with Empty Results (Not Found)
+
+Use `RETURNS EMPTY` for queries that return no rows:
+
+```linespec
+TEST get-user-not-found
+RECEIVE HTTP:GET http://localhost:3000/users/999
+HEADERS
+  Authorization: Bearer token_abc123xyz
+
+# First query finds the authenticated user
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
+"""
+RETURNS {{payloads/user_response.yaml}}
+
+# Second query finds no user with id=999
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
+"""
+RETURNS EMPTY
+
+RESPOND HTTP:404
+WITH {{payloads/user_not_found_error.yaml}}
 ```
 
 ### Non-Transactional ORM

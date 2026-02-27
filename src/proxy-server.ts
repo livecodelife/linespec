@@ -12,6 +12,8 @@ interface ProxyOptions {
   upstreamPort: number;
   listenPort: number;
   errorFile?: string;
+  passthroughFile?: string;
+  queryLogFile?: string;
 }
 
 function parseArgs(): ProxyOptions {
@@ -38,6 +40,12 @@ function parseArgs(): ProxyOptions {
       i++;
     } else if (args[i] === '--error-file' && i + 1 < args.length) {
       options.errorFile = args[i + 1];
+      i++;
+    } else if (args[i] === '--passthrough-file' && i + 1 < args.length) {
+      options.passthroughFile = args[i + 1];
+      i++;
+    } else if (args[i] === '--query-log-file' && i + 1 < args.length) {
+      options.queryLogFile = args[i + 1];
       i++;
     }
   }
@@ -72,6 +80,59 @@ async function main() {
         console.error(`[proxy-server] Verification error written to ${options.errorFile}`);
       } catch (err) {
         console.error(`[proxy-server] Failed to write error file: ${err}`);
+      }
+    });
+  }
+  
+  // Set up passthrough tracking if specified
+  if (options.passthroughFile) {
+    // Clear any previous passthrough data
+    if (fs.existsSync(options.passthroughFile)) {
+      fs.unlinkSync(options.passthroughFile);
+    }
+    
+    // Listen for passthrough queries and append them to file
+    proxyEvents.on('queryPassthrough', (data: { query: string; timestamp: number }) => {
+      try {
+        let existing: { queries: string[] } = { queries: [] };
+        if (fs.existsSync(options.passthroughFile!)) {
+          try {
+            existing = JSON.parse(fs.readFileSync(options.passthroughFile!, 'utf-8'));
+          } catch {
+            // If file is corrupted, start fresh
+          }
+        }
+        existing.queries.push(data.query);
+        fs.writeFileSync(options.passthroughFile!, JSON.stringify(existing));
+        console.error(`[proxy-server] Query passed through to database: ${data.query.substring(0, 80)}...`);
+      } catch (err) {
+        console.error(`[proxy-server] Failed to write passthrough file: ${err}`);
+      }
+    });
+  }
+
+  // Set up query logging if specified
+  if (options.queryLogFile) {
+    // Clear any previous query log
+    if (fs.existsSync(options.queryLogFile)) {
+      fs.unlinkSync(options.queryLogFile);
+    }
+    
+    // Listen for all queries and log them
+    proxyEvents.on('queryExecuted', (data: { query: string; matched: boolean; timestamp: number }) => {
+      try {
+        let existing: { queries: Array<{ query: string; matched: boolean; timestamp: number }> } = { queries: [] };
+        if (fs.existsSync(options.queryLogFile!)) {
+          try {
+            existing = JSON.parse(fs.readFileSync(options.queryLogFile!, 'utf-8'));
+          } catch {
+            // If file is corrupted, start fresh
+          }
+        }
+        existing.queries.push(data);
+        fs.writeFileSync(options.queryLogFile!, JSON.stringify(existing, null, 2));
+      } catch (err) {
+        console.error(`[proxy-server] Failed to write query log: ${err}`);
       }
     });
   }

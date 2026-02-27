@@ -1,5 +1,5 @@
 export interface Token {
-    type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY';
+    type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY' | 'HEADERS';
     value: string;
     line: number;
 }

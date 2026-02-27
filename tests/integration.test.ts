@@ -128,7 +128,7 @@ const testCases: TestCase[] = [
     statusCode: 200,
     statusMessage: 'OK',
     mockCount: 5, // 0 HTTP + 5 MySQL
-    hasRequestBody: true,
+    hasRequestBody: false,
     hasResponseBody: true,
     expectedHttpMocks: 0,
     expectedMysqlMocks: 5,
@@ -142,7 +142,7 @@ const testCases: TestCase[] = [
     statusCode: 401,
     statusMessage: 'Unauthorized',
     mockCount: 5, // 0 HTTP + 5 MySQL
-    hasRequestBody: true,
+    hasRequestBody: false,
     hasResponseBody: true,
     expectedHttpMocks: 0,
     expectedMysqlMocks: 5,
@@ -185,7 +185,7 @@ const testCases: TestCase[] = [
     statusCode: 200,
     statusMessage: 'OK',
     mockCount: 6, // 1 HTTP + 5 MySQL
-    hasRequestBody: true,
+    hasRequestBody: false,
     hasResponseBody: true,
     expectedHttpMocks: 1,
     expectedMysqlMocks: 5,
@@ -199,7 +199,7 @@ const testCases: TestCase[] = [
     statusCode: 404,
     statusMessage: 'Not Found',
     mockCount: 6, // 1 HTTP + 5 MySQL
-    hasRequestBody: true,
+    hasRequestBody: false,
     hasResponseBody: true,
     expectedHttpMocks: 1,
     expectedMysqlMocks: 5,

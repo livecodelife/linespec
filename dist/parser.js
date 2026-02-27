@@ -98,10 +98,23 @@ function parseExpectChannel(value, line) {
         };
         return expect;
     }
-    if (/^WRITE:MYSQL$/i.test(channelPart)) {
+    const writeMysqlMatch = channelPart.match(/^WRITE:MYSQL$/i);
+    if (writeMysqlMatch) {
+        // Parse optional operation type from rest (e.g., "DELETE users" or just "users")
+        const operationMatch = rest.match(/^(INSERT|UPDATE|DELETE)\s+(.+)$/i);
+        let operation;
+        let table;
+        if (operationMatch) {
+            operation = operationMatch[1].toUpperCase();
+            table = operationMatch[2];
+        }
+        else {
+            table = rest;
+        }
         const expect = {
             channel: 'WRITE_MYSQL',
-            table: rest,
+            table,
+            operation,
             withFile: '',
             returnsFile: '',
             transactional: true, // Default to transactional
@@ -149,11 +162,26 @@ function parse(tokens, filename) {
         const withToken = consume(tokens, pos);
         receiveWithFile = withToken.value;
     }
+    let receiveHeaders;
+    if (peek(tokens, pos.value)?.type === 'HEADERS') {
+        const headersToken = consume(tokens, pos);
+        const headerLines = headersToken.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+        receiveHeaders = {};
+        for (const line of headerLines) {
+            const colonIndex = line.indexOf(':');
+            if (colonIndex > 0) {
+                const key = line.substring(0, colonIndex).trim();
+                const value = line.substring(colonIndex + 1).trim();
+                receiveHeaders[key] = value;
+            }
+        }
+    }
     const receive = {
         channel: 'HTTP',
         method,
         path: pathValue,
         withFile: receiveWithFile,
+        headers: receiveHeaders,
     };
     const expects = [];
     while (peek(tokens, pos.value)?.type === 'EXPECT') {
@@ -176,7 +204,12 @@ function parse(tokens, filename) {
         }
         if (peek(tokens, pos.value)?.type === 'RETURNS') {
             const returnsToken = consume(tokens, pos);
-            expectPartial.returnsFile = returnsToken.value;
+            if (returnsToken.value === 'EMPTY') {
+                expectPartial.returnsEmpty = true;
+            }
+            else {
+                expectPartial.returnsFile = returnsToken.value;
+            }
         }
         if (sql) {
             expectPartial.sql = sql;

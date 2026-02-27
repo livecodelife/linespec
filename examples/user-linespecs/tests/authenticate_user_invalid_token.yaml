@@ -12,12 +12,9 @@ spec:
       Content-Type: application/json
       Accept: application/json
       Host: localhost:3000
-      Content-Length: '47'
-    body: |-
-      {
-        "authorization": "Bearer token_abc123xyz"
-      }
-    timestamp: '2026-02-25T21:42:03.363Z'
+      Authorization: Bearer invalid_token_xyz
+    body: ''
+    timestamp: '2026-02-25T23:48:30.904Z'
   resp:
     status_code: 401
     header:
@@ -26,16 +23,13 @@ spec:
     status_message: Unauthorized
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-02-25T21:42:03.364Z'
+    timestamp: '2026-02-25T23:48:30.905Z'
   objects: []
-  created: 1772055723
+  created: 1772063310
   app_port: 3000
-curl: |-
+curl: |
   curl --request GET \
   --header 'Content-Type: application/json' \
   --header 'Accept: application/json' \
   --header 'Host: localhost:3000' \
-  --header 'Content-Length: 47' \
-  --data "{
-    "authorization": "Bearer token_abc123xyz"
-  }"
+  --header 'Authorization: Bearer invalid_token_xyz' \

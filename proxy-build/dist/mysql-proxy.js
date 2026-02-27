@@ -708,12 +708,15 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
                 }
                 if (mock) {
                     console.error('[mysql-proxy] Using mock for: ' + query);
+                    exports.proxyEvents.emit('queryExecuted', { query, matched: true, timestamp: Date.now() });
                     const response = serializeResponses(mock.responses, packet.seqId + 1);
                     logPacketBytes('SENDING COM_QUERY MOCK RESPONSE', response);
                     clientSocket.write(response);
                 }
                 else {
-                    console.error('[mysql-proxy] Passing through to db: ' + query);
+                    console.error(`[mysql-proxy] Passing through to db: ` + query);
+                    exports.proxyEvents.emit('queryExecuted', { query, matched: false, timestamp: Date.now() });
+                    exports.proxyEvents.emit('queryPassthrough', { query, timestamp: Date.now() });
                     passthroughState.active = true;
                     passthroughState.responsePhase = 'first';
                     passthroughState.columnsRemaining = 0;

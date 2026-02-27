@@ -142,11 +142,14 @@ function generateUpdateSql(table: string, payload: Record<string, unknown>): str
   return `UPDATE ${table} SET ${setClauses.join(', ')}`;
 }
 
-function generateDeleteSql(table: string, payload?: Record<string, unknown>): string {
-  if (payload && payload.id !== undefined) {
+function generateDeleteSql(table: string, payload: Record<string, unknown>): string {
+  if (payload.id !== undefined) {
     return `DELETE FROM ${table} WHERE id = ${payload.id}`;
   }
-  return `DELETE FROM ${table}`;
+  throw new Error(
+    `Cannot generate DELETE for table "${table}" - payload must include an 'id' field to identify which record to delete.\n` +
+    `Example payload: { "id": 42 }`
+  );
 }
 
 function statusMessage(code: number): string {
@@ -183,14 +186,146 @@ function buildCurl(
   headers: Record<string, string>,
   body: string
 ): string {
-  let curl = `curl --request ${method} \\\n`;
+  let curl = `curl --request ${method} \\n`;
   for (const [key, value] of Object.entries(headers)) {
-    curl += `--header '${key}: ${value}' \\\n`;
+    curl += `--header '${key}: ${value}' \\n`;
   }
   if (body) {
     curl += `--data "${body}"`;
   }
   return curl;
+}
+
+// Helper function to infer column definitions from other expectations in the test
+function inferColumnsFromOtherExpects(
+  spec: TestSpec,
+  payloads: Map<string, PayloadFile>,
+  currentTable: string
+): Array<Record<string, unknown>> | null {
+  // Look through all READ_MYSQL expectations in the test
+  for (const expect of spec.expects) {
+    if (expect.channel !== 'READ_MYSQL') continue;
+    if (expect.table !== currentTable) continue;
+    
+    const readExpect = expect as any;
+    if (!readExpect.returnsFile) continue;
+    
+    const payload = payloads.get(readExpect.returnsFile);
+    if (!payload) continue;
+    
+    // Check if this payload has data we can use for column inference
+    const parsed = payload.parsed;
+    if (typeof parsed !== 'object' || parsed === null) continue;
+    
+    // If it's a rows array with data, extract columns from first row
+    if ('rows' in parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+      const firstRow = parsed.rows[0] as Record<string, unknown>;
+      return generateColumnsFromRow(firstRow, currentTable);
+    }
+    
+    // If it's a single row object, extract columns directly
+    if (!('rows' in parsed)) {
+      return generateColumnsFromRow(parsed as Record<string, unknown>, currentTable);
+    }
+  }
+  
+  return null;
+}
+
+// Generate column definitions from a row object
+function generateColumnsFromRow(
+  rowData: Record<string, unknown>,
+  tableName: string
+): Array<Record<string, unknown>> {
+  let seqId = 2;
+  
+  return Object.keys(rowData).map(col => {
+    const value = rowData[col];
+    let colType = 253; // Default to VAR_STRING
+    let colLength = 1020;
+    let colFlags = 0;
+    let colCharset = 255;
+    let colDecimals = 0;
+    
+    if (col === 'id') {
+      colType = 8; // MYSQL_TYPE_LONGLONG (BIGINT)
+      colLength = 20;
+      colFlags = 16899; // NOT_NULL + PRI_KEY + AUTO_INCREMENT
+      colCharset = 63; // Binary
+    } else if (col === 'user_id' || col.endsWith('_id')) {
+      colType = 8; // MYSQL_TYPE_LONGLONG (BIGINT)
+      colLength = 20;
+      colFlags = 20489; // NOT_NULL + KEY + UNSIGNED
+      colCharset = 63; // Binary
+    } else if (col === 'completed') {
+      colType = 1; // MYSQL_TYPE_TINY
+      colLength = 1;
+      colFlags = 0;
+      colCharset = 63; // Binary
+    } else if (col === 'created_at' || col === 'updated_at' || col.endsWith('_at')) {
+      colType = 12; // MYSQL_TYPE_DATETIME
+      colLength = 26;
+      colFlags = 128; // BINARY only
+      colCharset = 63; // Binary
+      colDecimals = 6;
+    } else if (col === 'description') {
+      colType = 252; // MYSQL_TYPE_LONG_BLOB (TEXT)
+      colLength = 262140;
+      colFlags = 16; // BLOB_FLAG
+      colCharset = 255;
+    } else if (typeof value === 'string' && value.length > 255) {
+      colType = 252; // MYSQL_TYPE_LONG_BLOB (TEXT)
+      colLength = 262140;
+      colFlags = 16; // BLOB_FLAG
+      colCharset = 255;
+    } else if (typeof value === 'string') {
+      colType = 253; // MYSQL_TYPE_VAR_STRING (VARCHAR)
+      colLength = 1020;
+      colFlags = 0;
+      colCharset = 255;
+    }
+    
+    return {
+      header: {
+        payload_length: 0,
+        sequence_id: seqId++,
+      },
+      catalog: 'def',
+      schema: 'todo_api_development',
+      table: tableName,
+      orgTable: tableName,
+      name: col,
+      orgName: col,
+      fixed_length: 12,
+      character_set: colCharset,
+      column_length: colLength,
+      type: colType,
+      flags: colFlags,
+      decimals: colDecimals,
+      filler: [0, 0],
+      defaultValue: '',
+    };
+  });
+}
+
+// Generate a proper MySQL empty result response with column definitions
+function generateEmptyResultResponse(
+  tableName: string,
+  columns: Array<Record<string, unknown>>
+): Record<string, unknown> {
+  const seqId = 2 + columns.length + 1; // After column count (1) + all columns + EOF
+  const finalSeqId = seqId + 1; // After the empty rows
+  
+  return {
+    columnCount: columns.length,
+    columns: columns,
+    eofAfterColumns: [5, 0, 0, seqId - 1, 254, 0, 0, 34, 0],
+    rows: [],
+    FinalResponse: {
+      data: [5, 0, 0, finalSeqId, 254, 0, 0, 34, 0],
+      type: 'EOF',
+    },
+  };
 }
 
 function buildKTest(spec: TestSpec, payloads: Map<string, PayloadFile>): KTest {
@@ -220,6 +355,10 @@ function buildKTest(spec: TestSpec, payloads: Map<string, PayloadFile>): KTest {
   };
   if (body) {
     reqHeaders['Content-Length'] = String(body.length);
+  }
+
+  if (receive.headers) {
+    Object.assign(reqHeaders, receive.headers);
   }
 
   let respBody = '';
@@ -476,12 +615,49 @@ function buildKMocks(spec: TestSpec, payloads: Map<string, PayloadFile>): KMock[
       } else if (expect.channel === 'READ_MYSQL') {
         sql = `SELECT * FROM ${expect.table}`;
       } else {
-        // WRITE_MYSQL - generate SQL from WITH payload if available
+        // WRITE_MYSQL - generate SQL based on operation type or auto-detect
         const withFile = (expect as ExpectWriteMysqlStatement).withFile;
-        if (withFile && payloads.has(withFile)) {
+        const writeExpect = expect as ExpectWriteMysqlStatement;
+        
+        if (writeExpect.operation) {
+          // Explicit operation type specified
+          switch (writeExpect.operation) {
+            case 'DELETE':
+              if (!withFile) {
+                throw new Error(
+                  `WRITE:MYSQL DELETE for table "${expect.table}" requires a WITH file to identify which record to delete.\n` +
+                  `Example: EXPECT WRITE:MYSQL DELETE ${expect.table} WITH {{payloads/delete_request.yaml}}`
+                );
+              }
+              if (!payloads.has(withFile)) {
+                throw new Error(`Payload file not found: ${withFile}`);
+              }
+              const deletePayload = payloads.get(withFile)!;
+              sql = generateDeleteSql(expect.table, deletePayload.parsed);
+              break;
+            case 'UPDATE':
+              if (withFile && payloads.has(withFile)) {
+                const updatePayload = payloads.get(withFile)!;
+                sql = generateUpdateSql(expect.table, updatePayload.parsed);
+              } else {
+                sql = `UPDATE ${expect.table}`;
+              }
+              break;
+            case 'INSERT':
+            default:
+              if (withFile && payloads.has(withFile)) {
+                const insertPayload = payloads.get(withFile)!;
+                sql = generateInsertSql(expect.table, insertPayload.parsed);
+              } else {
+                sql = `INSERT INTO ${expect.table}`;
+              }
+          }
+        } else if (withFile && payloads.has(withFile)) {
+          // Auto-detect based on payload (only INSERT or UPDATE, never DELETE)
           const payload = payloads.get(withFile)!;
           if (typeof payload.parsed === 'object' && payload.parsed !== null) {
-            // Check if this is an UPDATE (has id field) or INSERT
+            // Check if this is an UPDATE (has id field AND other fields) or INSERT
+            // DELETE is never auto-detected - must use explicit "DELETE" keyword
             if (payload.parsed.id !== undefined && Object.keys(payload.parsed).length > 1) {
               sql = generateUpdateSql(expect.table, payload.parsed);
             } else {
@@ -491,8 +667,11 @@ function buildKMocks(spec: TestSpec, payloads: Map<string, PayloadFile>): KMock[
             sql = `INSERT INTO ${expect.table}`;
           }
         } else {
-          // No WITH file - assume DELETE operation
-          sql = `DELETE FROM ${expect.table}`;
+          // No WITH file and no explicit operation - this is an error
+          throw new Error(
+            `WRITE:MYSQL for table "${expect.table}" requires either a WITH file or an explicit operation type (INSERT, UPDATE, or DELETE).\n` +
+            `Example: EXPECT WRITE:MYSQL DELETE ${expect.table} WITH {{payloads/delete_request.yaml}}`
+          );
         }
       }
 
@@ -508,7 +687,41 @@ function buildKMocks(spec: TestSpec, payloads: Map<string, PayloadFile>): KMock[
       });
 
       const returnsFile = (expect as any).returnsFile;
-      if (returnsFile && payloads.has(returnsFile)) {
+      const returnsEmpty = (expect as any).returnsEmpty;
+      
+      if (returnsEmpty) {
+        // RETURNS EMPTY - generate empty result with proper column definitions
+        const tableName = expect.table;
+        
+        // Try to infer columns from other expectations in the test
+        let columns = inferColumnsFromOtherExpects(spec, payloads, tableName);
+        
+        // If no columns found, generate a minimal set based on common patterns
+        if (!columns) {
+          // Default column set for typical Rails users table
+          columns = generateColumnsFromRow({
+            id: 1,
+            name: 'placeholder',
+            email: 'placeholder@example.com',
+            password: 'placeholder',
+            token: 'placeholder',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }, tableName);
+        }
+        
+        const emptyResponse = generateEmptyResultResponse(tableName, columns);
+        mysqlSpec.responses.push({
+          header: {
+            header: {
+              payload_length: 0,
+              sequence_id: 1,
+            },
+            packet_type: responseOp,
+          },
+          message: emptyResponse,
+        });
+      } else if (returnsFile && payloads.has(returnsFile)) {
         const payload = payloads.get(returnsFile)!;
         if (responseOp === 'TextResultSet' && typeof payload.parsed === 'object' && payload.parsed !== null && 'rows' in payload.parsed) {
           const rows = payload.parsed.rows as unknown[];

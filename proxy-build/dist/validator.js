@@ -45,6 +45,13 @@ function validate(spec, baseDir) {
             !expect.returnsFile) {
             throw new lexer_1.LineSpecError(`RETURNS is required for EXPECT ${expect.channel}`);
         }
+        // READ_MYSQL requires RETURNS or RETURNS EMPTY
+        if (expect.channel === 'READ_MYSQL') {
+            const readExpect = expect;
+            if (!readExpect.returnsFile && !readExpect.returnsEmpty) {
+                throw new lexer_1.LineSpecError(`RETURNS is required for EXPECT READ:MYSQL (use RETURNS EMPTY for empty results)`);
+            }
+        }
     }
     for (const expect of spec.expects) {
         if ((expect.channel === 'WRITE_POSTGRESQL' || expect.channel === 'EVENT') &&

@@ -18,13 +18,15 @@ export interface ExpectReadMysqlStatement {
   table: string;
   sql?: string;
   withFile?: string;
-  returnsFile: string;
+  returnsFile?: string;
+  returnsEmpty?: boolean;
   verify?: VerifyRule[];
 }
 
 export interface ExpectWriteMysqlStatement {
   channel: 'WRITE_MYSQL';
   table: string;
+  operation?: 'INSERT' | 'UPDATE' | 'DELETE';
   sql?: string;
   withFile: string;
   returnsFile?: string;
@@ -58,6 +60,7 @@ export interface ReceiveStatement {
   method: string;
   path: string;
   withFile?: string;
+  headers?: Record<string, string>;
 }
 
 export interface RespondStatement {
@@ -218,6 +221,7 @@ export interface LoadedTestSet {
   dir: string;
   tests: LoadedKTest[];
   mocks: LoadedMock[];
+  mocksByTest: Map<string, LoadedMock[]>; // mocks grouped by test name
 }
 
 export interface TestResult {

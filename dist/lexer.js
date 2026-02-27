@@ -17,6 +17,8 @@ function tokenize(source) {
     let sqlStartLine;
     let noiseLines;
     let noiseStartLine;
+    let headersLines;
+    let headersStartLine;
     for (let i = 0; i < lines.length; i++) {
         lineNo = i + 1;
         let line = lines[i];
@@ -29,6 +31,19 @@ function tokenize(source) {
                 tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine });
                 noiseLines = undefined;
                 noiseStartLine = undefined;
+                i--;
+                continue;
+            }
+        }
+        if (headersLines !== undefined) {
+            if (line.startsWith(' ') || line.startsWith('\t')) {
+                headersLines.push(line.trim());
+                continue;
+            }
+            else {
+                tokens.push({ type: 'HEADERS', value: headersLines.join('\n'), line: headersStartLine });
+                headersLines = undefined;
+                headersStartLine = undefined;
                 i--;
                 continue;
             }
@@ -63,6 +78,9 @@ function tokenize(source) {
         else if ((match = line.match(/^RETURNS\s+\{\{(.+?)\}\}$/))) {
             tokens.push({ type: 'RETURNS', value: match[1], line: lineNo });
         }
+        else if ((match = line.match(/^RETURNS\s+EMPTY$/))) {
+            tokens.push({ type: 'RETURNS', value: 'EMPTY', line: lineNo });
+        }
         else if ((match = line.match(/^USING_SQL\s+"""$/))) {
             sqlStartLine = i + 1;
         }
@@ -79,6 +97,10 @@ function tokenize(source) {
             noiseLines = [];
             noiseStartLine = lineNo;
         }
+        else if (line === 'HEADERS') {
+            headersLines = [];
+            headersStartLine = lineNo;
+        }
         else {
             throw new LineSpecError(`Unrecognized line: ${lines[i]}`, lineNo);
         }
@@ -88,6 +110,9 @@ function tokenize(source) {
     }
     if (noiseLines !== undefined) {
         tokens.push({ type: 'NOISE', value: noiseLines.join('\n'), line: noiseStartLine });
+    }
+    if (headersLines !== undefined) {
+        tokens.push({ type: 'HEADERS', value: headersLines.join('\n'), line: headersStartLine });
     }
     return tokens;
 }
