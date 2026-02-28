@@ -918,15 +918,32 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         // Ignore errors if container doesn't exist
       }
       
-      // Start initial proxy with ALL mocks (Optimization 5: Mock Aggregation)
-      // Mocks are already written to mocks.yaml above and will be filtered per-test via /activate
-      // fs.writeFileSync(path.join(proxyBuildDir, 'mocks.yaml'), '');  // REMOVED - was clearing mocks
+      // Extract unique hostnames from HTTP mocks for DNS aliases
+      const httpMocks = testSet.mocks.filter(m => m.mock.kind === 'Http');
+      const hostnames = [...new Set(httpMocks.map(m => {
+        try {
+          const spec = m.mock.spec as { req: { url: string } };
+          const url = new URL(spec.req.url);
+          return url.hostname;
+        } catch {
+          return null;
+        }
+      }).filter((h): h is string => h !== null))];
       
-      await spawnProcess('docker', [
+      // Build docker args with network aliases for each HTTP mock hostname
+      const dockerArgs = [
         'run', '-d',
         '--name', proxyContainerName,
         '--network', networkName,
-        '--network-alias', 'user-service.local',
+      ];
+      
+      // Add network aliases for each unique hostname
+      for (const hostname of hostnames) {
+        dockerArgs.push('--network-alias', hostname);
+        process.stdout.write(`→ Adding DNS alias: ${hostname}\n`);
+      }
+      
+      dockerArgs.push(
         '-p', `${proxyPort}:${internalProxyPort}`,
         '-p', `${controlPort}:3308`,
         '-v', `${proxyBuildDir}:/app/mocks:ro`,
@@ -941,7 +958,9 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         '--error-file', '/app/errors/verification-errors.json',
         '--passthrough-file', '/app/errors/passthrough-queries.json',
         '--query-log-file', '/app/errors/query-log.json'
-      ], true);
+      );
+      
+      await spawnProcess('docker', dockerArgs, true);
 
       const maxProxyRetries = 15;
       let proxyReady = false;
