@@ -148,8 +148,14 @@ async function main() {
 
   // Start HTTP mock server to intercept calls to user-service.local
   const httpMocks = docs.filter((m: KMock) => m.kind === 'Http');
+  // Track which HTTP mocks are invoked for verification
+  const httpMockUsage = new Map<string, boolean>();
+  
   if (httpMocks.length > 0) {
     console.error(`[proxy-server] Starting HTTP mock server with ${httpMocks.length} HTTP mocks`);
+    
+    // Initialize usage tracking
+    httpMocks.forEach(m => httpMockUsage.set(m.name, false));
     
     const httpServer = http.createServer((req, res) => {
       // Enable CORS
@@ -182,6 +188,9 @@ async function main() {
         if (mock) {
           const spec = mock.spec as any;
           console.error(`[proxy-server] HTTP Mock matched: ${mock.name}`);
+          
+          // Mark this mock as used
+          httpMockUsage.set(mock.name, true);
           
           // Set response headers
           if (spec.resp?.header) {
@@ -262,6 +271,10 @@ async function main() {
               return;
             }
             const count = activateMocksForTest(testName);
+            
+            // Reset HTTP mock usage tracking for new test
+            httpMockUsage.forEach((_, key) => httpMockUsage.set(key, false));
+            
             console.error(`[proxy-server] Activated mocks for test "${testName}": ${count} mocks`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, testName, count }));
@@ -276,7 +289,20 @@ async function main() {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: String(err) }));
         });
-      } else if (req.method === 'POST' && req.url === '/clear-errors') {
+      } else if (req.method === 'GET' && req.url === '/check-http-mocks') {
+        // Check which HTTP mocks were invoked
+        const unusedMocks: string[] = [];
+        httpMockUsage.forEach((used, name) => {
+          if (!used) unusedMocks.push(name);
+        });
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          total: httpMockUsage.size,
+          used: httpMockUsage.size - unusedMocks.length,
+          unused: unusedMocks 
+        }));
         // Clear error and passthrough files
         try {
           if (options.errorFile && fs.existsSync(options.errorFile)) {
