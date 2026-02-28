@@ -272,19 +272,63 @@ The compiler sets the `packet_type` dynamically:
 - `WRITE_MYSQL` statements → `packet_type: OK` (proxy routes to `encodeOkPayload`)
 - `READ_MYSQL` statements → `packet_type: TextResultSet` (proxy routes to column/row serialisation)
 
+### HTTP Mock Interception
+
+The proxy includes an HTTP server that intercepts external service calls:
+
+```typescript
+// HTTP server listens on port 80
+const httpServer = http.createServer((req, res) => {
+  // Match against HTTP mocks filtered by current test name
+  const mock = httpMocks.find(m => {
+    // Only match mocks for current test
+    if (!m.name.startsWith(`${currentHttpTestName}-mock-`)) return false;
+    // Match URL and method
+    return mockMethod === requestMethod && mockUrl === requestUrl;
+  });
+  
+  if (mock) {
+    httpMockUsage.set(mock.name, true); // Track usage
+    res.writeHead(mock.spec.resp.status_code);
+    res.end(mock.spec.resp.body);
+  }
+});
+```
+
+**Key features:**
+1. **Dynamic DNS aliases** - Hostnames from HTTP mocks are added as `--network-alias` when starting the proxy container
+2. **Test-scoped matching** - Each test only sees its own HTTP mocks (prevents cross-test contamination)
+3. **Usage tracking** - Mocks are tracked and verified after each test
+
 ### Test Runner Pipeline
 `linespec test [dir]` follows the sequence:
 1. `loadTestSet(dir)` — reads all `tests/*.yaml` and `mocks.yaml`
-2. `startProxy(mocks, host, dbPort, proxyPort)` — starts TCP proxy on a free port
-   - Infrastructure queries pass through to real DB
-   - App-level queries matched against mocks
-3. Docker Compose with `DATABASE_URL` override to route through proxy
-4. `pollUntilHealthy(serviceUrl)` — waits for HTTP 200/404
-5. Each `KTest` replayed via `http` module
-6. Status/body compared (noise fields ignored)
-7. Side-by-side diff for failures
-8. Report written to `linespec-report/`
-9. `docker compose down` and proxy teardown
+2. **Extract HTTP hostnames** - Parse HTTP mocks to get unique hostnames for DNS aliases
+3. **Build proxy with all mocks** - Start proxy container with all mocks loaded (mock aggregation)
+4. **Add DNS aliases** - Add `--network-alias` for each HTTP mock hostname
+5. **Per-test activation** - For each test:
+   - Call `/activate` endpoint with test name
+   - Proxy filters mocks by test name prefix
+   - Reset HTTP mock usage tracking
+6. **Run HTTP test** - Replay KTest via HTTP module
+7. **Verify mocks** - Check SQL verification errors and HTTP mock usage
+8. **Report results** - Side-by-side diff for failures
+9. **Write report** - JSON files to `linespec-report/`
+10. **Cleanup** - `docker compose down` and proxy teardown
+
+**HTTP Mock Verification:**
+After each test, the runner checks the `/check-http-mocks` endpoint:
+```typescript
+const httpMockUsage = await checkHttpMockUsage('localhost', controlPort);
+if (httpMockUsage.unused.length > 0) {
+  throw new Error(`HTTP Mock(s) not invoked: ${httpMockUsage.unused.join(', ')}`);
+}
+```
+
+This catches:
+- Applications using fallback behavior instead of making HTTP calls
+- Wrong hostnames in application code
+- Test mode bypasses
 
 ### Docker Compose Testing Infrastructure
 
@@ -381,7 +425,7 @@ These queries always pass through to the real database (never matched against mo
 ### Statement Types
 - `RECEIVE` - Trigger request (exactly one required, must be first)
 - `EXPECT` - External dependencies (zero or more)
-  - `HTTP` - External HTTP calls
+  - `HTTP` - External HTTP calls (mocked by proxy, verified after test)
   - `READ_MYSQL` - Database reads (requires `RETURNS`)
   - `WRITE_MYSQL` - Database writes (auto-transactional, optional `RETURNS`)
   - `WRITE_POSTGRESQL` - PostgreSQL writes
@@ -390,6 +434,36 @@ These queries always pass through to the real database (never matched against mo
 - `RESPOND` - Response (exactly one required, must be last)
 - `NOISE` - Response noise filter (optional, follows RESPOND)
 - `NO TRANSACTION` - Disable auto-transaction for WRITE_MYSQL
+
+### Verification Types
+LineSpec supports two types of verification:
+
+**1. SQL Verification (`VERIFY query ...`)**
+Validates actual SQL queries executed by the application:
+- `VERIFY query CONTAINS 'string'` - Query must include the string
+- `VERIFY query NOT_CONTAINS 'string'` - Query must NOT include the string
+- `VERIFY query MATCHES /regex/` - Query must match the regex pattern
+
+**2. HTTP Mock Verification (automatic)**
+Tests fail if HTTP mocks are defined but not invoked:
+- Catches fallback behavior (rescue blocks providing default values)
+- Validates external service calls actually happen
+- Prevents silent test bypasses
+
+When verification fails, the test runner displays:
+```
+✗ test-1 FAIL
+
+  🔒 SQL Verification Error:
+    VERIFY FAILED: Query does not contain 'password_digest'.
+    Actual query: INSERT INTO `users` (`name`, `email`, `password`) ...
+
+  🔌 HTTP Mock Verification Error:
+    HTTP Mock(s) not invoked: test-1-mock-0
+
+  Expected status : 201
+  Actual status   : 500
+```
 
 ### Custom Errors
 All parsing and validation errors extend `LineSpecError` with optional line numbers for error reporting.
