@@ -37,11 +37,15 @@ exports.proxyEvents = void 0;
 exports.getLastVerificationError = getLastVerificationError;
 exports.clearVerificationErrors = clearVerificationErrors;
 exports.setVerificationError = setVerificationError;
+exports.buildMockQueue = buildMockQueue;
+exports.reloadMocks = reloadMocks;
 exports.startProxy = startProxy;
 const net = __importStar(require("net"));
 const events_1 = require("events");
 // Global event emitter for proxy events
 exports.proxyEvents = new events_1.EventEmitter();
+// Global mock queue - shared across all connections
+let globalMockQueue = [];
 // Debug logging helper
 function logPacketBytes(label, data, maxBytes = 200) {
     const hex = data.slice(0, Math.min(data.length, maxBytes)).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
@@ -375,6 +379,20 @@ function buildMockQueue(mocks) {
     queue.sort((a, b) => a.created - b.created);
     return queue;
 }
+function reloadMocks(mocks) {
+    console.error(`[mysql-proxy] Reloading mocks: clearing ${globalMockQueue.length} mocks, loading ${mocks.length} new mocks`);
+    globalMockQueue.length = 0;
+    const newQueue = buildMockQueue(mocks);
+    globalMockQueue.push(...newQueue);
+    console.error(`[mysql-proxy] Reloaded ${globalMockQueue.length} mocks into global queue`);
+    for (let i = 0; i < globalMockQueue.length; i++) {
+        const q = globalMockQueue[i];
+        const req = q.requests[0];
+        if (req && typeof req.message === 'object' && 'query' in req.message) {
+            console.error(`[mysql-proxy] Queue[${i}]: ${req.message.query}`);
+        }
+    }
+}
 function checkVerificationRules(query, rules) {
     if (!rules || rules.length === 0) {
         return { success: true };
@@ -410,18 +428,18 @@ function checkVerificationRules(query, rules) {
     }
     return { success: true };
 }
-function findAndConsumeMock(queue, requestOperation, query) {
+function findAndConsumeMock(requestOperation, query) {
     console.error(`[mysql-proxy] findAndConsumeMock called with operation=${requestOperation}, query="${query}"`);
-    console.error(`[mysql-proxy] Queue length: ${queue.length}`);
+    console.error(`[mysql-proxy] Global queue length: ${globalMockQueue.length}`);
     // Create a snapshot of queue indices to avoid race conditions during iteration
     // when the queue is modified by concurrent connections
-    const queueSnapshot = queue.map((spec, index) => ({ spec, index }));
+    const queueSnapshot = globalMockQueue.map((spec, index) => ({ spec, index }));
     for (const { spec, index: i } of queueSnapshot) {
         if (spec.metadata.requestOperation !== requestOperation) {
             continue;
         }
         if (requestOperation === 'COM_PING') {
-            queue.splice(i, 1);
+            globalMockQueue.splice(i, 1);
             return { spec };
         }
         if (requestOperation === 'COM_QUERY' && query) {
@@ -456,7 +474,7 @@ function findAndConsumeMock(queue, requestOperation, query) {
                             return { spec: null, verificationError: verifyResult.error };
                         }
                         if (isWriteOp) {
-                            queue.splice(i, 1);
+                            globalMockQueue.splice(i, 1);
                         }
                         return { spec };
                     }
@@ -551,7 +569,7 @@ function findAndConsumeMock(queue, requestOperation, query) {
                                 return { spec: null, verificationError: verifyResult.error };
                             }
                             if (isWriteOp) {
-                                queue.splice(i, 1);
+                                globalMockQueue.splice(i, 1);
                             }
                             return { spec };
                         }
@@ -609,7 +627,7 @@ function isResponseComplete(payload, passthroughState) {
     }
     return true;
 }
-function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
+function handleConnection(clientSocket, upstreamHost, upstreamPort) {
     const upstreamSocket = net.createConnection(upstreamPort, upstreamHost);
     upstreamSocket.on('connect', () => {
         console.error(`[mysql-proxy] Connected to upstream ${upstreamHost}:${upstreamPort}`);
@@ -674,7 +692,7 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             }
             const commandByte = packet.payload[0];
             if (commandByte === 0x0e) {
-                const { spec: mock, verificationError } = findAndConsumeMock(queue, 'COM_PING');
+                const { spec: mock, verificationError } = findAndConsumeMock('COM_PING');
                 if (verificationError) {
                     console.error('[mysql-proxy] VERIFICATION FAILED for COM_PING: ' + verificationError);
                     clientSocket.destroy(new Error(verificationError));
@@ -699,7 +717,7 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
             }
             if (commandByte === 0x03) {
                 const query = packet.payload.slice(1).toString('utf8');
-                const { spec: mock, verificationError } = findAndConsumeMock(queue, 'COM_QUERY', query);
+                const { spec: mock, verificationError } = findAndConsumeMock('COM_QUERY', query);
                 if (verificationError) {
                     console.error('[mysql-proxy] VERIFICATION FAILED for query: ' + query);
                     console.error('[mysql-proxy] Error: ' + verificationError);
@@ -737,17 +755,20 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort, queue) {
 }
 function startProxy(mocks, upstreamHost, upstreamPort, listenPort) {
     return new Promise((resolve, reject) => {
-        const queue = buildMockQueue(mocks);
-        console.error('[mysql-proxy] Loaded ' + queue.length + ' mocks into queue');
-        for (let i = 0; i < queue.length; i++) {
-            const q = queue[i];
+        // Initialize global mock queue
+        globalMockQueue.length = 0;
+        const initialQueue = buildMockQueue(mocks);
+        globalMockQueue.push(...initialQueue);
+        console.error('[mysql-proxy] Loaded ' + globalMockQueue.length + ' mocks into global queue');
+        for (let i = 0; i < globalMockQueue.length; i++) {
+            const q = globalMockQueue[i];
             const req = q.requests[0];
             if (req && typeof req.message === 'object' && 'query' in req.message) {
                 console.error('[mysql-proxy] Queue[' + i + ']: ' + req.message.query);
             }
         }
         const server = net.createServer((clientSocket) => {
-            handleConnection(clientSocket, upstreamHost, upstreamPort, queue);
+            handleConnection(clientSocket, upstreamHost, upstreamPort);
         });
         server.on('error', reject);
         server.listen(listenPort, '0.0.0.0', () => resolve(server));

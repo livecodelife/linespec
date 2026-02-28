@@ -37,6 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mysql_proxy_1 = require("./mysql-proxy");
 const fs = __importStar(require("fs"));
 const yaml = __importStar(require("js-yaml"));
+const http = __importStar(require("http"));
 function parseArgs() {
     const args = process.argv.slice(2);
     const options = {
@@ -44,6 +45,7 @@ function parseArgs() {
         upstreamHost: 'localhost',
         upstreamPort: 3306,
         listenPort: 3307,
+        controlPort: 3308,
     };
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--mocks' && i + 1 < args.length) {
@@ -60,6 +62,10 @@ function parseArgs() {
         }
         else if (args[i] === '--port' && i + 1 < args.length) {
             options.listenPort = parseInt(args[i + 1], 10);
+            i++;
+        }
+        else if (args[i] === '--control-port' && i + 1 < args.length) {
+            options.controlPort = parseInt(args[i + 1], 10);
             i++;
         }
         else if (args[i] === '--error-file' && i + 1 < args.length) {
@@ -156,9 +162,101 @@ async function main() {
             }
         });
     }
-    const server = await (0, mysql_proxy_1.startProxy)(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
+    // Start the MySQL proxy
+    const proxyServer = await (0, mysql_proxy_1.startProxy)(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
+    // Start the HTTP control server for hot mock reloading
+    let controlServer = null;
+    if (options.controlPort) {
+        controlServer = http.createServer((req, res) => {
+            // Enable CORS
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            res.setHeader('Connection', 'keep-alive');
+            if (req.method === 'OPTIONS') {
+                res.writeHead(200);
+                res.end();
+                return;
+            }
+            if (req.method === 'POST' && req.url === '/reload') {
+                let body = '';
+                req.on('data', chunk => {
+                    body += chunk;
+                });
+                req.on('end', () => {
+                    try {
+                        const mocks = yaml.loadAll(body);
+                        (0, mysql_proxy_1.reloadMocks)(mocks);
+                        console.error(`[proxy-server] Hot reloaded ${mocks.length} mocks`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, count: mocks.length }));
+                    }
+                    catch (err) {
+                        console.error(`[proxy-server] Failed to reload mocks: ${err}`);
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: String(err) }));
+                    }
+                });
+                req.on('error', (err) => {
+                    console.error(`[proxy-server] Request error on /reload: ${err}`);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: String(err) }));
+                });
+            }
+            else if (req.method === 'POST' && req.url === '/clear-errors') {
+                // Clear error and passthrough files
+                try {
+                    if (options.errorFile && fs.existsSync(options.errorFile)) {
+                        fs.unlinkSync(options.errorFile);
+                    }
+                    if (options.passthroughFile && fs.existsSync(options.passthroughFile)) {
+                        fs.unlinkSync(options.passthroughFile);
+                    }
+                    if (options.queryLogFile && fs.existsSync(options.queryLogFile)) {
+                        fs.unlinkSync(options.queryLogFile);
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true }));
+                }
+                catch (err) {
+                    console.error(`[proxy-server] Failed to clear errors: ${err}`);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: String(err) }));
+                }
+            }
+            else {
+                res.writeHead(404);
+                res.end('Not found');
+            }
+        });
+        await new Promise((resolve, reject) => {
+            controlServer.listen(options.controlPort, '0.0.0.0', () => {
+                console.error(`Control API listening on port ${options.controlPort}`);
+                resolve();
+            });
+            controlServer.on('error', reject);
+            controlServer.on('clientError', (err, socket) => {
+                console.error(`[proxy-server] Control server client error: ${err}`);
+                socket.destroy();
+            });
+        });
+    }
     console.error(`MySQL proxy listening on port ${options.listenPort} -> ${options.upstreamHost}:${options.upstreamPort}`);
     console.error('Press Ctrl+C to stop');
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+        console.error('\nShutting down...');
+        proxyServer.close(() => {
+            if (controlServer) {
+                controlServer.close(() => {
+                    process.exit(0);
+                });
+            }
+            else {
+                process.exit(0);
+            }
+        });
+    });
 }
 main().catch((err) => {
     console.error('Error:', err);

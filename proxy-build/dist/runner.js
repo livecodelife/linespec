@@ -56,6 +56,67 @@ async function findFreePort() {
         server.on('error', reject);
     });
 }
+async function reloadMocksViaControlApi(proxyHost, controlPort, mocksYaml) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: proxyHost,
+            port: controlPort,
+            path: '/reload',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/yaml',
+                'Content-Length': Buffer.byteLength(mocksYaml),
+            },
+            timeout: 10000,
+        };
+        const req = http_1.default.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    resolve();
+                }
+                else {
+                    reject(new Error(`Control API returned ${res.statusCode}: ${data}`));
+                }
+            });
+        });
+        req.on('error', (err) => {
+            reject(err);
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Control API request timeout'));
+        });
+        req.write(mocksYaml);
+        req.end();
+    });
+}
+async function clearProxyErrorsViaControlApi(proxyHost, controlPort) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: proxyHost,
+            port: controlPort,
+            path: '/clear-errors',
+            method: 'POST',
+            timeout: 5000,
+        };
+        const req = http_1.default.request(options, (res) => {
+            if (res.statusCode === 200) {
+                resolve();
+            }
+            else {
+                reject(new Error(`Control API returned ${res.statusCode}`));
+            }
+        });
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Control API request timeout'));
+        });
+        req.end();
+    });
+}
 function parseComposeFile(composePath) {
     if (!fs.existsSync(composePath)) {
         throw new Error(`Compose file not found: ${composePath}`);
@@ -603,8 +664,10 @@ async function runTests(testSet, options) {
     let upstreamHost = '';
     let upstreamPort = 3306;
     let internalProxyPort = 3306;
+    let controlPort = 3308;
     try {
-        const proxyPort = await findFreePort();
+        const proxyPort = options.proxyPort ?? await findFreePort();
+        const controlPort = await findFreePort();
         const mocks = testSet.mocks.map((m) => m.mock);
         if (useCompose) {
             const composeParsed = parseComposeFile(options.composePath);
@@ -670,9 +733,9 @@ COPY mocks.yaml ./
 
 RUN npm install --omit=dev
 
-EXPOSE 3306
+EXPOSE 3306 3308
 
-CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
+CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", "--control-port", "3308"]
 `;
             if (!fs.existsSync(proxyBuildDir)) {
                 fs.mkdirSync(proxyBuildDir, { recursive: true });
@@ -734,6 +797,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
                 '--name', proxyContainerName,
                 '--network', networkName,
                 '-p', `${proxyPort}:${internalProxyPort}`,
+                '-p', `${controlPort}:3308`,
                 '-v', `${proxyBuildDir}:/app/mocks:ro`,
                 '-v', `${errorDirPath}:/app/errors`,
                 proxyImageName,
@@ -742,6 +806,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
                 '--upstream-host', upstreamHost,
                 '--upstream-port', String(upstreamPort),
                 '--port', String(internalProxyPort),
+                '--control-port', '3308',
                 '--error-file', '/app/errors/verification-errors.json',
                 '--passthrough-file', '/app/errors/passthrough-queries.json',
                 '--query-log-file', '/app/errors/query-log.json'
@@ -774,6 +839,35 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
             }
             if (!proxyReady) {
                 throw new Error('Proxy did not become ready within timeout');
+            }
+            // Wait for control API to be ready
+            let controlReady = false;
+            for (let i = 0; i < maxProxyRetries; i++) {
+                try {
+                    const conn = require('net');
+                    await new Promise((resolve, reject) => {
+                        const socket = new conn.Socket();
+                        socket.setTimeout(1000);
+                        socket.on('connect', () => {
+                            socket.destroy();
+                            resolve();
+                        });
+                        socket.on('timeout', () => {
+                            socket.destroy();
+                            reject(new Error('timeout'));
+                        });
+                        socket.on('error', reject);
+                        socket.connect(controlPort, 'localhost');
+                    });
+                    controlReady = true;
+                    break;
+                }
+                catch {
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+            }
+            if (!controlReady) {
+                throw new Error('Proxy control API did not become ready within timeout');
             }
             let networkVerified = false;
             const maxNetworkRetries = 10;
@@ -884,85 +978,21 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
             const testMocksPath = path.join(testSet.dir, `mocks-${name}.yaml`);
             fs.writeFileSync(testMocksPath, testMocksYaml);
             if (useCompose) {
-                // Restart proxy with only this test's mocks
+                // Hot reload mocks via control API (much faster than container restart)
                 process.stdout.write(`→ ${name}: `);
+                // Clear error files via control API
                 try {
-                    // Stop and force remove existing proxy (quietly)
-                    await spawnProcess('docker', ['stop', '-t', '1', proxyContainerName], true);
-                    await spawnProcess('docker', ['rm', '-f', proxyContainerName], true);
+                    await clearProxyErrorsViaControlApi('localhost', controlPort);
                 }
                 catch {
-                    // Container might not exist, ignore error
+                    // Ignore errors - files might not exist
                 }
-                // Clear error files
-                const errorFiles = ['verification-errors.json', 'passthrough-queries.json', 'query-log.json'];
-                for (const file of errorFiles) {
-                    const filePath = path.join(errorDirPath, file);
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
-                    }
-                }
-                // Start proxy with test-specific mocks
-                const absoluteMocksDir = path.resolve(testSet.dir);
-                // Ensure port is free by waiting a bit after container removal
-                await new Promise((resolve) => setTimeout(resolve, 500));
-                await spawnProcess('docker', [
-                    'run', '-d',
-                    '--name', proxyContainerName,
-                    '--network', networkName,
-                    '-p', `${proxyPort}:${internalProxyPort}`,
-                    '-v', `${absoluteMocksDir}:/app/mocks:ro`,
-                    '-v', `${errorDirPath}:/app/errors`,
-                    proxyImageName,
-                    'node', 'dist/proxy-server.js',
-                    '--mocks', `/app/mocks/mocks-${name}.yaml`,
-                    '--upstream-host', upstreamHost,
-                    '--upstream-port', String(upstreamPort),
-                    '--port', String(internalProxyPort),
-                    '--error-file', '/app/errors/verification-errors.json',
-                    '--passthrough-file', '/app/errors/passthrough-queries.json',
-                    '--query-log-file', '/app/errors/query-log.json'
-                ], true);
-                // Wait for proxy to be ready (increased wait time)
-                await new Promise((resolve) => setTimeout(resolve, 1500));
-                let proxyReady = false;
-                for (let i = 0; i < 20; i++) {
-                    try {
-                        const conn = require('net');
-                        await new Promise((resolve, reject) => {
-                            const socket = new conn.Socket();
-                            socket.setTimeout(1000);
-                            socket.on('connect', () => {
-                                socket.destroy();
-                                resolve();
-                            });
-                            socket.on('timeout', () => {
-                                socket.destroy();
-                                reject(new Error('timeout'));
-                            });
-                            socket.on('error', reject);
-                            socket.connect(proxyPort, 'localhost');
-                        });
-                        proxyReady = true;
-                        break;
-                    }
-                    catch {
-                        await new Promise((resolve) => setTimeout(resolve, 500));
-                    }
-                }
-                if (!proxyReady) {
-                    throw new Error(`Proxy did not become ready for test "${name}"`);
-                }
-                // Additional wait to ensure proxy has loaded mocks
-                await new Promise((resolve) => setTimeout(resolve, 500));
-                // Wait for web service to be healthy after proxy restart
-                // This ensures the service has reconnected to the new proxy
+                // Reload mocks via control API
                 try {
-                    await pollUntilHealthy(options.serviceUrl, 30000);
+                    await reloadMocksViaControlApi('localhost', controlPort, testMocksYaml);
                 }
-                catch (healthErr) {
-                    process.stdout.write(`⚠ Service health check failed: ${healthErr.message}\n`);
-                    // Continue anyway - the test might still pass
+                catch (err) {
+                    throw new Error(`Failed to reload mocks for test "${name}": ${err}`);
                 }
             }
             const result = await runHttpTest(ktest, options.serviceUrl, name);
@@ -1144,6 +1174,13 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306"]
             proxyServer.close();
         }
         if (useCompose) {
+            // Clean up proxy container
+            try {
+                await spawnProcess('docker', ['rm', '-f', proxyContainerName], true);
+            }
+            catch {
+                // ignore cleanup errors
+            }
             try {
                 await spawnProcess('docker', [
                     'compose',

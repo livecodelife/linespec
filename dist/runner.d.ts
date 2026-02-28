@@ -4,5 +4,6 @@ export interface RunnerOptions {
     serviceUrl: string;
     dbPort?: number;
     reportDir?: string;
+    proxyPort?: number;
 }
 export declare function runTests(testSet: LoadedTestSet, options: RunnerOptions): Promise<void>;

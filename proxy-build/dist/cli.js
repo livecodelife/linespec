@@ -165,6 +165,7 @@ program
     .option('--compose <file>', 'Path to docker-compose file (optional, for manual service management)')
     .option('--service-url <url>', 'Base URL of the service to test', 'http://localhost:3000')
     .option('--db-port <port>', 'MySQL port to proxy (default: 3306)', '3306')
+    .option('--proxy-port <port>', 'Proxy listen port (default: random free port)', '')
     .option('--report <dir>', 'Report output directory (relative to test-set dir)', 'linespec-report')
     .action((dir, options) => {
     const testDir = dir || 'keploy-examples/test-set-0';
@@ -176,6 +177,7 @@ program
             composePath: options.compose,
             serviceUrl: options.serviceUrl,
             dbPort: parseInt(options.dbPort, 10),
+            proxyPort: options.proxyPort ? parseInt(options.proxyPort, 10) : undefined,
             reportDir,
         })
             .catch((err) => {
