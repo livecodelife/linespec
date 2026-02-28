@@ -7,4 +7,5 @@ export declare function clearVerificationErrors(): void;
 export declare function setVerificationError(testName: string, error: string): void;
 export declare function buildMockQueue(mocks: KMock[]): KMockMysqlSpec[];
 export declare function reloadMocks(mocks: KMock[]): void;
+export declare function activateMocksForTest(testName: string): number;
 export declare function startProxy(mocks: KMock[], upstreamHost: string, upstreamPort: number, listenPort: number): Promise<net.Server>;

@@ -120,6 +120,7 @@ export interface KMockMysqlSpec {
         responseOperation: string;
         type: string;
         verify?: VerifyRule[];
+        name?: string;
     };
     requests: Array<{
         header: {

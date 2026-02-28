@@ -164,6 +164,60 @@ async function main() {
     }
     // Start the MySQL proxy
     const proxyServer = await (0, mysql_proxy_1.startProxy)(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
+    // Start HTTP mock server to intercept calls to user-service.local
+    const httpMocks = docs.filter((m) => m.kind === 'Http');
+    if (httpMocks.length > 0) {
+        console.error(`[proxy-server] Starting HTTP mock server with ${httpMocks.length} HTTP mocks`);
+        const httpServer = http.createServer((req, res) => {
+            // Enable CORS
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            if (req.method === 'OPTIONS') {
+                res.writeHead(200);
+                res.end();
+                return;
+            }
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+                // Find matching HTTP mock
+                const mock = httpMocks.find((m) => {
+                    const spec = m.spec;
+                    const mockMethod = spec.req?.method?.toUpperCase();
+                    const mockUrl = spec.req?.url;
+                    const requestMethod = req.method?.toUpperCase();
+                    const requestUrl = `http://${req.headers.host}${req.url}`;
+                    console.error(`[proxy-server] HTTP Mock check: ${requestMethod} ${requestUrl} vs ${mockMethod} ${mockUrl}`);
+                    return mockMethod === requestMethod && mockUrl === requestUrl;
+                });
+                if (mock) {
+                    const spec = mock.spec;
+                    console.error(`[proxy-server] HTTP Mock matched: ${mock.name}`);
+                    // Set response headers
+                    if (spec.resp?.header) {
+                        for (const [key, value] of Object.entries(spec.resp.header)) {
+                            res.setHeader(key, value);
+                        }
+                    }
+                    res.writeHead(spec.resp?.status_code || 200);
+                    res.end(spec.resp?.body || '{}');
+                }
+                else {
+                    console.error(`[proxy-server] No HTTP mock found for: ${req.method} http://${req.headers.host}${req.url}`);
+                    res.writeHead(404);
+                    res.end(JSON.stringify({ error: 'No mock found' }));
+                }
+            });
+        });
+        await new Promise((resolve, reject) => {
+            httpServer.listen(80, '0.0.0.0', () => {
+                console.error('[proxy-server] HTTP mock server listening on port 80');
+                resolve();
+            });
+            httpServer.on('error', reject);
+        });
+    }
     // Start the HTTP control server for hot mock reloading
     let controlServer = null;
     if (options.controlPort) {
@@ -199,6 +253,36 @@ async function main() {
                 });
                 req.on('error', (err) => {
                     console.error(`[proxy-server] Request error on /reload: ${err}`);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: String(err) }));
+                });
+            }
+            else if (req.method === 'POST' && req.url === '/activate') {
+                // Optimization 5: Mock Aggregation - activate mocks for specific test
+                let body = '';
+                req.on('data', chunk => { body += chunk; });
+                req.on('end', () => {
+                    try {
+                        const data = JSON.parse(body);
+                        const testName = data.testName;
+                        if (!testName) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'Missing testName' }));
+                            return;
+                        }
+                        const count = (0, mysql_proxy_1.activateMocksForTest)(testName);
+                        console.error(`[proxy-server] Activated mocks for test "${testName}": ${count} mocks`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, testName, count }));
+                    }
+                    catch (err) {
+                        console.error(`[proxy-server] Failed to activate mocks: ${err}`);
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: String(err) }));
+                    }
+                });
+                req.on('error', (err) => {
+                    console.error(`[proxy-server] Request error on /activate: ${err}`);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: String(err) }));
                 });
