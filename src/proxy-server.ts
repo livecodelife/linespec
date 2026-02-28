@@ -174,8 +174,13 @@ async function main() {
       let body = '';
       req.on('data', chunk => { body += chunk; });
       req.on('end', () => {
-        // Find matching HTTP mock
+        // Find matching HTTP mock - filter by current test name
         const mock = httpMocks.find((m: KMock) => {
+          // Only consider mocks for the current test
+          if (currentHttpTestName && !m.name.startsWith(`${currentHttpTestName}-mock-`)) {
+            return false;
+          }
+          
           const spec = m.spec as any;
           const mockMethod = spec.req?.method?.toUpperCase();
           const mockUrl = spec.req?.url;
@@ -204,7 +209,7 @@ async function main() {
           res.writeHead(spec.resp?.status_code || 200);
           res.end(spec.resp?.body || '{}');
         } else {
-          console.error(`[proxy-server] No HTTP mock found for: ${req.method} http://${req.headers.host}${req.url}`);
+          console.error(`[proxy-server] No HTTP mock found for: ${req.method} http://${req.headers.host}${req.url} (current test: ${currentHttpTestName})`);
           res.writeHead(404);
           res.end(JSON.stringify({ error: 'No mock found' }));
         }
