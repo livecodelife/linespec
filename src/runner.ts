@@ -102,6 +102,52 @@ async function clearProxyErrorsViaControlApi(
   });
 }
 
+// Optimization 5: Mock Aggregation - activate mocks for specific test
+async function activateMocksViaControlApi(
+  proxyHost: string,
+  controlPort: number,
+  testName: string
+): Promise<{ count: number }> {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({ testName });
+    const options = {
+      hostname: proxyHost,
+      port: controlPort,
+      path: '/activate',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
+      timeout: 10000,
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          const result = JSON.parse(data);
+          resolve({ count: result.count });
+        } else {
+          reject(new Error(`Control API returned ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Control API request timeout'));
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
 function parseComposeFile(composePath: string): Record<string, unknown> {
   if (!fs.existsSync(composePath)) {
     throw new Error(`Compose file not found: ${composePath}`);
@@ -536,7 +582,7 @@ async function pollUntilHealthy(serviceUrl: string, timeoutMs: number = 120000):
       });
       return;
     } catch {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 200));
       process.stdout.write('…waiting for service\n');
     }
   }
@@ -779,7 +825,7 @@ export async function runTests(testSet: LoadedTestSet, options: RunnerOptions): 
           dbReady = true;
           break;
         } catch {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         }
       }
       
@@ -872,8 +918,9 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         // Ignore errors if container doesn't exist
       }
       
-      // Start initial proxy with empty mocks (will be replaced per-test)
-      fs.writeFileSync(path.join(proxyBuildDir, 'mocks.yaml'), '');
+      // Start initial proxy with ALL mocks (Optimization 5: Mock Aggregation)
+      // Mocks are already written to mocks.yaml above and will be filtered per-test via /activate
+      // fs.writeFileSync(path.join(proxyBuildDir, 'mocks.yaml'), '');  // REMOVED - was clearing mocks
       
       await spawnProcess('docker', [
         'run', '-d',
@@ -918,7 +965,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
           proxyReady = true;
           break;
         } catch {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
       
@@ -948,7 +995,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
           controlReady = true;
           break;
         } catch {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
       
@@ -987,7 +1034,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
           networkVerified = true;
           break;
         } catch {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
       
@@ -996,7 +1043,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
       }
 
       process.stdout.write(`✓ MySQL proxy ready (${proxyContainerName}:${internalProxyPort})\n`);
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Removed 3000ms fixed delay - proxy readiness is already confirmed above
 
       const overrideContent = buildOverrideContentForContainer(composeParsed);
       fs.writeFileSync(overridePath, overrideContent);
@@ -1077,13 +1124,13 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         process.stdout.write(`⚠ Warning: No mocks found for test "${name}"\n`);
       }
       
-      // Write test-specific mocks file (YAML document stream format)
+      // Optimization 5: Mock Aggregation - only write test-specific mocks file for debugging
       const testMocksYaml = testMocks.map(m => yaml.dump(m.mock)).join('---\n');
       const testMocksPath = path.join(testSet.dir, `mocks-${name}.yaml`);
       fs.writeFileSync(testMocksPath, testMocksYaml);
       
       if (useCompose) {
-        // Hot reload mocks via control API (much faster than container restart)
+        // Optimization 5: Use mock aggregation instead of full reload
         process.stdout.write(`→ ${name}: `);
         
         // Clear error files via control API
@@ -1093,11 +1140,12 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
           // Ignore errors - files might not exist
         }
         
-        // Reload mocks via control API
+        // Activate mocks for this test via control API (much faster than full reload)
         try {
-          await reloadMocksViaControlApi('localhost', controlPort, testMocksYaml);
+          const result = await activateMocksViaControlApi('localhost', controlPort, name);
+          console.error(`[runner] Activated ${result.count} mocks for test "${name}"`);
         } catch (err) {
-          throw new Error(`Failed to reload mocks for test "${name}": ${err}`);
+          throw new Error(`Failed to activate mocks for test "${name}": ${err}`);
         }
       }
       

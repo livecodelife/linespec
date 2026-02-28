@@ -142,6 +142,7 @@ export interface KMockMysqlSpec {
     responseOperation: string;
     type: string;
     verify?: VerifyRule[];
+    name?: string; // Added for mock aggregation (Optimization 5)
   };
   requests: Array<{
     header: {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { startProxy, proxyEvents, reloadMocks } from './mysql-proxy';
+import { startProxy, proxyEvents, reloadMocks, activateMocksForTest } from './mysql-proxy';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -182,6 +182,34 @@ async function main() {
         });
         req.on('error', (err) => {
           console.error(`[proxy-server] Request error on /reload: ${err}`);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: String(err) }));
+        });
+      } else if (req.method === 'POST' && req.url === '/activate') {
+        // Optimization 5: Mock Aggregation - activate mocks for specific test
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            const testName = data.testName;
+            if (!testName) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Missing testName' }));
+              return;
+            }
+            const count = activateMocksForTest(testName);
+            console.error(`[proxy-server] Activated mocks for test "${testName}": ${count} mocks`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, testName, count }));
+          } catch (err) {
+            console.error(`[proxy-server] Failed to activate mocks: ${err}`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: String(err) }));
+          }
+        });
+        req.on('error', (err) => {
+          console.error(`[proxy-server] Request error on /activate: ${err}`);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: String(err) }));
         });

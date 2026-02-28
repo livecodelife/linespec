@@ -8,6 +8,10 @@ export const proxyEvents = new EventEmitter();
 // Global mock queue - shared across all connections
 let globalMockQueue: KMockMysqlSpec[] = [];
 
+// Store all mocks for aggregation (Optimization 5)
+let allMockSpecs: KMockMysqlSpec[] = [];
+let currentTestName: string | null = null;
+
 // Debug logging helper
 function logPacketBytes(label: string, data: Buffer, maxBytes: number = 200): void {
   const hex = data.slice(0, Math.min(data.length, maxBytes)).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
@@ -367,6 +371,9 @@ export function buildMockQueue(mocks: KMock[]): KMockMysqlSpec[] {
   for (const mock of mocks) {
     if (mock.kind === 'MySQL') {
       const spec = mock.spec as KMockMysqlSpec;
+      // Add mock name to metadata for test filtering (Optimization 5)
+      spec.metadata.name = mock.name;
+      // Only operational mocks (not config/handshake) go into active queue
       if (spec.metadata && spec.metadata.type === 'mocks') {
         queue.push(spec);
       }
@@ -381,7 +388,16 @@ export function reloadMocks(mocks: KMock[]): void {
   globalMockQueue.length = 0;
   const newQueue = buildMockQueue(mocks);
   globalMockQueue.push(...newQueue);
-  console.error(`[mysql-proxy] Reloaded ${globalMockQueue.length} mocks into global queue`);
+  // Also store ALL MySQL specs for aggregation mode (Optimization 5)
+  allMockSpecs.length = 0;
+  for (const mock of mocks) {
+    if (mock.kind === 'MySQL') {
+      const spec = mock.spec as KMockMysqlSpec;
+      spec.metadata.name = mock.name;
+      allMockSpecs.push(spec);
+    }
+  }
+  console.error(`[mysql-proxy] Reloaded ${globalMockQueue.length} mocks into global queue (${allMockSpecs.length} total for aggregation)`);
   for (let i = 0; i < globalMockQueue.length; i++) {
     const q = globalMockQueue[i];
     const req = q.requests[0];
@@ -389,6 +405,37 @@ export function reloadMocks(mocks: KMock[]): void {
       console.error(`[mysql-proxy] Queue[${i}]: ${(req.message as any).query}`);
     }
   }
+}
+
+// Optimization 5: Mock Aggregation - activate mocks for a specific test
+export function activateMocksForTest(testName: string): number {
+  currentTestName = testName;
+  
+  // Filter mocks by test name (format: {test-name}-mock-{number})
+  const filteredSpecs = allMockSpecs.filter(spec => {
+    // Check if spec has metadata with name
+    if (spec.metadata && spec.metadata.name) {
+      const mockName = spec.metadata.name as string;
+      // Match exact test name or test name prefix followed by -mock-
+      return mockName === testName || mockName.startsWith(`${testName}-mock-`);
+    }
+    return false;
+  });
+  
+  // Replace global queue with filtered specs
+  globalMockQueue.length = 0;
+  globalMockQueue.push(...filteredSpecs);
+  
+  console.error(`[mysql-proxy] Activated ${filteredSpecs.length} mocks for test "${testName}" (out of ${allMockSpecs.length} total)`);
+  for (let i = 0; i < globalMockQueue.length; i++) {
+    const q = globalMockQueue[i];
+    const req = q.requests[0];
+    if (req && typeof req.message === 'object' && 'query' in req.message) {
+      console.error(`[mysql-proxy] Queue[${i}]: ${(req.message as any).query}`);
+    }
+  }
+  
+  return filteredSpecs.length;
 }
 
 function checkVerificationRules(query: string, rules: VerifyRule[] | undefined): { success: boolean; error?: string } {
@@ -804,11 +851,20 @@ export function startProxy(
   listenPort: number
 ): Promise<net.Server> {
   return new Promise((resolve, reject) => {
-    // Initialize global mock queue
+    // Initialize global mock queue and all specs for aggregation
     globalMockQueue.length = 0;
+    allMockSpecs.length = 0;
     const initialQueue = buildMockQueue(mocks);
     globalMockQueue.push(...initialQueue);
-    console.error('[mysql-proxy] Loaded ' + globalMockQueue.length + ' mocks into global queue');
+    // Store ALL MySQL specs for aggregation mode (Optimization 5)
+    for (const mock of mocks) {
+      if (mock.kind === 'MySQL') {
+        const spec = mock.spec as KMockMysqlSpec;
+        spec.metadata.name = mock.name;
+        allMockSpecs.push(spec);
+      }
+    }
+    console.error('[mysql-proxy] Loaded ' + globalMockQueue.length + ' mocks into global queue (' + allMockSpecs.length + ' total for aggregation)');
     for (let i = 0; i < globalMockQueue.length; i++) {
       const q = globalMockQueue[i];
       const req = q.requests[0];
