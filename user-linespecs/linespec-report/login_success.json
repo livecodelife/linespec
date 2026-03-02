@@ -1,0 +1,22 @@
+{
+  "name": "login_success",
+  "pass": true,
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "{\"token\":\"token_abc123xyz\",\"user\":{\"id\":42,\"name\":\"John Doe\",\"email\":\"john@example.com\"}}",
+  "actualBody": "{\"token\":\"token_abc123xyz\",\"user\":{\"id\":42,\"name\":\"John Doe\",\"email\":\"john@example.com\"}}",
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/users/login",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Content-Length": "65"
+    },
+    "body": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\"\n}",
+    "timestamp": "2026-02-27T16:00:57.245Z"
+  }
+}

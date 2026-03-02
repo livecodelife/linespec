@@ -1,0 +1,44 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: create_user_success
+spec:
+  metadata: {}
+  req:
+    method: POST
+    proto_major: 1
+    proto_minor: 1
+    url: http://localhost:3000/api/v1/users
+    header:
+      Content-Type: application/json
+      Accept: application/json
+      Host: localhost:3000
+      Content-Length: '87'
+    body: |-
+      {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "password": "SecurePass123!"
+      }
+    timestamp: '2026-02-27T16:00:57.238Z'
+  resp:
+    status_code: 201
+    header:
+      Content-Type: application/json; charset=utf-8
+    body: '{"id":42,"name":"John Doe","email":"john@example.com","created_at":"2026-01-01T00:00:00.000Z"}'
+    status_message: Created
+    proto_major: 0
+    proto_minor: 0
+    timestamp: '2026-02-27T16:00:57.238Z'
+  objects: []
+  assertions:
+    noise:
+      body.id: []
+      body.created_at: []
+  created: 1772208057
+  app_port: 3000
+curl: |-
+  curl --request POST \n--header 'Content-Type: application/json' \n--header 'Accept: application/json' \n--header 'Host: localhost:3000' \n--header 'Content-Length: 87' \n--data "{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "SecurePass123!"
+  }"

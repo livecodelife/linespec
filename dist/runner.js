@@ -156,6 +156,41 @@ async function activateMocksViaControlApi(proxyHost, controlPort, testName) {
         req.end();
     });
 }
+// Check HTTP mock usage - returns unused mock names
+async function checkHttpMockUsage(proxyHost, controlPort) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: proxyHost,
+            port: controlPort,
+            path: '/check-http-mocks',
+            method: 'GET',
+            timeout: 5000,
+        };
+        const req = http_1.default.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    const result = JSON.parse(data);
+                    resolve({
+                        total: result.total,
+                        used: result.used,
+                        unused: result.unused || []
+                    });
+                }
+                else {
+                    reject(new Error(`Control API returned ${res.statusCode}: ${data}`));
+                }
+            });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Control API request timeout'));
+        });
+        req.end();
+    });
+}
 function parseComposeFile(composePath) {
     if (!fs.existsSync(composePath)) {
         throw new Error(`Compose file not found: ${composePath}`);
@@ -205,19 +240,22 @@ function getDbUpstreamPort(composeParsed) {
     try {
         const services = composeParsed.services;
         const db = services[dbServiceName];
+        // First, infer from image to get the standard internal port
+        const image = db.image || '';
+        if (image.includes('postgres')) {
+            return 5432;
+        }
+        if (image.includes('mysql') || image.includes('mariadb')) {
+            return 3306;
+        }
+        // Fall back to parsing ports (though this is less reliable)
         const ports = db.ports;
         if (ports && ports.length > 0) {
-            // Get the internal container port (after the colon)
             const portMapping = ports[0];
             const parts = portMapping.split(':');
             if (parts.length >= 2) {
                 return parseInt(parts[parts.length - 1], 10);
             }
-        }
-        // Try to infer from image
-        const image = db.image || '';
-        if (image.includes('postgres')) {
-            return 5432;
         }
     }
     catch {
@@ -1061,6 +1099,20 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
                     // Ignore file read errors
                 }
             }
+            // Check HTTP mock usage verification
+            let httpMockError;
+            if (useCompose) {
+                try {
+                    const httpMockUsage = await checkHttpMockUsage('localhost', controlPort);
+                    if (httpMockUsage.unused.length > 0) {
+                        httpMockError = `HTTP Mock(s) not invoked: ${httpMockUsage.unused.join(', ')}`;
+                    }
+                }
+                catch (err) {
+                    // If check fails, continue without failing (might be no HTTP mocks)
+                    console.error(`[runner] Could not check HTTP mock usage: ${err}`);
+                }
+            }
             // In Docker mode, read passthrough queries from file
             if (useCompose) {
                 const passthroughFilePath = path.join(errorDirPath, 'passthrough-queries.json');
@@ -1118,6 +1170,18 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
                 // If both failed, append verification error to reason
                 result.reason = `${result.reason}\nSQL Verification Failed: ${verificationError}`;
             }
+            // Check HTTP mock verification
+            if (httpMockError) {
+                if (result.pass) {
+                    // If HTTP mocks weren't used but test passed, mark as failed
+                    result.pass = false;
+                    result.reason = httpMockError;
+                }
+                else {
+                    // If test already failed, append HTTP mock error
+                    result.reason = `${result.reason}\n${httpMockError}`;
+                }
+            }
             results.push(result);
             if (result.pass) {
                 passed++;
@@ -1133,6 +1197,12 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
                     for (const line of lines) {
                         process.stdout.write(`    ${line}\n`);
                     }
+                    process.stdout.write(`\n`);
+                }
+                // Print HTTP mock verification error
+                if (httpMockError) {
+                    process.stdout.write(`\n  🔌 HTTP Mock Verification Error:\n`);
+                    process.stdout.write(`    ${httpMockError}\n`);
                     process.stdout.write(`\n`);
                 }
                 if (result.expectedStatus !== undefined && result.actualStatus !== undefined) {

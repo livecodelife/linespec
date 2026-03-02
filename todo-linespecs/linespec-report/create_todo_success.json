@@ -1,0 +1,29 @@
+{
+  "name": "create_todo_success",
+  "pass": false,
+  "expectedStatus": 201,
+  "actualStatus": 201,
+  "expectedBody": "{\"title\":\"Buy groceries\",\"description\":\"Milk, eggs, and bread\",\"completed\":false,\"user_id\":42}",
+  "actualBody": "{\"title\":\"Buy groceries\",\"description\":\"Milk, eggs, and bread\",\"completed\":false,\"user_id\":42}",
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/todos",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Content-Length": "94"
+    },
+    "body": "{\n  \"title\": \"Buy groceries\",\n  \"description\": \"Milk, eggs, and bread\",\n  \"completed\": false\n}",
+    "timestamp": "2026-02-28T07:49:04.438Z"
+  },
+  "reason": "HTTP Mock(s) not invoked: create_todo_success-mock-0",
+  "passthroughQueries": [
+    "SET NAMES utf8mb4,  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.wait_timeout = 2147483",
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = database()",
+    "SHOW FULL FIELDS FROM `todos`",
+    "SELECT column_name\nFROM information_schema.statistics\nWHERE index_name = 'PRIMARY'\n  AND table_schema = database()\n  AND table_name = 'todos'\nORDER BY seq_in_index\n"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "authenticate_user_success",
+  "pass": true,
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "{\"id\":42,\"email\":\"john@example.com\",\"name\":\"John Doe\"}",
+  "actualBody": "{\"id\":42,\"email\":\"john@example.com\",\"name\":\"John Doe\"}",
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/users/auth",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Authorization": "Bearer token_abc123xyz"
+    },
+    "body": "",
+    "timestamp": "2026-02-27T16:00:57.234Z"
+  },
+  "passthroughQueries": [
+    "SELECT column_name\nFROM information_schema.statistics\nWHERE index_name = 'PRIMARY'\n  AND table_schema = database()\n  AND table_name = 'users'\nORDER BY seq_in_index\n"
+  ]
+}

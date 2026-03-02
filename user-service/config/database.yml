@@ -1,0 +1,21 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: <%= ENV.fetch("DB_USERNAME", "todo_user") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "todo_password") %>
+  host: <%= ENV.fetch("DB_HOST", "db") %>
+
+development:
+  <<: *default
+  database: todo_api_development
+
+test:
+  <<: *default
+  database: todo_api_test
+
+production:
+  <<: *default
+  database: todo_api_production
+  username: todo_user
+  password: <%= ENV["DB_PASSWORD"] %>

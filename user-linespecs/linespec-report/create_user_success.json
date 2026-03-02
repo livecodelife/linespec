@@ -1,0 +1,25 @@
+{
+  "name": "create_user_success",
+  "pass": true,
+  "expectedStatus": 201,
+  "actualStatus": 201,
+  "expectedBody": "{\"name\":\"John Doe\",\"email\":\"john@example.com\"}",
+  "actualBody": "{\"name\":\"John Doe\",\"email\":\"john@example.com\"}",
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/users",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Content-Length": "87"
+    },
+    "body": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\"\n}",
+    "timestamp": "2026-02-27T16:00:57.238Z"
+  },
+  "passthroughQueries": [
+    "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1"
+  ]
+}

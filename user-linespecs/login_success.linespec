@@ -1,0 +1,13 @@
+TEST login_success
+
+RECEIVE HTTP:POST /api/v1/users/login
+WITH {{payloads/login_request.json}}
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
+"""
+RETURNS {{payloads/user_with_password.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/login_response.json}}

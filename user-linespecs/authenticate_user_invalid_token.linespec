@@ -1,0 +1,14 @@
+TEST authenticate_user_invalid_token
+
+RECEIVE HTTP:GET /api/v1/users/auth
+HEADERS
+  Authorization: Bearer invalid_token_xyz
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM `users` WHERE `users`.`token` = 'invalid_token_xyz' LIMIT 1
+"""
+RETURNS EMPTY
+
+RESPOND HTTP:401
+WITH {{payloads/auth_error_response.json}}

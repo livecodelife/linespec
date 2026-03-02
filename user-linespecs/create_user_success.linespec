@@ -1,0 +1,13 @@
+TEST create_user_success
+
+RECEIVE HTTP:POST /api/v1/users
+WITH {{payloads/create_user_request.json}}
+
+EXPECT WRITE:MYSQL users
+WITH {{payloads/create_user_request.json}}
+
+RESPOND HTTP:201
+WITH {{payloads/user_public_response.json}}
+NOISE
+  body.id
+  body.created_at

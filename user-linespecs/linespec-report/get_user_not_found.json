@@ -1,0 +1,22 @@
+{
+  "name": "get_user_not_found",
+  "pass": true,
+  "expectedStatus": 404,
+  "actualStatus": 404,
+  "expectedBody": "{\"error\":\"Not Found\",\"message\":\"User with ID 999 not found\"}",
+  "actualBody": "{\"error\":\"Not Found\",\"message\":\"User with ID 999 not found\"}",
+  "req": {
+    "method": "GET",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/users/999",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Authorization": "Bearer token_abc123xyz"
+    },
+    "body": "",
+    "timestamp": "2026-02-27T16:00:57.241Z"
+  }
+}

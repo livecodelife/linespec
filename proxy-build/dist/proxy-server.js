@@ -166,8 +166,14 @@ async function main() {
     const proxyServer = await (0, mysql_proxy_1.startProxy)(docs, options.upstreamHost, options.upstreamPort, options.listenPort);
     // Start HTTP mock server to intercept calls to user-service.local
     const httpMocks = docs.filter((m) => m.kind === 'Http');
+    // Track which HTTP mocks are invoked for verification
+    const httpMockUsage = new Map();
+    // Track current test name to filter HTTP mocks
+    let currentHttpTestName = null;
     if (httpMocks.length > 0) {
         console.error(`[proxy-server] Starting HTTP mock server with ${httpMocks.length} HTTP mocks`);
+        // Initialize usage tracking
+        httpMocks.forEach(m => httpMockUsage.set(m.name, false));
         const httpServer = http.createServer((req, res) => {
             // Enable CORS
             res.setHeader('Access-Control-Allow-Origin', '*');
@@ -181,8 +187,12 @@ async function main() {
             let body = '';
             req.on('data', chunk => { body += chunk; });
             req.on('end', () => {
-                // Find matching HTTP mock
+                // Find matching HTTP mock - filter by current test name
                 const mock = httpMocks.find((m) => {
+                    // Only consider mocks for the current test
+                    if (currentHttpTestName && !m.name.startsWith(`${currentHttpTestName}-mock-`)) {
+                        return false;
+                    }
                     const spec = m.spec;
                     const mockMethod = spec.req?.method?.toUpperCase();
                     const mockUrl = spec.req?.url;
@@ -194,6 +204,8 @@ async function main() {
                 if (mock) {
                     const spec = mock.spec;
                     console.error(`[proxy-server] HTTP Mock matched: ${mock.name}`);
+                    // Mark this mock as used
+                    httpMockUsage.set(mock.name, true);
                     // Set response headers
                     if (spec.resp?.header) {
                         for (const [key, value] of Object.entries(spec.resp.header)) {
@@ -204,7 +216,7 @@ async function main() {
                     res.end(spec.resp?.body || '{}');
                 }
                 else {
-                    console.error(`[proxy-server] No HTTP mock found for: ${req.method} http://${req.headers.host}${req.url}`);
+                    console.error(`[proxy-server] No HTTP mock found for: ${req.method} http://${req.headers.host}${req.url} (current test: ${currentHttpTestName})`);
                     res.writeHead(404);
                     res.end(JSON.stringify({ error: 'No mock found' }));
                 }
@@ -271,6 +283,10 @@ async function main() {
                             return;
                         }
                         const count = (0, mysql_proxy_1.activateMocksForTest)(testName);
+                        // Track current test name for HTTP mock filtering
+                        currentHttpTestName = testName;
+                        // Reset HTTP mock usage tracking for new test
+                        httpMockUsage.forEach((_, key) => httpMockUsage.set(key, false));
                         console.error(`[proxy-server] Activated mocks for test "${testName}": ${count} mocks`);
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ success: true, testName, count }));
@@ -286,6 +302,24 @@ async function main() {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: String(err) }));
                 });
+            }
+            else if (req.method === 'GET' && req.url === '/check-http-mocks') {
+                // Check which HTTP mocks were invoked - filter by current test name
+                const unusedMocks = [];
+                httpMockUsage.forEach((used, name) => {
+                    // Only check mocks that belong to the current test
+                    if (currentHttpTestName && name.startsWith(`${currentHttpTestName}-mock-`)) {
+                        if (!used)
+                            unusedMocks.push(name);
+                    }
+                });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    total: httpMockUsage.size,
+                    used: httpMockUsage.size - unusedMocks.length,
+                    unused: unusedMocks
+                }));
             }
             else if (req.method === 'POST' && req.url === '/clear-errors') {
                 // Clear error and passthrough files

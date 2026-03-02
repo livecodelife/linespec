@@ -1,0 +1,26 @@
+{
+  "name": "update_user_success",
+  "pass": true,
+  "expectedStatus": 200,
+  "actualStatus": 200,
+  "expectedBody": "{\"id\":42,\"name\":\"Jane Doe\",\"email\":\"jane@example.com\",\"created_at\":\"2026-01-01T00:00:00.000Z\"}",
+  "actualBody": "{\"id\":42,\"name\":\"Jane Doe\",\"email\":\"jane@example.com\",\"created_at\":\"2026-01-01T00:00:00.000Z\"}",
+  "req": {
+    "method": "PUT",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/users/42",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Content-Length": "67",
+      "Authorization": "Bearer token_abc123xyz"
+    },
+    "body": "{\n  \"id\": 42,\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\"\n}",
+    "timestamp": "2026-02-27T16:00:57.246Z"
+  },
+  "passthroughQueries": [
+    "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'jane@example.com' AND `users`.`id` != 42 LIMIT 1"
+  ]
+}
