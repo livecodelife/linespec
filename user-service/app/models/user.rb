@@ -5,7 +5,7 @@ class User < ApplicationRecord
   before_validation :generate_token, if: -> { token.blank? }
 
   def authenticate(password)
-    self.password == password ? self : false
+    BCrypt::Password.new(password_digest) == password
   end
 
   private

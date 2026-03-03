@@ -20,7 +20,7 @@ spec:
         "name": "Jane Doe",
         "email": "jane@example.com"
       }
-    timestamp: '2026-02-27T16:00:57.246Z'
+    timestamp: '2026-03-03T23:28:17.231Z'
   resp:
     status_code: 200
     header:
@@ -29,12 +29,12 @@ spec:
     status_message: OK
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-02-27T16:00:57.246Z'
+    timestamp: '2026-03-03T23:28:17.231Z'
   objects: []
   assertions:
     noise:
       body.updated_at: []
-  created: 1772208057
+  created: 1772580497
   app_port: 3000
 curl: |-
   curl --request PUT \n--header 'Content-Type: application/json' \n--header 'Accept: application/json' \n--header 'Host: localhost:3000' \n--header 'Content-Length: 67' \n--header 'Authorization: Bearer token_abc123xyz' \n--data "{

@@ -1,7 +1,0 @@
-services:
-  web:
-    environment:
-      DB_HOST: linespec-proxy
-      DB_PORT: '3306'
-      DB_USERNAME: todo_user
-      DB_PASSWORD: todo_password

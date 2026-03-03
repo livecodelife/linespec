@@ -173,9 +173,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -352,9 +352,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -531,9 +531,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -710,9 +710,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -744,9 +744,9 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -757,16 +757,21 @@ spec:
     requestOperation: COM_QUERY
     responseOperation: OK
     type: mocks
+    verify:
+      - type: CONTAINS
+        pattern: password_digest
   requests:
     - header:
         header:
-          payload_length: 100
+          payload_length: 159
           sequence_id: 0
         packet_type: COM_QUERY
       message:
         query: >-
-          INSERT INTO users (name, email, password) VALUES ('John Doe',
-          'john@example.com', 'SecurePass123!')
+          UPDATE users SET name = 'John Doe', email = 'john@example.com',
+          password_digest =
+          '$2b$10$RPPs.VHi0Kpr6niRJCo5m.4KIzE8BpOI2Ok.1mVDnK.T9j4VwGxE6' WHERE
+          id = 42
   responses:
     - header:
         header:
@@ -780,9 +785,9 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -814,6 +819,6 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772208058
-  reqtimestampmock: '2026-02-27T16:00:57.238Z'
-  restimestampmock: '2026-02-27T16:00:57.238Z'
+  created: 1772580498
+  reqtimestampmock: '2026-03-03T23:28:17.222Z'
+  restimestampmock: '2026-03-03T23:28:17.222Z'

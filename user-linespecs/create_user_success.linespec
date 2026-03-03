@@ -4,7 +4,7 @@ RECEIVE HTTP:POST /api/v1/users
 WITH {{payloads/create_user_request.json}}
 
 EXPECT WRITE:MYSQL users
-WITH {{payloads/create_user_request.json}}
+WITH {{payloads/user_db_write_record.json}}
 
 VERIFY query CONTAINS 'password_digest'
 
@@ -13,3 +13,4 @@ WITH {{payloads/user_public_response.json}}
 NOISE
   body.id
   body.created_at
+  password_digest

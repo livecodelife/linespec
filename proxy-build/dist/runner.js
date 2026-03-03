@@ -656,6 +656,7 @@ async function runHttpTest(ktest, serviceUrl, name) {
                         expectedStatus,
                         actualStatus,
                         req: ktest.spec.req,
+                        actualBody: body, // Include body for debugging
                     });
                     return;
                 }
@@ -763,25 +764,34 @@ async function runTests(testSet, options) {
                 '-f', options.composePath,
                 'up', '-d', 'db'
             ], true);
-            const dbHost = 'localhost';
+            const networkName = getNetworkName(options.composePath, composeParsed);
+            const upstreamHost = getDbUpstreamHost(composeParsed);
+            const upstreamPort = getDbUpstreamPort(composeParsed);
             const maxRetries = 30;
             let dbReady = false;
+            // Wait for database to be ready from within the Docker network
+            // This ensures the proxy (which also runs in the network) can connect
             for (let i = 0; i < maxRetries; i++) {
                 try {
-                    const conn = require('net');
                     await new Promise((resolve, reject) => {
-                        const socket = new conn.Socket();
-                        socket.setTimeout(1000);
-                        socket.on('connect', () => {
-                            socket.destroy();
-                            resolve();
+                        const proc = (0, child_process_1.spawn)('docker', [
+                            'run', '--rm',
+                            '--network', networkName,
+                            'alpine:latest',
+                            'sh', '-c',
+                            `timeout 2 nc -z ${upstreamHost} ${upstreamPort} && echo 'ready' || echo 'notready'`
+                        ], { stdio: ['inherit', 'pipe', 'pipe'] });
+                        let output = '';
+                        proc.stdout?.on('data', (data) => { output += data.toString(); });
+                        proc.on('close', (code) => {
+                            if (output.includes('ready')) {
+                                resolve();
+                            }
+                            else {
+                                reject(new Error('database not ready'));
+                            }
                         });
-                        socket.on('timeout', () => {
-                            socket.destroy();
-                            reject(new Error('timeout'));
-                        });
-                        socket.on('error', reject);
-                        socket.connect(dbUpstreamPort, dbHost);
+                        proc.on('error', reject);
                     });
                     dbReady = true;
                     break;
@@ -791,9 +801,9 @@ async function runTests(testSet, options) {
                 }
             }
             if (!dbReady) {
-                throw new Error('Database did not become ready within timeout');
+                throw new Error('Database did not become ready within timeout (checked from Docker network)');
             }
-            process.stdout.write('✓ Database ready\n');
+            process.stdout.write('✓ Database ready (verified from Docker network)\n');
             proxyImageName = 'linespec-mysql-proxy:latest';
             proxyBuildDir = path.join(__dirname, '..', 'proxy-build');
             const proxyBuildDockerfile = path.join(proxyBuildDir, 'Dockerfile');
@@ -849,9 +859,7 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
             process.stdout.write('✓ Proxy image built\n');
             // Pre-calculate these values for use in the test loop
             proxyContainerName = 'linespec-proxy';
-            networkName = getNetworkName(options.composePath, composeParsed);
-            upstreamHost = getDbUpstreamHost(composeParsed);
-            upstreamPort = getDbUpstreamPort(composeParsed);
+            // networkName, upstreamHost, upstreamPort already set during DB readiness check
             internalProxyPort = 3306;
             // Ensure error directory exists
             if (!fs.existsSync(errorDirPath)) {

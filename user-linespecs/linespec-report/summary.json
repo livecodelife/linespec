@@ -10,6 +10,7 @@
     "BEGIN",
     "ROLLBACK",
     "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1",
+    "INSERT INTO `users` (`name`, `email`, `password`, `token`, `created_at`, `updated_at`) VALUES ('John Doe', 'john@example.com', 'SecurePass123!', 'b6d53be350d4b35e75b0c2a10a48d1be', '2026-03-03 23:36:10', '2026-03-03 23:36:10')",
     "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'jane@example.com' AND `users`.`id` != 42 LIMIT 1"
   ],
   "tests": [
@@ -41,7 +42,8 @@
       "name": "create_user_success",
       "pass": true,
       "passthroughQueries": [
-        "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1"
+        "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1",
+        "INSERT INTO `users` (`name`, `email`, `password`, `token`, `created_at`, `updated_at`) VALUES ('John Doe', 'john@example.com', 'SecurePass123!', 'b6d53be350d4b35e75b0c2a10a48d1be', '2026-03-03 23:36:10', '2026-03-03 23:36:10')"
       ]
     },
     {

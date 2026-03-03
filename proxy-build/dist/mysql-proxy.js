@@ -107,6 +107,25 @@ function writePacket(seqId, payload) {
     header[3] = seqId;
     return Buffer.concat([header, payload]);
 }
+// Send MySQL error packet to client and close connection gracefully
+function sendErrorAndClose(clientSocket, errorMessage, errorCode = 2003, // CR_CONN_HOST_ERROR - Can't connect to MySQL server
+sqlState = 'HY000') {
+    const errBuf = Buffer.alloc(9 + Buffer.byteLength(errorMessage, 'utf8'));
+    errBuf[0] = 0xff; // Error packet header
+    errBuf[1] = errorCode & 0xff;
+    errBuf[2] = (errorCode >> 8) & 0xff;
+    errBuf[3] = 0x23; // '#' prefix for SQL state
+    const sqlStateBuf = Buffer.from(sqlState, 'utf8');
+    sqlStateBuf.copy(errBuf, 4);
+    const messageBuf = Buffer.from(errorMessage, 'utf8');
+    messageBuf.copy(errBuf, 9);
+    const errorPacket = writePacket(2, errBuf); // seqId 2 is typical for error during handshake
+    console.error(`[mysql-proxy] Sending error to client: ${errorMessage} (code: ${errorCode})`);
+    // Write the error packet and destroy the socket
+    clientSocket.write(errorPacket, () => {
+        clientSocket.destroy();
+    });
+}
 function encodeLenenc(n) {
     if (n <= 250) {
         return Buffer.from([n]);
@@ -729,7 +748,10 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort) {
         columnsRemaining: 0,
         expectEof: false,
     };
-    upstreamSocket.on('error', () => clientSocket.destroy());
+    upstreamSocket.on('error', (err) => {
+        console.error(`[mysql-proxy] Upstream connection error: ${err.message}`);
+        sendErrorAndClose(clientSocket, `Cannot connect to database server at ${upstreamHost}:${upstreamPort}: ${err.message}`, 2003);
+    });
     clientSocket.on('error', () => upstreamSocket.destroy());
     upstreamSocket.on('data', (data) => {
         if (connState.phase === 'handshake') {
@@ -837,7 +859,16 @@ function handleConnection(clientSocket, upstreamHost, upstreamPort) {
         }
     });
     clientSocket.on('close', () => upstreamSocket.destroy());
-    upstreamSocket.on('close', () => clientSocket.destroy());
+    upstreamSocket.on('close', (hadError) => {
+        // If upstream closes during handshake, send an error to the client
+        if (connState.phase === 'handshake' && !hadError) {
+            console.error('[mysql-proxy] Upstream closed during handshake without error');
+            sendErrorAndClose(clientSocket, `Database server at ${upstreamHost}:${upstreamPort} closed connection during handshake`, 2003);
+        }
+        else {
+            clientSocket.destroy();
+        }
+    });
 }
 function startProxy(mocks, upstreamHost, upstreamPort, listenPort) {
     return new Promise((resolve, reject) => {

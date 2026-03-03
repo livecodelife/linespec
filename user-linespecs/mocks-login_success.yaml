@@ -173,9 +173,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.245Z'
-  restimestampmock: '2026-02-27T16:00:57.245Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.230Z'
+  restimestampmock: '2026-03-03T23:28:17.230Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -352,9 +352,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.245Z'
-  restimestampmock: '2026-02-27T16:00:57.245Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.230Z'
+  restimestampmock: '2026-03-03T23:28:17.230Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -531,9 +531,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.245Z'
-  restimestampmock: '2026-02-27T16:00:57.245Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.230Z'
+  restimestampmock: '2026-03-03T23:28:17.230Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -710,9 +710,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.245Z'
-  restimestampmock: '2026-02-27T16:00:57.245Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.230Z'
+  restimestampmock: '2026-03-03T23:28:17.230Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -806,8 +806,8 @@ spec:
             schema: todo_api_development
             table: users
             orgTable: users
-            name: password
-            orgName: password
+            name: password_digest
+            orgName: password_digest
             fixed_length: 12
             character_set: 255
             column_length: 1020
@@ -903,8 +903,8 @@ spec:
                 value: john@example.com
                 unsigned: false
               - type: 253
-                name: password
-                value: SecurePass123!
+                name: password_digest
+                value: $2b$10$RPPs.VHi0Kpr6niRJCo5m.4KIzE8BpOI2Ok.1mVDnK.T9j4VwGxE6
                 unsigned: false
               - type: 253
                 name: token
@@ -930,6 +930,6 @@ spec:
             - 34
             - 0
           type: EOF
-  created: 1772208057
-  reqtimestampmock: '2026-02-27T16:00:57.245Z'
-  restimestampmock: '2026-02-27T16:00:57.245Z'
+  created: 1772580497
+  reqtimestampmock: '2026-03-03T23:28:17.230Z'
+  restimestampmock: '2026-03-03T23:28:17.230Z'

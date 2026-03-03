@@ -17,9 +17,10 @@
       "Content-Length": "87"
     },
     "body": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\"\n}",
-    "timestamp": "2026-02-27T16:00:57.238Z"
+    "timestamp": "2026-03-03T23:28:17.222Z"
   },
   "passthroughQueries": [
-    "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1"
+    "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1",
+    "INSERT INTO `users` (`name`, `email`, `password`, `token`, `created_at`, `updated_at`) VALUES ('John Doe', 'john@example.com', 'SecurePass123!', 'b6d53be350d4b35e75b0c2a10a48d1be', '2026-03-03 23:36:10', '2026-03-03 23:36:10')"
   ]
 }

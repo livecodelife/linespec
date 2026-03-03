@@ -19,7 +19,7 @@ spec:
         "email": "john@example.com",
         "password": "SecurePass123!"
       }
-    timestamp: '2026-02-27T16:00:57.238Z'
+    timestamp: '2026-03-03T23:28:17.222Z'
   resp:
     status_code: 201
     header:
@@ -28,13 +28,14 @@ spec:
     status_message: Created
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-02-27T16:00:57.238Z'
+    timestamp: '2026-03-03T23:28:17.222Z'
   objects: []
   assertions:
     noise:
       body.id: []
       body.created_at: []
-  created: 1772208057
+      password_digest: []
+  created: 1772580497
   app_port: 3000
 curl: |-
   curl --request POST \n--header 'Content-Type: application/json' \n--header 'Accept: application/json' \n--header 'Host: localhost:3000' \n--header 'Content-Length: 87' \n--data "{

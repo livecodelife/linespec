@@ -11,3 +11,9 @@ RETURNS {{payloads/user_with_password.json}}
 
 RESPOND HTTP:200
 WITH {{payloads/login_response.json}}
+
+NOISE
+  body.id
+  body.created_at
+  body.updated_at
+  body.password_digest
