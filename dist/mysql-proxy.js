@@ -34,6 +34,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.proxyEvents = void 0;
+exports.getNegativeAssertionViolation = getNegativeAssertionViolation;
+exports.clearNegativeAssertionViolations = clearNegativeAssertionViolations;
+exports.setNegativeAssertionViolation = setNegativeAssertionViolation;
 exports.getLastVerificationError = getLastVerificationError;
 exports.clearVerificationErrors = clearVerificationErrors;
 exports.setVerificationError = setVerificationError;
@@ -60,6 +63,17 @@ function logPacketBytes(label, data, maxBytes = 200) {
 const proxyState = {
     verificationErrors: new Map(),
 };
+// Track negative assertion violations
+const negativeAssertionViolations = new Map();
+function getNegativeAssertionViolation(testName) {
+    return negativeAssertionViolations.get(testName);
+}
+function clearNegativeAssertionViolations() {
+    negativeAssertionViolations.clear();
+}
+function setNegativeAssertionViolation(testName, violation) {
+    negativeAssertionViolations.set(testName, violation);
+}
 function getLastVerificationError(testName) {
     return proxyState.verificationErrors.get(testName);
 }
@@ -508,6 +522,16 @@ function findAndConsumeMock(requestOperation, query) {
                     // Try exact match first (normalized)
                     if (normalizedQuery === normalizedMock) {
                         console.error(`[mysql-proxy] EXACT MATCH found for query: "${query}"`);
+                        // Check if this is a negative mock - if so, fail immediately
+                        if (spec.metadata.negative) {
+                            const errorMsg = `NEGATIVE ASSERTION VIOLATED: Query was executed but should NOT have been.\nQuery: "${query}"`;
+                            console.error(`[mysql-proxy] ${errorMsg}`);
+                            exports.proxyEvents.emit('negativeAssertionViolation', errorMsg);
+                            if (currentTestName) {
+                                setNegativeAssertionViolation(currentTestName, errorMsg);
+                            }
+                            return { spec: null, verificationError: errorMsg };
+                        }
                         // Check verification rules
                         const verifyResult = checkVerificationRules(query, spec.metadata.verify);
                         if (!verifyResult.success) {
@@ -562,6 +586,16 @@ function findAndConsumeMock(requestOperation, query) {
                                 normalizedQuery.includes(`join ${tableName}`);
                             if (hasTable) {
                                 console.error(`[mysql-proxy] TABLE MATCH for ${requestOperation}: ${tableName}`);
+                                // Check if this is a negative mock - if so, fail immediately
+                                if (spec.metadata.negative) {
+                                    const errorMsg = `NEGATIVE ASSERTION VIOLATED: Query was executed but should NOT have been.\nQuery: "${query}"`;
+                                    console.error(`[mysql-proxy] ${errorMsg}`);
+                                    exports.proxyEvents.emit('negativeAssertionViolation', errorMsg);
+                                    if (currentTestName) {
+                                        setNegativeAssertionViolation(currentTestName, errorMsg);
+                                    }
+                                    return { spec: null, verificationError: errorMsg };
+                                }
                                 // Check verification rules
                                 const verifyResult = checkVerificationRules(query, spec.metadata.verify);
                                 if (!verifyResult.success) {
@@ -603,6 +637,16 @@ function findAndConsumeMock(requestOperation, query) {
                         console.error(`[mysql-proxy] Pattern matching for ${opPrefix} on table ${tableName}, query starts with: "${normalizedQuery.substring(0, 50)}"`);
                         if (tableName && normalizedQuery.startsWith(`${opPrefix} ${tableName}`)) {
                             console.error(`[mysql-proxy] Pattern match for ${requestOperation}: ${opPrefix} ${tableName}*`);
+                            // Check if this is a negative mock - if so, fail immediately
+                            if (spec.metadata.negative) {
+                                const errorMsg = `NEGATIVE ASSERTION VIOLATED: Query was executed but should NOT have been.\nQuery: "${query}"`;
+                                console.error(`[mysql-proxy] ${errorMsg}`);
+                                exports.proxyEvents.emit('negativeAssertionViolation', errorMsg);
+                                if (currentTestName) {
+                                    setNegativeAssertionViolation(currentTestName, errorMsg);
+                                }
+                                return { spec: null, verificationError: errorMsg };
+                            }
                             // Check verification rules
                             const verifyResult = checkVerificationRules(query, spec.metadata.verify);
                             if (!verifyResult.success) {

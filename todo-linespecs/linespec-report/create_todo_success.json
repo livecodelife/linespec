@@ -1,6 +1,6 @@
 {
   "name": "create_todo_success",
-  "pass": false,
+  "pass": true,
   "expectedStatus": 201,
   "actualStatus": 201,
   "expectedBody": "{\"title\":\"Buy groceries\",\"description\":\"Milk, eggs, and bread\",\"completed\":false,\"user_id\":42}",
@@ -17,9 +17,8 @@
       "Content-Length": "94"
     },
     "body": "{\n  \"title\": \"Buy groceries\",\n  \"description\": \"Milk, eggs, and bread\",\n  \"completed\": false\n}",
-    "timestamp": "2026-02-28T07:49:04.438Z"
+    "timestamp": "2026-03-03T16:04:40.048Z"
   },
-  "reason": "HTTP Mock(s) not invoked: create_todo_success-mock-0",
   "passthroughQueries": [
     "SET NAMES utf8mb4,  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.wait_timeout = 2147483",
     "SELECT table_name FROM information_schema.tables WHERE table_schema = database()",

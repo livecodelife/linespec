@@ -173,9 +173,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -352,9 +352,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -531,9 +531,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -710,9 +710,9 @@ spec:
         status_flags: 16386
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -744,9 +744,9 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: Http
@@ -755,7 +755,7 @@ spec:
   metadata: {}
   req:
     method: GET
-    url: http://user-service.prod/api/v1/users/auth
+    url: http://user-service.local/api/v1/users/auth
     header:
       Content-Type: application/json
     body: '{"authorization":"Bearer token_abc123xyz"}'
@@ -764,8 +764,8 @@ spec:
     header:
       Content-Type: application/json
     body: '{"id":42,"email":"user@example.com","name":"John Doe"}'
-  reqTimestampMock: '2026-02-28T07:49:04.443Z'
-  resTimestampMock: '2026-02-28T07:49:04.443Z'
+  reqTimestampMock: '2026-03-03T16:04:40.049Z'
+  resTimestampMock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -799,9 +799,9 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772264944
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'
 ---
 version: api.keploy.io/v1beta1
 kind: MySQL
@@ -833,6 +833,6 @@ spec:
         status_flags: 2
         warnings: 0
         info: ''
-  created: 1772264945
-  reqtimestampmock: '2026-02-28T07:49:04.443Z'
-  restimestampmock: '2026-02-28T07:49:04.443Z'
+  created: 1772553881
+  reqtimestampmock: '2026-03-03T16:04:40.049Z'
+  restimestampmock: '2026-03-03T16:04:40.049Z'

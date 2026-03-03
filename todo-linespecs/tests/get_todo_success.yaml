@@ -13,7 +13,7 @@ spec:
       Accept: application/json
       Host: localhost:3000
     body: ''
-    timestamp: '2026-02-28T07:49:04.576Z'
+    timestamp: '2026-03-03T16:04:40.059Z'
   resp:
     status_code: 200
     header:
@@ -22,8 +22,8 @@ spec:
     status_message: OK
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-02-28T07:49:04.576Z'
+    timestamp: '2026-03-03T16:04:40.059Z'
   objects: []
-  created: 1772264944
+  created: 1772553880
   app_port: 3000
 curl: 'curl --request GET \n--header ''Content-Type: application/json'' \n--header ''Accept: application/json'' \n--header ''Host: localhost:3000'' \n'

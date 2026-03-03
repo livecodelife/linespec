@@ -1,0 +1,22 @@
+{
+  "name": "create_todo_unavailable_user_service",
+  "pass": true,
+  "expectedStatus": 503,
+  "actualStatus": 503,
+  "expectedBody": "{\"error\":\"Unavailable\",\"message\":\"Internal Server Error\"}",
+  "actualBody": "{\"error\":\"Unavailable\",\"message\":\"Internal Server Error\"}",
+  "req": {
+    "method": "POST",
+    "proto_major": 1,
+    "proto_minor": 1,
+    "url": "http://localhost:3000/api/v1/todos",
+    "header": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Host": "localhost:3000",
+      "Content-Length": "94"
+    },
+    "body": "{\n  \"title\": \"Buy groceries\",\n  \"description\": \"Milk, eggs, and bread\",\n  \"completed\": false\n}",
+    "timestamp": "2026-03-03T16:04:40.056Z"
+  }
+}

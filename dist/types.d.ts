@@ -1,4 +1,5 @@
 export type ExpectChannel = 'HTTP' | 'READ_MYSQL' | 'WRITE_MYSQL' | 'WRITE_POSTGRESQL' | 'EVENT';
+export type ExpectNotChannel = 'HTTP' | 'WRITE_MYSQL' | 'WRITE_POSTGRESQL' | 'EVENT';
 export interface VerifyRule {
     type: 'CONTAINS' | 'NOT_CONTAINS' | 'MATCHES';
     pattern: string;
@@ -42,6 +43,29 @@ export interface ExpectEventStatement {
     withFile: string;
 }
 export type ExpectStatement = ExpectHttpStatement | ExpectReadMysqlStatement | ExpectWriteMysqlStatement | ExpectWritePostgresqlStatement | ExpectEventStatement;
+export interface ExpectNotHttpStatement {
+    channel: 'HTTP';
+    method: string;
+    url: string;
+    withFile?: string;
+}
+export interface ExpectNotWriteMysqlStatement {
+    channel: 'WRITE_MYSQL';
+    table: string;
+    operation?: 'INSERT' | 'UPDATE' | 'DELETE';
+    withFile?: string;
+}
+export interface ExpectNotWritePostgresqlStatement {
+    channel: 'WRITE_POSTGRESQL';
+    table: string;
+    withFile?: string;
+}
+export interface ExpectNotEventStatement {
+    channel: 'EVENT';
+    topic: string;
+    withFile?: string;
+}
+export type ExpectNotStatement = ExpectNotHttpStatement | ExpectNotWriteMysqlStatement | ExpectNotWritePostgresqlStatement | ExpectNotEventStatement;
 export interface ReceiveStatement {
     channel: 'HTTP';
     method: string;
@@ -58,6 +82,7 @@ export interface TestSpec {
     name: string;
     receive: ReceiveStatement;
     expects: ExpectStatement[];
+    expectsNot: ExpectNotStatement[];
     respond: RespondStatement;
 }
 export interface KTestReq {
@@ -121,6 +146,7 @@ export interface KMockMysqlSpec {
         type: string;
         verify?: VerifyRule[];
         name?: string;
+        negative?: boolean;
     };
     requests: Array<{
         header: {
@@ -166,6 +192,7 @@ export interface KMockHttpSpec {
 export interface KMockEventSpec {
     metadata: {
         topic: string;
+        negative?: boolean;
     };
     message: Record<string, unknown>;
     reqTimestampMock: string;

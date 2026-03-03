@@ -59,6 +59,23 @@ export function validate(spec: TestSpec, baseDir: string): void {
     seenKeys.add(key);
   }
 
+  const seenNotKeys = new Set<string>();
+  for (const expectNot of spec.expectsNot) {
+    let key: string;
+    if (expectNot.channel === 'HTTP') {
+      key = `EXPECT_NOT:HTTP:${(expectNot as any).method}:${(expectNot as any).url}`;
+    } else if (expectNot.channel === 'WRITE_MYSQL' || expectNot.channel === 'WRITE_POSTGRESQL') {
+      key = `EXPECT_NOT:${expectNot.channel}:${expectNot.table}`;
+    } else {
+      key = `EXPECT_NOT:EVENT:${(expectNot as any).topic}`;
+    }
+
+    if (seenNotKeys.has(key)) {
+      throw new LineSpecError(`Duplicate EXPECT NOT: ${key}`);
+    }
+    seenNotKeys.add(key);
+  }
+
   const fileRefs: string[] = [];
   if (spec.receive.withFile) {
     fileRefs.push(spec.receive.withFile);
@@ -69,6 +86,11 @@ export function validate(spec: TestSpec, baseDir: string): void {
     }
     if ((expect as any).returnsFile) {
       fileRefs.push((expect as any).returnsFile);
+    }
+  }
+  for (const expectNot of spec.expectsNot) {
+    if ((expectNot as any).withFile) {
+      fileRefs.push((expectNot as any).withFile);
     }
   }
   if (spec.respond.withFile) {

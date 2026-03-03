@@ -1,0 +1,18 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: create_todo_unauthenticated-mock-0
+spec:
+  metadata: {}
+  req:
+    method: GET
+    url: http://user-service.local/api/v1/users/auth
+    header:
+      Content-Type: application/json
+    body: '{"authorization":"Bearer token_abc123xyz"}'
+  resp:
+    status_code: 401
+    header:
+      Content-Type: application/json
+    body: '{"error":"Unauthorized","message":"Invalid or expired token"}'
+  reqTimestampMock: '2026-03-03T16:04:40.055Z'
+  resTimestampMock: '2026-03-03T16:04:40.055Z'

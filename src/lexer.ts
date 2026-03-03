@@ -1,5 +1,5 @@
 export interface Token {
-  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY' | 'HEADERS';
+  type: 'TEST' | 'RECEIVE' | 'EXPECT' | 'EXPECT_NOT' | 'WITH' | 'RETURNS' | 'USING_SQL' | 'RESPOND' | 'NOISE' | 'NO_TRANSACTION' | 'VERIFY' | 'HEADERS';
   value: string;
   line: number;
 }
@@ -76,6 +76,8 @@ export function tokenize(source: string): Token[] {
       tokens.push({ type: 'TEST', value: match[1].trim(), line: lineNo });
     } else if ((match = line.match(/^RECEIVE\s+(.+)$/))) {
       tokens.push({ type: 'RECEIVE', value: match[1].trim(), line: lineNo });
+    } else if ((match = line.match(/^EXPECT\s+NOT\s+(.+)$/))) {
+      tokens.push({ type: 'EXPECT_NOT', value: match[1].trim(), line: lineNo });
     } else if ((match = line.match(/^EXPECT\s+(.+)$/))) {
       tokens.push({ type: 'EXPECT', value: match[1].trim(), line: lineNo });
     } else if ((match = line.match(/^WITH\s+\{\{(.+?)\}\}$/))) {

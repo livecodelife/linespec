@@ -6,6 +6,8 @@ WITH {{payloads/create_user_request.json}}
 EXPECT WRITE:MYSQL users
 WITH {{payloads/create_user_request.json}}
 
+VERIFY query CONTAINS 'password_digest'
+
 RESPOND HTTP:201
 WITH {{payloads/user_public_response.json}}
 NOISE

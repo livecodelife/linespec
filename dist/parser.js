@@ -72,6 +72,58 @@ function parseVerifyRule(value, line) {
     }
     throw new lexer_1.LineSpecError(`Invalid VERIFY format: ${value}. Expected: VERIFY query CONTAINS 'string', VERIFY query NOT_CONTAINS 'string', or VERIFY query MATCHES /regex/`, line);
 }
+function parseExpectNotChannel(value, line) {
+    const eventMatch = value.match(/^(EVENT|MESSAGE):(.+)$/i);
+    if (eventMatch) {
+        const expectNot = {
+            channel: 'EVENT',
+            topic: eventMatch[2],
+        };
+        return expectNot;
+    }
+    const firstSpace = value.indexOf(' ');
+    if (firstSpace === -1) {
+        throw new lexer_1.LineSpecError(`Invalid EXPECT NOT channel format: ${value}`, line);
+    }
+    const channelPart = value.substring(0, firstSpace).toUpperCase();
+    const rest = value.substring(firstSpace + 1);
+    const httpMatch = channelPart.match(/^HTTP:(\w+)$/i);
+    if (httpMatch) {
+        const expectNot = {
+            channel: 'HTTP',
+            method: httpMatch[1].toUpperCase(),
+            url: rest,
+        };
+        return expectNot;
+    }
+    const writeMysqlMatch = channelPart.match(/^WRITE:MYSQL$/i);
+    if (writeMysqlMatch) {
+        const operationMatch = rest.match(/^(INSERT|UPDATE|DELETE)\s+(.+)$/i);
+        let operation;
+        let table;
+        if (operationMatch) {
+            operation = operationMatch[1].toUpperCase();
+            table = operationMatch[2];
+        }
+        else {
+            table = rest;
+        }
+        const expectNot = {
+            channel: 'WRITE_MYSQL',
+            table,
+            operation,
+        };
+        return expectNot;
+    }
+    if (/^WRITE:POSTGRESQL$/i.test(channelPart)) {
+        const expectNot = {
+            channel: 'WRITE_POSTGRESQL',
+            table: rest,
+        };
+        return expectNot;
+    }
+    throw new lexer_1.LineSpecError(`Unrecognized EXPECT NOT channel: ${channelPart}`, line);
+}
 function parseExpectChannel(value, line) {
     const eventMatch = value.match(/^(EVENT|MESSAGE):(.+)$/i);
     if (eventMatch) {
@@ -230,6 +282,16 @@ function parse(tokens, filename) {
         }
         expects.push(expectPartial);
     }
+    const expectsNot = [];
+    while (peek(tokens, pos.value)?.type === 'EXPECT_NOT') {
+        const expectNotToken = consume(tokens, pos);
+        const expectNotPartial = parseExpectNotChannel(expectNotToken.value, expectNotToken.line);
+        if (peek(tokens, pos.value)?.type === 'WITH') {
+            const withToken = consume(tokens, pos);
+            expectNotPartial.withFile = withToken.value;
+        }
+        expectsNot.push(expectNotPartial);
+    }
     const respondToken = expectType(tokens, pos, 'RESPOND');
     const httpRespondMatch = respondToken.value.match(/^HTTP:(\d+)$/i);
     if (!httpRespondMatch) {
@@ -259,6 +321,7 @@ function parse(tokens, filename) {
         name,
         receive,
         expects,
+        expectsNot,
         respond,
     };
 }

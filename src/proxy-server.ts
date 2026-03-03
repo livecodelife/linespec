@@ -196,6 +196,15 @@ async function main() {
           const spec = mock.spec as any;
           console.error(`[proxy-server] HTTP Mock matched: ${mock.name}`);
           
+          // Check if this is a negative mock - if so, fail immediately
+          if (spec.metadata?.negative) {
+            const errorMsg = `NEGATIVE ASSERTION VIOLATED: HTTP call was made but should NOT have been.\nMethod: ${req.method}\nURL: http://${req.headers.host}${req.url}`;
+            console.error(`[proxy-server] ${errorMsg}`);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: errorMsg }));
+            return;
+          }
+          
           // Mark this mock as used
           httpMockUsage.set(mock.name, true);
           

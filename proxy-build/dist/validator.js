@@ -86,6 +86,23 @@ function validate(spec, baseDir) {
         }
         seenKeys.add(key);
     }
+    const seenNotKeys = new Set();
+    for (const expectNot of spec.expectsNot) {
+        let key;
+        if (expectNot.channel === 'HTTP') {
+            key = `EXPECT_NOT:HTTP:${expectNot.method}:${expectNot.url}`;
+        }
+        else if (expectNot.channel === 'WRITE_MYSQL' || expectNot.channel === 'WRITE_POSTGRESQL') {
+            key = `EXPECT_NOT:${expectNot.channel}:${expectNot.table}`;
+        }
+        else {
+            key = `EXPECT_NOT:EVENT:${expectNot.topic}`;
+        }
+        if (seenNotKeys.has(key)) {
+            throw new lexer_1.LineSpecError(`Duplicate EXPECT NOT: ${key}`);
+        }
+        seenNotKeys.add(key);
+    }
     const fileRefs = [];
     if (spec.receive.withFile) {
         fileRefs.push(spec.receive.withFile);
@@ -96,6 +113,11 @@ function validate(spec, baseDir) {
         }
         if (expect.returnsFile) {
             fileRefs.push(expect.returnsFile);
+        }
+    }
+    for (const expectNot of spec.expectsNot) {
+        if (expectNot.withFile) {
+            fileRefs.push(expectNot.withFile);
         }
     }
     if (spec.respond.withFile) {

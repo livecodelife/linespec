@@ -65,10 +65,21 @@ class Api::V1::TodosController < ApplicationController
         @current_user = OpenStruct.new(id: user_data["id"], email: user_data["email"], name: user_data["name"])
         return
       end
-    rescue HTTParty::Error, JSON::ParserError, SocketError, Errno::ECONNREFUSED, Net::OpenTimeout, Timeout::Error
-    end
 
-    @current_user = OpenStruct.new(id: 42, email: "user@example.com", name: "John Doe")
+      # Check if user service is unavailable (503) vs auth failed (401/403)
+      if response.code == 503
+        render json: { error: "Unavailable", message: "Internal Server Error" }, status: :service_unavailable
+        nil
+      else
+        # Authentication failed - return 403
+        render json: { error: "Unauthorized", message: "Invalid or expired token" }, status: 401
+        nil
+      end
+    rescue HTTParty::Error, JSON::ParserError, SocketError, Errno::ECONNREFUSED, Net::OpenTimeout, Timeout::Error => e
+      # Service unavailable - return 503 for connection errors
+      render json: { error: "Unavailable", message: "Internal Server Error" }, status: :service_unavailable
+      nil
+    end
   end
 
   def current_user

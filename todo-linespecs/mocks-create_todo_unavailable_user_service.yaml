@@ -1,0 +1,43 @@
+version: api.keploy.io/v1beta1
+kind: Http
+name: create_todo_unavailable_user_service-mock-0
+spec:
+  metadata: {}
+  req:
+    method: GET
+    url: http://user-service.local/api/v1/users/auth
+    header:
+      Content-Type: application/json
+    body: '{"authorization":"Bearer token_abc123xyz"}'
+  resp:
+    status_code: 503
+    header:
+      Content-Type: application/json
+    body: '{"error":"Unavailable","message":"Internal Server Error"}'
+  reqTimestampMock: '2026-03-03T16:04:40.056Z'
+  resTimestampMock: '2026-03-03T16:04:40.056Z'
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: create_todo_unavailable_user_service-mock-not-0
+spec:
+  metadata:
+    connID: '0'
+    requestOperation: COM_QUERY
+    responseOperation: OK
+    type: mocks
+    negative: true
+  requests:
+    - header:
+        header:
+          payload_length: 120
+          sequence_id: 0
+        packet_type: COM_QUERY
+      message:
+        query: >-
+          INSERT INTO todos (title, description, completed, user_id) VALUES
+          ('Buy groceries', 'Milk, eggs, and bread', false, 42)
+  responses: []
+  created: 1772553880
+  reqtimestampmock: '2026-03-03T16:04:40.056Z'
+  restimestampmock: '2026-03-03T16:04:40.056Z'

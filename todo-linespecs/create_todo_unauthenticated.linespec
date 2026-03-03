@@ -1,0 +1,13 @@
+TEST create_todo_unauthenticated
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{payloads/create_todo_request.yaml}}
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+WITH {{payloads/auth_token_request.yaml}}
+RETURNS {{payloads/auth_error_response.json}}
+
+RESPOND HTTP:401
+WITH {{payloads/auth_error_401.json}}
+NOISE
+  body.id

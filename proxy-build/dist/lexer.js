@@ -69,6 +69,9 @@ function tokenize(source) {
         else if ((match = line.match(/^RECEIVE\s+(.+)$/))) {
             tokens.push({ type: 'RECEIVE', value: match[1].trim(), line: lineNo });
         }
+        else if ((match = line.match(/^EXPECT\s+NOT\s+(.+)$/))) {
+            tokens.push({ type: 'EXPECT_NOT', value: match[1].trim(), line: lineNo });
+        }
         else if ((match = line.match(/^EXPECT\s+(.+)$/))) {
             tokens.push({ type: 'EXPECT', value: match[1].trim(), line: lineNo });
         }

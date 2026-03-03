@@ -1100,6 +1100,104 @@ function buildKMocks(spec, payloads) {
     }
     return mocks;
 }
+function buildNegativeKMocks(spec, payloads) {
+    const mocks = [];
+    for (let i = 0; i < spec.expectsNot.length; i++) {
+        const expectNot = spec.expectsNot[i];
+        if (expectNot.channel === 'WRITE_MYSQL' || expectNot.channel === 'WRITE_POSTGRESQL') {
+            const isMysql = expectNot.channel === 'WRITE_MYSQL';
+            const table = expectNot.table;
+            let sql;
+            if (expectNot.withFile && payloads.has(expectNot.withFile)) {
+                const payload = payloads.get(expectNot.withFile);
+                sql = generateInsertSql(table, payload.parsed);
+            }
+            else {
+                sql = `INSERT INTO ${table}`;
+            }
+            const mysqlSpec = {
+                metadata: {
+                    connID: '0',
+                    requestOperation: 'COM_QUERY',
+                    responseOperation: 'OK',
+                    type: 'mocks',
+                    negative: true, // Mark as negative mock
+                },
+                requests: [{
+                        header: {
+                            header: {
+                                payload_length: sql.length + 1,
+                                sequence_id: 0,
+                            },
+                            packet_type: 'COM_QUERY',
+                        },
+                        message: { query: sql },
+                    }],
+                responses: [], // No response needed - proxy will reject
+                created: Math.floor(Date.now() / 1000),
+                reqtimestampmock: new Date().toISOString(),
+                restimestampmock: new Date().toISOString(),
+            };
+            mocks.push({
+                version: 'api.keploy.io/v1beta1',
+                kind: 'MySQL',
+                name: `${spec.name}-mock-not-${i}`,
+                spec: mysqlSpec,
+            });
+        }
+        else if (expectNot.channel === 'HTTP') {
+            const httpExpectNot = expectNot;
+            let reqBody = '';
+            if (httpExpectNot.withFile && payloads.has(httpExpectNot.withFile)) {
+                const payload = payloads.get(httpExpectNot.withFile);
+                reqBody = JSON.stringify(payload.parsed);
+            }
+            const httpSpec = {
+                metadata: { negative: true }, // Mark as negative mock
+                req: {
+                    method: httpExpectNot.method,
+                    url: httpExpectNot.url,
+                    header: { 'Content-Type': 'application/json' },
+                    body: reqBody,
+                },
+                resp: {
+                    status_code: 0, // Never used
+                    header: {},
+                    body: '',
+                },
+                reqTimestampMock: new Date().toISOString(),
+                resTimestampMock: new Date().toISOString(),
+            };
+            mocks.push({
+                version: 'api.keploy.io/v1beta1',
+                kind: 'Http',
+                name: `${spec.name}-mock-not-${i}`,
+                spec: httpSpec,
+            });
+        }
+        else if (expectNot.channel === 'EVENT') {
+            const eventExpectNot = expectNot;
+            let message = {};
+            if (eventExpectNot.withFile && payloads.has(eventExpectNot.withFile)) {
+                const payload = payloads.get(eventExpectNot.withFile);
+                message = payload.parsed;
+            }
+            const eventSpec = {
+                metadata: { topic: eventExpectNot.topic, negative: true }, // Mark as negative mock
+                message,
+                reqTimestampMock: new Date().toISOString(),
+                resTimestampMock: new Date().toISOString(),
+            };
+            mocks.push({
+                version: 'api.keploy.io/v1beta1',
+                kind: 'Kafka',
+                name: `${spec.name}-mock-not-${i}`,
+                spec: eventSpec,
+            });
+        }
+    }
+    return mocks;
+}
 function compile(spec, options) {
     const { outDir, baseDir } = options;
     const fileRefs = new Set();
@@ -1115,6 +1213,12 @@ function compile(spec, options) {
             fileRefs.add(e.returnsFile);
         }
     }
+    for (const expectNot of spec.expectsNot) {
+        const e = expectNot;
+        if (e.withFile) {
+            fileRefs.add(e.withFile);
+        }
+    }
     if (spec.respond.withFile) {
         fileRefs.add(spec.respond.withFile);
     }
@@ -1124,11 +1228,13 @@ function compile(spec, options) {
     }
     const ktest = buildKTest(spec, payloads);
     const kmocks = buildKMocks(spec, payloads);
+    const negativeKMocks = buildNegativeKMocks(spec, payloads);
     fs.mkdirSync(path.join(outDir, 'tests'), { recursive: true });
     const ktestYaml = yaml.dump(ktest, { lineWidth: -1, noRefs: true });
     fs.writeFileSync(path.join(outDir, 'tests', spec.name + '.yaml'), ktestYaml);
-    if (kmocks.length > 0) {
-        const mockDocs = kmocks.map((mock) => yaml.dump(mock, { lineWidth: -1, noRefs: true }));
+    const allMocks = [...kmocks, ...negativeKMocks];
+    if (allMocks.length > 0) {
+        const mockDocs = allMocks.map((mock) => yaml.dump(mock, { lineWidth: -1, noRefs: true }));
         const mocksContent = mockDocs.map((d) => '---\n' + d).join('');
         // Append to mocks.yaml instead of overwriting
         const mocksPath = path.join(outDir, 'mocks.yaml');

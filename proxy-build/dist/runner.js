@@ -240,22 +240,19 @@ function getDbUpstreamPort(composeParsed) {
     try {
         const services = composeParsed.services;
         const db = services[dbServiceName];
-        // First, infer from image to get the standard internal port
-        const image = db.image || '';
-        if (image.includes('postgres')) {
-            return 5432;
-        }
-        if (image.includes('mysql') || image.includes('mariadb')) {
-            return 3306;
-        }
-        // Fall back to parsing ports (though this is less reliable)
         const ports = db.ports;
         if (ports && ports.length > 0) {
+            // Get the internal container port (after the colon)
             const portMapping = ports[0];
             const parts = portMapping.split(':');
             if (parts.length >= 2) {
                 return parseInt(parts[parts.length - 1], 10);
             }
+        }
+        // Try to infer from image
+        const image = db.image || '';
+        if (image.includes('postgres')) {
+            return 5432;
         }
     }
     catch {
