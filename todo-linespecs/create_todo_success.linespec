@@ -10,6 +10,9 @@ RETURNS {{payloads/authenticated_user.yaml}}
 EXPECT WRITE:MYSQL todos
 WITH {{payloads/todo_insert.yaml}}
 
+EXPECT EVENT:todo-events
+WITH {{payloads/todo_created_event.yaml}}
+
 RESPOND HTTP:201
 WITH {{payloads/created_todo.yaml}}
 NOISE

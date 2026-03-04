@@ -15,4 +15,7 @@ RETURNS {{payloads/todo_single.yaml}}
 EXPECT WRITE:MYSQL todos
 WITH {{payloads/todo_delete.yaml}}
 
+EXPECT EVENT:todo-events
+WITH {{payloads/todo_deleted_event.yaml}}
+
 RESPOND HTTP:204

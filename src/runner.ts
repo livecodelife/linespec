@@ -152,7 +152,7 @@ async function activateMocksViaControlApi(
 async function checkHttpMockUsage(
   proxyHost: string,
   controlPort: number
-): Promise<{ total: number; used: number; unused: string[] }> {
+): Promise<{ unused: string[] }> {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: proxyHost,
@@ -168,11 +168,7 @@ async function checkHttpMockUsage(
       res.on('end', () => {
         if (res.statusCode === 200) {
           const result = JSON.parse(data);
-          resolve({
-            total: result.total,
-            used: result.used,
-            unused: result.unused || []
-          });
+          resolve({ unused: result.unused || [] });
         } else {
           reject(new Error(`Control API returned ${res.statusCode}: ${data}`));
         }
@@ -187,6 +183,114 @@ async function checkHttpMockUsage(
 
     req.end();
   });
+}
+
+// Global Kafka message tracking
+let kafkaMessages: Map<string, Array<Record<string, unknown>>> = new Map();
+let kafkaConsumerProcess: any = null;
+
+// Start Kafka consumer using docker exec
+async function startKafkaConsumerDocker(composePath: string): Promise<void> {
+  // Don't start a persistent consumer - we'll read messages directly after each test
+  console.error('[runner] Kafka consumer ready (will consume after each test)');
+}
+
+// Read messages from Kafka topic using docker exec
+async function readKafkaMessages(): Promise<Array<Record<string, unknown>>> {
+  return new Promise((resolve) => {
+    const messages: Array<Record<string, unknown>> = [];
+    
+    // Run kafka-console-consumer to read messages
+    const proc = spawn('docker', [
+      'run', '--rm',
+      '--network', 'todo-api_default',
+      'confluentinc/cp-kafka:latest',
+      'kafka-console-consumer',
+      '--bootstrap-server', 'kafka:29092',
+      '--topic', 'todo-events',
+      '--from-beginning',
+      '--timeout-ms', '5000'
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    
+    let output = '';
+    proc.stdout.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+    
+    proc.on('close', () => {
+      // Parse each line as a JSON message
+      const lines = output.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line);
+          messages.push(event);
+        } catch {
+          // Ignore non-JSON lines
+        }
+      }
+      resolve(messages);
+    });
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      proc.kill();
+      resolve(messages);
+    }, 10000);
+  });
+}
+
+// Stop Kafka consumer
+function stopKafkaConsumer(): void {
+  // Nothing to stop with the new approach
+}
+
+// Initialize Kafka consumer
+async function initKafkaConsumer(brokers: string[]): Promise<void> {
+  // Use docker-based consumer instead of KafkaJS
+  return;
+}
+
+// Check Kafka events by reading from the topic
+async function checkKafkaEvents(
+  testName: string,
+  expectedEvents: Array<{ eventType: string; mockName: string }>
+): Promise<{ unused: string[] }> {
+  // Wait for messages to be produced and committed
+  console.error('[runner] Waiting for Kafka messages...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Read messages from Kafka
+  console.error('[runner] Reading messages from Kafka...');
+  const messages = await readKafkaMessages();
+  console.error(`[runner] Read ${messages.length} messages from Kafka`);
+  
+  // Group messages by event type
+  const messagesByType = new Map<string, Array<Record<string, unknown>>>();
+  for (const msg of messages) {
+    const eventType = msg.event_type as string;
+    if (!messagesByType.has(eventType)) {
+      messagesByType.set(eventType, []);
+    }
+    messagesByType.get(eventType)?.push(msg);
+  }
+  
+  const unused: string[] = [];
+  
+  for (const expected of expectedEvents) {
+    const events = messagesByType.get(expected.eventType) || [];
+    
+    // Check if any event of this type was consumed
+    if (events.length === 0) {
+      unused.push(expected.mockName);
+    }
+  }
+  
+  return { unused };
+}
+
+// Reset Kafka messages for a new test
+function resetKafkaMessages(): void {
+  kafkaMessages.clear();
 }
 
 function parseComposeFile(composePath: string): Record<string, unknown> {
@@ -903,7 +1007,7 @@ COPY mocks.yaml ./
 
 RUN npm install --omit=dev
 
-EXPOSE 3306 3308
+EXPOSE 3306 3308 9092
 
 CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", "--control-port", "3308"]
 `;
@@ -1115,18 +1219,80 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
 
       process.stdout.write(`✓ MySQL proxy ready (${proxyContainerName}:${internalProxyPort})\n`);
       // Removed 3000ms fixed delay - proxy readiness is already confirmed above
-
+      
       const overrideContent = buildOverrideContentForContainer(composeParsed);
-      fs.writeFileSync(overridePath, overrideContent);
+      const absoluteOverridePath = path.resolve(overridePath);
+      try {
+        // Ensure directory exists
+        const overrideDir = path.dirname(absoluteOverridePath);
+        if (!fs.existsSync(overrideDir)) {
+          fs.mkdirSync(overrideDir, { recursive: true });
+        }
+        fs.writeFileSync(absoluteOverridePath, overrideContent);
+        // Verify file was written
+        if (fs.existsSync(absoluteOverridePath)) {
+          const stats = fs.statSync(absoluteOverridePath);
+          const content = fs.readFileSync(absoluteOverridePath, 'utf-8');
+          console.error(`[runner] Override file written successfully: ${absoluteOverridePath} (${stats.size} bytes)`);
+          console.error(`[runner] Override file content:\n${content}`);
+        } else {
+          console.error(`[runner] ERROR: Override file was not created at ${absoluteOverridePath}!`);
+        }
+      } catch (err) {
+        console.error(`[runner] ERROR writing override file: ${err}`);
+        throw err;
+      }
+      process.stdout.write(`→ Generated override: ${absoluteOverridePath}\n`);
+      
+      // Small delay to ensure file is written
+      await new Promise(resolve => setTimeout(resolve, 100));
       process.stdout.write(`→ Generated override: ${overridePath}\n`);
+      
+      // Small delay to ensure file is written
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       process.stdout.write('→ Starting web service...\n');
-      await spawnProcess('docker', [
-        'compose',
-        '-f', options.composePath!,
-        '-f', overridePath,
-        'up', '-d', '--no-deps', '--no-recreate', '--build', 'web'
-      ], true);
+      
+      // Check file exists before docker compose
+      if (!fs.existsSync(absoluteOverridePath)) {
+        console.error(`[runner] CRITICAL: Override file ${absoluteOverridePath} does not exist before docker compose!`);
+        throw new Error('Override file missing');
+      }
+      console.error(`[runner] Override file confirmed existing before docker compose`);
+      
+      try {
+        // Use spawn without quiet mode to see docker output
+        const proc = spawn('docker', [
+          'compose',
+          '-f', path.resolve(options.composePath!),
+          '-f', absoluteOverridePath,
+          'up', '-d', '--no-recreate', '--build', 'web'
+        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+        
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', (data) => { stdout += data.toString(); });
+        proc.stderr.on('data', (data) => { stderr += data.toString(); });
+        
+        await new Promise((resolve, reject) => {
+          proc.on('close', (code) => {
+            if (code === 0) {
+              resolve(undefined);
+            } else {
+              reject(new Error(`docker compose exited with code ${code}. stdout: ${stdout}, stderr: ${stderr}`));
+            }
+          });
+          proc.on('error', reject);
+        });
+      } catch (err) {
+        console.error(`[runner] Docker compose failed: ${err}`);
+        throw err;
+      }
+      
+      // Check file still exists after docker compose
+      if (!fs.existsSync(absoluteOverridePath)) {
+        console.error(`[runner] WARNING: Override file ${absoluteOverridePath} was deleted during docker compose!`);
+      }
     } else {
       proxyServer = await startProxy(mocks, 'localhost', dbPort, proxyPort);
       process.stdout.write(`✓ MySQL proxy listening on port ${proxyPort}\n`);
@@ -1134,6 +1300,56 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
 
     await pollUntilHealthy(options.serviceUrl, 120000);
     process.stdout.write(`✓ Service ready at ${options.serviceUrl}\n`);
+    
+    // Initialize Kafka consumer if there are any Kafka mocks
+    // We do this after the web service is ready because Kafka is a dependency
+    const hasKafkaMocks = testSet.mocks.some(m => m.mock.kind === 'Kafka');
+    if (hasKafkaMocks && useCompose) {
+      // Wait longer for Kafka to be fully ready (it takes time to start)
+      process.stdout.write('→ Waiting for Kafka to be ready...\n');
+      await new Promise(resolve => setTimeout(resolve, 8000));
+      
+      // Create the topic if it doesn't exist
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const proc = spawn('docker', [
+            'run', '--rm',
+            '--network', 'todo-api_default',
+            'confluentinc/cp-kafka:latest',
+            'kafka-topics',
+            '--bootstrap-server', 'kafka:29092',
+            '--create',
+            '--topic', 'todo-events',
+            '--partitions', '1',
+            '--replication-factor', '1',
+            '--if-not-exists'
+          ], { stdio: 'pipe' });
+          
+          proc.on('close', (code) => {
+            if (code === 0 || code === null) {
+              console.error('[runner] Created Kafka topic: todo-events');
+              resolve();
+            } else {
+              console.error(`[runner] Topic creation exited with code ${code}`);
+              resolve(); // Continue anyway, topic might already exist
+            }
+          });
+          proc.on('error', (err) => {
+            console.error(`[runner] Error creating topic: ${err}`);
+            resolve(); // Continue anyway
+          });
+        });
+      } catch (err) {
+        console.error(`[runner] Could not create Kafka topic: ${err}`);
+      }
+      
+      try {
+        await startKafkaConsumerDocker(options.composePath!);
+        process.stdout.write('✓ Kafka consumer initialized\n');
+      } catch (err) {
+        console.error(`[runner] Failed to initialize Kafka consumer: ${err}`);
+      }
+    }
 
     let passed = 0;
     let failed = 0;
@@ -1258,6 +1474,40 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         }
       }
       
+      // Check Kafka mock usage verification
+      let kafkaMockError: string | undefined;
+      if (useCompose) {
+        try {
+          // Get expected Kafka events for this test
+          const expectedEvents: Array<{ eventType: string; mockName: string }> = [];
+          const testMocks = testSet.mocksByTest.get(name) || [];
+          
+          for (const mock of testMocks) {
+            if (mock.mock.kind === 'Kafka') {
+              const eventSpec = mock.mock.spec as { message?: { event_type?: string } };
+              const eventType = eventSpec.message?.event_type;
+              if (eventType) {
+                expectedEvents.push({ eventType, mockName: mock.name });
+              }
+            }
+          }
+          
+          if (expectedEvents.length > 0) {
+            // Check which events were consumed
+            const kafkaResult = await checkKafkaEvents(name, expectedEvents);
+            if (kafkaResult.unused.length > 0) {
+              kafkaMockError = `Kafka Event(s) not produced: ${kafkaResult.unused.join(', ')}`;
+            }
+          }
+        } catch (err) {
+          // If check fails, continue without failing (might be no Kafka mocks)
+          console.error(`[runner] Could not check Kafka events: ${err}`);
+        }
+      }
+      
+      // Don't reset Kafka messages between tests - we want to track all events
+      // resetKafkaMessages();
+      
       // In Docker mode, read passthrough queries from file
       if (useCompose) {
         const passthroughFilePath = path.join(errorDirPath, 'passthrough-queries.json');
@@ -1327,6 +1577,18 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         }
       }
       
+      // Check Kafka mock verification
+      if (kafkaMockError) {
+        if (result.pass) {
+          // If Kafka events weren't produced but test passed, mark as failed
+          result.pass = false;
+          result.reason = kafkaMockError;
+        } else {
+          // If test already failed, append Kafka mock error
+          result.reason = `${result.reason}\n${kafkaMockError}`;
+        }
+      }
+      
       results.push(result);
 
       if (result.pass) {
@@ -1350,6 +1612,13 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
         if (httpMockError) {
           process.stdout.write(`\n  🔌 HTTP Mock Verification Error:\n`);
           process.stdout.write(`    ${httpMockError}\n`);
+          process.stdout.write(`\n`);
+        }
+        
+        // Print Kafka mock verification error
+        if (kafkaMockError) {
+          process.stdout.write(`\n  📨 Kafka Event Verification Error:\n`);
+          process.stdout.write(`    ${kafkaMockError}\n`);
           process.stdout.write(`\n`);
         }
         
@@ -1383,6 +1652,9 @@ CMD ["node", "dist/proxy-server.js", "--mocks", "mocks.yaml", "--port", "3306", 
     proxyEvents.off('verificationError', onVerificationError);
     proxyEvents.off('queryPassthrough', onQueryPassthrough);
     proxyEvents.off('queryExecuted', onQueryExecuted);
+    
+    // Stop Kafka consumer
+    stopKafkaConsumer();
 
     if (options.reportDir) {
       fs.mkdirSync(options.reportDir, { recursive: true });

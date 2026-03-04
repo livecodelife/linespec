@@ -17,9 +17,9 @@
       "Content-Length": "109"
     },
     "body": "{\n  \"title\": \"Buy groceries\",\n  \"description\": \"Milk, eggs, and bread - organic only\",\n  \"completed\": false\n}",
-    "timestamp": "2026-03-03T16:04:40.063Z"
+    "timestamp": "2026-03-03T23:48:48.762Z"
   },
   "passthroughQueries": [
-    "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-03 16:06:00.450198' WHERE `todos`.`id` = 1"
+    "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-04 01:58:19.924923' WHERE `todos`.`id` = 1"
   ]
 }

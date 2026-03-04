@@ -8,7 +8,7 @@
     "SHOW FULL FIELDS FROM `todos`",
     "SELECT column_name\nFROM information_schema.statistics\nWHERE index_name = 'PRIMARY'\n  AND table_schema = database()\n  AND table_name = 'todos'\nORDER BY seq_in_index\n",
     "DELETE FROM `todos` WHERE `todos`.`id` = 1",
-    "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-03 16:06:00.450198' WHERE `todos`.`id` = 1"
+    "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-04 01:58:19.924923' WHERE `todos`.`id` = 1"
   ],
   "tests": [
     {
@@ -48,7 +48,7 @@
       "name": "update_todo_success",
       "pass": true,
       "passthroughQueries": [
-        "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-03 16:06:00.450198' WHERE `todos`.`id` = 1"
+        "UPDATE `todos` SET `todos`.`description` = 'Milk, eggs, and bread - organic only', `todos`.`updated_at` = '2026-03-04 01:58:19.924923' WHERE `todos`.`id` = 1"
       ]
     }
   ]

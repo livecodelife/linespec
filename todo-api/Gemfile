@@ -5,6 +5,7 @@ gem "mysql2"
 gem "puma", ">= 5.0"
 gem "rack-cors"
 gem "httparty"
+gem "ruby-kafka"
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

@@ -21,6 +21,6 @@
   },
   "passthroughQueries": [
     "SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1",
-    "INSERT INTO `users` (`name`, `email`, `password`, `token`, `created_at`, `updated_at`) VALUES ('John Doe', 'john@example.com', 'SecurePass123!', 'b6d53be350d4b35e75b0c2a10a48d1be', '2026-03-03 23:36:10', '2026-03-03 23:36:10')"
+    "INSERT INTO `users` (`name`, `email`, `password`, `token`, `created_at`, `updated_at`) VALUES ('John Doe', 'john@example.com', 'SecurePass123!', 'a4c9376dc4f86c5be296d82f571413aa', '2026-03-04 00:39:10', '2026-03-04 00:39:10')"
   ]
 }

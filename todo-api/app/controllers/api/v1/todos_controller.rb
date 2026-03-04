@@ -15,6 +15,7 @@ class Api::V1::TodosController < ApplicationController
   def create
     @todo = Todo.new(todo_params.merge(user_id: current_user.id))
     if @todo.save
+      EventPublisher.publish_todo_created(@todo)
       render json: { id: @todo.id, title: @todo.title, description: @todo.description, completed: @todo.completed, user_id: @todo.user_id, created_at: @todo.created_at.try(:iso8601), updated_at: @todo.updated_at.try(:iso8601) }, status: :created
     else
       render json: @todo.errors, status: :unprocessable_entity
@@ -23,6 +24,7 @@ class Api::V1::TodosController < ApplicationController
 
   def update
     if @todo.update(todo_params)
+      EventPublisher.publish_todo_updated(@todo)
       render json: { id: @todo.id, title: @todo.title, description: @todo.description, completed: @todo.completed, user_id: @todo.user_id, created_at: @todo.created_at.try(:iso8601), updated_at: @todo.updated_at.try(:iso8601) }
     else
       render json: @todo.errors, status: :unprocessable_entity
@@ -33,6 +35,7 @@ class Api::V1::TodosController < ApplicationController
   end
 
   def destroy
+    EventPublisher.publish_todo_deleted(@todo)
     @todo.destroy
     head :no_content
   end

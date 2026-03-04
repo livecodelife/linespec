@@ -19,7 +19,7 @@ spec:
         "description": "Milk, eggs, and bread - organic only",
         "completed": false
       }
-    timestamp: '2026-03-03T16:04:40.063Z'
+    timestamp: '2026-03-03T23:48:48.762Z'
   resp:
     status_code: 200
     header:
@@ -28,12 +28,12 @@ spec:
     status_message: OK
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-03-03T16:04:40.063Z'
+    timestamp: '2026-03-03T23:48:48.763Z'
   objects: []
   assertions:
     noise:
       body.updated_at: []
-  created: 1772553880
+  created: 1772581728
   app_port: 3000
 curl: |-
   curl --request PATCH \n--header 'Content-Type: application/json' \n--header 'Accept: application/json' \n--header 'Host: localhost:3000' \n--header 'Content-Length: 109' \n--data "{

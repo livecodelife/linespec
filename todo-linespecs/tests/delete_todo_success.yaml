@@ -13,7 +13,7 @@ spec:
       Accept: application/json
       Host: localhost:3000
     body: ''
-    timestamp: '2026-03-03T16:04:40.057Z'
+    timestamp: '2026-03-03T23:48:49.126Z'
   resp:
     status_code: 204
     header: {}
@@ -21,8 +21,8 @@ spec:
     status_message: No Content
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-03-03T16:04:40.057Z'
+    timestamp: '2026-03-03T23:48:49.127Z'
   objects: []
-  created: 1772553880
+  created: 1772581729
   app_port: 3000
 curl: 'curl --request DELETE \n--header ''Content-Type: application/json'' \n--header ''Accept: application/json'' \n--header ''Host: localhost:3000'' \n'

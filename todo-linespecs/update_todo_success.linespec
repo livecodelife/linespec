@@ -16,6 +16,9 @@ RETURNS {{payloads/todo_single.yaml}}
 EXPECT WRITE:MYSQL todos
 WITH {{payloads/todo_update.yaml}}
 
+EXPECT EVENT:todo-events
+WITH {{payloads/todo_updated_event.yaml}}
+
 RESPOND HTTP:200
 WITH {{payloads/updated_todo.yaml}}
 NOISE

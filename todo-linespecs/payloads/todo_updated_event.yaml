@@ -1,0 +1,8 @@
+event_type: todo_updated
+todo_id: 1
+title: Buy groceries updated
+description: Milk, eggs, bread, and cheese
+completed: false
+user_id: 42
+created_at: "2026-02-25T10:00:00Z"
+updated_at: "2026-02-25T11:00:00Z"

@@ -47,7 +47,8 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "commander": "^12.1.0",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "kafkajs": "^2.2.4"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

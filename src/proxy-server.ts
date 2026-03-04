@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { startProxy, proxyEvents, reloadMocks, activateMocksForTest } from './mysql-proxy';
+import { startKafkaProxy, activateKafkaMocksForTest, kafkaMockUsage } from './kafka-proxy';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as http from 'http';
-import type { KMock } from './types';
+import * as net from 'net';
+import type { KMock, KMockEventSpec } from './types';
 
 interface ProxyOptions {
   mocksFile: string;
@@ -234,6 +236,26 @@ async function main() {
     });
   }
 
+  // Start Kafka proxy server to intercept produce requests
+  const kafkaMocks = docs.filter((m: KMock) => m.kind === 'Kafka');
+  // Track current test name to filter Kafka mocks
+  let currentKafkaTestName: string | null = null;
+  let kafkaServer: net.Server | null = null;
+  
+  if (kafkaMocks.length > 0) {
+    console.error(`[proxy-server] Starting Kafka proxy with ${kafkaMocks.length} Kafka mocks`);
+    
+    // Initialize usage tracking using the shared map
+    kafkaMocks.forEach(m => kafkaMockUsage.set(m.name, false));
+    
+    // Import Kafka proxy with full mock names
+    const mocksWithNames = kafkaMocks.map(m => ({
+      name: m.name,
+      spec: m.spec as KMockEventSpec
+    }));
+    kafkaServer = await startKafkaProxy(mocksWithNames, 9092);
+  }
+
   // Start the HTTP control server for hot mock reloading
   let controlServer: http.Server | null = null;
   if (options.controlPort) {
@@ -290,9 +312,16 @@ async function main() {
             
             // Track current test name for HTTP mock filtering
             currentHttpTestName = testName;
+            currentKafkaTestName = testName;
             
             // Reset HTTP mock usage tracking for new test
             httpMockUsage.forEach((_, key) => httpMockUsage.set(key, false));
+            
+            // Reset Kafka mock usage tracking for new test
+            if (kafkaMocks.length > 0) {
+              const kafkaCount = activateKafkaMocksForTest(testName, kafkaMockUsage);
+              console.error(`[proxy-server] Activated ${kafkaCount} Kafka mocks for test "${testName}"`);
+            }
             
             console.error(`[proxy-server] Activated mocks for test "${testName}": ${count} mocks`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -323,6 +352,23 @@ async function main() {
           success: true, 
           total: httpMockUsage.size,
           used: httpMockUsage.size - unusedMocks.length,
+          unused: unusedMocks 
+        }));
+      } else if (req.method === 'GET' && req.url === '/check-kafka-mocks') {
+        // Check which Kafka mocks were invoked - filter by current test name
+        const unusedMocks: string[] = [];
+        kafkaMockUsage.forEach((used, name) => {
+          // Only check mocks that belong to the current test
+          if (currentKafkaTestName && name.startsWith(`${currentKafkaTestName}-`)) {
+            if (!used) unusedMocks.push(name);
+          }
+        });
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          total: kafkaMockUsage.size,
+          used: kafkaMockUsage.size - unusedMocks.length,
           unused: unusedMocks 
         }));
       } else if (req.method === 'POST' && req.url === '/clear-errors') {
@@ -364,20 +410,41 @@ async function main() {
   }
 
   console.error(`MySQL proxy listening on port ${options.listenPort} -> ${options.upstreamHost}:${options.upstreamPort}`);
+  console.error(`Kafka proxy listening on port 9092`);
   console.error('Press Ctrl+C to stop');
+  
+  // Handle uncaught exceptions to prevent crashes
+  process.on('uncaughtException', (err) => {
+    console.error('[proxy-server] Uncaught exception:', err);
+  });
+  
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[proxy-server] Unhandled rejection at:', promise, 'reason:', reason);
+  });
 
   // Graceful shutdown
   process.on('SIGINT', () => {
     console.error('\nShutting down...');
-    proxyServer.close(() => {
-      if (controlServer) {
-        controlServer.close(() => {
-          process.exit(0);
+    
+    const cleanup = () => {
+      if (kafkaServer) {
+        kafkaServer.close(() => {
+          console.error('[proxy-server] Kafka proxy closed');
         });
-      } else {
-        process.exit(0);
       }
-    });
+      
+      proxyServer.close(() => {
+        if (controlServer) {
+          controlServer.close(() => {
+            process.exit(0);
+          });
+        } else {
+          process.exit(0);
+        }
+      });
+    };
+    
+    cleanup();
   });
 }
 

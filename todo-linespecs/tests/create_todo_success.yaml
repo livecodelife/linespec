@@ -19,7 +19,7 @@ spec:
         "description": "Milk, eggs, and bread",
         "completed": false
       }
-    timestamp: '2026-03-03T16:04:40.048Z'
+    timestamp: '2026-03-03T23:48:48.604Z'
   resp:
     status_code: 201
     header:
@@ -28,14 +28,14 @@ spec:
     status_message: Created
     proto_major: 0
     proto_minor: 0
-    timestamp: '2026-03-03T16:04:40.049Z'
+    timestamp: '2026-03-03T23:48:48.605Z'
   objects: []
   assertions:
     noise:
       body.id: []
       body.created_at: []
       body.updated_at: []
-  created: 1772553880
+  created: 1772581728
   app_port: 3000
 curl: |-
   curl --request POST \n--header 'Content-Type: application/json' \n--header 'Accept: application/json' \n--header 'Host: localhost:3000' \n--header 'Content-Length: 94' \n--data "{
