@@ -12,7 +12,44 @@ This document outlines the best next steps and improvements for LineSpec, organi
 
 ## P0: Critical Gaps
 
-### 1. PostgreSQL Read Support
+### 1. Environment Variable Support in LineSpec DSL
+**Status:** NEW - Critical usability gap
+**Impact:** Prevents hardcoded hostnames, enables production-ready test patterns
+
+**Problem:** Currently LineSpec requires hardcoded URLs in expectations:
+```linespec
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+```
+
+This forces example apps to use hardcoded hostnames (`.local` TLDs) instead of environment variables, teaching bad practices.
+
+**Solution:** Add ENV variable substitution syntax:
+```linespec
+EXPECT HTTP:GET ${USER_SERVICE_URL}/api/v1/users/auth
+# or
+EXPECT HTTP:GET {{env.USER_SERVICE_URL}}/api/v1/users/auth
+```
+
+**Benefits:**
+- Services can use standard environment variables for configuration
+- Same test files work across dev/staging/prod environments
+- Eliminates need for DNS hacks and hardcoded hostnames
+- Aligns with 12-factor app principles
+
+**Implementation notes:**
+- Add variable substitution phase before tokenization
+- Support `$VAR` or `${VAR}` syntax (shell-style)
+- Support default values: `${VAR:-default}`
+- Pass through undefined vars (or error on compile)
+- Update example apps to remove hardcoded hostnames
+
+**Related cleanup:**
+- Fix todo-api's hardcoded token fallback
+- Fix todo-api's hardcoded user-service.local hostname
+- Fix auth-in-body pattern (should use headers)
+- Update all examples to use ENV-based URLs
+
+### 2. PostgreSQL Read Support
 **Status:** WRITE_POSTGRESQL exists, READ_POSTGRESQL missing
 
 Currently only `WRITE_POSTGRESQL` is supported. Add `READ_POSTGRESQL` channel with:
@@ -26,7 +63,7 @@ Currently only `WRITE_POSTGRESQL` is supported. Add `READ_POSTGRESQL` channel wi
 - Add compiler logic in compiler.ts (similar to READ_MYSQL)
 - Add proxy support for PostgreSQL protocol in mysql-proxy.ts (rename to db-proxy.ts)
 
-### 2. HTTP Expectations Completion ✅
+### 3. HTTP Expectations Completion ✅
 **Status:** DONE - HTTP expectations fully tested with examples
 
 Tests added for:
@@ -43,7 +80,7 @@ Tests added for:
 
 **Test file:** `tests/http-expectations.test.ts`
 
-### 3. Event/Messaging Channel Validation
+### 4. Event/Messaging Channel Validation
 **Status:** EVENT channel exists but untested
 
 Kafka/Event expectations are defined but:
@@ -60,10 +97,10 @@ Kafka/Event expectations are defined but:
 
 ## P1: High Impact Improvements
 
-### 4. IDE/Editor Support
+### 5. IDE/Editor Support
 **Impact:** Huge DX improvement for users
 
-#### 4a. VS Code Extension
+#### 5a. VS Code Extension
 - Syntax highlighting for `.linespec` files
 - Auto-completion for:
   - Channel types (HTTP, READ_MYSQL, WRITE_MYSQL, etc.)
@@ -73,14 +110,14 @@ Kafka/Event expectations are defined but:
 - Go-to-definition for payload references (`{{path}}`)
 - Snippets for common test patterns
 
-#### 4b. LSP Server
+#### 5b. LSP Server
 - Real-time validation
 - Hover information for keywords
 - Type checking for payload files
 
 **Effort:** Medium (2-3 days for basic extension)
 
-### 5. Better Error Messages
+### 6. Better Error Messages
 **Current state:** Basic line numbers, some context
 
 **Improvements:**
@@ -106,7 +143,7 @@ error[linespec::invalid_channel]: unrecognized channel type
   = Available channels: HTTP, READ_MYSQL, WRITE_MYSQL, READ_POSTGRESQL, WRITE_POSTGRESQL, EVENT
 ```
 
-### 6. Payload Schema Validation
+### 7. Payload Schema Validation
 **Problem:** Payload files aren't validated against expected structure
 
 **Solution:**
@@ -391,10 +428,11 @@ Converts to `.linespec` files with appropriate expectations.
 
 ### Phase 1: Foundation (Next 2-4 weeks)
 1. ✅ Fix any critical bugs
-2. Add PostgreSQL read support (P0)
-3. ✅ Add HTTP expectation tests (P0)
-4. Better error messages (P1)
-5. VS Code extension MVP (P1)
+2. **Add environment variable support to DSL (P0)**
+3. Add PostgreSQL read support (P0)
+4. ✅ Add HTTP expectation tests (P0)
+5. Better error messages (P1)
+6. VS Code extension MVP (P1)
 
 ### Phase 2: Developer Experience (Month 2-3)
 6. Watch mode
@@ -424,19 +462,21 @@ Converts to `.linespec` files with appropriate expectations.
 Priority items welcome contributions:
 
 1. **Good first issues:**
+   - Environment variable support (P0 #1)
    - Better error messages (P1 #5)
-   - Additional test examples (P0 #2, #3)
+   - Additional test examples (P0 #3, #4)
    - Documentation improvements
 
 2. **Medium complexity:**
-   - PostgreSQL read support (P0 #1)
+   - Environment variable support (P0 #1)
+   - PostgreSQL read support (P0 #2)
    - Watch mode (P1 #8)
-   - Test tagging (P2 #10)
+   - Test tagging (P2 #11)
 
 3. **Advanced:**
-   - VS Code extension (P1 #4)
-   - LSP server (P1 #4)
-   - SQL validation (P1 #7)
+   - VS Code extension (P1 #6)
+   - LSP server (P1 #6)
+   - SQL validation (P1 #8)
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
@@ -460,6 +500,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ---
 
-*Last updated: 2026-02-25*
+*Last updated: 2026-03-04*
+*Added P0: Environment variable support to DSL*
 *HTTP expectation tests completed*
 *Maintainers: See [AGENTS.md](./AGENTS.md) for contact info*
