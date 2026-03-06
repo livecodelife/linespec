@@ -1,8 +1,0 @@
-{
-  "token": "token_abc123xyz",
-  "user": {
-    "id": 42,
-    "name": "John Doe",
-    "email": "john@example.com"
-  }
-}
