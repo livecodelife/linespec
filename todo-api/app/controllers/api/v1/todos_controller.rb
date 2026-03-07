@@ -58,7 +58,8 @@ class Api::V1::TodosController < ApplicationController
     token = request.headers["Authorization"]&.gsub("Bearer ", "") || "token_abc123xyz"
 
     begin
-      response = HTTParty.get("http://user-service.local/api/v1/users/auth",
+      user_service_url = ENV["USER_SERVICE_URL"] || "http://user-service.local/api/v1/users/auth"
+      response = HTTParty.get(user_service_url,
         body: { authorization: "Bearer #{token}" }.to_json,
         headers: { "Content-Type" => "application/json" },
         timeout: 5)

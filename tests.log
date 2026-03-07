@@ -1,0 +1,593 @@
+
+[1/16] Running Test: todo-linespecs/create_todo_success.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering key [todos] for channel WRITE_MYSQL
+Registry: Registering key [todo-events] for channel EVENT
+Warning: failed to stop container db-create_todo_success: Error response from daemon: No such container: db-create_todo_success
+Warning: failed to stop container app-create_todo_success: Error response from daemon: No such container: app-create_todo_success
+Warning: failed to stop container proxy-db-create_todo_success: Error response from daemon: No such container: proxy-db-create_todo_success
+Warning: failed to stop container proxy-http-create_todo_success: Error response from daemon: No such container: proxy-http-create_todo_success
+Warning: failed to stop container proxy-kafka-create_todo_success: Error response from daemon: No such container: proxy-kafka-create_todo_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55108
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55108/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/todos
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0138s
+== 20260225185250 CreateTodos: migrated (0.0139s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:31:30 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (1.0ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.1ms | GC: 0.0ms)
+Completed 200 OK in 5ms (Views: 3.5ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started POST "/api/v1/todos" for 192.168.65.1 at 2026-03-07 02:31:30 +0000
+Processing by Api::V1::TodosController#create as HTML
+  Parameters: {"completed"=>false, "description"=>"Milk, eggs, and bread", "title"=>"Buy groceries", "todo"=>{"title"=>"Buy groceries", "description"=>"Milk, eggs, and bread", "completed"=>false}}
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 8ms (Views: 0.1ms | ActiveRecord: 16.9ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/create_todo_success.linespec FAILED: expected status 201, got 401
+
+[2/16] Running Test: todo-linespecs/create_todo_unauthenticated.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Warning: failed to stop container db-create_todo_unauthenticated: Error response from daemon: No such container: db-create_todo_unauthenticated
+Warning: failed to stop container app-create_todo_unauthenticated: Error response from daemon: No such container: app-create_todo_unauthenticated
+Warning: failed to stop container proxy-db-create_todo_unauthenticated: Error response from daemon: No such container: proxy-db-create_todo_unauthenticated
+Warning: failed to stop container proxy-http-create_todo_unauthenticated: Error response from daemon: No such container: proxy-http-create_todo_unauthenticated
+Warning: failed to stop container proxy-kafka-create_todo_unauthenticated: Error response from daemon: No such container: proxy-kafka-create_todo_unauthenticated
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55112
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55112/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/todos
+✅ Received response: 401
+Proxy: Collecting hits from localhost:55109...
+Proxy: Collecting hits from localhost:55110...
+Proxy: Collecting hits from localhost:55111...
+❌ Mock verification failed: expectation failed: [HTTP] on [/http://user-service.local/api/v1/users/auth/] was never called
+
+❌ Test todo-linespecs/create_todo_unauthenticated.linespec FAILED: expectation failed: [HTTP] on [/http://user-service.local/api/v1/users/auth/] was never called
+
+[3/16] Running Test: todo-linespecs/create_todo_unavailable_user_service.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering negative key [todos] for channel WRITE_MYSQL
+Warning: failed to stop container db-create_todo_unavailable_user_service: Error response from daemon: No such container: db-create_todo_unavailable_user_service
+Warning: failed to stop container app-create_todo_unavailable_user_service: Error response from daemon: No such container: app-create_todo_unavailable_user_service
+Warning: failed to stop container proxy-db-create_todo_unavailable_user_service: Error response from daemon: No such container: proxy-db-create_todo_unavailable_user_service
+Warning: failed to stop container proxy-http-create_todo_unavailable_user_service: Error response from daemon: No such container: proxy-http-create_todo_unavailable_user_service
+Warning: failed to stop container proxy-kafka-create_todo_unavailable_user_service: Error response from daemon: No such container: proxy-kafka-create_todo_unavailable_user_service
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55116
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55116/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/todos
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0054s
+== 20260225185250 CreateTodos: migrated (0.0054s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:32:56 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (0.6ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.1ms | GC: 0.0ms)
+Completed 200 OK in 3ms (Views: 2.3ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started POST "/api/v1/todos" for 192.168.65.1 at 2026-03-07 02:32:56 +0000
+Processing by Api::V1::TodosController#create as HTML
+  Parameters: {"completed"=>false, "description"=>"Milk, eggs, and bread", "title"=>"Buy groceries", "todo"=>{"title"=>"Buy groceries", "description"=>"Milk, eggs, and bread", "completed"=>false}}
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 4ms (Views: 0.2ms | ActiveRecord: 9.1ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/create_todo_unavailable_user_service.linespec FAILED: expected status 503, got 401
+
+[4/16] Running Test: todo-linespecs/delete_todo_success.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering key [todos] for channel READ_MYSQL
+Registry: Registering key [todos] for channel WRITE_MYSQL
+Registry: Registering key [todo-events] for channel EVENT
+Warning: failed to stop container db-delete_todo_success: Error response from daemon: No such container: db-delete_todo_success
+Warning: failed to stop container app-delete_todo_success: Error response from daemon: No such container: app-delete_todo_success
+Warning: failed to stop container proxy-db-delete_todo_success: Error response from daemon: No such container: proxy-db-delete_todo_success
+Warning: failed to stop container proxy-http-delete_todo_success: Error response from daemon: No such container: proxy-http-delete_todo_success
+Warning: failed to stop container proxy-kafka-delete_todo_success: Error response from daemon: No such container: proxy-kafka-delete_todo_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55120
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55120/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: DELETE /api/v1/todos/1
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0181s
+== 20260225185250 CreateTodos: migrated (0.0181s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:33:45 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (0.4ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.0ms | GC: 0.0ms)
+Completed 200 OK in 2ms (Views: 1.3ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started DELETE "/api/v1/todos/1" for 192.168.65.1 at 2026-03-07 02:33:45 +0000
+Processing by Api::V1::TodosController#destroy as HTML
+  Parameters: {"id"=>"1"}
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 2ms (Views: 0.1ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/delete_todo_success.linespec FAILED: expected status 204, got 401
+
+[5/16] Running Test: todo-linespecs/get_todo_success.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering key [todos] for channel READ_MYSQL
+Warning: failed to stop container db-get_todo_success: Error response from daemon: No such container: db-get_todo_success
+Warning: failed to stop container app-get_todo_success: Error response from daemon: No such container: app-get_todo_success
+Warning: failed to stop container proxy-db-get_todo_success: Error response from daemon: No such container: proxy-db-get_todo_success
+Warning: failed to stop container proxy-http-get_todo_success: Error response from daemon: No such container: proxy-http-get_todo_success
+Warning: failed to stop container proxy-kafka-get_todo_success: Error response from daemon: No such container: proxy-kafka-get_todo_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55124
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55124/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/todos/1
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0233s
+== 20260225185250 CreateTodos: migrated (0.0234s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:34:31 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (0.3ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.0ms | GC: 0.0ms)
+Completed 200 OK in 2ms (Views: 1.3ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started GET "/api/v1/todos/1" for 192.168.65.1 at 2026-03-07 02:34:31 +0000
+Processing by Api::V1::TodosController#show as HTML
+  Parameters: {"id"=>"1"}
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 2ms (Views: 0.1ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/get_todo_success.linespec FAILED: expected status 200, got 401
+
+[6/16] Running Test: todo-linespecs/list_todos_success.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering key [todos] for channel READ_MYSQL
+Warning: failed to stop container db-list_todos_success: Error response from daemon: No such container: db-list_todos_success
+Warning: failed to stop container app-list_todos_success: Error response from daemon: No such container: app-list_todos_success
+Warning: failed to stop container proxy-db-list_todos_success: Error response from daemon: No such container: proxy-db-list_todos_success
+Warning: failed to stop container proxy-http-list_todos_success: Error response from daemon: No such container: proxy-http-list_todos_success
+Warning: failed to stop container proxy-kafka-list_todos_success: Error response from daemon: No such container: proxy-kafka-list_todos_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55129
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55129/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/todos
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0094s
+== 20260225185250 CreateTodos: migrated (0.0094s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:35:16 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (0.3ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.0ms | GC: 0.0ms)
+Completed 200 OK in 2ms (Views: 1.3ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started GET "/api/v1/todos" for 192.168.65.1 at 2026-03-07 02:35:17 +0000
+Processing by Api::V1::TodosController#index as HTML
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 2ms (Views: 0.1ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/list_todos_success.linespec FAILED: expected status 200, got 401
+
+[7/16] Running Test: todo-linespecs/update_todo_success.linespec
+--------------------------------------------------
+Registry: Registering key [http://user-service.local/api/v1/users/auth] for channel HTTP
+Registry: Registering key [todos] for channel READ_MYSQL
+Registry: Registering key [todos] for channel WRITE_MYSQL
+Registry: Registering key [todo-events] for channel EVENT
+Warning: failed to stop container db-update_todo_success: Error response from daemon: No such container: db-update_todo_success
+Warning: failed to stop container app-update_todo_success: Error response from daemon: No such container: app-update_todo_success
+Warning: failed to stop container proxy-db-update_todo_success: Error response from daemon: No such container: proxy-db-update_todo_success
+Warning: failed to stop container proxy-http-update_todo_success: Error response from daemon: No such container: proxy-http-update_todo_success
+Warning: failed to stop container proxy-kafka-update_todo_success: Error response from daemon: No such container: proxy-kafka-update_todo_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55133
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55133/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: PATCH /api/v1/todos/1
+✅ Received response: 401
+❌ Test failed with status 401. Fetching app logs...
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+== 20260225185250 CreateTodos: migrating ======================================
+-- create_table(:todos)
+   -> 0.0127s
+== 20260225185250 CreateTodos: migrated (0.0127s) =============================
+
+=> Booting Puma
+=> Rails 7.2.3 application starting in development 
+=> Run `bin/rails server --help` for more startup options
+[KAFKA] Initializing Kafka with brokers: ["kafka:9092"]
+[KAFKA] KAFKA_BROKERS env: "kafka:9092"
+[KAFKA] Kafka client initialized successfully
+Puma starting in single mode...
+* Puma version: 7.2.0 ("On The Corner")
+* Ruby version: ruby 3.2.2 (2023-03-30 revision e51014f9c0) [aarch64-linux]
+*  Min threads: 3
+*  Max threads: 3
+*  Environment: development
+*          PID: 1
+* Listening on http://0.0.0.0:3000
+Use Ctrl-C to stop
+Started GET "/up" for 192.168.65.1 at 2026-03-07 02:35:58 +0000
+  [1m[36mActiveRecord::SchemaMigration Load (0.3ms)[0m  [1m[34mSELECT `schema_migrations`.`version` FROM `schema_migrations` ORDER BY `schema_migrations`.`version` ASC[0m
+Processing by Rails::HealthController#show as HTML
+  Rendering html template
+  Rendered html template (Duration: 0.0ms | GC: 0.0ms)
+Completed 200 OK in 2ms (Views: 1.5ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.1ms)
+
+
+Started PATCH "/api/v1/todos/1" for 192.168.65.1 at 2026-03-07 02:35:58 +0000
+Processing by Api::V1::TodosController#update as HTML
+  Parameters: {"completed"=>false, "description"=>"Milk, eggs, and bread - organic only", "title"=>"Buy groceries", "id"=>"1", "todo"=>{"title"=>"Buy groceries", "description"=>"Milk, eggs, and bread - organic only", "completed"=>false}}
+Filter chain halted as :authenticate_user! rendered or redirected
+Completed 401 Unauthorized in 2ms (Views: 0.1ms | ActiveRecord: 3.1ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+
+❌ Test todo-linespecs/update_todo_success.linespec FAILED: expected status 200, got 401
+
+[8/16] Running Test: user-linespecs/authenticate_user_invalid_token.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-authenticate_user_invalid_token: Error response from daemon: No such container: db-authenticate_user_invalid_token
+Warning: failed to stop container app-authenticate_user_invalid_token: Error response from daemon: No such container: app-authenticate_user_invalid_token
+Warning: failed to stop container proxy-http-authenticate_user_invalid_token: Error response from daemon: No such container: proxy-http-authenticate_user_invalid_token
+Warning: failed to stop container proxy-kafka-authenticate_user_invalid_token: Error response from daemon: No such container: proxy-kafka-authenticate_user_invalid_token
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55137
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55137/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/users/auth
+✅ Received response: 401
+Proxy: Collecting hits from localhost:55134...
+Proxy: Collecting hits from localhost:55135...
+Proxy: Collecting hits from localhost:55136...
+✨ Test passed!
+
+✅ Test user-linespecs/authenticate_user_invalid_token.linespec PASSED
+
+[9/16] Running Test: user-linespecs/authenticate_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-authenticate_user_success: Error response from daemon: No such container: db-authenticate_user_success
+Warning: failed to stop container app-authenticate_user_success: Error response from daemon: No such container: app-authenticate_user_success
+Warning: failed to stop container proxy-http-authenticate_user_success: Error response from daemon: No such container: proxy-http-authenticate_user_success
+Warning: failed to stop container proxy-kafka-authenticate_user_success: Error response from daemon: No such container: proxy-kafka-authenticate_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55142
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55142/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/users/auth
+✅ Received response: 200
+Proxy: Collecting hits from localhost:55138...
+Proxy: Collecting hits from localhost:55139...
+Proxy: Collecting hits from localhost:55140...
+✨ Test passed!
+
+✅ Test user-linespecs/authenticate_user_success.linespec PASSED
+
+[10/16] Running Test: user-linespecs/create_user_already_exists.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-create_user_already_exists: Error response from daemon: No such container: db-create_user_already_exists
+Warning: failed to stop container app-create_user_already_exists: Error response from daemon: No such container: app-create_user_already_exists
+Warning: failed to stop container proxy-http-create_user_already_exists: Error response from daemon: No such container: proxy-http-create_user_already_exists
+Warning: failed to stop container proxy-kafka-create_user_already_exists: Error response from daemon: No such container: proxy-kafka-create_user_already_exists
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55146
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55146/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/users
+✅ Received response: 409
+Proxy: Collecting hits from localhost:55143...
+Proxy: Collecting hits from localhost:55144...
+Proxy: Collecting hits from localhost:55145...
+✨ Test passed!
+
+✅ Test user-linespecs/create_user_already_exists.linespec PASSED
+
+[11/16] Running Test: user-linespecs/create_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel WRITE_MYSQL
+Warning: failed to stop container db-create_user_success: Error response from daemon: No such container: db-create_user_success
+Warning: failed to stop container app-create_user_success: Error response from daemon: No such container: app-create_user_success
+Warning: failed to stop container proxy-http-create_user_success: Error response from daemon: No such container: proxy-http-create_user_success
+Warning: failed to stop container proxy-kafka-create_user_success: Error response from daemon: No such container: proxy-kafka-create_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55150
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55150/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/users
+✅ Received response: 201
+Proxy: Collecting hits from localhost:55147...
+Proxy: Collecting hits from localhost:55148...
+Proxy: Collecting hits from localhost:55149...
+✨ Test passed!
+
+✅ Test user-linespecs/create_user_success.linespec PASSED
+
+[12/16] Running Test: user-linespecs/delete_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel WRITE_MYSQL
+Warning: failed to stop container db-delete_user_success: Error response from daemon: No such container: db-delete_user_success
+Warning: failed to stop container app-delete_user_success: Error response from daemon: No such container: app-delete_user_success
+Warning: failed to stop container proxy-http-delete_user_success: Error response from daemon: No such container: proxy-http-delete_user_success
+Warning: failed to stop container proxy-kafka-delete_user_success: Error response from daemon: No such container: proxy-kafka-delete_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55154
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55154/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: DELETE /api/v1/users/42
+✅ Received response: 204
+Proxy: Collecting hits from localhost:55151...
+Proxy: Collecting hits from localhost:55152...
+Proxy: Collecting hits from localhost:55153...
+✨ Test passed!
+
+✅ Test user-linespecs/delete_user_success.linespec PASSED
+
+[13/16] Running Test: user-linespecs/get_user_not_found.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-get_user_not_found: Error response from daemon: No such container: db-get_user_not_found
+Warning: failed to stop container app-get_user_not_found: Error response from daemon: No such container: app-get_user_not_found
+Warning: failed to stop container proxy-http-get_user_not_found: Error response from daemon: No such container: proxy-http-get_user_not_found
+Warning: failed to stop container proxy-kafka-get_user_not_found: Error response from daemon: No such container: proxy-kafka-get_user_not_found
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55158
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55158/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/users/999
+✅ Received response: 404
+Proxy: Collecting hits from localhost:55155...
+Proxy: Collecting hits from localhost:55156...
+Proxy: Collecting hits from localhost:55157...
+✨ Test passed!
+
+✅ Test user-linespecs/get_user_not_found.linespec PASSED
+
+[14/16] Running Test: user-linespecs/get_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-get_user_success: Error response from daemon: No such container: db-get_user_success
+Warning: failed to stop container app-get_user_success: Error response from daemon: No such container: app-get_user_success
+Warning: failed to stop container proxy-http-get_user_success: Error response from daemon: No such container: proxy-http-get_user_success
+Warning: failed to stop container proxy-kafka-get_user_success: Error response from daemon: No such container: proxy-kafka-get_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55162
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55162/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/users/42
+✅ Received response: 200
+Proxy: Collecting hits from localhost:55159...
+Proxy: Collecting hits from localhost:55160...
+Proxy: Collecting hits from localhost:55161...
+✨ Test passed!
+
+✅ Test user-linespecs/get_user_success.linespec PASSED
+
+[15/16] Running Test: user-linespecs/login_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-login_success: Error response from daemon: No such container: db-login_success
+Warning: failed to stop container app-login_success: Error response from daemon: No such container: app-login_success
+Warning: failed to stop container proxy-db-login_success: Error response from daemon: No such container: proxy-db-login_success
+Warning: failed to stop container proxy-http-login_success: Error response from daemon: No such container: proxy-http-login_success
+Warning: failed to stop container proxy-kafka-login_success: Error response from daemon: No such container: proxy-kafka-login_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55166
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55166/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: POST /api/v1/users/login
+✅ Received response: 200
+Proxy: Collecting hits from localhost:55163...
+Proxy: Collecting hits from localhost:55164...
+Proxy: Collecting hits from localhost:55165...
+✨ Test passed!
+
+✅ Test user-linespecs/login_success.linespec PASSED
+
+[16/16] Running Test: user-linespecs/update_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel WRITE_MYSQL
+Warning: failed to stop container db-update_user_success: Error response from daemon: No such container: db-update_user_success
+Warning: failed to stop container app-update_user_success: Error response from daemon: No such container: app-update_user_success
+Warning: failed to stop container proxy-db-update_user_success: Error response from daemon: No such container: proxy-db-update_user_success
+Warning: failed to stop container proxy-http-update_user_success: Error response from daemon: No such container: proxy-http-update_user_success
+Warning: failed to stop container proxy-kafka-update_user_success: Error response from daemon: No such container: proxy-kafka-update_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55170
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55170/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: PUT /api/v1/users/42
+✅ Received response: 200
+Proxy: Collecting hits from localhost:55167...
+Proxy: Collecting hits from localhost:55168...
+Proxy: Collecting hits from localhost:55169...
+✨ Test passed!
+
+✅ Test user-linespecs/update_user_success.linespec PASSED
+
+================Summary================
+Total Tests: 16
+Passed:      9
+Failed:      7

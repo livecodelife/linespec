@@ -1,0 +1,27 @@
+
+[1/1] Running Test: user-linespecs/get_user_success.linespec
+--------------------------------------------------
+Registry: Registering key [users] for channel READ_MYSQL
+Registry: Registering key [users] for channel READ_MYSQL
+Warning: failed to stop container db-get_user_success: Error response from daemon: No such container: db-get_user_success
+Warning: failed to stop container app-get_user_success: Error response from daemon: No such container: app-get_user_success
+Warning: failed to stop container proxy-db-get_user_success: Error response from daemon: No such container: proxy-db-get_user_success
+Warning: failed to stop container proxy-http-get_user_success: Error response from daemon: No such container: proxy-http-get_user_success
+Warning: failed to stop container proxy-kafka-get_user_success: Error response from daemon: No such container: proxy-kafka-get_user_success
+Waiting for DB to be ready (internal)...
+DB is ready, waiting for initialization...
+App started on host port: 55018
+Waiting for App to be healthy...
+WaitHTTP: http://localhost:55018/up returned 200
+✅ App is healthy
+🚀 Triggering RECEIVE: GET /api/v1/users/42
+✅ Received response: 200
+❌ Mock verification failed: expectation failed: [READ_MYSQL] on [users//] was never called
+
+❌ Test user-linespecs/get_user_success.linespec FAILED: expectation failed: [READ_MYSQL] on [users//] was never called
+
+================Summary================
+Total Tests: 1
+Passed:      0
+Failed:      1
+exit status 1

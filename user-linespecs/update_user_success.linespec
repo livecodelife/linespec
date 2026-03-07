@@ -17,6 +17,12 @@ SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1
 """
 RETURNS {{payloads/user_response.json}}
 
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'jane@example.com' AND `users`.`id` != 42 LIMIT 1
+"""
+RETURNS EMPTY
+
 EXPECT WRITE:MYSQL UPDATE users
 WITH {{payloads/update_user_request.json}}
 
