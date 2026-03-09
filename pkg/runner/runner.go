@@ -86,6 +86,16 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for DB init: %w", err)
 	}
 
+	// Run Rails migrations once for all services
+	fmt.Println("Running Rails migrations...")
+	if err := s.runMigrations(ctx, "user-service", "3001"); err != nil {
+		return fmt.Errorf("failed to run user-service migrations: %w", err)
+	}
+	if err := s.runMigrations(ctx, "todo-api", "3000"); err != nil {
+		return fmt.Errorf("failed to run todo-api migrations: %w", err)
+	}
+	fmt.Println("✅ Migrations complete")
+
 	// Start shared Kafka
 	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image:    "confluentinc/cp-kafka:latest",
@@ -166,6 +176,51 @@ SET FOREIGN_KEY_CHECKS = 1;
 	_ = resetSQL // We'll implement this if needed, for now rely on clean test data
 
 	return nil
+}
+
+func (s *TestSuite) runMigrations(ctx context.Context, serviceDir, appPort string) error {
+	// Start a temporary container to run migrations
+	containerName := "linespec-migrate-" + serviceDir
+
+	// Clean up any existing migration container
+	_ = s.orch.StopAndRemoveContainer(context.Background(), containerName)
+
+	appEnv := []string{
+		"DB_HOST=real-db",
+		"DB_PORT=3306",
+		"DB_USERNAME=todo_user",
+		"DB_PASSWORD=todo_password",
+		"RAILS_ENV=development",
+		"KAFKA_BROKERS=kafka:29092",
+		"KAFKA_TOPIC=todo-events",
+	}
+
+	_, err := s.orch.StartContainer(ctx, &container.Config{
+		Image: serviceDir + ":latest",
+		Env:   appEnv,
+		Cmd:   []string{"bundle", "exec", "rails", "db:migrate"},
+	}, &container.HostConfig{
+		AutoRemove: true,
+	}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {}},
+	}, containerName)
+	if err != nil {
+		return fmt.Errorf("failed to start migration container: %w", err)
+	}
+
+	// Wait for container to complete
+	statusCh, errCh := s.orch.WaitForContainer(ctx, containerName)
+	select {
+	case status := <-statusCh:
+		if status.StatusCode != 0 {
+			return fmt.Errorf("migrations failed with exit code %d", status.StatusCode)
+		}
+		return nil
+	case err := <-errCh:
+		return fmt.Errorf("error waiting for migrations: %w", err)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
@@ -312,7 +367,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: serviceDir + ":latest",
 		Env:   appEnv,
-		Cmd:   []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails db:migrate && bundle exec rails server -b 0.0.0.0 -p " + appPort},
+		Cmd:   []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + appPort},
 	}, &container.HostConfig{
 		ExtraHosts: extraHosts,
 		PortBindings: map[nat.Port][]nat.PortBinding{

@@ -78,6 +78,10 @@ func (d *DockerOrchestrator) GetContainerInspect(ctx context.Context, id string)
 	return d.cli.ContainerInspect(ctx, id)
 }
 
+func (d *DockerOrchestrator) WaitForContainer(ctx context.Context, id string) (<-chan container.WaitResponse, <-chan error) {
+	return d.cli.ContainerWait(ctx, id, container.WaitConditionNotRunning)
+}
+
 func (d *DockerOrchestrator) GetNetworkGateway(ctx context.Context, id string) (string, error) {
 	inspect, err := d.cli.NetworkInspect(ctx, id, types.NetworkInspectOptions{})
 	if err != nil {
