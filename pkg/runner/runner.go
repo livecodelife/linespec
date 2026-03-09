@@ -50,20 +50,30 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	r.registry.Register(spec)
 
 	// Pre-cleanup
-	_ = r.orch.StopAndRemoveContainer(ctx, "db-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(ctx, "app-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(ctx, "proxy-db-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(ctx, "proxy-http-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(ctx, "proxy-kafka-"+spec.Name)
-	_ = r.orch.RemoveNetwork(ctx, "linespec-net-"+spec.Name)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "db-"+spec.Name)
+	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
+	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
+	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
+	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "kafka-"+spec.Name)
+	_ = r.orch.RemoveNetwork(cleanupCtx, "linespec-net-"+spec.Name)
+	cleanupCancel()
 
 	// 2. Setup Network
 	netName := "linespec-net-" + spec.Name
 	_, err = r.orch.CreateNetwork(ctx, netName)
 	if err != nil {
-		return err
+		_ = r.orch.RemoveNetwork(context.Background(), netName)
+		_, err = r.orch.CreateNetwork(ctx, netName)
+		if err != nil {
+			return err
+		}
 	}
-	defer r.orch.RemoveNetwork(context.Background(), netName)
+	defer func() {
+		c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_ = r.orch.RemoveNetwork(c, netName)
+	}()
 
 	// 3. Start Database
 	serviceDir := "user-service"
@@ -82,7 +92,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}, &container.HostConfig{
 		Binds: []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/init.sql", initSqlPath)},
 		PortBindings: map[nat.Port][]nat.PortBinding{
-			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}, // Random port for DB
+			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"real-db"}}},
@@ -95,10 +105,6 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		defer cancel()
 		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "db-"+spec.Name)
 	}()
-
-	// Get Real DB Host Port
-	inspectDbReal, _ := r.orch.GetContainerInspect(ctx, "db-"+spec.Name)
-	realDbHostPort := inspectDbReal.NetworkSettings.Ports["3306/tcp"][0].HostPort
 
 	fmt.Println("Waiting for DB to be ready (internal)...")
 	if err := r.orch.WaitTCPInternal(ctx, netName, "real-db:3306", 60*time.Second); err != nil {
@@ -121,7 +127,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}, &container.HostConfig{
 		Binds: []string{cwd + ":/app/project"},
 		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}, // Random verify port
+			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"db"}}},
@@ -135,9 +141,6 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
 	}()
 
-	inspectDbProxy, _ := r.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
-	dbVerifyPort := inspectDbProxy.NetworkSettings.Ports["8081/tcp"][0].HostPort
-
 	// HTTP Proxy
 	_, err = r.orch.StartContainer(ctx, &container.Config{
 		Image: "linespec:latest",
@@ -145,7 +148,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}, &container.HostConfig{
 		Binds: []string{cwd + ":/app/project"},
 		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}, // Random verify port
+			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"user-service.local"}}},
@@ -159,33 +162,71 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
 	}()
 
-	inspectHttp, _ := r.orch.GetContainerInspect(ctx, "proxy-http-"+spec.Name)
-	httpVerifyPort := inspectHttp.NetworkSettings.Ports["8081/tcp"][0].HostPort
-	proxyHttpIP := inspectHttp.NetworkSettings.Networks[netName].IPAddress
-
-	// Kafka Proxy
+	// Real Kafka broker (not mocked)
 	_, err = r.orch.StartContainer(ctx, &container.Config{
-		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "kafka", "0.0.0.0:9092", "unused", "/app/project/registry.json"},
+		Image:    "confluentinc/cp-kafka:latest",
+		Hostname: "kafka",
+		Env: []string{
+			"KAFKA_BROKER_ID=1",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT",
+			"KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092",
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
+			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1",
+			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0",
+			"KAFKA_AUTO_CREATE_TOPICS_ENABLE=true",
+			"KAFKA_PROCESS_ROLES=broker,controller",
+			"KAFKA_NODE_ID=1",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093",
+			"KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092",
+			"KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT",
+			"KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
+			"CLUSTER_ID=linespec-cluster",
+		},
 	}, &container.HostConfig{
-		Binds: []string{cwd + ":/app/project"},
 		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}, // Random verify port
+			"9092/tcp":  {{HostIP: "0.0.0.0", HostPort: "0"}},
+			"29092/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"kafka"}}},
-	}, "proxy-kafka-"+spec.Name)
+	}, "kafka-"+spec.Name)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-kafka-"+spec.Name)
+		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "kafka-"+spec.Name)
 	}()
 
-	inspectKafka, _ := r.orch.GetContainerInspect(ctx, "proxy-kafka-"+spec.Name)
-	kafkaVerifyPort := inspectKafka.NetworkSettings.Ports["8081/tcp"][0].HostPort
+	// Inspect all proxies to get ports and IPs
+	time.Sleep(2 * time.Second)
+
+	inspectDb, _ := r.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
+	dbVerifyPort := ""
+	if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+		dbVerifyPort = p[0].HostPort
+	}
+
+	inspectHttp, _ := r.orch.GetContainerInspect(ctx, "proxy-http-"+spec.Name)
+	httpVerifyPort := ""
+	if p, ok := inspectHttp.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+		httpVerifyPort = p[0].HostPort
+	}
+	proxyHttpIP := ""
+	if n, ok := inspectHttp.NetworkSettings.Networks[netName]; ok {
+		proxyHttpIP = n.IPAddress
+	}
+
+	// Wait for services to be ready on the network
+	fmt.Println("Waiting for proxies to be ready...")
+	_ = r.orch.WaitTCPInternal(ctx, netName, "db:3306", 30*time.Second)
+	_ = r.orch.WaitTCPInternal(ctx, netName, "user-service.local:80", 30*time.Second)
+	_ = r.orch.WaitTCPInternal(ctx, netName, "kafka:29092", 30*time.Second)
+	// Give Kafka extra time to initialize
+	fmt.Println("⏳ Waiting for Kafka to fully initialize...")
+	time.Sleep(10 * time.Second)
 
 	// 6. Start SUT
 	appEnv := []string{
@@ -194,8 +235,19 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		"DB_USERNAME=todo_user",
 		"DB_PASSWORD=todo_password",
 		"RAILS_ENV=development",
-		"KAFKA_BROKERS=kafka:9092",
+		"KAFKA_BROKERS=kafka:29092",
+		"KAFKA_TOPIC=todo-events",
 		"USER_SERVICE_URL=http://" + proxyHttpIP + ":80/api/v1/users/auth",
+	}
+
+	extraHosts := []string{}
+	if proxyHttpIP != "" {
+		extraHosts = append(extraHosts, "user-service.local:"+proxyHttpIP)
+	}
+
+	// Safety: If IP still empty, use host-gateway as fallback to avoid crash
+	if proxyHttpIP == "" {
+		extraHosts = append(extraHosts, "user-service.local:host-gateway")
 	}
 
 	_, err = r.orch.StartContainer(ctx, &container.Config{
@@ -203,6 +255,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		Env:   appEnv,
 		Cmd:   []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails db:migrate && bundle exec rails server -b 0.0.0.0 -p " + appPort},
 	}, &container.HostConfig{
+		ExtraHosts: extraHosts,
 		PortBindings: map[nat.Port][]nat.PortBinding{
 			nat.Port(appPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
@@ -219,8 +272,11 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}()
 
 	inspectApp, _ := r.orch.GetContainerInspect(ctx, "app-"+spec.Name)
-	hostPort := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")][0].HostPort
-	fmt.Printf("App started on host port: %s (DB port used: %s)\n", hostPort, realDbHostPort)
+	hostPort := ""
+	if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
+		hostPort = p[0].HostPort
+	}
+	fmt.Printf("App started on host port: %s\n", hostPort)
 
 	// 7. Wait for App
 	fmt.Println("Waiting for App to be healthy...")
@@ -271,13 +327,24 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}
 
 	// 10. Final Registry Verification
-	time.Sleep(500 * time.Millisecond)
-	r.collectHits("localhost:" + dbVerifyPort)
-	r.collectHits("localhost:" + httpVerifyPort)
-	r.collectHits("localhost:" + kafkaVerifyPort)
+	fmt.Println("⏳ Waiting for async operations to complete...")
+	time.Sleep(2 * time.Second)
+	if dbVerifyPort != "" {
+		r.collectHits("localhost:" + dbVerifyPort)
+	}
+	if httpVerifyPort != "" {
+		r.collectHits("localhost:" + httpVerifyPort)
+	}
+	// Extra delay for Kafka which is async
+	time.Sleep(1 * time.Second)
 
 	if err := r.registry.VerifyAll(); err != nil {
 		fmt.Printf("❌ Mock verification failed: %v\n", err)
+		// Stream app logs for debugging
+		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer logCancel()
+		fmt.Println("📋 Fetching app logs for debugging...")
+		_ = r.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
 		return err
 	}
 
@@ -287,10 +354,10 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 
 func (r *Runner) collectHits(addr string) {
 	fmt.Printf("Proxy: Collecting hits from %s...\n", addr)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		resp, err := http.Get("http://" + addr + "/verify")
 		if err != nil {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 		defer resp.Body.Close()

@@ -131,6 +131,12 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		return nil, err
 	}
 
+	// Handle HEADERS for HTTP expectations
+	if p.peek().Type == TokenHeaders {
+		headersToken := p.consume()
+		expect.Headers = parseHeaders(headersToken.Literal)
+	}
+
 	if p.peek().Type == TokenUsingSql {
 		p.consume() // TokenUsingSql
 		sqlToken, err := p.expect(TokenSqlBlock)

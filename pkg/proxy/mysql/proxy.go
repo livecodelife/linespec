@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"regexp"
 	"strings"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
@@ -67,52 +68,26 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 	}
 	defer upstreamConn.Close()
 
-	// AUTH PHASE: Transparent piping until we see Command Phase (Client sends Seq 0)
-
-	// Server -> Client (Upstream to Client) is always piped
+	// 1. Server -> Client Pipe (Always Transparent)
 	go func() {
 		_, _ = io.Copy(clientConn, upstreamConn)
+		clientConn.Close()
 	}()
 
-	// Client -> Server (Client to Upstream)
-	// We read packet by packet to sniff for the transition to Command Phase (Seq 0)
+	// 2. Client -> Server Loop (Intercept Commands)
 	for {
 		header := make([]byte, 4)
 		if _, err := io.ReadFull(clientConn, header); err != nil {
 			return
 		}
-
 		length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 		seq := header[3]
-
 		payload := make([]byte, length)
 		if _, err := io.ReadFull(clientConn, payload); err != nil {
 			return
 		}
 
-		// Transition detected: Command Phase starts with Seq 0
 		if seq == 0 && length > 0 {
-			fmt.Printf("Proxy: Command Phase detected (Cmd: 0x%02x)\n", payload[0])
-			p.runCommandLoop(clientConn, upstreamConn, header, payload)
-			return
-		}
-
-		// Still in Auth Phase, pipe to upstream
-		if _, err := upstreamConn.Write(header); err != nil {
-			return
-		}
-		if _, err := upstreamConn.Write(payload); err != nil {
-			return
-		}
-	}
-}
-
-func (p *Proxy) runCommandLoop(clientConn, upstreamConn net.Conn, firstHeader, firstPayload []byte) {
-	header := firstHeader
-	payload := firstPayload
-
-	for {
-		if len(payload) > 0 {
 			cmd := payload[0]
 			if cmd == 0x03 { // COM_QUERY
 				query := string(payload[1:])
@@ -123,7 +98,7 @@ func (p *Proxy) runCommandLoop(clientConn, upstreamConn net.Conn, firstHeader, f
 					tableName := p.extractTable(query)
 					mock, found := p.registry.FindMock(tableName, query)
 					if found {
-						fmt.Printf("Proxy: Mocking %s on %s\n", mock.Channel, tableName)
+						fmt.Printf("Proxy: Mocking query for table %s: %s\n", tableName, query)
 						p.sendMockResponse(clientConn, mock)
 					} else {
 						_, _ = upstreamConn.Write(header)
@@ -135,21 +110,12 @@ func (p *Proxy) runCommandLoop(clientConn, upstreamConn net.Conn, firstHeader, f
 				_, _ = upstreamConn.Write(payload)
 				return
 			} else {
-				// Passthrough other commands
 				_, _ = upstreamConn.Write(header)
 				_, _ = upstreamConn.Write(payload)
 			}
-		}
-
-		// Read next packet from client
-		header = make([]byte, 4)
-		if _, err := io.ReadFull(clientConn, header); err != nil {
-			return
-		}
-		length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-		payload = make([]byte, length)
-		if _, err := io.ReadFull(clientConn, payload); err != nil {
-			return
+		} else {
+			_, _ = upstreamConn.Write(header)
+			_, _ = upstreamConn.Write(payload)
 		}
 	}
 }
@@ -230,7 +196,6 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 		}
 	}
 
-	// Filter
 	finalColumns := make([]string, 0, len(columns))
 	for _, col := range columns {
 		if _, ok := firstRow[col]; ok {
@@ -239,12 +204,10 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 	}
 	columns = finalColumns
 
-	// 1. Column Count
 	if err := p.writePacket(conn, 1, []byte{byte(len(columns))}); err != nil {
 		return err
 	}
 
-	// 2. Column Definitions
 	seq := uint8(2)
 	for _, col := range columns {
 		tp := mysql.MYSQL_TYPE_VAR_STRING
@@ -255,7 +218,7 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 			case int, int64, float64:
 				tp = mysql.MYSQL_TYPE_LONGLONG
 				if col == "id" {
-					flags = 3 // NOT_NULL | PRI_KEY
+					flags = 3
 				}
 			}
 		}
@@ -266,19 +229,17 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 		seq++
 	}
 
-	// 3. EOF
 	if err := p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
 		return err
 	}
 	seq++
 
-	// 4. Rows
 	for _, row := range rows {
 		var rowData []byte
 		for _, col := range columns {
 			val := row[col]
 			if val == nil {
-				rowData = append(rowData, 0xfb) // NULL
+				rowData = append(rowData, 0xfb)
 			} else {
 				strVal := fmt.Sprintf("%v", val)
 				rowData = append(rowData, mysql.PutLengthEncodedString([]byte(strVal))...)
@@ -290,7 +251,6 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 		seq++
 	}
 
-	// 5. Final EOF
 	return p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0})
 }
 
@@ -333,13 +293,7 @@ func (p *Proxy) makeColumnDef(schema, table, col string, tp uint8, flags uint16)
 	data = append(data, mysql.PutLengthEncodedString([]byte(table))...)
 	data = append(data, mysql.PutLengthEncodedString([]byte(col))...)
 	data = append(data, mysql.PutLengthEncodedString([]byte(col))...)
-	data = append(data, 0x0c)          // next length
-	data = append(data, 45, 0)         // charset (utf8mb4)
-	data = append(data, 0xff, 0, 0, 0) // column length (255)
-	data = append(data, tp)            // type
-	data = append(data, byte(flags), byte(flags>>8))
-	data = append(data, 0)    // decimals
-	data = append(data, 0, 0) // filler
+	data = append(data, 0x0c, 45, 0, 0xff, 0, 0, 0, tp, byte(flags), byte(flags>>8), 0, 0, 0)
 	return data
 }
 
@@ -365,12 +319,30 @@ func (p *Proxy) isWhitelisted(query string) bool {
 }
 
 func (p *Proxy) extractTable(query string) string {
-	q := strings.ReplaceAll(strings.ToLower(query), "`", "")
+	q := strings.ReplaceAll(strings.ToLower(query), "`", " ")
+	q = strings.ReplaceAll(q, "(", " ")
+	q = strings.ReplaceAll(q, ")", " ")
+	q = strings.ReplaceAll(q, ",", " ")
+	q = strings.ReplaceAll(q, ";", " ")
+
+	knownTables := []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+
+	for _, table := range knownTables {
+		re := regexp.MustCompile(`\b` + table + `\b`)
+		if re.MatchString(q) {
+			return table
+		}
+	}
+
 	words := strings.Fields(q)
 	for i, word := range words {
 		if word == "from" || word == "into" || word == "update" || word == "table" {
 			if i+1 < len(words) {
-				return strings.Trim(words[i+1], "();")
+				table := words[i+1]
+				if idx := strings.Index(table, "."); idx != -1 {
+					return table[:idx]
+				}
+				return table
 			}
 		}
 	}

@@ -64,9 +64,12 @@ func (d *DockerOrchestrator) StartContainer(ctx context.Context, config *contain
 }
 
 func (d *DockerOrchestrator) StopAndRemoveContainer(ctx context.Context, id string) error {
-	timeout := 10
+	if id == "" {
+		return nil
+	}
+	timeout := 5
 	if err := d.cli.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout}); err != nil {
-		fmt.Printf("Warning: failed to stop container %s: %v\n", id, err)
+		// fmt.Printf("Warning: failed to stop container %s: %v\n", id, err)
 	}
 	return d.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true, RemoveVolumes: true})
 }

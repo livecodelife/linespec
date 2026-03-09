@@ -32,8 +32,9 @@ type ExpectStatement struct {
 	ReturnsEmpty  bool   // For DB (RETURNS EMPTY)
 	NoTransaction bool   // For WRITE:MYSQL
 	Verify        []VerifyRule
-	Negative      bool   // If true, this should NOT be called
-	BaseDir       string // To resolve payload files
+	Negative      bool              // If true, this should NOT be called
+	BaseDir       string            // To resolve payload files
+	Headers       map[string]string // For HTTP header matching
 }
 
 // ReceiveStatement defines the trigger request

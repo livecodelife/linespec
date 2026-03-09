@@ -2,9 +2,12 @@ TEST create_todo_unauthenticated
 
 RECEIVE HTTP:POST /api/v1/todos
 WITH {{payloads/create_todo_request.yaml}}
+HEADERS
+  Authorization: Bearer invalid_token_123
 
 EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
-WITH {{payloads/auth_token_request.yaml}}
+HEADERS
+  Authorization: Bearer invalid_token_123
 RETURNS {{payloads/auth_error_response.json}}
 
 RESPOND HTTP:401

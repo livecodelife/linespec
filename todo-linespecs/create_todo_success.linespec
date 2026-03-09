@@ -2,9 +2,12 @@ TEST create_todo_success
 
 RECEIVE HTTP:POST /api/v1/todos
 WITH {{payloads/create_todo_request.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
 
 EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
-WITH {{payloads/auth_token_request.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
 RETURNS {{payloads/authenticated_user.yaml}}
 
 EXPECT WRITE:MYSQL todos

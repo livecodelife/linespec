@@ -3,9 +3,14 @@ TEST create_user_success
 RECEIVE HTTP:POST /api/v1/users
 WITH {{payloads/create_user_request.json}}
 
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
+"""
+RETURNS EMPTY
+
 EXPECT WRITE:MYSQL users
 WITH {{payloads/user_db_write_record.json}}
-
 VERIFY query CONTAINS 'password_digest'
 
 RESPOND HTTP:201
@@ -13,4 +18,4 @@ WITH {{payloads/user_public_response.json}}
 NOISE
   body.id
   body.created_at
-  password_digest
+  body.password_digest

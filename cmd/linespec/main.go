@@ -73,26 +73,35 @@ func main() {
 		fmt.Printf("\n[%d/%d] Running Test: %s\n", i+1, len(testFiles), file)
 		fmt.Println("--------------------------------------------------")
 
-		testCtx, cancel := context.WithCancel(ctx)
+		testCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 
-		singleRunner, err := runner.NewRunner()
-		if err != nil {
-			fmt.Printf("❌ Failed to create runner: %v\n", err)
-			failed++
-			cancel()
-			continue
-		}
+		func() {
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("❌ Test %s PANICKED: %v\n", file, r)
+					failed++
+				}
+			}()
 
-		if err := singleRunner.RunTest(testCtx, file); err != nil {
-			fmt.Printf("\n❌ Test %s FAILED: %v\n", file, err)
-			failed++
-		} else {
-			fmt.Printf("\n✅ Test %s PASSED\n", file)
-			passed++
-		}
-		cancel()
-		// Small sleep to allow Docker to stabilize and release ports
-		time.Sleep(2 * time.Second)
+			singleRunner, err := runner.NewRunner()
+			if err != nil {
+				fmt.Printf("❌ Failed to create runner: %v\n", err)
+				failed++
+				return
+			}
+
+			if err := singleRunner.RunTest(testCtx, file); err != nil {
+				fmt.Printf("\n❌ Test %s FAILED: %v\n", file, err)
+				failed++
+			} else {
+				fmt.Printf("\n✅ Test %s PASSED\n", file)
+				passed++
+			}
+		}()
+
+		// Larger sleep to allow Docker to fully stabilize and release ports
+		time.Sleep(5 * time.Second)
 	}
 
 	fmt.Printf("\n================Summary================\n")
@@ -147,23 +156,28 @@ func runProxy() {
 
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
+
+	var proxyErr error
 	switch pType {
 	case "mysql":
 		p := mysql.NewProxy(addr, upstream, reg)
-		if err := p.Start(ctx); err != nil {
-			fmt.Printf("Proxy error: %v\n", err)
-		}
+		proxyErr = p.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
-		if err := p.Start(ctx); err != nil {
-			fmt.Printf("Proxy error: %v\n", err)
-		}
+		proxyErr = p.Start(ctx)
 	case "kafka":
 		p := kafka.NewInterceptor(addr, reg)
-		if err := p.Start(ctx); err != nil {
-			fmt.Printf("Proxy error: %v\n", err)
-		}
+		proxyErr = p.Start(ctx)
 	default:
 		fmt.Printf("Unknown proxy type: %s\n", pType)
+		os.Exit(1)
 	}
+
+	if proxyErr != nil {
+		fmt.Printf("Proxy error: %v\n", proxyErr)
+		os.Exit(1)
+	}
+
+	// Block until context is cancelled
+	<-ctx.Done()
 }

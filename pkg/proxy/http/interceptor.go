@@ -8,6 +8,7 @@ import (
 
 	"github.com/calebcowen/linespec/pkg/dsl"
 	"github.com/calebcowen/linespec/pkg/registry"
+	"github.com/calebcowen/linespec/pkg/types"
 )
 
 type Interceptor struct {
@@ -48,16 +49,37 @@ func (i *Interceptor) Start(ctx context.Context) error {
 
 func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 1. Find mock in registry
-	fullURL := fmt.Sprintf("http://%s%s", r.Host, r.URL.Path)
-	fmt.Printf("HTTP Interceptor: Intercepted %s %s\n", r.Method, fullURL)
+	path := r.URL.Path
+	method := r.Method
+	fmt.Printf("HTTP Interceptor: Intercepted %s %s (Host: %s)\n", method, path, r.Host)
 
-	mock, found := i.registry.FindMock(fullURL, "")
-	if !found {
-		mock, found = i.registry.FindMock(r.URL.Path, "")
+	// Extract headers from request
+	requestHeaders := make(map[string]string)
+	for k, v := range r.Header {
+		if len(v) > 0 {
+			requestHeaders[k] = v[0]
+		}
+	}
+	fmt.Printf("HTTP Interceptor: Request headers: %v\n", requestHeaders)
+
+	// Try common variants of the key
+	keys := []string{
+		path,
+		"http://" + r.Host + path,
+		"http://user-service.local" + path, // Common alias
+	}
+
+	var mock *types.ExpectStatement
+	var found bool
+	for _, key := range keys {
+		mock, found = i.registry.FindHTTPMockWithHeaders(key, method, requestHeaders)
+		if found {
+			break
+		}
 	}
 
 	if !found {
-		fmt.Printf("HTTP Interceptor: No mock found for %s\n", fullURL)
+		fmt.Printf("HTTP Interceptor: No mock found for %s %s (Tried keys: %v)\n", method, path, keys)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
