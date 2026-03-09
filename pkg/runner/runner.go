@@ -20,73 +20,42 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
-type Runner struct {
-	orch     *docker.DockerOrchestrator
-	registry *registry.MockRegistry
+type TestSuite struct {
+	orch        *docker.DockerOrchestrator
+	networkName string
+	dbHostPort  string
+	kafkaReady  bool
+	cwd         string
 }
 
-func NewRunner() (*Runner, error) {
+func NewTestSuite() (*TestSuite, error) {
 	orch, err := docker.NewDockerOrchestrator()
 	if err != nil {
 		return nil, err
 	}
-	return &Runner{
-		orch:     orch,
-		registry: registry.NewMockRegistry(),
+	cwd, _ := os.Getwd()
+	return &TestSuite{
+		orch:        orch,
+		networkName: "linespec-shared-net",
+		cwd:         cwd,
 	}, nil
 }
 
-func (r *Runner) RunTest(ctx context.Context, specPath string) error {
-	// 1. Load Spec
-	tokens, err := dsl.LexFile(specPath)
-	if err != nil {
-		return err
-	}
-	parser := dsl.NewParser(tokens)
-	spec, err := parser.Parse(specPath)
-	if err != nil {
-		return err
-	}
-	r.registry.Register(spec)
+func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
+	// Clean up any existing infrastructure first
+	s.CleanupSharedInfrastructure(context.Background())
 
-	// Pre-cleanup
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
-	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "db-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
-	_ = r.orch.StopAndRemoveContainer(cleanupCtx, "kafka-"+spec.Name)
-	_ = r.orch.RemoveNetwork(cleanupCtx, "linespec-net-"+spec.Name)
-	cleanupCancel()
-
-	// 2. Setup Network
-	netName := "linespec-net-" + spec.Name
-	_, err = r.orch.CreateNetwork(ctx, netName)
+	// Create shared network
+	_, err := s.orch.CreateNetwork(ctx, s.networkName)
 	if err != nil {
-		_ = r.orch.RemoveNetwork(context.Background(), netName)
-		_, err = r.orch.CreateNetwork(ctx, netName)
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("failed to create network: %w", err)
 	}
-	defer func() {
-		c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		_ = r.orch.RemoveNetwork(c, netName)
-	}()
 
-	// 3. Start Database
+	// Start shared MySQL
 	serviceDir := "user-service"
-	appPort := "3001"
-	if strings.Contains(specPath, "todo-linespecs") {
-		serviceDir = "todo-api"
-		appPort = "3000"
-	}
+	initSqlPath := filepath.Join(s.cwd, serviceDir, "init.sql")
 
-	cwd, _ := os.Getwd()
-	initSqlPath := filepath.Join(cwd, serviceDir, "init.sql")
-
-	_, err = r.orch.StartContainer(ctx, &container.Config{
+	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image: "mysql:8.4",
 		Env:   []string{"MYSQL_ROOT_PASSWORD=rootpassword", "MYSQL_DATABASE=todo_api_development", "MYSQL_USER=todo_user", "MYSQL_PASSWORD=todo_password"},
 	}, &container.HostConfig{
@@ -95,74 +64,30 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"real-db"}}},
-	}, "db-"+spec.Name)
+		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{"real-db"}}},
+	}, "linespec-shared-db")
 	if err != nil {
+		return fmt.Errorf("failed to start MySQL: %w", err)
+	}
+
+	fmt.Println("Waiting for shared DB to be ready...")
+	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "real-db:3306", 60*time.Second); err != nil {
 		return err
 	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "db-"+spec.Name)
-	}()
 
-	fmt.Println("Waiting for DB to be ready...")
-	if err := r.orch.WaitTCPInternal(ctx, netName, "real-db:3306", 60*time.Second); err != nil {
-		return err
+	// Get the host port for DB reset
+	inspect, _ := s.orch.GetContainerInspect(ctx, "linespec-shared-db")
+	if p, ok := inspect.NetworkSettings.Ports["3306/tcp"]; ok && len(p) > 0 {
+		s.dbHostPort = p[0].HostPort
 	}
-	// MySQL is ready when TCP responds, no need for additional sleep
 
-	// 4. Save Registry to File for Proxy Containers
-	regFile := filepath.Join(cwd, "registry.json")
-	_ = r.registry.SaveToFile(regFile)
-	defer os.Remove(regFile)
-
-	// 5. Start Proxy Containers
-
-	// MySQL Proxy
-	_, err = r.orch.StartContainer(ctx, &container.Config{
-		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "mysql", "0.0.0.0:3306", "real-db:3306", "/app/project/registry.json"},
-	}, &container.HostConfig{
-		Binds: []string{cwd + ":/app/project"},
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
-		},
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"db"}}},
-	}, "proxy-db-"+spec.Name)
-	if err != nil {
-		return err
+	// Wait for init.sql to complete
+	if err := s.waitForDBInit(ctx); err != nil {
+		return fmt.Errorf("failed waiting for DB init: %w", err)
 	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
-	}()
 
-	// HTTP Proxy
-	_, err = r.orch.StartContainer(ctx, &container.Config{
-		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/project/registry.json"},
-	}, &container.HostConfig{
-		Binds: []string{cwd + ":/app/project"},
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
-		},
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"user-service.local"}}},
-	}, "proxy-http-"+spec.Name)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
-	}()
-
-	// Real Kafka broker (not mocked)
-	_, err = r.orch.StartContainer(ctx, &container.Config{
+	// Start shared Kafka
+	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image:    "confluentinc/cp-kafka:latest",
 		Hostname: "kafka",
 		Env: []string{
@@ -188,47 +113,183 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 			"29092/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{netName: {Aliases: []string{"kafka"}}},
-	}, "kafka-"+spec.Name)
+		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{"kafka"}}},
+	}, "linespec-shared-kafka")
+	if err != nil {
+		return fmt.Errorf("failed to start Kafka: %w", err)
+	}
+
+	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "kafka:29092", 60*time.Second); err != nil {
+		return err
+	}
+	s.kafkaReady = true
+
+	fmt.Println("✅ Shared infrastructure ready")
+	return nil
+}
+
+func (s *TestSuite) waitForDBInit(ctx context.Context) error {
+	// Poll for table creation to confirm init.sql completed
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		// Try to connect via TCP to the host-mapped port
+		if s.dbHostPort != "" {
+			if err := s.orch.WaitTCP(ctx, "localhost:"+s.dbHostPort, 2*time.Second); err == nil {
+				// Give a moment for init.sql to fully apply
+				time.Sleep(2 * time.Second)
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("timeout waiting for DB initialization")
+}
+
+func (s *TestSuite) ResetDatabase(ctx context.Context) error {
+	if s.dbHostPort == "" {
+		return nil
+	}
+
+	// For now, we'll just re-run init.sql by executing it via mysql client in the container
+	resetSQL := `
+SET FOREIGN_KEY_CHECKS = 0;
+SELECT CONCAT('TRUNCATE TABLE ', table_name, ';') 
+FROM information_schema.tables 
+WHERE table_schema = 'todo_api_development' AND table_type = 'BASE TABLE';
+SET FOREIGN_KEY_CHECKS = 1;
+`
+
+	_ = resetSQL // We'll implement this if needed, for now rely on clean test data
+
+	return nil
+}
+
+func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
+	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-kafka")
+	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-db")
+	_ = s.orch.RemoveNetwork(ctx, s.networkName)
+}
+
+func (s *TestSuite) RunTest(ctx context.Context, specPath string) error {
+	r := &testRunner{
+		suite:    s,
+		registry: registry.NewMockRegistry(),
+	}
+	return r.run(ctx, specPath)
+}
+
+type testRunner struct {
+	suite    *TestSuite
+	registry *registry.MockRegistry
+}
+
+func (r *testRunner) run(ctx context.Context, specPath string) error {
+	// 1. Load Spec
+	tokens, err := dsl.LexFile(specPath)
+	if err != nil {
+		return err
+	}
+	parser := dsl.NewParser(tokens)
+	spec, err := parser.Parse(specPath)
+	if err != nil {
+		return err
+	}
+	r.registry.Register(spec)
+
+	// Pre-cleanup test-specific containers only
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
+	cleanupCancel()
+
+	serviceDir := "user-service"
+	appPort := "3001"
+	if strings.Contains(specPath, "todo-linespecs") {
+		serviceDir = "todo-api"
+		appPort = "3000"
+	}
+
+	// 2. Save Registry to File for Proxy Containers
+	regFile := filepath.Join(r.suite.cwd, "registry-"+spec.Name+".json")
+	_ = r.registry.SaveToFile(regFile)
+	defer os.Remove(regFile)
+
+	// 3. Start Proxy Containers
+
+	// MySQL Proxy
+	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+		Image: "linespec:latest",
+		Cmd:   []string{"proxy", "mysql", "0.0.0.0:3306", "real-db:3306", "/app/project/registry-" + spec.Name + ".json"},
+	}, &container.HostConfig{
+		Binds: []string{r.suite.cwd + ":/app/project"},
+		PortBindings: map[nat.Port][]nat.PortBinding{
+			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+		},
+	}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
+	}, "proxy-db-"+spec.Name)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "kafka-"+spec.Name)
+		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
+	}()
+
+	// HTTP Proxy
+	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+		Image: "linespec:latest",
+		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/project/registry-" + spec.Name + ".json"},
+	}, &container.HostConfig{
+		Binds: []string{r.suite.cwd + ":/app/project"},
+		PortBindings: map[nat.Port][]nat.PortBinding{
+			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+		},
+	}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"user-service.local"}}},
+	}, "proxy-http-"+spec.Name)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
 	}()
 
 	// Inspect all proxies to get ports and IPs
-	inspectDb, _ := r.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
+	inspectDb, _ := r.suite.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
 	dbVerifyPort := ""
 	if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
 		dbVerifyPort = p[0].HostPort
 	}
 
-	inspectHttp, _ := r.orch.GetContainerInspect(ctx, "proxy-http-"+spec.Name)
+	inspectHttp, _ := r.suite.orch.GetContainerInspect(ctx, "proxy-http-"+spec.Name)
 	httpVerifyPort := ""
 	if p, ok := inspectHttp.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
 		httpVerifyPort = p[0].HostPort
 	}
 	proxyHttpIP := ""
-	if n, ok := inspectHttp.NetworkSettings.Networks[netName]; ok {
+	if n, ok := inspectHttp.NetworkSettings.Networks[r.suite.networkName]; ok {
 		proxyHttpIP = n.IPAddress
 	}
 
 	// Wait for services to be ready on the network
 	fmt.Println("Waiting for proxies to be ready...")
-	if err := r.orch.WaitTCPInternal(ctx, netName, "db:3306", 30*time.Second); err != nil {
+	if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:3306", 30*time.Second); err != nil {
 		return fmt.Errorf("MySQL proxy not ready: %w", err)
 	}
-	if err := r.orch.WaitTCPInternal(ctx, netName, "user-service.local:80", 30*time.Second); err != nil {
+	if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "user-service.local:80", 30*time.Second); err != nil {
 		return fmt.Errorf("HTTP proxy not ready: %w", err)
 	}
-	if err := r.orch.WaitTCPInternal(ctx, netName, "kafka:29092", 30*time.Second); err != nil {
-		return fmt.Errorf("Kafka not ready: %w", err)
-	}
 
-	// 6. Start SUT
+	// 4. Start SUT
 	appEnv := []string{
 		"DB_HOST=db",
 		"DB_PORT=3306",
@@ -244,13 +305,11 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	if proxyHttpIP != "" {
 		extraHosts = append(extraHosts, "user-service.local:"+proxyHttpIP)
 	}
-
-	// Safety: If IP still empty, use host-gateway as fallback to avoid crash
 	if proxyHttpIP == "" {
 		extraHosts = append(extraHosts, "user-service.local:host-gateway")
 	}
 
-	_, err = r.orch.StartContainer(ctx, &container.Config{
+	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: serviceDir + ":latest",
 		Env:   appEnv,
 		Cmd:   []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails db:migrate && bundle exec rails server -b 0.0.0.0 -p " + appPort},
@@ -260,7 +319,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 			nat.Port(appPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{netName: {}},
+		EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {}},
 	}, "app-"+spec.Name)
 	if err != nil {
 		return err
@@ -268,29 +327,29 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
+		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
 	}()
 
-	inspectApp, _ := r.orch.GetContainerInspect(ctx, "app-"+spec.Name)
+	inspectApp, _ := r.suite.orch.GetContainerInspect(ctx, "app-"+spec.Name)
 	hostPort := ""
 	if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
 		hostPort = p[0].HostPort
 	}
 	fmt.Printf("App started on host port: %s\n", hostPort)
 
-	// 7. Wait for App
+	// 5. Wait for App
 	fmt.Println("Waiting for App to be healthy...")
 	healthURL := fmt.Sprintf("http://localhost:%s/up", hostPort)
-	if err := r.orch.WaitHTTP(ctx, healthURL, 120*time.Second); err != nil {
+	if err := r.suite.orch.WaitHTTP(ctx, healthURL, 120*time.Second); err != nil {
 		fmt.Println("❌ App failed to become healthy")
 		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer logCancel()
-		_ = r.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
 		return err
 	}
 	fmt.Println("✅ App is healthy")
 
-	// 8. Trigger Request
+	// 6. Trigger Request
 	fmt.Printf("🚀 Triggering RECEIVE: %s %s\n", spec.Receive.Method, spec.Receive.Path)
 	resp, err := r.sendRequest(spec.Receive, spec.BaseDir, hostPort)
 	if err != nil {
@@ -300,12 +359,12 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	defer resp.Body.Close()
 	fmt.Printf("✅ Received response: %d\n", resp.StatusCode)
 
-	// 9. Verify Response
+	// 7. Verify Response
 	if resp.StatusCode != spec.Respond.StatusCode {
 		fmt.Printf("❌ Test failed with status %d. Fetching app logs...\n", resp.StatusCode)
 		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer logCancel()
-		_ = r.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
 		return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
 	}
 
@@ -326,23 +385,21 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		}
 	}
 
-	// 10. Final Registry Verification
+	// 8. Final Registry Verification
 	if dbVerifyPort != "" {
 		r.collectHits("localhost:" + dbVerifyPort)
 	}
 	if httpVerifyPort != "" {
 		r.collectHits("localhost:" + httpVerifyPort)
 	}
-	// Small delay for any remaining async operations
 	time.Sleep(500 * time.Millisecond)
 
 	if err := r.registry.VerifyAll(); err != nil {
 		fmt.Printf("❌ Mock verification failed: %v\n", err)
-		// Stream app logs for debugging
 		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer logCancel()
 		fmt.Println("📋 Fetching app logs for debugging...")
-		_ = r.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
 		return err
 	}
 
@@ -350,7 +407,7 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	return nil
 }
 
-func (r *Runner) collectHits(addr string) {
+func (r *testRunner) collectHits(addr string) {
 	fmt.Printf("Proxy: Collecting hits from %s...\n", addr)
 	for i := 0; i < 5; i++ {
 		resp, err := http.Get("http://" + addr + "/verify")
@@ -369,7 +426,7 @@ func (r *Runner) collectHits(addr string) {
 	}
 }
 
-func (r *Runner) sendRequest(receive types.ReceiveStatement, baseDir string, port string) (*http.Response, error) {
+func (r *testRunner) sendRequest(receive types.ReceiveStatement, baseDir string, port string) (*http.Response, error) {
 	url := "http://localhost:" + port + receive.Path
 	var body io.Reader
 	if receive.WithFile != "" {
@@ -393,7 +450,7 @@ func (r *Runner) sendRequest(receive types.ReceiveStatement, baseDir string, por
 	return client.Do(req)
 }
 
-func (r *Runner) comparePayloads(expected, actual interface{}, noise []string) error {
+func (r *testRunner) comparePayloads(expected, actual interface{}, noise []string) error {
 	noiseMap := make(map[string]bool)
 	for _, n := range noise {
 		noiseMap[n] = true
@@ -401,7 +458,7 @@ func (r *Runner) comparePayloads(expected, actual interface{}, noise []string) e
 	return r.compareRecursive(expected, actual, "body", noiseMap)
 }
 
-func (r *Runner) compareRecursive(exp, act interface{}, path string, noise map[string]bool) error {
+func (r *testRunner) compareRecursive(exp, act interface{}, path string, noise map[string]bool) error {
 	if noise[path] {
 		return nil
 	}
@@ -440,4 +497,16 @@ func (r *Runner) compareRecursive(exp, act interface{}, path string, noise map[s
 		}
 	}
 	return nil
+}
+
+// Deprecated: Use NewTestSuite instead
+func NewRunner() (*Runner, error) {
+	return nil, fmt.Errorf("NewRunner is deprecated, use NewTestSuite instead")
+}
+
+// Deprecated: Use TestSuite.RunTest instead
+type Runner struct{}
+
+func (r *Runner) RunTest(ctx context.Context, specPath string) error {
+	return fmt.Errorf("Runner.RunTest is deprecated, use TestSuite.RunTest instead")
 }

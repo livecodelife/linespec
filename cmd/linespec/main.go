@@ -66,6 +66,30 @@ func main() {
 		return
 	}
 
+	// Create test suite with shared infrastructure
+	suite, err := runner.NewTestSuite()
+	if err != nil {
+		fmt.Printf("❌ Failed to create test suite: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Setup shared infrastructure once
+	fmt.Println("🔧 Setting up shared infrastructure...")
+	infraCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	if err := suite.SetupSharedInfrastructure(infraCtx); err != nil {
+		cancel()
+		fmt.Printf("❌ Failed to setup infrastructure: %v\n", err)
+		os.Exit(1)
+	}
+	cancel()
+
+	// Cleanup shared infrastructure when done
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		suite.CleanupSharedInfrastructure(cleanupCtx)
+		cancel()
+	}()
+
 	passed := 0
 	failed := 0
 
@@ -73,7 +97,7 @@ func main() {
 		fmt.Printf("\n[%d/%d] Running Test: %s\n", i+1, len(testFiles), file)
 		fmt.Println("--------------------------------------------------")
 
-		testCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		testCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 
 		func() {
 			defer cancel()
@@ -84,14 +108,7 @@ func main() {
 				}
 			}()
 
-			singleRunner, err := runner.NewRunner()
-			if err != nil {
-				fmt.Printf("❌ Failed to create runner: %v\n", err)
-				failed++
-				return
-			}
-
-			if err := singleRunner.RunTest(testCtx, file); err != nil {
+			if err := suite.RunTest(testCtx, file); err != nil {
 				fmt.Printf("\n❌ Test %s FAILED: %v\n", file, err)
 				failed++
 			} else {
