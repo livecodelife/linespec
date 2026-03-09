@@ -105,30 +105,61 @@ func (d *DockerOrchestrator) GetContainerIP(ctx context.Context, id string, netw
 
 func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, address string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+
+	// Start a single Alpine container for polling
 	config := &container.Config{
 		Image: "alpine:latest",
-		Cmd:   []string{"sh", "-c", fmt.Sprintf("until nc -w 1 %s; do sleep 1; done", strings.Replace(address, ":", " ", 1))},
+		Cmd:   []string{"sleep", "300"}, // Keep container alive for polling
 	}
 
+	waiterID, err := d.StartContainer(ctx, config, &container.HostConfig{}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{networkName: {}},
+	}, "waiter-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	if err != nil {
+		return fmt.Errorf("failed to start waiter container: %w", err)
+	}
+	defer d.StopAndRemoveContainer(context.Background(), waiterID)
+
+	// Poll using exec commands in the same container
 	for time.Now().Before(deadline) {
-		id, err := d.StartContainer(ctx, config, &container.HostConfig{}, &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{networkName: {}},
-		}, "waiter-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+		// Create exec config for nc command
+		execConfig := types.ExecConfig{
+			AttachStdout: true,
+			AttachStderr: true,
+			Cmd:          []string{"nc", "-z", "-w", "1", strings.Split(address, ":")[0], strings.Split(address, ":")[1]},
+		}
+
+		execID, err := d.cli.ContainerExecCreate(ctx, waiterID, execConfig)
 		if err != nil {
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
-		// Wait for waiter to exit
-		statusCh, errCh := d.cli.ContainerWait(ctx, id, container.WaitConditionNotRunning)
+		if err := d.cli.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{}); err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Wait for exec to complete with short timeout
+		execDeadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(execDeadline) {
+			inspect, err := d.cli.ContainerExecInspect(ctx, execID.ID)
+			if err != nil {
+				break
+			}
+			if !inspect.Running {
+				if inspect.ExitCode == 0 {
+					return nil
+				}
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
 		select {
-		case <-statusCh:
-			d.StopAndRemoveContainer(context.Background(), id)
-			return nil
-		case <-errCh:
-			d.StopAndRemoveContainer(context.Background(), id)
-		case <-time.After(5 * time.Second):
-			d.StopAndRemoveContainer(context.Background(), id)
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
 		}
 	}
 	return fmt.Errorf("timeout waiting for internal TCP %s", address)

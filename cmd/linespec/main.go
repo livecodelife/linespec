@@ -99,9 +99,6 @@ func main() {
 				passed++
 			}
 		}()
-
-		// Larger sleep to allow Docker to fully stabilize and release ports
-		time.Sleep(5 * time.Second)
 	}
 
 	fmt.Printf("\n================Summary================\n")

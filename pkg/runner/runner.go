@@ -106,12 +106,11 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 		_ = r.orch.StopAndRemoveContainer(cleanupCtx, "db-"+spec.Name)
 	}()
 
-	fmt.Println("Waiting for DB to be ready (internal)...")
+	fmt.Println("Waiting for DB to be ready...")
 	if err := r.orch.WaitTCPInternal(ctx, netName, "real-db:3306", 60*time.Second); err != nil {
 		return err
 	}
-	fmt.Println("DB is ready, waiting for initialization...")
-	time.Sleep(15 * time.Second)
+	// MySQL is ready when TCP responds, no need for additional sleep
 
 	// 4. Save Registry to File for Proxy Containers
 	regFile := filepath.Join(cwd, "registry.json")
@@ -201,8 +200,6 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}()
 
 	// Inspect all proxies to get ports and IPs
-	time.Sleep(2 * time.Second)
-
 	inspectDb, _ := r.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
 	dbVerifyPort := ""
 	if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
@@ -221,12 +218,15 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 
 	// Wait for services to be ready on the network
 	fmt.Println("Waiting for proxies to be ready...")
-	_ = r.orch.WaitTCPInternal(ctx, netName, "db:3306", 30*time.Second)
-	_ = r.orch.WaitTCPInternal(ctx, netName, "user-service.local:80", 30*time.Second)
-	_ = r.orch.WaitTCPInternal(ctx, netName, "kafka:29092", 30*time.Second)
-	// Give Kafka extra time to initialize
-	fmt.Println("⏳ Waiting for Kafka to fully initialize...")
-	time.Sleep(10 * time.Second)
+	if err := r.orch.WaitTCPInternal(ctx, netName, "db:3306", 30*time.Second); err != nil {
+		return fmt.Errorf("MySQL proxy not ready: %w", err)
+	}
+	if err := r.orch.WaitTCPInternal(ctx, netName, "user-service.local:80", 30*time.Second); err != nil {
+		return fmt.Errorf("HTTP proxy not ready: %w", err)
+	}
+	if err := r.orch.WaitTCPInternal(ctx, netName, "kafka:29092", 30*time.Second); err != nil {
+		return fmt.Errorf("Kafka not ready: %w", err)
+	}
 
 	// 6. Start SUT
 	appEnv := []string{
@@ -327,16 +327,14 @@ func (r *Runner) RunTest(ctx context.Context, specPath string) error {
 	}
 
 	// 10. Final Registry Verification
-	fmt.Println("⏳ Waiting for async operations to complete...")
-	time.Sleep(2 * time.Second)
 	if dbVerifyPort != "" {
 		r.collectHits("localhost:" + dbVerifyPort)
 	}
 	if httpVerifyPort != "" {
 		r.collectHits("localhost:" + httpVerifyPort)
 	}
-	// Extra delay for Kafka which is async
-	time.Sleep(1 * time.Second)
+	// Small delay for any remaining async operations
+	time.Sleep(500 * time.Millisecond)
 
 	if err := r.registry.VerifyAll(); err != nil {
 		fmt.Printf("❌ Mock verification failed: %v\n", err)
