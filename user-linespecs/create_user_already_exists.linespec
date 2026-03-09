@@ -5,7 +5,7 @@ WITH {{payloads/create_user_request.json}}
 
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
+SELECT users.* FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
 """
 RETURNS {{payloads/user_response.json}}
 

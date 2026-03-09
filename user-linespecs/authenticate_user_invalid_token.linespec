@@ -6,7 +6,7 @@ HEADERS
 
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`token` = 'invalid_token_xyz' LIMIT 1
+SELECT users.* FROM `users` WHERE `users`.`token` = 'invalid_token_xyz' LIMIT 1
 """
 RETURNS EMPTY
 

@@ -5,12 +5,6 @@ WITH {{payloads/login_request.json}}
 
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
-"""
-RETURNS {{payloads/user_with_password.json}}
-
-EXPECT READ:MYSQL users
-USING_SQL """
 SELECT `users`.* FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
 """
 RETURNS {{payloads/user_with_password.json}}

@@ -6,13 +6,13 @@ HEADERS
 
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
+SELECT users.* FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
 """
 RETURNS {{payloads/user_response.json}}
 
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
+SELECT users.* FROM `users` WHERE `users`.`id` = 999 LIMIT 1
 """
 RETURNS EMPTY
 
