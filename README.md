@@ -4,21 +4,15 @@ LineSpec is a DSL compiler that generates Keploy-compatible KTests and KMocks fr
 
 ## Installation
 
-### From npm (recommended)
-
-```bash
-npm install -g linespec
-```
-
-### From source (development)
+### From source (Go)
 
 ```bash
 git clone https://github.com/anomalyco/linespec.git
 cd linespec
-npm install
-npm run build
-npm link
+go install ./cmd/linespec
 ```
+
+The `linespec` binary will be installed to `$GOPATH/bin` (or `$HOME/go/bin` by default).
 
 ## Usage
 
@@ -481,9 +475,9 @@ spec:
 ## Development
 
 ```bash
-npm run dev        # Run CLI in development mode
-npm run build      # Compile TypeScript
-npm run test       # Run tests
+go run ./cmd/linespec    # Run CLI in development mode
+go build -o linespec ./cmd/linespec  # Build binary
+go test ./...            # Run tests
 linespec compile examples/test-set-0/test-1.linespec -o out
 linespec test keploy-examples/test-set-0 --compose /path/to/docker-compose.yml
 ```

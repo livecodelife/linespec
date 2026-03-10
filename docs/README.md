@@ -4,21 +4,15 @@ LineSpec is a DSL compiler that generates Keploy-compatible KTests and KMocks fr
 
 ## Installation
 
-### From npm (recommended)
-
-```bash
-npm install -g linespec
-```
-
-### From source (development)
+### From source (Go)
 
 ```bash
 git clone https://github.com/anomalyco/linespec.git
 cd linespec
-npm install
-npm run build
-npm link
+go install ./cmd/linespec
 ```
+
+The `linespec` binary will be installed to `$GOPATH/bin` (or `$HOME/go/bin` by default).
 
 ## Usage
 
@@ -155,11 +149,30 @@ EXPECT <CHANNEL> <resource>
 ```
 
 Supported channels:
-- `HTTP:<METHOD> <URL>` - External HTTP calls
-  - `READ_MYSQL <table>` - Database reads (requires `RETURNS`)
-  - `WRITE_MYSQL <table>` - Database writes (auto-transactional by default)
-  - `WRITE_POSTGRESQL <table>` - PostgreSQL writes
-  - `EVENT <topic>` - Message queue events
+- `HTTP:<METHOD> <URL>` - External HTTP calls (see HTTP Mock section below)
+- `READ_MYSQL <table>` - Database reads (requires `RETURNS`)
+- `WRITE_MYSQL <table>` - Database writes (auto-transactional by default)
+- `WRITE_POSTGRESQL <table>` - PostgreSQL writes
+- `EVENT <topic>` - Message queue events
+
+**HTTP Expectations:**
+
+The `EXPECT HTTP` statement mocks external HTTP service calls. This is useful for testing microservices that call other services:
+
+```linespec
+EXPECT HTTP:GET http://auth-service.local/api/v1/validate
+WITH {{payloads/auth_request.yaml}}
+RETURNS {{payloads/auth_response.yaml}}
+```
+
+**How it works:**
+1. LineSpec extracts hostnames from HTTP expectations (e.g., `auth-service.local`)
+2. The proxy container gets DNS aliases for these hostnames
+3. When your application calls the external service, it resolves to the proxy
+4. The proxy matches the request and returns the mocked response
+5. Tests fail if HTTP mocks are defined but not invoked (catches fallback behavior)
+
+**Important:** HTTP mocks are scoped by test name. Each test only sees its own HTTP mocks, preventing cross-test contamination when multiple tests use the same URL.
 
 **MySQL Write Operations:**
 
@@ -288,6 +301,44 @@ When verification fails, the test output shows:
   Expected status : 201
   Actual status   : 500
 ```
+
+### HTTP Mock Verification
+
+LineSpec verifies that HTTP mocks are actually invoked during tests. This prevents silent failures when applications use fallback behavior instead of making HTTP calls:
+
+```linespec
+TEST microservice-call
+RECEIVE HTTP:GET http://localhost:3000/api/data
+
+# Expect a call to external auth service
+EXPECT HTTP:POST http://auth-service.local/validate
+WITH {{payloads/auth_request.yaml}}
+RETURNS {{payloads/auth_response.yaml}}
+
+# Expect a call to external payment service  
+EXPECT HTTP:POST http://payment-service.local/charge
+WITH {{payloads/payment_request.yaml}}
+RETURNS {{payloads/payment_response.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/combined_response.yaml}}
+```
+
+**If HTTP mocks are not invoked, the test fails:**
+```
+✗ microservice-call FAIL
+
+  🔌 HTTP Mock Verification Error:
+    HTTP Mock(s) not invoked: microservice-call-mock-0, microservice-call-mock-1
+
+  Expected status : 200
+  Actual status   : 200
+```
+
+This catches common issues:
+- **Fallback behavior** - Application catches HTTP errors and uses default values
+- **Wrong hostnames** - Application calls `auth-service.prod` instead of `auth-service.local`
+- **Test mode bypass** - Application skips external calls in test environment
 
 ### Read Operation with Custom SQL
 
@@ -424,9 +475,9 @@ spec:
 ## Development
 
 ```bash
-npm run dev        # Run CLI in development mode
-npm run build      # Compile TypeScript
-npm run test       # Run tests
+go run ./cmd/linespec    # Run CLI in development mode
+go build -o linespec ./cmd/linespec  # Build binary
+go test ./...            # Run tests
 linespec compile examples/test-set-0/test-1.linespec -o out
 linespec test keploy-examples/test-set-0 --compose /path/to/docker-compose.yml
 ```
@@ -440,3 +491,23 @@ linespec test keploy-examples/test-set-0 --compose /path/to/docker-compose.yml
 - **Pattern matching** - SQL queries are matched by operation and table, so ORM-specific SQL variations work automatically
 - **Infrastructure pass-through** - Schema queries (`information_schema`, `SHOW`, etc.) pass through to real database
 - **Docker Compose integration** - Seamless testing with containerized services
+- **HTTP mock interception** - External service calls are intercepted and mocked with automatic DNS resolution
+- **Strict mock verification** - Tests fail if mocks are defined but not used (catches silent fallback behavior)
+- **High performance** - Hot mock reloading eliminates per-test container restarts (5-10x faster than traditional approaches)
+
+### Performance
+
+LineSpec uses several optimizations to minimize test execution time:
+
+| Optimization | Impact |
+|-------------|--------|
+| **Hot mock reloading** | Proxy container stays running; mocks filtered by test name |
+| **Mock aggregation** | All mocks loaded once at startup |
+| **Active readiness probes** | Eliminates fixed delays (200ms instead of 2000ms) |
+| **HTTP interception** | External service calls mocked instantly (no 5s timeouts) |
+
+**Typical performance:**
+- 5 tests: ~14 seconds total (~2.8s per test)
+- 9 tests: ~14 seconds total (~1.5s per test)
+
+The proxy container starts once and serves all tests via the `/activate` control API endpoint.

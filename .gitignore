@@ -1,0 +1,49 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Binary output
+/linespec
+/main
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.ruby-lsp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+debug.log
+user_tests.log
+
+# Test reports
+linespec-report/
+
+# Docker compose override (generated during test runs)
+.linespec-compose-override.yml
+
+# Temporary files
+*.tmp
+*.temp

@@ -4,7 +4,7 @@ This file provides guidance for agents working on the LineSpec codebase.
 
 ## For AI Agents Helping End Users
 
-When a user has installed LineSpec globally via npm and asks you to help write LineSpec files:
+When a user has installed LineSpec and asks you to help write LineSpec files:
 
 1. **Access documentation via CLI:**
    ```bash
@@ -20,14 +20,14 @@ When a user has installed LineSpec globally via npm and asks you to help write L
    - Third: `README.md` - for usage examples
 
 3. **Documentation location:** After installation, docs are in:
-   - `<npm_global_prefix>/lib/node_modules/linespec/docs/`
+   - `<go-install-path>/pkg/mod/github.com/anomalyco/linespec@<version>/docs/`
    - Or use the `linespec docs` command to get the exact path
 
 ---
 
 ## Project Overview
 
-LineSpec is a DSL compiler for generating Keploy-compatible KTests and KMocks from human-readable service behavior specifications. It's a TypeScript CLI tool designed for TDD workflows.
+LineSpec is a DSL compiler for generating Keploy-compatible KTests and KMocks from human-readable service behavior specifications. It's a Go CLI tool designed for TDD workflows.
 
 ---
 
@@ -35,136 +35,124 @@ LineSpec is a DSL compiler for generating Keploy-compatible KTests and KMocks fr
 
 ### Installation
 ```bash
-npm install
+go install ./cmd/linespec
 ```
 
 ### Build
 ```bash
-npm run build
+go build -o linespec ./cmd/linespec
 ```
-Compiles TypeScript to JavaScript using `tsc`. Output goes to `./dist`.
 
 ### Development
 ```bash
-npm run dev
+go run ./cmd/linespec
 ```
-Runs the CLI directly using ts-node on `src/cli.ts`.
 
 ### Test
 ```bash
-npm run test
+go test ./...
 ```
-Runs all tests using `vitest run`.
 
 ### Run a Single Test
 ```bash
-vitest run --testNamePattern "test-1"
+go test -run TestName ./pkg/compiler
 ```
-Or use vitest's watch mode:
+
+Or use verbose mode:
 ```bash
-vitest
+go test -v ./...
 ```
-Then press `f` to filter tests interactively.
 
 ---
 
 ## Code Style Guidelines
 
-### TypeScript Configuration
-- Target: ES2020
-- Module: CommonJS
-- Strict mode is enabled (`strict: true`)
-- No ESLint or Prettier configured
+### Go Configuration
+- Go version: 1.25.7
+- Standard Go formatting (use `gofmt` or `go fmt`)
 
 ### Imports
-- Use explicit named imports: `import { tokenize } from '../src/lexer'`
-- Group external imports first, then internal
-- Use `import * as fs from 'fs'` for Node.js built-ins
-- Use `import * as yaml from 'js-yaml'` for external packages
-
-### Naming Conventions
-- **Files**: kebab-case (e.g., `lexer.ts`, `parser.ts`)
-- **Types/Interfaces**: PascalCase (e.g., `TestSpec`, `ExpectStatement`)
-- **Classes**: PascalCase (e.g., `LineSpecError`)
-- **Functions/Variables**: camelCase (e.g., `tokenize`, `specFile`)
-- **Constants**: camelCase (e.g., `EXAMPLES_DIR`)
-
-### Type Definitions
-- Use interfaces for object shapes
-- Use type unions for variant types
-- Export types from `src/types.ts`
+- Use standard Go import style
+- Group imports: standard library, then third-party, then internal
 - Example:
-  ```typescript
-  export interface ReceiveStatement {
-    channel: 'HTTP';
-    method: string;
-    path: string;
-    withFile?: string;
-  }
+  ```go
+  import (
+      "fmt"
+      "os"
+      
+      "gopkg.in/yaml.v3"
+      
+      "github.com/anomalyco/linespec/pkg/parser"
+  )
   ```
 
+### Naming Conventions
+- **Files**: snake_case (e.g., `lexer.go`, `parser.go`)
+- **Types/Interfaces**: PascalCase (e.g., `TestSpec`, `ExpectStatement`)
+- **Structs**: PascalCase (e.g., `LineSpecError`)
+- **Functions/Variables**: camelCase (e.g., `tokenize`, `specFile`)
+- **Constants**: PascalCase or camelCase (e.g., `ExamplesDir`)
+- **Package names**: lowercase, single word (e.g., `parser`, `compiler`)
+
 ### Error Handling
-- Create custom error classes extending `Error`
-- Include line numbers for parsing errors
+- Use idiomatic Go error handling with `error` interface
+- Create custom error types when needed
+- Include context in error messages
 - Example:
-  ```typescript
-  export class LineSpecError extends Error {
-    line?: number;
-    constructor(message: string, line?: number) {
-      super(message);
-      this.name = 'LineSpecError';
-      this.line = line;
-    }
+  ```go
+  type LineSpecError struct {
+      Message string
+      Line    int
+  }
+  
+  func (e *LineSpecError) Error() string {
+      if e.Line > 0 {
+          return fmt.Sprintf("line %d: %s", e.Line, e.Message)
+      }
+      return e.Message
   }
   ```
 
 ### Code Structure
-- One export per file for utility functions
-- Group related exports in a single file (e.g., `types.ts`)
-- Separate concerns: lexer, parser, validator, compiler
-- Tests go in `tests/` directory
-- Test files should be named `*.test.ts`
+- One package per directory
+- Separate concerns: `cmd/`, `pkg/lexer`, `pkg/parser`, `pkg/compiler`
+- Tests go in same package with `_test.go` suffix
+- Test files: `*_test.go`
 
 ### Formatting
-- Use 2 spaces for indentation
+- Use `gofmt` or `go fmt` for consistent formatting
+- Use tabs for indentation (standard Go)
 - No trailing whitespace
-- One blank line between imports and code
-- Use semicolons
-- No comments (per existing code style)
+- One blank line between import groups
 
 ### Best Practices
-- Always specify return types for functions
-- Use `as` type assertions when types are guaranteed
-- Validate inputs early and throw descriptive errors
-- Use `Record<string, unknown>` for dynamic object types
-- Handle file I/O with proper error messages
-- Clean up temporary resources in tests (use `afterEach`)
+- Always handle errors explicitly
+- Use `defer` for resource cleanup
+- Prefer composition over inheritance
+- Use interfaces to define contracts
+- Keep functions small and focused
+- Write table-driven tests
 
 ---
 
 ## Project Structure
 
 ```
-src/
-  cli.ts          # CLI entry point (compile + test commands)
-  lexer.ts        # Tokenizer for .linespec files
-  parser.ts       # AST generation
-  validator.ts    # Semantic validation
-  compiler.ts     # YAML output generation (KTests + KMocks)
-  types.ts        # TypeScript type definitions
-  test-loader.ts  # Loads KTest YAML files and mocks.yaml from a test-set directory
-  mysql-proxy.ts  # TCP proxy that intercepts MySQL packets and serves mock responses
-  runner.ts       # Orchestrates Docker Compose, the proxy, HTTP test execution, and reporting
+cmd/
+  linespec/          # CLI entry point
+    main.go
+pkg/
+  lexer/             # Tokenizer for .linespec files
+  parser/            # AST generation
+  compiler/          # YAML output generation (KTests + KMocks)
 examples/
-  test-set-0/          # .linespec input fixtures
+  test-set-0/        # .linespec input fixtures
     *.linespec
-    payloads/          # YAML payload files for test data
+    payloads/        # YAML payload files for test data
 keploy-examples/
-  test-set-0/          # Pre-compiled KTest + mocks fixtures
+  test-set-0/        # Pre-compiled KTest + mocks fixtures
     tests/
     mocks.yaml
-tests/
-  integration.test.ts  # Main test suite
 ```
 
 ---
@@ -267,32 +255,24 @@ message:
 
 This eliminates the need for write result payload files (`mysql_*_write_result.yaml`, etc.).
 
-### Compiler — MySQL packet_type
-The compiler sets the `packet_type` dynamically:
-- `WRITE_MYSQL` statements → `packet_type: OK` (proxy routes to `encodeOkPayload`)
-- `READ_MYSQL` statements → `packet_type: TextResultSet` (proxy routes to column/row serialisation)
-
 ### HTTP Mock Interception
 
 The proxy includes an HTTP server that intercepts external service calls:
 
-```typescript
+```go
 // HTTP server listens on port 80
-const httpServer = http.createServer((req, res) => {
-  // Match against HTTP mocks filtered by current test name
-  const mock = httpMocks.find(m => {
-    // Only match mocks for current test
-    if (!m.name.startsWith(`${currentHttpTestName}-mock-`)) return false;
-    // Match URL and method
-    return mockMethod === requestMethod && mockUrl === requestUrl;
-  });
-  
-  if (mock) {
-    httpMockUsage.set(mock.name, true); // Track usage
-    res.writeHead(mock.spec.resp.status_code);
-    res.end(mock.spec.resp.body);
-  }
-});
+httpServer := &http.Server{
+    Addr: ":80",
+    Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Match against HTTP mocks filtered by current test name
+        mock := findMatchingMock(r, currentTestName)
+        if mock != nil {
+            httpMockUsage[mock.Name] = true // Track usage
+            w.WriteHeader(mock.Spec.Response.StatusCode)
+            w.Write([]byte(mock.Spec.Response.Body))
+        }
+    }),
+}
 ```
 
 **Key features:**
@@ -315,20 +295,6 @@ const httpServer = http.createServer((req, res) => {
 8. **Report results** - Side-by-side diff for failures
 9. **Write report** - JSON files to `linespec-report/`
 10. **Cleanup** - `docker compose down` and proxy teardown
-
-**HTTP Mock Verification:**
-After each test, the runner checks the `/check-http-mocks` endpoint:
-```typescript
-const httpMockUsage = await checkHttpMockUsage('localhost', controlPort);
-if (httpMockUsage.unused.length > 0) {
-  throw new Error(`HTTP Mock(s) not invoked: ${httpMockUsage.unused.join(', ')}`);
-}
-```
-
-This catches:
-- Applications using fallback behavior instead of making HTTP calls
-- Wrong hostnames in application code
-- Test mode bypasses
 
 ### Docker Compose Testing Infrastructure
 
@@ -380,22 +346,6 @@ When running tests with `--compose`, LineSpec manages Docker containers automati
 3. **Remove override file**
    - Deletes `.linespec-compose-override.yml`
    - Cleans up temporary files
-
-**Example Override File:**
-```yaml
-version: "3.8"
-services:
-  web:
-    environment:
-      DATABASE_URL: mysql2://user:pass@linespec-proxy:3306/mydb
-      DB_HOST: linespec-proxy
-      DB_PORT: "3306"
-```
-
-**Proxy Query Routing:**
-- Infrastructure queries (SET NAMES, COM_PING, SHOW, etc.) → Real database
-- App-level queries (SELECT, INSERT, UPDATE, DELETE) → Mocks.yaml matching
-- If no mock matches → Pass through to real database
 
 ### Proxy Pattern Matching
 
@@ -465,18 +415,39 @@ When verification fails, the test runner displays:
   Actual status   : 500
 ```
 
-### Custom Errors
-All parsing and validation errors extend `LineSpecError` with optional line numbers for error reporting.
-
 ---
 
 ## Testing Guidelines
 
-- Use Vitest's `describe`/`it` syntax
-- Use `beforeEach`/`afterEach` for setup/teardown
-- Create temporary directories for test output
+- Use Go's standard `testing` package
+- Use table-driven tests for multiple test cases
+- Use `t.Run()` for subtests
+- Use `t.Cleanup()` for cleanup
 - Verify YAML output structure against expected schemas
 - Test both success and failure cases
+
+Example test structure:
+```go
+func TestTokenize(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected []Token
+    }{
+        {"simple", "TEST foo", []Token{...}},
+        {"complex", "EXPECT HTTP:GET...", []Token{...}},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got := tokenize(tt.input)
+            if !reflect.DeepEqual(got, tt.expected) {
+                t.Errorf("tokenize() = %v, want %v", got, tt.expected)
+            }
+        })
+    }
+}
+```
 
 ---
 
