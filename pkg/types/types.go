@@ -10,6 +10,7 @@ const (
 	ReadMySQL       ExpectChannel = "READ_MYSQL"
 	WriteMySQL      ExpectChannel = "WRITE_MYSQL"
 	WritePostgreSQL ExpectChannel = "WRITE_POSTGRESQL"
+	ReadPostgreSQL  ExpectChannel = "READ_POSTGRESQL"
 	Event           ExpectChannel = "EVENT"
 )
 

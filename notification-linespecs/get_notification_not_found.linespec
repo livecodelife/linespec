@@ -1,0 +1,19 @@
+TEST get_notification_not_found
+
+RECEIVE HTTP:GET /api/v1/notifications/999
+HEADERS
+  Authorization: Bearer token_abc123xyz
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+HEADERS
+  Authorization: Bearer token_abc123xyz
+RETURNS {{payloads/authenticated_user.yaml}}
+
+EXPECT READ:POSTGRESQL notifications
+USING_SQL """
+SELECT * FROM notifications WHERE id = 999 AND recipient = 'john@example.com'
+"""
+RETURNS EMPTY
+
+RESPOND HTTP:404
+WITH {{payloads/not_found_response.yaml}}

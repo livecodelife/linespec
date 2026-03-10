@@ -24,6 +24,13 @@ func NewMockRegistry() *MockRegistry {
 	}
 }
 
+// ResetHits resets the hit count for all mocks (useful for testing)
+func (r *MockRegistry) ResetHits() {
+	r.Lock()
+	defer r.Unlock()
+	r.hits = make(map[*types.ExpectStatement]int)
+}
+
 func (r *MockRegistry) Register(spec *types.TestSpec) {
 	r.Lock()
 	defer r.Unlock()
@@ -103,11 +110,11 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 		}
 		if query != "" {
 			q := strings.TrimSpace(strings.ToUpper(query))
-			if strings.HasPrefix(q, "SELECT") && mock.Channel == types.ReadMySQL {
+			if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
 				r.hits[mock]++
 				return mock, true
 			}
-			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && mock.Channel == types.WriteMySQL {
+			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
 				r.hits[mock]++
 				return mock, true
 			}
@@ -255,6 +262,12 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 func (r *MockRegistry) matchSQL(mockSQL string, query string) bool {
 	normMock := strings.ReplaceAll(strings.ToLower(mockSQL), "`", "")
 	normQuery := strings.ReplaceAll(strings.ToLower(query), "`", "")
+
+	// Normalize table prefixes like `users`.`id` to `users.id`
+	reTablePrefix := regexp.MustCompile(`(\w+)\.(\w+)`)
+	normMock = reTablePrefix.ReplaceAllString(normMock, "$1.$2")
+	normQuery = reTablePrefix.ReplaceAllString(normQuery, "$1.$2")
+
 	reSpace := regexp.MustCompile(`\s+`)
 	normMock = strings.TrimSpace(reSpace.ReplaceAllString(normMock, " "))
 	normQuery = strings.TrimSpace(reSpace.ReplaceAllString(normQuery, " "))

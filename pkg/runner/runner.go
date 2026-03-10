@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calebcowen/linespec/pkg/config"
 	"github.com/calebcowen/linespec/pkg/docker"
 	"github.com/calebcowen/linespec/pkg/dsl"
 	"github.com/calebcowen/linespec/pkg/registry"
@@ -240,6 +241,7 @@ func (s *TestSuite) RunTest(ctx context.Context, specPath string) error {
 type testRunner struct {
 	suite    *TestSuite
 	registry *registry.MockRegistry
+	config   *config.LineSpecConfig
 }
 
 func (r *testRunner) run(ctx context.Context, specPath string) error {
@@ -255,6 +257,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	r.registry.Register(spec)
 
+	// 1.5 Load Service Configuration
+	specDir := spec.BaseDir
+	serviceConfig, err := config.LoadConfig(specDir)
+	if err != nil {
+		return fmt.Errorf("failed to load service config from %s: %w", specDir, err)
+	}
+	r.config = serviceConfig
+
 	// Pre-cleanup test-specific containers only
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
@@ -262,42 +272,116 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
 	cleanupCancel()
 
-	serviceDir := "user-service"
-	appPort := "3001"
-	if strings.Contains(specPath, "todo-linespecs") {
-		serviceDir = "todo-api"
-		appPort = "3000"
+	serviceDir := filepath.Base(serviceConfig.BaseDir)
+	if serviceConfig.Service.ServiceDir != "" {
+		serviceDir = serviceConfig.Service.ServiceDir
 	}
+	appPort := fmt.Sprintf("%d", serviceConfig.Service.Port)
 
 	// 2. Save Registry to File for Proxy Containers
 	regFile := filepath.Join(r.suite.cwd, "registry-"+spec.Name+".json")
 	_ = r.registry.SaveToFile(regFile)
 	defer os.Remove(regFile)
 
-	// 3. Start Proxy Containers
+	// 3. Start Database and Proxy Containers (if database is enabled)
+	var dbContainerName string
+	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
+		dbType := serviceConfig.Database.Type
+		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
 
-	// MySQL Proxy
-	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "mysql", "0.0.0.0:3306", "real-db:3306", "/app/project/registry-" + spec.Name + ".json"},
-	}, &container.HostConfig{
-		Binds: []string{r.suite.cwd + ":/app/project"},
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
-		},
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
-	}, "proxy-db-"+spec.Name)
-	if err != nil {
-		return err
+		if dbType == "postgresql" {
+			// Start PostgreSQL container for this service
+			dbContainerName = "linespec-db-" + spec.Name
+			db := serviceConfig.Database
+
+			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+				Image: db.Image,
+				Env: []string{
+					fmt.Sprintf("POSTGRES_DB=%s", db.Database),
+					fmt.Sprintf("POSTGRES_USER=%s", db.Username),
+					fmt.Sprintf("POSTGRES_PASSWORD=%s", db.Password),
+					"POSTGRES_HOST_AUTH_METHOD=trust", // Enable trust authentication
+				},
+			}, &container.HostConfig{
+				PortBindings: map[nat.Port][]nat.PortBinding{
+					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+				},
+			}, &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"real-db"}}},
+			}, dbContainerName)
+			if err != nil {
+				return fmt.Errorf("failed to start PostgreSQL container: %w", err)
+			}
+			defer func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
+			}()
+
+			// Wait for PostgreSQL to be ready
+			fmt.Println("Waiting for PostgreSQL to be ready...")
+			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "real-db:"+dbPort, 30*time.Second); err != nil {
+				return fmt.Errorf("PostgreSQL not ready: %w", err)
+			}
+
+			// Start PostgreSQL proxy
+			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+				Image: "linespec:latest",
+				Cmd:   []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/project/registry-" + spec.Name + ".json"},
+			}, &container.HostConfig{
+				Binds: []string{r.suite.cwd + ":/app/project"},
+				PortBindings: map[nat.Port][]nat.PortBinding{
+					"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+				},
+			}, &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
+			}, "proxy-db-"+spec.Name)
+			if err != nil {
+				return fmt.Errorf("failed to start PostgreSQL proxy: %w", err)
+			}
+			defer func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
+			}()
+
+			fmt.Println("✅ PostgreSQL proxy started")
+
+			// Wait for proxy to be ready
+			fmt.Println("Waiting for PostgreSQL proxy to be ready...")
+			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:"+dbPort, 30*time.Second); err != nil {
+				return fmt.Errorf("PostgreSQL proxy not ready: %w", err)
+			}
+			fmt.Println("✅ PostgreSQL proxy is ready")
+
+		} else if dbType == "mysql" {
+			// MySQL: use shared database with proxy
+			dbContainerName = "linespec-shared-db"
+
+			// Start database proxy
+			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+				Image: "linespec:latest",
+				Cmd:   []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/project/registry-" + spec.Name + ".json"},
+			}, &container.HostConfig{
+				Binds: []string{r.suite.cwd + ":/app/project"},
+				PortBindings: map[nat.Port][]nat.PortBinding{
+					"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+				},
+			}, &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
+			}, "proxy-db-"+spec.Name)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
+			}()
+		}
 	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
-	}()
 
-	// HTTP Proxy
+	// HTTP Proxy - always start for backward compatibility with user-service.local
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: "linespec:latest",
 		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/project/registry-" + spec.Name + ".json"},
@@ -319,55 +403,109 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}()
 
 	// Inspect all proxies to get ports and IPs
-	inspectDb, _ := r.suite.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
-	dbVerifyPort := ""
-	if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
-		dbVerifyPort = p[0].HostPort
+	var dbVerifyPort, httpVerifyPort, proxyHttpIP string
+
+	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
+		// Both MySQL and PostgreSQL now have proxies we can inspect
+		inspectDb, _ := r.suite.orch.GetContainerInspect(ctx, "proxy-db-"+spec.Name)
+		if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+			dbVerifyPort = p[0].HostPort
+		}
 	}
 
 	inspectHttp, _ := r.suite.orch.GetContainerInspect(ctx, "proxy-http-"+spec.Name)
-	httpVerifyPort := ""
 	if p, ok := inspectHttp.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
 		httpVerifyPort = p[0].HostPort
 	}
-	proxyHttpIP := ""
 	if n, ok := inspectHttp.NetworkSettings.Networks[r.suite.networkName]; ok {
 		proxyHttpIP = n.IPAddress
 	}
 
 	// Wait for services to be ready on the network
 	fmt.Println("Waiting for proxies to be ready...")
-	if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:3306", 30*time.Second); err != nil {
-		return fmt.Errorf("MySQL proxy not ready: %w", err)
+	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
+		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
+		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:"+dbPort, 30*time.Second); err != nil {
+			return fmt.Errorf("database proxy not ready: %w", err)
+		}
 	}
 	if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "user-service.local:80", 30*time.Second); err != nil {
 		return fmt.Errorf("HTTP proxy not ready: %w", err)
 	}
 
 	// 4. Start SUT
-	appEnv := []string{
-		"DB_HOST=db",
-		"DB_PORT=3306",
-		"DB_USERNAME=todo_user",
-		"DB_PASSWORD=todo_password",
-		"RAILS_ENV=development",
-		"KAFKA_BROKERS=kafka:29092",
-		"KAFKA_TOPIC=todo-events",
-		"USER_SERVICE_URL=http://" + proxyHttpIP + ":80/api/v1/users/auth",
+	// Build environment variables based on config
+	appEnv := []string{}
+
+	// Add database environment variables if enabled
+	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
+		db := serviceConfig.Database
+		switch db.Type {
+		case "mysql":
+			appEnv = append(appEnv,
+				"DB_HOST=db",
+				fmt.Sprintf("DB_PORT=%d", db.Port),
+				fmt.Sprintf("DB_USERNAME=%s", db.Username),
+				fmt.Sprintf("DB_PASSWORD=%s", db.Password),
+				"RAILS_ENV=development",
+			)
+		case "postgresql":
+			appEnv = append(appEnv,
+				fmt.Sprintf("DATABASE_URL=postgresql://%s:%s@db:%d/%s", db.Username, db.Password, db.Port, db.Database),
+			)
+		}
+	}
+
+	// Add Kafka environment variables if enabled
+	if serviceConfig.Infrastructure.Kafka {
+		appEnv = append(appEnv,
+			"KAFKA_BROKERS=kafka:29092",
+		)
+	}
+
+	// Add user-defined environment variables
+	for k, v := range serviceConfig.Service.Environment {
+		// Interpolate proxy IP if needed
+		if strings.Contains(v, "{{proxy_http_ip}}") {
+			v = strings.ReplaceAll(v, "{{proxy_http_ip}}", proxyHttpIP)
+		}
+		appEnv = append(appEnv, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Add USER_SERVICE_URL for services that depend on user-service
+	for _, dep := range serviceConfig.Dependencies {
+		if dep.Name == "user-service" && dep.Type == "http" {
+			// HTTP proxy listens on port 80
+			appEnv = append(appEnv, fmt.Sprintf("USER_SERVICE_URL=http://%s:80/api/v1/users/auth", dep.Host))
+		}
 	}
 
 	extraHosts := []string{}
 	if proxyHttpIP != "" {
 		extraHosts = append(extraHosts, "user-service.local:"+proxyHttpIP)
-	}
-	if proxyHttpIP == "" {
+	} else {
 		extraHosts = append(extraHosts, "user-service.local:host-gateway")
+	}
+
+	// Determine start command based on framework and config
+	var startCmd []string
+	if serviceConfig.Service.StartCommand != "" {
+		// Use custom start command from config
+		startCmd = []string{"sh", "-c", serviceConfig.Service.StartCommand}
+	} else {
+		// Default commands based on framework
+		switch serviceConfig.Service.Framework {
+		case "rails":
+			startCmd = []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + appPort}
+		default:
+			startCmd = []string{"sh", "-c", "echo 'No start command specified'"}
+		}
 	}
 
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: serviceDir + ":latest",
 		Env:   appEnv,
-		Cmd:   []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + appPort},
+		Cmd:   startCmd,
 	}, &container.HostConfig{
 		ExtraHosts: extraHosts,
 		PortBindings: map[nat.Port][]nat.PortBinding{
@@ -394,7 +532,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// 5. Wait for App
 	fmt.Println("Waiting for App to be healthy...")
-	healthURL := fmt.Sprintf("http://localhost:%s/up", hostPort)
+	healthURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
 	if err := r.suite.orch.WaitHTTP(ctx, healthURL, 120*time.Second); err != nil {
 		fmt.Println("❌ App failed to become healthy")
 		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)

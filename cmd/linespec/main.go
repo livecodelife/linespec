@@ -13,6 +13,7 @@ import (
 	httpproxy "github.com/calebcowen/linespec/pkg/proxy/http"
 	"github.com/calebcowen/linespec/pkg/proxy/kafka"
 	"github.com/calebcowen/linespec/pkg/proxy/mysql"
+	"github.com/calebcowen/linespec/pkg/proxy/postgresql"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/runner"
 )
@@ -175,6 +176,9 @@ func runProxy() {
 	switch pType {
 	case "mysql":
 		p := mysql.NewProxy(addr, upstream, reg)
+		proxyErr = p.Start(ctx)
+	case "postgresql":
+		p := postgresql.NewProxy(addr, upstream, reg)
 		proxyErr = p.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)

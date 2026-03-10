@@ -56,18 +56,27 @@ func TestMockRegistry_SQLMatching(t *testing.T) {
 
 	reg.Register(spec)
 
-	// Test exact match (normalized)
-	_, found := reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1")
-	// Note: my current simple normalization doesn't handle table prefixes like `users`.`id` yet.
-	// Let's see if it works with a simpler query first.
-
-	_, found = reg.FindMock("users", "SELECT * FROM users WHERE id = 42 LIMIT 1")
+	// Test exact match
+	_, found := reg.FindMock("users", "SELECT * FROM users WHERE id = 42 LIMIT 1")
 	if !found {
 		t.Errorf("Expected exact SQL match to work")
 	}
 
+	// Reset hits to test backtick normalization
+	reg.ResetHits()
+
+	// Test backtick-normalized match
 	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE id = 42 LIMIT 1")
 	if !found {
 		t.Errorf("Expected backtick-normalized SQL match to work")
+	}
+
+	// Reset hits to test table prefix normalization
+	reg.ResetHits()
+
+	// Test table prefix match (like `users`.`id` -> users.id)
+	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1")
+	if !found {
+		t.Errorf("Expected table prefix normalized SQL match to work")
 	}
 }
