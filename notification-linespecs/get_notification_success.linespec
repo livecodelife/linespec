@@ -17,3 +17,6 @@ RETURNS {{payloads/notification_single.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/notification_single_response.yaml}}
+NOISE
+  body.created_at
+  body.updated_at

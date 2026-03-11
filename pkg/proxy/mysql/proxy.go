@@ -98,6 +98,10 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					tableName := p.extractTable(query)
 					mock, found := p.registry.FindMock(tableName, query)
 					if found {
+						// Store the actual query in the mock for proper hit tracking
+						if mock.SQL == "" {
+							mock.SQL = query
+						}
 						fmt.Printf("Proxy: Mocking query for table %s: %s\n", tableName, query)
 						p.sendMockResponse(clientConn, mock)
 					} else {

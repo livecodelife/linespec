@@ -153,6 +153,10 @@ func runProxy() {
 			os.Exit(1)
 		}
 		fmt.Printf("✅ Loaded registry from %s\n", regFile)
+
+		// Debug: Print registry contents
+		data, _ := os.ReadFile(regFile)
+		fmt.Printf("📄 Registry file size: %d bytes\n", len(data))
 	}
 
 	// Start a sidecar HTTP server for verification

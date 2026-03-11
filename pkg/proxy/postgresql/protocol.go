@@ -295,6 +295,23 @@ func CreateCommandComplete(tag string) []byte {
 	return CreateMessage(MsgCommandComplete, payload)
 }
 
+// CreateParameterDescription creates ParameterDescription message
+// numParams is the number of parameters, paramTypes are the OIDs of the parameter types
+func CreateParameterDescription(numParams uint16, paramTypes []uint32) []byte {
+	// Format: [num_params (2 bytes)] [param_type_1 (4 bytes)] [param_type_2 (4 bytes)] ...
+	payload := make([]byte, 2+len(paramTypes)*4)
+
+	// Number of parameters
+	binary.BigEndian.PutUint16(payload[0:2], numParams)
+
+	// Parameter type OIDs (we'll use generic types: 25 = TEXT for VARCHAR, 23 = INT4 for INTEGER)
+	for i, oid := range paramTypes {
+		binary.BigEndian.PutUint32(payload[2+i*4:], oid)
+	}
+
+	return CreateMessage(MsgParameterDescription, payload)
+}
+
 // CreateMessage creates a message with given type and payload
 func CreateMessage(msgType byte, payload []byte) []byte {
 	length := uint32(len(payload) + 4)

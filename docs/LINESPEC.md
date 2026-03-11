@@ -1,13 +1,13 @@
-# LineSpec CLI
+# LineSpec DSL Reference
 
-LineSpec is a deterministic domain-specific language (DSL) and CLI tool for generating Keploy-compatible KTests and KMocks from human-readable service behavior specifications.
+LineSpec is a deterministic domain-specific language (DSL) for describing service behavior and defining integration tests that execute directly against containerized services.
 
 The goal of LineSpec is to:
 
 * Provide a concise, readable way to describe service behavior
 * Enforce strict structural rules to keep parsing simple
-* Deterministically compile to Keploy KTest and KMock YAML artifacts
-* Avoid inference, heuristics, or natural language ambiguity
+* Execute deterministically without inference or heuristics
+* Support database mocking, HTTP interception, and message queue testing
 
 ---
 
@@ -16,7 +16,6 @@ The goal of LineSpec is to:
 1. Deterministic parsing — no NLP, no guessing.
 2. Single entrypoint and single exit per spec.
 3. Clear separation between:
-
    * Trigger (RECEIVE)
    * External dependencies (EXPECT)
    * System response (RESPOND)
@@ -46,13 +45,15 @@ A LineSpec file MUST follow this structure:
 
 1. Exactly one RECEIVE statement
 2. Zero or more EXPECT statements
-3. Exactly one RESPOND statement
+3. Zero or more EXPECT_NOT statements
+4. Exactly one RESPOND statement
 
 Statements MUST appear in this order:
 
 ```
 RECEIVE
 EXPECT (0..n)
+EXPECT_NOT (0..n)
 RESPOND
 ```
 
@@ -68,7 +69,7 @@ Optional test name declaration:
 TEST <test_name>
 ```
 
-If omitted, the filename is used as the test name.
+If omitted, the filename (without extension) is used as the test name.
 
 ---
 
@@ -81,7 +82,7 @@ Defines the trigger request into the System Under Test (SUT).
 Syntax:
 
 ```
-RECEIVE HTTP:<METHOD> <PATH>
+RECEIVE HTTP:<METHOD> <URL>
 [WITH {{<body_file>}}]
 [HEADERS
   <header_name>: <header_value>
@@ -102,18 +103,14 @@ HEADERS
 Rules:
 
 * Exactly one RECEIVE per file
-* MUST appear before any EXPECT
+* MUST appear before any EXPECT or EXPECT_NOT
 * HTTP method is required
-* Path is required
-* WITH is required for HTTP requests with a body
+* URL is required (full URL including protocol and host)
+* WITH is optional for HTTP requests without a body
 * Body must reference an external YAML or JSON file
 * HEADERS is optional and supports multiple header lines with indentation
 * Headers are added to the HTTP request (Authorization, X-Custom-Header, etc.)
 * WITH must come before HEADERS if both are present
-
-Compiled To:
-
-* KTest.spec.req
 
 ---
 
@@ -121,14 +118,19 @@ Compiled To:
 
 Defines an external dependency interaction that MUST occur during execution.
 
-Each EXPECT becomes a separate KMock artifact within a mocks.yaml file.
-
 General Syntax:
 
 ```
-EXPECT <CHANNEL>
-WITH {{<request_file>}}
-RETURNS {{<response_file>}}
+EXPECT <CHANNEL> <resource>
+[USING_SQL """
+<raw-sql-query>
+"""]
+[WITH {{<request_file>}}]
+[RETURNS {{<response_file>}}]
+[RETURNS EMPTY]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]
 ```
 
 The exact format depends on the channel type.
@@ -139,7 +141,9 @@ The exact format depends on the channel type.
 
 ```
 EXPECT HTTP:<METHOD> <URL>
-WITH {{<request_body>}}
+[HEADERS
+  <header_name>: <header_value>
+  ...]
 RETURNS {{<response_body>}}
 ```
 
@@ -147,77 +151,128 @@ Example:
 
 ```
 EXPECT HTTP:GET http://user-service.local/users/42
-WITH {{user_request.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
 RETURNS {{user_info.yaml}}
 ```
 
-Compiled To:
+Rules:
 
-* KMock of kind: Http
+* RETURNS is required for HTTP expectations
+* HEADERS is optional; headers are matched against the actual request
+* The proxy intercepts calls to the hostname and returns the mocked response
+* Tests fail if the HTTP mock is defined but not invoked
+
+---
+
+### EXPECT READ:MYSQL
+
+```
+EXPECT READ:MYSQL <table_name>
+[USING_SQL """
+<SQL SELECT statement>
+"""]
+RETURNS {{<response_file>}}
+```
+
+Or for empty results:
+
+```
+EXPECT READ:MYSQL <table_name>
+[USING_SQL """
+<SQL SELECT statement that returns no rows>
+"""]
+RETURNS EMPTY
+```
+
+Example:
+
+```
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users WHERE id = 42
+"""
+RETURNS {{user_response.yaml}}
+```
+
+Rules:
+
+* RETURNS is required (either a file or EMPTY)
+* USING_SQL is optional; if omitted, the proxy matches by table name
+* The proxy matches SELECT queries by table name in the FROM clause
+* RETURNS EMPTY generates proper MySQL protocol response for zero rows
 
 ---
 
 ### EXPECT WRITE:MYSQL
 
-Auto-detect operation type from payload:
-
 ```
 EXPECT WRITE:MYSQL <table_name>
-WITH {{<input_payload>}}
+[USING_SQL """
+<SQL INSERT/UPDATE/DELETE statement>
+"""]
+[WITH {{<input_payload>}}]
+[NO TRANSACTION]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]
 ```
 
-Explicit operation type:
+Example:
 
 ```
-EXPECT WRITE:MYSQL INSERT <table_name>
-WITH {{<input_payload>}}
-
-EXPECT WRITE:MYSQL UPDATE <table_name>
-WITH {{<input_payload>}}
-
-EXPECT WRITE:MYSQL DELETE <table_name>
-WITH {{<input_payload>}}
+EXPECT WRITE:MYSQL users
+WITH {{user_create.yaml}}
+VERIFY query CONTAINS 'password_digest'
 ```
 
-Optional explicit SQL:
+Rules:
+
+* WITH is optional for write operations
+* USING_SQL is optional; if omitted, the proxy matches by table name and operation type
+* NO TRANSACTION is parsed but has no effect (transactions always pass through)
+* VERIFY clauses validate the actual SQL executed at runtime
+* The proxy sends a generic OK response for matched write operations
+
+---
+
+### EXPECT READ:POSTGRESQL
+
+Same syntax as READ:MYSQL:
 
 ```
-EXPECT WRITE:MYSQL <table_name>
-USING_SQL """
-<SQL statement>
-"""
-WITH {{<input_payload>}}
+EXPECT READ:POSTGRESQL <table_name>
+[USING_SQL """
+<SQL SELECT statement>
+"""]
+RETURNS {{<response_file>}}
 ```
 
-Compiled To:
+---
 
-* KMock of kind: MySQL
+### EXPECT WRITE:POSTGRESQL
 
-**Auto-Detection Rules (INSERT vs UPDATE only):**
-* INSERT: Generated when payload has no `id` field OR only has `id` field with no other fields
-* UPDATE: Generated when payload has `id` field AND other fields to update
-* DELETE: Never auto-detected - must specify explicitly
-
-**Explicit Operations:**
-* **INSERT**: Add new records. WITH file provides field values.
-* **UPDATE**: Modify existing records. WITH file must include `id` field AND fields to update.
-* **DELETE**: Remove records. WITH file must include `id` field to identify which record.
-
-**Requirements:**
-* DELETE always requires a WITH file with an `id` field
-* Without explicit operation AND without WITH file: compiler error
-* Without explicit operation but WITH file present: auto-detects INSERT or UPDATE only
+```
+EXPECT WRITE:POSTGRESQL <table_name>
+[USING_SQL """
+<SQL INSERT/UPDATE/DELETE statement>
+"""]
+[WITH {{<input_payload>}}]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]
+```
 
 ---
 
 ### VERIFY (SQL Validation)
 
-The `VERIFY` clause validates the actual SQL query executed by the application at runtime. It can be attached to any MySQL EXPECT statement to enforce query structure, security policies, or correctness constraints.
+The `VERIFY` clause validates the actual SQL query executed by the application at runtime. It can be attached to any MySQL or PostgreSQL EXPECT statement.
 
 Use cases include:
 - Security: Ensuring passwords are hashed before storage
 - Compliance: Verifying sensitive data is not logged in plain text
-- Correctness: Confirming proper SQL structure (e.g., required columns, proper table names)
+- Correctness: Confirming proper SQL structure
 - Injection prevention: Validating query patterns match expected templates
 
 Syntax:
@@ -225,7 +280,7 @@ Syntax:
 ```
 EXPECT <CHANNEL> <resource>
 [USING_SQL """<SQL>"""]
-WITH {{<input_payload>}}
+[WITH {{<input_payload>}}]
 VERIFY query CONTAINS '<string>'
 VERIFY query NOT_CONTAINS '<string>'
 VERIFY query MATCHES /<regex>/
@@ -269,10 +324,6 @@ VERIFY query MATCHES /INSERT INTO orders \([^)]+\) VALUES \([^)]+\)/
 RESPOND HTTP:201
 ```
 
-Compiled To:
-
-* KMock with `spec.metadata.verify` array containing validation rules
-
 Runtime Behavior:
 
 * When the proxy matches a query to the mock, it checks all VERIFY rules
@@ -281,67 +332,87 @@ Runtime Behavior:
 
 ---
 
-### EXPECT READ:MYSQL with Empty Results
+### EXPECT EVENT / EXPECT MESSAGE
 
-For queries that return no rows (e.g., "not found" scenarios), use `RETURNS EMPTY` instead of a payload file:
-
-```
-EXPECT READ:MYSQL <table_name>
-USING_SQL """
-<SQL statement that returns no rows>
-"""
-RETURNS EMPTY
-```
-
-The compiler automatically generates proper MySQL TextResultSet column definitions based on other expectations in the same test, or uses sensible defaults for common Rails conventions.
-
-**Example — User Not Found:**
-
-```
-TEST get-user-not-found
-RECEIVE HTTP:GET /api/v1/users/999
-HEADERS
-  Authorization: Bearer token_abc123xyz
-
-# First query finds the authenticated user
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`token` = 'token_abc123xyz' LIMIT 1
-"""
-RETURNS {{user_response.yaml}}
-
-# Second query finds no user with id=999
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
-"""
-RETURNS EMPTY
-
-RESPOND HTTP:404
-WITH {{user_not_found_error.yaml}}
-```
-
-**Benefits:**
-- No need to write complex MySQL protocol payload files
-- Column definitions are inferred automatically
-- Human-readable and maintainable
-
----
-
-### EXPECT EVENT
+Both `EVENT` and `MESSAGE` are aliases for the same functionality:
 
 ```
 EXPECT EVENT:<topic_name>
 WITH {{<message_payload>}}
+
+EXPECT MESSAGE:<topic_name>
+WITH {{<message_payload>}}
 ```
 
-Compiled To:
+Example:
 
-* KMock of kind: Kafka (or configured event broker)
+```
+EXPECT EVENT:todo-events
+WITH {{todo_created_event.yaml}}
+
+# Same as:
+EXPECT MESSAGE:todo-events
+WITH {{todo_created_event.yaml}}
+```
+
+Rules:
+
+* Both `EVENT:` and `MESSAGE:` prefixes work identically
+* WITH file should contain the message payload
+* Currently, the Kafka proxy passes through to the real broker
 
 ---
 
-## 3. RESPOND
+## 3. EXPECT_NOT
+
+Defines an external dependency interaction that must NOT occur during execution. Useful for testing query optimization and ensuring certain operations are avoided.
+
+Syntax:
+
+```
+EXPECT_NOT <CHANNEL> <resource>
+[USING_SQL """
+<raw-sql-query>
+"""]
+```
+
+Supported channels:
+- `READ_MYSQL <table>` — Assert that a SELECT query does NOT occur
+- `WRITE_MYSQL <table>` — Assert that an INSERT/UPDATE/DELETE does NOT occur
+
+Example — Testing Efficient Queries:
+
+```
+TEST efficient-user-lookup
+RECEIVE HTTP:GET /api/v1/users/123
+
+# Assert that we DON'T do a full table scan
+EXPECT_NOT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users
+"""
+
+# Should use indexed lookup instead
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users WHERE id = 123 LIMIT 1
+"""
+RETURNS {{user_response.yaml}}
+
+RESPOND HTTP:200
+WITH {{user_response.yaml}}
+```
+
+Rules:
+
+* Exactly one of READ_MYSQL or WRITE_MYSQL
+* USING_SQL is optional; if provided, matches that specific query
+* If no USING_SQL, matches any read/write on the table
+* Test fails if the forbidden operation is detected
+
+---
+
+## 4. RESPOND
 
 Defines the final response of the System Under Test.
 
@@ -349,7 +420,10 @@ Syntax:
 
 ```
 RESPOND HTTP:<numeric_status_code>
-WITH {{<response_body>}}
+[WITH {{<response_body>}}]
+[NOISE
+  body.<field_name>
+  body.<field_name>]
 ```
 
 Example:
@@ -357,6 +431,10 @@ Example:
 ```
 RESPOND HTTP:201
 WITH {{saved_todo.yaml}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at
 ```
 
 Rules:
@@ -364,13 +442,8 @@ Rules:
 * Exactly one RESPOND per file
 * MUST be the final statement
 * Status MUST be numeric (e.g., 200, 201, 400, 500)
-* WITH is required for JSON responses
-
-Compiled To:
-
-* KTest.spec.resp
-
-RESPOND does NOT generate a KMock.
+* WITH is optional for responses without a body
+* NOISE must appear after WITH if both are present
 
 ### NOISE (optional)
 
@@ -391,44 +464,21 @@ Rules:
 - Field paths use dot notation matching the JSON response body (e.g. `body.created_at`)
 - `NOISE` is optional; omit it when no fields need filtering
 
-Compiled To:
-
-- `KTest.spec.assertions.noise` — each field becomes a key with an empty array value
-
----
-
-# Template Referencing
-
-LineSpec supports deterministic template interpolation using double braces.
-
-Example:
-
-```
-EXPECT HTTP:GET http://user-service.local/users/{{trigger.body.owner_id}}
-```
-
-Available context objects:
-
-* trigger.body
-* steps.<step_id>.returns
-
-Step IDs may be auto-generated or explicitly defined in future versions.
-
 ---
 
 # Enforcement Rules
 
-The CLI MUST enforce:
+The parser MUST enforce:
 
 * Exactly one RECEIVE
 * Exactly one RESPOND
 * RESPOND must be last
-* EXPECT cannot appear before RECEIVE
-* WITH files must exist
-* RETURNS required for HTTP and WRITE
+* EXPECT/EXPECT_NOT cannot appear before RECEIVE
+* WITH files must exist (if specified)
+* RETURNS required for READ operations and HTTP expectations
 * No duplicate step identifiers
 
-Compilation MUST fail if rules are violated.
+Parsing MUST fail if rules are violated.
 
 ---
 
@@ -439,21 +489,24 @@ TEST create_todo_success
 
 RECEIVE HTTP:POST /api/v1/todos
 WITH {{todo.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
 
-EXPECT HTTP:GET http://user-service.local/users/42
-WITH {{user_request.yaml}}
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+HEADERS
+  Authorization: Bearer token_abc123xyz
 RETURNS {{user_info.yaml}}
 
-EXPECT WRITE:POSTGRESQL todos
+EXPECT WRITE:MYSQL todos
 WITH {{todo_insert.yaml}}
-RETURNS {{saved_todo.yaml}}
 
-EXPECT MESSAGE:user_notification_topic
-WITH {{create_todo_message.yaml}}
+EXPECT EVENT:todo-events
+WITH {{todo_created_event.yaml}}
 
 RESPOND HTTP:201
 WITH {{saved_todo.yaml}}
 NOISE
+  body.id
   body.created_at
   body.updated_at
 ```
@@ -462,34 +515,24 @@ NOISE
 
 # CLI Usage
 
-Compile a spec:
+Execute a spec:
 
 ```
-linespec compile create_todo_success.linespec
-```
-
-Output structure:
-
-```
-out/
-  tests/
-    create_todo_success.yaml
-  mocks/
-    create_todo_success__step1.yaml
-    create_todo_success__step2.yaml
-    create_todo_success__step3.yaml
+linespec test create_todo_success.linespec
+linespec test /path/to/linespecs/
 ```
 
 ---
 
 # Future Extensions (Planned)
 
-* MATCH and IGNORE rules
+* MATCH and IGNORE rules for fuzzy matching
 * gRPC support
 * JSON Schema validation
 * Snapshot diffing
 * Spec linting mode
 * Multi-test suites
+* Template interpolation ({{variable}} support)
 
 ---
 
@@ -500,7 +543,7 @@ It is a strict behavioral specification language designed to:
 
 * Be readable by humans
 * Be trivial to parse
-* Compile deterministically
-* Mirror Keploy's runtime model
+* Execute deterministically
+* Support modern microservice testing workflows
 
 No inference. No heuristics. No ambiguity.

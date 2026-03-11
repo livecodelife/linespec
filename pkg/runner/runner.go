@@ -242,6 +242,7 @@ type testRunner struct {
 	suite    *TestSuite
 	registry *registry.MockRegistry
 	config   *config.LineSpecConfig
+	tempDir  string // Temp directory for registry and other test artifacts
 }
 
 func (r *testRunner) run(ctx context.Context, specPath string) error {
@@ -265,6 +266,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	r.config = serviceConfig
 
+	// Create temp directory for this test run
+	tempDir, err := os.MkdirTemp("", "linespec-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	r.tempDir = tempDir
+	defer os.RemoveAll(tempDir) // Clean up temp directory after test
+
 	// Pre-cleanup test-specific containers only
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "app-"+spec.Name)
@@ -279,9 +288,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	appPort := fmt.Sprintf("%d", serviceConfig.Service.Port)
 
 	// 2. Save Registry to File for Proxy Containers
-	regFile := filepath.Join(r.suite.cwd, "registry-"+spec.Name+".json")
+	regFile := filepath.Join(r.tempDir, "registry-"+spec.Name+".json")
 	_ = r.registry.SaveToFile(regFile)
-	defer os.Remove(regFile)
 
 	// 3. Start Database and Proxy Containers (if database is enabled)
 	var dbContainerName string
@@ -327,9 +335,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			// Start PostgreSQL proxy
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
-				Cmd:   []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/project/registry-" + spec.Name + ".json"},
+				Cmd:   []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/registry/registry-" + spec.Name + ".json"},
 			}, &container.HostConfig{
-				Binds: []string{r.suite.cwd + ":/app/project"},
+				Binds: []string{
+					r.suite.cwd + ":/app/project",
+					r.tempDir + ":/app/registry",
+				},
 				PortBindings: map[nat.Port][]nat.PortBinding{
 					"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 				},
@@ -362,9 +373,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			fmt.Println("Starting MySQL proxy...")
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
-				Cmd:   []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/project/registry-" + spec.Name + ".json"},
+				Cmd:   []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/registry/registry-" + spec.Name + ".json"},
 			}, &container.HostConfig{
-				Binds: []string{r.suite.cwd + ":/app/project"},
+				Binds: []string{
+					r.suite.cwd + ":/app/project",
+					r.tempDir + ":/app/registry",
+				},
 				PortBindings: map[nat.Port][]nat.PortBinding{
 					"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 				},
@@ -387,9 +401,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	fmt.Println("Starting HTTP proxy...")
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/project/registry-" + spec.Name + ".json"},
+		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/registry/registry-" + spec.Name + ".json"},
 	}, &container.HostConfig{
-		Binds: []string{r.suite.cwd + ":/app/project"},
+		Binds: []string{
+			r.suite.cwd + ":/app/project",
+			r.tempDir + ":/app/registry",
+		},
 		PortBindings: map[nat.Port][]nat.PortBinding{
 			"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},

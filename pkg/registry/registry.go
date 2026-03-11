@@ -62,6 +62,66 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 	return "unknown"
 }
 
+// PeekMock checks if a mock exists without incrementing hit count (used for testing intercept)
+func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatement, bool) {
+	r.RLock()
+	defer r.RUnlock()
+
+	mocks, ok := r.mocks[key]
+	if !ok {
+		// Fallback: Check all mocks for SQL match
+		if query != "" {
+			for _, mocksList := range r.mocks {
+				for _, mock := range mocksList {
+					if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+						if r.hits[mock] == 0 {
+							return mock, true
+						}
+					}
+				}
+			}
+		}
+		return nil, false
+	}
+
+	// 1. Exact SQL Match
+	if query != "" {
+		for _, mock := range mocks {
+			if r.hits[mock] > 0 {
+				continue
+			}
+			if mock.SQL != "" {
+				if r.matchSQL(mock.SQL, query) {
+					return mock, true
+				}
+			}
+		}
+	}
+
+	// 2. Fuzzy Match
+	for _, mock := range mocks {
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.HTTP || mock.Channel == types.Event {
+			return mock, true
+		}
+		if query != "" {
+			q := strings.TrimSpace(strings.ToUpper(query))
+			if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
+				return mock, true
+			}
+			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
+				return mock, true
+			}
+		} else {
+			return mock, true
+		}
+	}
+
+	return nil, false
+}
+
 func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatement, bool) {
 	r.Lock()
 	defer r.Unlock()
@@ -240,7 +300,20 @@ func (r *MockRegistry) GetHits() map[string]int {
 	defer r.RUnlock()
 	res := make(map[string]int)
 	for mock, count := range r.hits {
-		key := fmt.Sprintf("%s-%s-%s-%s-%s", mock.Channel, mock.Table, mock.URL, mock.Topic, mock.SQL)
+		// Use consistent key format:
+		// For HTTP: Channel-URL (Table/Topic/SQL are empty)
+		// For DB: Channel-Table-SQL (only for READ operations with explicit SQL)
+		// For WRITE: Channel-Table only (SQL is auto-generated at runtime)
+		var key string
+		if mock.Channel == types.HTTP {
+			key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+		} else if mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL {
+			// READ operations: include SQL to distinguish different queries
+			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+		} else {
+			// WRITE and other operations: use Channel-Table only
+			key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+		}
 		res[key] = count
 	}
 	return res
@@ -251,7 +324,15 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 	defer r.Unlock()
 	for _, mocks := range r.mocks {
 		for _, mock := range mocks {
-			key := fmt.Sprintf("%s-%s-%s-%s-%s", mock.Channel, mock.Table, mock.URL, mock.Topic, mock.SQL)
+			// Use same key format as GetHits
+			var key string
+			if mock.Channel == types.HTTP {
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+			} else if mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL {
+				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+			} else {
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+			}
 			if count, ok := hostHits[key]; ok {
 				r.hits[mock] += count
 			}

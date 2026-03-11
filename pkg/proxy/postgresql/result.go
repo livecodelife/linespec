@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
+	"time"
 )
 
 // ResultHandler generates PostgreSQL result set messages
@@ -88,12 +90,16 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	// - Field name (null-terminated string)
 	// - Table OID (4 bytes) - 0 for not associated with a table
 	// - Column number (2 bytes) - 0
-	// - Type OID (4 bytes) - use TEXT (25) for simplicity
+	// - Type OID (4 bytes) - proper OIDs for each type
 	// - Type size (2 bytes) - -1 for variable
 	// - Type modifier (4 bytes) - -1
-	// - Format code (2 bytes) - 0 for text
+	// - Format code (2 bytes) - 1 for binary (INTEGER, TIMESTAMPTZ), 0 for text (others)
 
 	for _, col := range columns {
+		colLower := strings.ToLower(col)
+		isInteger := colLower == "id" || strings.HasSuffix(colLower, "_id")
+		isTimestamp := strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")
+
 		// Field name
 		payload = append(payload, []byte(col)...)
 		payload = append(payload, 0) // null terminator
@@ -104,9 +110,15 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		// Column number
 		payload = append(payload, 0, 0)
 
-		// Type OID - TEXT = 25
+		// Type OID - use proper types
 		typeOID := make([]byte, 4)
-		binary.BigEndian.PutUint32(typeOID, 25)
+		oid := uint32(25) // Default TEXT
+		if isTimestamp {
+			oid = 1184 // TIMESTAMPTZ
+		} else if isInteger {
+			oid = 23 // INTEGER
+		}
+		binary.BigEndian.PutUint32(typeOID, oid)
 		payload = append(payload, typeOID...)
 
 		// Type size - -1 for variable
@@ -119,8 +131,14 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		binary.BigEndian.PutUint32(typeMod, 0xFFFFFFFF) // -1 as uint32
 		payload = append(payload, typeMod...)
 
-		// Format code - 0 (text)
-		payload = append(payload, 0, 0)
+		// Format code: 0 = text, 1 = binary
+		// Use binary format for INTEGER and TIMESTAMPTZ (need proper binary encoding)
+		// Use text format for other types
+		if isInteger || isTimestamp {
+			payload = append(payload, 0, 1) // Binary format
+		} else {
+			payload = append(payload, 0, 0) // Text format
+		}
 	}
 
 	msg := CreateMessage(MsgRowDescription, payload)
@@ -140,7 +158,7 @@ func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[
 
 	// For each column value:
 	// - Length (4 bytes) - -1 for NULL, otherwise length of value
-	// - Value (variable) - text representation
+	// - Value (variable) - binary for INTEGER/TIMESTAMPTZ, text for other types
 
 	for _, col := range columns {
 		val, ok := values[col]
@@ -150,16 +168,51 @@ func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[
 			continue
 		}
 
-		// Convert value to string
-		strVal := fmt.Sprintf("%v", val)
+		colLower := strings.ToLower(col)
+		isInteger := colLower == "id" || strings.HasSuffix(colLower, "_id")
+		isTimestamp := strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")
 
-		// Length
-		lenBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
-		payload = append(payload, lenBytes...)
-
-		// Value
-		payload = append(payload, []byte(strVal)...)
+		if isInteger {
+			// Send INTEGER in binary format (4 bytes, big-endian)
+			// RowDescription declares format=1 for INTEGER, so asyncpg expects binary
+			intVal, err := toInt32(val)
+			if err != nil {
+				// Fallback to text format if conversion fails
+				strVal := fmt.Sprintf("%v", val)
+				lenBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
+				payload = append(payload, lenBytes...)
+				payload = append(payload, []byte(strVal)...)
+			} else {
+				// Binary format: length = 4, value = 4 bytes big-endian
+				payload = append(payload, 0, 0, 0, 4) // length = 4
+				intBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(intBytes, uint32(intVal))
+				payload = append(payload, intBytes...)
+			}
+		} else if isTimestamp {
+			// Send TIMESTAMPTZ in binary format (8 bytes, microseconds since 2000-01-01)
+			timestampBytes, err := encodeTimestampBinary(val)
+			if err != nil {
+				// Fallback to text format if encoding fails
+				strVal := fmt.Sprintf("%v", val)
+				lenBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
+				payload = append(payload, lenBytes...)
+				payload = append(payload, []byte(strVal)...)
+			} else {
+				// Binary format: length = 8, value = 8 bytes big-endian
+				payload = append(payload, 0, 0, 0, 8) // length = 8
+				payload = append(payload, timestampBytes...)
+			}
+		} else {
+			// Text format for other types (TEXT, VARCHAR, etc.)
+			strVal := fmt.Sprintf("%v", val)
+			lenBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
+			payload = append(payload, lenBytes...)
+			payload = append(payload, []byte(strVal)...)
+		}
 	}
 
 	msg := CreateMessage(MsgDataRow, payload)
@@ -184,5 +237,131 @@ func inferTypeOID(val interface{}) uint32 {
 	default:
 		// Default to TEXT = 25
 		return 25
+	}
+}
+
+// encodeTimestampBinary converts a timestamp value to PostgreSQL binary format
+// PostgreSQL timestamps are int64 values representing microseconds since 2000-01-01 00:00:00 UTC
+func encodeTimestampBinary(val interface{}) ([]byte, error) {
+	var t time.Time
+
+	switch v := val.(type) {
+	case time.Time:
+		t = v
+	case string:
+		// Try parsing various ISO timestamp formats
+		formats := []string{
+			time.RFC3339,           // "2006-01-02T15:04:05Z07:00"
+			"2006-01-02T15:04:05Z", // ISO format with Z
+			"2006-01-02 15:04:05",  // PostgreSQL format without timezone
+			"2006-01-02 15:04:05-07",
+			"2006-01-02 15:04:05+00",
+		}
+
+		var err error
+		for _, format := range formats {
+			t, err = time.Parse(format, v)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp: %v", v)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported timestamp type: %T", val)
+	}
+
+	// PostgreSQL epoch is 2000-01-01 00:00:00 UTC
+	postgresEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Calculate microseconds since PostgreSQL epoch
+	diff := t.UTC().Sub(postgresEpoch)
+	microseconds := diff.Microseconds()
+
+	// Encode as int64 (8 bytes, big-endian)
+	result := make([]byte, 8)
+	binary.BigEndian.PutUint64(result, uint64(microseconds))
+
+	return result, nil
+}
+
+// toInt64 converts a value to int64
+func toInt64(val interface{}) (int64, error) {
+	switch v := val.(type) {
+	case int:
+		return int64(v), nil
+	case int8:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case uint:
+		return int64(v), nil
+	case uint8:
+		return int64(v), nil
+	case uint16:
+		return int64(v), nil
+	case uint32:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case float32:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	case string:
+		// Try to parse as integer
+		var result int64
+		_, err := fmt.Sscanf(v, "%d", &result)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse integer from string: %v", v)
+		}
+		return result, nil
+	default:
+		return 0, fmt.Errorf("unsupported type for integer conversion: %T", val)
+	}
+}
+
+// toInt32 converts a value to int32
+func toInt32(val interface{}) (int32, error) {
+	switch v := val.(type) {
+	case int:
+		return int32(v), nil
+	case int8:
+		return int32(v), nil
+	case int16:
+		return int32(v), nil
+	case int32:
+		return v, nil
+	case int64:
+		return int32(v), nil
+	case uint:
+		return int32(v), nil
+	case uint8:
+		return int32(v), nil
+	case uint16:
+		return int32(v), nil
+	case uint32:
+		return int32(v), nil
+	case uint64:
+		return int32(v), nil
+	case float32:
+		return int32(v), nil
+	case float64:
+		return int32(v), nil
+	case string:
+		// Try to parse as integer
+		var result int64
+		_, err := fmt.Sscanf(v, "%d", &result)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse integer from string: %v", v)
+		}
+		return int32(result), nil
+	default:
+		return 0, fmt.Errorf("unsupported type for integer conversion: %T", val)
 	}
 }
