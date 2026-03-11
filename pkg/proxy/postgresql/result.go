@@ -16,13 +16,13 @@ func NewResultHandler() *ResultHandler {
 // SendResultSet sends a complete result set to the client
 func (r *ResultHandler) SendResultSet(conn net.Conn, columns []string, rows []map[string]interface{}) error {
 	// 1. Send RowDescription
-	if err := r.sendRowDescription(conn, columns); err != nil {
+	if err := r.SendRowDescription(conn, columns); err != nil {
 		return fmt.Errorf("error sending row description: %w", err)
 	}
 
 	// 2. Send DataRows
 	for _, row := range rows {
-		if err := r.sendDataRow(conn, columns, row); err != nil {
+		if err := r.SendDataRow(conn, columns, row); err != nil {
 			return fmt.Errorf("error sending data row: %w", err)
 		}
 	}
@@ -44,7 +44,7 @@ func (r *ResultHandler) SendResultSet(conn net.Conn, columns []string, rows []ma
 // SendEmptyResultSet sends an empty result set
 func (r *ResultHandler) SendEmptyResultSet(conn net.Conn, columns []string) error {
 	// Send RowDescription
-	if err := r.sendRowDescription(conn, columns); err != nil {
+	if err := r.SendRowDescription(conn, columns); err != nil {
 		return fmt.Errorf("error sending row description: %w", err)
 	}
 
@@ -74,8 +74,8 @@ func (r *ResultHandler) SendCommandComplete(conn net.Conn, tag string) error {
 	return nil
 }
 
-// sendRowDescription sends RowDescription message
-func (r *ResultHandler) sendRowDescription(conn net.Conn, columns []string) error {
+// SendRowDescription sends RowDescription message
+func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
 	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size
@@ -128,8 +128,8 @@ func (r *ResultHandler) sendRowDescription(conn net.Conn, columns []string) erro
 	return err
 }
 
-// sendDataRow sends a single DataRow message
-func (r *ResultHandler) sendDataRow(conn net.Conn, columns []string, values map[string]interface{}) error {
+// SendDataRow sends a single DataRow message
+func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[string]interface{}) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
 	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size

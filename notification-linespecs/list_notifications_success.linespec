@@ -11,7 +11,7 @@ RETURNS {{payloads/authenticated_user.yaml}}
 
 EXPECT READ:POSTGRESQL notifications
 USING_SQL """
-SELECT * FROM notifications WHERE recipient = 'john@example.com' ORDER BY created_at DESC
+SELECT notifications.id, notifications.content, notifications.recipient, notifications.created_at, notifications.updated_at FROM notifications WHERE notifications.recipient = $1::VARCHAR ORDER BY notifications.created_at DESC
 """
 RETURNS {{payloads/notifications_list.yaml}}
 

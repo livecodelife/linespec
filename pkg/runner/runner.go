@@ -359,6 +359,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			dbContainerName = "linespec-shared-db"
 
 			// Start database proxy
+			fmt.Println("Starting MySQL proxy...")
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
 				Cmd:   []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/project/registry-" + spec.Name + ".json"},
@@ -371,17 +372,19 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
 			}, "proxy-db-"+spec.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to start MySQL proxy: %w", err)
 			}
 			defer func() {
 				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
 			}()
+			fmt.Println("✅ MySQL proxy started")
 		}
 	}
 
 	// HTTP Proxy - always start for backward compatibility with user-service.local
+	fmt.Println("Starting HTTP proxy...")
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: "linespec:latest",
 		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/project/registry-" + spec.Name + ".json"},
@@ -394,13 +397,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"user-service.local"}}},
 	}, "proxy-http-"+spec.Name)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to start HTTP proxy: %w", err)
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
 	}()
+	fmt.Println("✅ HTTP proxy started")
 
 	// Inspect all proxies to get ports and IPs
 	var dbVerifyPort, httpVerifyPort, proxyHttpIP string

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
 	"github.com/calebcowen/linespec/pkg/registry"
@@ -62,6 +64,14 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("HTTP Interceptor: Request headers: %v\n", requestHeaders)
 
+	// Also extract authorization from request body (for Rails apps that send auth in body)
+	bodyAuth := i.extractAuthFromBody(r)
+	if bodyAuth != "" {
+		fmt.Printf("HTTP Interceptor: Found authorization in body: %s\n", bodyAuth)
+		// Add it to headers for matching purposes
+		requestHeaders["Authorization"] = bodyAuth
+	}
+
 	// Try common variants of the key
 	keys := []string{
 		path,
@@ -111,4 +121,43 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// extractAuthFromBody extracts authorization from request body
+// Rails apps often send auth as: { "authorization": "Bearer token" }
+func (i *Interceptor) extractAuthFromBody(r *http.Request) string {
+	// Only parse body for GET/POST/PATCH/PUT methods with Content-Type: application/json
+	if r.Body == nil {
+		return ""
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		return ""
+	}
+
+	// Read body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return ""
+	}
+	// Restore body for potential future reads
+	r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
+	if len(bodyBytes) == 0 {
+		return ""
+	}
+
+	// Try to parse as JSON
+	var bodyMap map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+		return ""
+	}
+
+	// Look for authorization field
+	if auth, ok := bodyMap["authorization"].(string); ok && auth != "" {
+		return auth
+	}
+
+	return ""
 }

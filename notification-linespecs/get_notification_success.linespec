@@ -11,7 +11,7 @@ RETURNS {{payloads/authenticated_user.yaml}}
 
 EXPECT READ:POSTGRESQL notifications
 USING_SQL """
-SELECT * FROM notifications WHERE id = 1 AND recipient = 'john@example.com'
+SELECT notifications.id, notifications.content, notifications.recipient, notifications.created_at, notifications.updated_at FROM notifications WHERE notifications.id = $1::INTEGER AND notifications.recipient = $2::VARCHAR
 """
 RETURNS {{payloads/notification_single.yaml}}
 
