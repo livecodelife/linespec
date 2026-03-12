@@ -42,8 +42,18 @@ type LineSpecConfig struct {
 	Database       *DatabaseConfig      `yaml:"database,omitempty"`
 	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
 	Dependencies   []DependencyConfig   `yaml:"dependencies,omitempty"`
+	Provenance     *ProvenanceConfig    `yaml:"provenance,omitempty"`
 	Created        time.Time            `yaml:"-"`
 	BaseDir        string               `yaml:"-"`
+}
+
+// ProvenanceConfig defines provenance record settings
+type ProvenanceConfig struct {
+	Enforcement       string   `yaml:"enforcement"`         // none | warn | strict
+	Dir               string   `yaml:"dir"`                 // relative to repo root
+	SharedRepos       []string `yaml:"shared_repos"`        // paths or URLs to shared provenance repositories
+	CommitTagRequired bool     `yaml:"commit_tag_required"` // whether commits must reference a prov ID
+	AutoAffectedScope bool     `yaml:"auto_affected_scope"` // whether to auto-populate affected_scope from git diffs
 }
 
 // DependencyConfig defines external service dependencies
