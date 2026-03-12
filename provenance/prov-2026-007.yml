@@ -1,0 +1,37 @@
+id: prov-2026-007
+title: "Service discovery and configuration must be flexible, not hardcoded"
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: >
+  The test runner must not contain hardcoded paths or assumptions about
+  service locations. Service directories, initialization scripts, migration
+  commands, and Docker image names must be discoverable from configuration
+  or the filesystem, not baked into the runner code. Hardcoded paths
+  prevent LineSpec from being used with arbitrary service layouts and
+  require code changes for every new project structure. The runner must
+  derive paths from .linespec.yml configuration or follow conventions that
+  can be overridden by users.
+
+constraints:
+  - No hardcoded service directory paths in runner code (e.g., "examples/user-service")
+  - No hardcoded initialization script paths; must derive from service location
+  - Docker image names must be derived from service configuration, not full paths
+  - Migration commands must use service names extracted from paths, not raw paths
+  - All paths must be relative to the working directory or configured base directory
+  - Service discovery must work for any valid directory structure without code changes
+
+affected_scope: []
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+  - architecture
+  - runner
+  - configuration
