@@ -47,9 +47,7 @@ related:
   - prov-2026-001
   - prov-2026-005
 
-associated_linespecs:
-  - examples/todo-linespecs/**
-  - examples/user-linespecs/**
+associated_linespecs: []
 
 associated_traces: []
 

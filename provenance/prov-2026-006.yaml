@@ -1,0 +1,29 @@
+id: prov-2026-006
+title: Provenance Records subsystem added to LineSpec CLI
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: |
+    A Provenance Records subsystem is added to the LineSpec CLI under the linespec provenance subcommand family. Provenance Records are structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a provenance/ directory at the repository root, are enforced by the CLI linter, and form a queryable graph of decisions over time via supersedes links. The subsystem is designed to deliver standalone value without requiring LineSpec behavioral specs — enforcement of the LineSpec association requirement is configurable at three levels (none, warn, strict) so teams can adopt Provenance Records incrementally. The subsystem is the first component of LineSpec to be built using Provenance Records themselves, making prov-2026-006 both the governing record for this work and the first real test of the schema and tooling.
+constraints:
+    - All provenance functionality must live in pkg/provenance/ — no provenance logic may be introduced into existing packages
+    - The provenance subcommand must be additive to the existing CLI — no existing linespec commands or behaviors may change as a result of this work
+    - The linter must run in under one second for a repository containing up to 100 provenance records
+    - All commands that produce structured data must support --format json for CI and tooling integration
+    - The graph traversal must detect and hard-error on cycles before any other operation — no command may produce output based on a graph that has not been validated as acyclic
+    - Pattern matching for scope enforcement must normalize paths before comparison — two paths referring to the same file must always produce the same match result regardless of how they are expressed
+    - Implemented records must be treated as immutable by all CLI commands except updates to monitors and associated_traces
+affected_scope: []
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-001
+    - prov-2026-002
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - provenance
+    - cli
+    - architecture
