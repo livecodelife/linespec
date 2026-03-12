@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calebcowen/linespec/pkg/logger"
 	httpproxy "github.com/calebcowen/linespec/pkg/proxy/http"
 	"github.com/calebcowen/linespec/pkg/proxy/kafka"
 	"github.com/calebcowen/linespec/pkg/proxy/mysql"
@@ -20,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: linespec <test|proxy> ...")
+		printUsage()
 		os.Exit(1)
 	}
 
@@ -29,17 +30,50 @@ func main() {
 		return
 	}
 
-	if len(os.Args) < 3 || os.Args[1] != "test" {
-		fmt.Println("Usage: linespec test <path-to-linespec-or-dir>")
+	if os.Args[1] != "test" {
+		printUsage()
 		os.Exit(1)
 	}
 
-	path := os.Args[2]
+	// Parse test command arguments
+	args := os.Args[2:]
+	debug := false
+	var path string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--debug", "-d":
+			debug = true
+		case "--help", "-h":
+			printTestUsage()
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				path = args[i]
+			} else {
+				logger.Error("Unknown flag: %s", args[i])
+				printTestUsage()
+				os.Exit(1)
+			}
+		}
+	}
+
+	if path == "" {
+		logger.Error("Usage: linespec test [--debug] <path-to-linespec-or-dir>")
+		os.Exit(1)
+	}
+
+	// Set log level based on debug flag
+	if debug {
+		logger.SetLevel(logger.DebugLevel)
+		logger.Debug("Debug mode enabled")
+	}
+
 	ctx := context.Background()
 
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		logger.Error("Error: %v", err)
 		os.Exit(1)
 	}
 
@@ -56,7 +90,7 @@ func main() {
 			return nil
 		})
 		if err != nil {
-			fmt.Printf("Error walking path: %v\n", err)
+			logger.Error("Error walking path: %v", err)
 			os.Exit(1)
 		}
 	} else {
@@ -64,26 +98,29 @@ func main() {
 	}
 
 	if len(testFiles) == 0 {
-		fmt.Println("No .linespec files found.")
+		logger.Info("No .linespec files found.")
 		return
 	}
 
 	// Create test suite with shared infrastructure
 	suite, err := runner.NewTestSuite()
 	if err != nil {
-		fmt.Printf("❌ Failed to create test suite: %v\n", err)
+		logger.Error("Failed to create test suite: %v", err)
 		os.Exit(1)
 	}
 
 	// Setup shared infrastructure once
-	fmt.Println("🔧 Setting up shared infrastructure...")
+	setupStop := logger.ShowSpinner("Setting up tests...")
 	infraCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	if err := suite.SetupSharedInfrastructure(infraCtx); err != nil {
-		cancel()
-		fmt.Printf("❌ Failed to setup infrastructure: %v\n", err)
+	setupErr := suite.SetupSharedInfrastructure(infraCtx)
+	cancel()
+	logger.StopSpinner(setupStop)
+
+	if setupErr != nil {
+		logger.Error("Failed to setup infrastructure: %v", setupErr)
 		os.Exit(1)
 	}
-	cancel()
+	logger.SetupComplete()
 
 	// Cleanup shared infrastructure when done
 	defer func() {
@@ -96,50 +133,76 @@ func main() {
 	failed := 0
 
 	for i, file := range testFiles {
-		fmt.Printf("\n[%d/%d] Running Test: %s\n", i+1, len(testFiles), file)
-		fmt.Println("--------------------------------------------------")
+		logger.TestRunning(i+1, len(testFiles), file)
 
 		testCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 
 		func() {
 			defer cancel()
+
+			// Show spinner during test execution
+			testStop := logger.TestingMessage()
+
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Printf("❌ Test %s PANICKED: %v\n", file, r)
+					logger.StopSpinner(testStop)
+					logger.TestFailed(file, fmt.Errorf("PANIC: %v", r))
 					failed++
 				}
 			}()
 
 			if err := suite.RunTest(testCtx, file); err != nil {
-				fmt.Printf("\n❌ Test %s FAILED: %v\n", file, err)
+				logger.StopSpinner(testStop)
+				logger.TestFailed(file, err)
 				failed++
 			} else {
-				fmt.Printf("\n✅ Test %s PASSED\n", file)
+				logger.StopSpinner(testStop)
+				logger.TestPassed()
 				passed++
 			}
 		}()
 	}
 
-	fmt.Printf("\n================Summary================\n")
-	fmt.Printf("Total Tests: %d\n", len(testFiles))
-	fmt.Printf("Passed:      %d\n", passed)
-	fmt.Printf("Failed:      %d\n", failed)
+	logger.Summary(len(testFiles), passed, failed)
 
 	if failed > 0 {
 		os.Exit(1)
 	}
 }
 
+func printUsage() {
+	logger.Info(`Usage: linespec <command> [options]
+
+Commands:
+  test [--debug] <path>  Run .linespec test files
+  proxy <type> ...       Start protocol proxy
+
+Use "linespec test --help" for more information about test command.`)
+}
+
+func printTestUsage() {
+	logger.Info(`Usage: linespec test [--debug] <path-to-linespec-or-dir>
+
+Options:
+  --debug, -d    Show detailed debug logs
+  --help, -h     Show this help message
+
+Examples:
+  linespec test ./tests/              # Run all tests in directory
+  linespec test --debug ./tests/       # Run with debug output
+  linespec test ./tests/create.linespec # Run single test file`)
+}
+
 func runProxy() {
 	if len(os.Args) < 5 {
-		fmt.Println("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [schema-file]")
+		logger.Error("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [schema-file]")
 		os.Exit(1)
 	}
 
 	// Change working directory to /app/project if it exists (inside container)
 	if _, err := os.Stat("/app/project"); err == nil {
 		os.Chdir("/app/project")
-		fmt.Println("✅ Changed working directory to /app/project")
+		logger.Debug("Changed working directory to /app/project")
 	}
 
 	pType := os.Args[2]
@@ -150,14 +213,14 @@ func runProxy() {
 	if len(os.Args) > 5 {
 		regFile := os.Args[5]
 		if err := reg.LoadFromFile(regFile); err != nil {
-			fmt.Printf("❌ Failed to load registry: %v\n", err)
+			logger.Error("Failed to load registry: %v", err)
 			os.Exit(1)
 		}
-		fmt.Printf("✅ Loaded registry from %s\n", regFile)
+		logger.Debug("Loaded registry from %s", regFile)
 
 		// Debug: Print registry contents
 		data, _ := os.ReadFile(regFile)
-		fmt.Printf("📄 Registry file size: %d bytes\n", len(data))
+		logger.Debug("Registry file size: %d bytes", len(data))
 	}
 
 	// Start a sidecar HTTP server for verification
@@ -168,9 +231,9 @@ func runProxy() {
 	})
 
 	go func() {
-		fmt.Println("✅ Verification sidecar listening on 0.0.0.0:8081")
+		logger.Debug("Verification sidecar listening on 0.0.0.0:8081")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("❌ Verification sidecar error: %v\n", err)
+			logger.Error("Verification sidecar error: %v", err)
 		}
 	}()
 
@@ -184,17 +247,17 @@ func runProxy() {
 		// Load schema file if provided (6th argument)
 		if len(os.Args) > 6 {
 			schemaFile := os.Args[6]
-			fmt.Printf("📄 Loading schema file: %s\n", schemaFile)
+			logger.Debug("Loading schema file: %s", schemaFile)
 			if _, err := os.Stat(schemaFile); err != nil {
-				fmt.Printf("⚠️  Schema file does not exist: %v\n", err)
+				logger.Debug("Schema file does not exist: %v", err)
 			} else {
 				if err := p.LoadSchema(schemaFile); err != nil {
-					fmt.Printf("⚠️  Failed to load schema file: %v\n", err)
+					logger.Error("Failed to load schema file: %v", err)
 					// Don't exit - schema is optional
 				}
 			}
 		} else {
-			fmt.Println("📄 No schema file provided (len(os.Args) =", len(os.Args), ")")
+			logger.Debug("No schema file provided (len(os.Args) = %d)", len(os.Args))
 		}
 		// Check for transparent mode duration (7th argument)
 		if len(os.Args) > 7 {
@@ -202,7 +265,7 @@ func runProxy() {
 			if duration, err := time.ParseDuration(transparentDuration); err == nil {
 				p.EnableTransparentMode(duration)
 			} else {
-				fmt.Printf("⚠️  Invalid transparent duration: %v\n", err)
+				logger.Error("Invalid transparent duration: %v", err)
 			}
 		}
 		proxyErr = p.Start(ctx)
@@ -216,12 +279,12 @@ func runProxy() {
 		p := kafka.NewInterceptor(addr, reg)
 		proxyErr = p.Start(ctx)
 	default:
-		fmt.Printf("Unknown proxy type: %s\n", pType)
+		logger.Error("Unknown proxy type: %s", pType)
 		os.Exit(1)
 	}
 
 	if proxyErr != nil {
-		fmt.Printf("Proxy error: %v\n", proxyErr)
+		logger.Error("Proxy error: %v", proxyErr)
 		os.Exit(1)
 	}
 

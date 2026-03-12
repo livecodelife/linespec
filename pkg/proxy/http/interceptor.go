@@ -3,12 +3,12 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 )
@@ -41,7 +41,7 @@ func (i *Interceptor) Start(ctx context.Context) error {
 		server.Shutdown(context.Background())
 	}()
 
-	fmt.Printf("HTTP Interceptor listening on %s\n", i.addr)
+	logger.Debug("HTTP Interceptor listening on %s", i.addr)
 	err := server.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
@@ -53,7 +53,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 1. Find mock in registry
 	path := r.URL.Path
 	method := r.Method
-	fmt.Printf("HTTP Interceptor: Intercepted %s %s (Host: %s)\n", method, path, r.Host)
+	logger.Debug("Intercepted %s %s (Host: %s)", method, path, r.Host)
 
 	// Extract headers from request
 	requestHeaders := make(map[string]string)
@@ -62,12 +62,12 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			requestHeaders[k] = v[0]
 		}
 	}
-	fmt.Printf("HTTP Interceptor: Request headers: %v\n", requestHeaders)
+	logger.Debug("Request headers: %v", requestHeaders)
 
 	// Also extract authorization from request body (for Rails apps that send auth in body)
 	bodyAuth := i.extractAuthFromBody(r)
 	if bodyAuth != "" {
-		fmt.Printf("HTTP Interceptor: Found authorization in body: %s\n", bodyAuth)
+		logger.Debug("Found authorization in body: %s", bodyAuth)
 		// Add it to headers for matching purposes
 		requestHeaders["Authorization"] = bodyAuth
 	}
@@ -89,7 +89,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		fmt.Printf("HTTP Interceptor: No mock found for %s %s (Tried keys: %v)\n", method, path, keys)
+		logger.Debug("No mock found for %s %s (Tried keys: %v)", method, path, keys)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -99,7 +99,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		i.loader.BaseDir = mock.BaseDir
 		payload, err := i.loader.Load(mock.ReturnsFile)
 		if err != nil {
-			fmt.Printf("HTTP Interceptor: Error loading payload %s: %v\n", mock.ReturnsFile, err)
+			logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

@@ -16,6 +16,7 @@ import (
 	"github.com/calebcowen/linespec/pkg/config"
 	"github.com/calebcowen/linespec/pkg/docker"
 	"github.com/calebcowen/linespec/pkg/dsl"
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 	"github.com/docker/docker/api/types/container"
@@ -84,7 +85,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed to start MySQL: %w", err)
 	}
 
-	fmt.Println("Waiting for shared DB to be ready...")
+	logger.Debug("Waiting for shared DB to be ready")
 	// Get host port for direct connection from host (with retry)
 	s.dbHostPort, err = s.waitForContainerPort(ctx, "linespec-shared-db", "3306/tcp", 30*time.Second)
 	if err != nil {
@@ -96,11 +97,11 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 
 	// Additional wait for MySQL to fully initialize and accept connections
 	// Use actual MySQL ping to verify readiness instead of fixed delays
-	fmt.Println("Verifying MySQL is ready...")
+	logger.Debug("Verifying MySQL is ready")
 	if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, "todo_user", "todo_password", "todo_api_development", 30*time.Second); err != nil {
 		return fmt.Errorf("MySQL not accepting connections: %w", err)
 	}
-	fmt.Println("✅ MySQL is ready")
+	logger.Debug("MySQL is ready")
 
 	// Wait for init.sql to complete
 	if err := s.waitForDBInit(ctx); err != nil {
@@ -108,14 +109,14 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	// Run Rails migrations once for all services
-	fmt.Println("Running Rails migrations...")
+	logger.Debug("Running Rails migrations")
 	if err := s.runMigrations(ctx, "user-service"); err != nil {
 		return fmt.Errorf("failed to run user-service migrations: %w", err)
 	}
 	if err := s.runMigrations(ctx, "todo-api"); err != nil {
 		return fmt.Errorf("failed to run todo-api migrations: %w", err)
 	}
-	fmt.Println("✅ Migrations complete")
+	logger.Debug("Migrations complete")
 
 	// Fetch schema for all tables after migrations complete
 	// This is done once and shared across all tests
@@ -123,15 +124,15 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
 		"todo_user", "todo_password", "todo_api_development")
 	if err != nil {
-		fmt.Printf("⚠️  Failed to fetch shared schema: %v\n", err)
+		logger.Debug("Failed to fetch shared schema: %v", err)
 	} else {
 		// Save to shared location in temp directory
 		schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
 		schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
 		if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-			fmt.Printf("⚠️  Failed to write shared schema file: %v\n", err)
+			logger.Debug("Failed to write shared schema file: %v", err)
 		} else {
-			fmt.Printf("✅ Shared schema cached to %s\n", schemaFile)
+			logger.Debug("Shared schema cached to %s", schemaFile)
 		}
 	}
 
@@ -178,13 +179,13 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	// Wait for Kafka to be ready (actual TCP connection check)
-	fmt.Println("Waiting for Kafka to be ready...")
+	logger.Debug("Waiting for Kafka to be ready")
 	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+kafkaHostPort, 60*time.Second); err != nil {
 		return fmt.Errorf("Kafka not ready: %w", err)
 	}
 	s.kafkaReady = true
 
-	fmt.Println("✅ Shared infrastructure ready")
+	logger.Debug("Shared infrastructure ready")
 	return nil
 }
 
@@ -276,11 +277,13 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceDir string) error 
 	select {
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
-			// Stream logs to see what went wrong
-			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer logCancel()
-			fmt.Printf("❌ Migrations failed with exit code %d. Fetching logs...\n", status.StatusCode)
-			_ = s.orch.StreamLogs(logCtx, containerName, os.Stdout, os.Stderr)
+			logger.Debug("Migrations failed with exit code %d. Fetching logs...", status.StatusCode)
+			if logger.IsDebug() {
+				// Stream logs to see what went wrong
+				logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer logCancel()
+				_ = s.orch.StreamLogs(logCtx, containerName, os.Stdout, os.Stderr)
+			}
 			return fmt.Errorf("migrations failed with exit code %d", status.StatusCode)
 		}
 		return nil
@@ -398,7 +401,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}()
 
 			// Wait for PostgreSQL to be ready
-			fmt.Println("Waiting for PostgreSQL to be ready...")
+			logger.Debug("Waiting for PostgreSQL to be ready")
 			// Get host port for direct connection from host (with retry)
 			postgresHostPort, err := r.suite.waitForContainerPort(ctx, dbContainerName, dbPort+"/tcp", 30*time.Second)
 			if err != nil {
@@ -408,10 +411,15 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				return fmt.Errorf("PostgreSQL not ready: %w", err)
 			}
 
-			// Start PostgreSQL proxy
+			// Build PostgreSQL proxy command with debug flag if enabled
+			pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/registry/registry-" + spec.Name + ".json"}
+			if logger.IsDebug() {
+				pgProxyCmd = append(pgProxyCmd, "--debug")
+			}
+
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
-				Cmd:   []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/registry/registry-" + spec.Name + ".json"},
+				Cmd:   pgProxyCmd,
 			}, &container.HostConfig{
 				Binds: []string{
 					r.suite.cwd + ":/app/project",
@@ -432,10 +440,10 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
 			}()
 
-			fmt.Println("✅ PostgreSQL proxy started")
+			logger.Debug("PostgreSQL proxy started")
 
 			// Wait for proxy to be ready
-			fmt.Println("Waiting for PostgreSQL proxy to be ready...")
+			logger.Debug("Waiting for PostgreSQL proxy to be ready")
 			// Get proxy verify endpoint host port for direct connection from host (with retry)
 			// Note: The proxy listens on dbPort internally, but only exposes 8081 to host
 			proxyVerifyPort, err := r.suite.waitForContainerPort(ctx, "proxy-db-"+spec.Name, "8081/tcp", 30*time.Second)
@@ -445,7 +453,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+proxyVerifyPort, 30*time.Second); err != nil {
 				return fmt.Errorf("PostgreSQL proxy not ready: %w", err)
 			}
-			fmt.Println("✅ PostgreSQL proxy is ready")
+			logger.Debug("PostgreSQL proxy is ready")
 
 		case "mysql":
 			// MySQL: use shared database with proxy
@@ -461,16 +469,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				data, err := os.ReadFile(sharedSchemaFile)
 				if err == nil {
 					if err := os.WriteFile(schemaFile, data, 0644); err != nil {
-						fmt.Printf("⚠️  Failed to write schema file: %v\n", err)
+						logger.Debug("Failed to write schema file: %v", err)
 					} else {
-						fmt.Printf("✅ Loaded shared schema for test\n")
+						logger.Debug("Loaded shared schema for test")
 					}
 				} else {
-					fmt.Printf("⚠️  Failed to read shared schema: %v\n", err)
+					logger.Debug("Failed to read shared schema: %v", err)
 				}
 			} else {
 				// Fallback: extract tables from spec and fetch fresh (for backward compatibility)
-				fmt.Printf("📋 Shared schema not found, fetching per-test...\n")
+				logger.Debug("Shared schema not found, fetching per-test")
 				tables := extractTableNamesFromSpec(spec)
 				if len(tables) > 0 {
 					schemaCache, err := r.suite.fetchSchemaFromDatabase(
@@ -481,20 +489,20 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 						serviceConfig.Database.Database,
 					)
 					if err != nil {
-						fmt.Printf("⚠️  Failed to fetch schema: %v\n", err)
+						logger.Debug("Failed to fetch schema: %v", err)
 					} else if len(schemaCache) > 0 {
 						schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
 						if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-							fmt.Printf("⚠️  Failed to write schema file: %v\n", err)
+							logger.Debug("Failed to write schema file: %v", err)
 						}
 					}
 				}
 			}
 
 			// Start database proxy
-			fmt.Println("Starting MySQL proxy...")
+			logger.Debug("Starting MySQL proxy")
 
-			// Build proxy command with optional schema file
+			// Build proxy command with optional schema file and debug flag
 			proxyCmd := []string{
 				"proxy", "mysql",
 				"0.0.0.0:" + dbPort,
@@ -502,14 +510,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				"/app/registry/registry-" + spec.Name + ".json",
 			}
 
-			// Check if schema file exists and add it to command
+			// Add schema file if it exists
 			if _, err := os.Stat(schemaFile); err == nil {
 				proxyCmd = append(proxyCmd, "/app/registry/schema-"+spec.Name+".json")
 			}
 
 			// Add transparent mode duration (0s) - schema is pre-loaded from shared file
-			// This saves ~10s per test by eliminating the transparent mode wait
 			proxyCmd = append(proxyCmd, "0s")
+
+			// Add debug flag if enabled
+			if logger.IsDebug() {
+				proxyCmd = append(proxyCmd, "--debug")
+			}
 
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
@@ -533,22 +545,31 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				defer cancel()
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
 			}()
-			fmt.Println("✅ MySQL proxy started")
+			logger.Debug("MySQL proxy started")
 
-			// Stream proxy logs for debugging (only during development)
-			go func() {
-				logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
-				defer logCancel()
-				_ = r.suite.orch.StreamLogs(logCtx, "proxy-db-"+spec.Name, os.Stdout, os.Stderr)
-			}()
+			// Stream proxy logs for debugging (only in debug mode)
+			if logger.IsDebug() {
+				go func() {
+					logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+					defer logCancel()
+					_ = r.suite.orch.StreamLogs(logCtx, "proxy-db-"+spec.Name, os.Stdout, os.Stderr)
+				}()
+			}
 		}
 	}
 
 	// HTTP Proxy - always start for backward compatibility with user-service.local
-	fmt.Println("Starting HTTP proxy...")
+	logger.Debug("Starting HTTP proxy")
+
+	// Build HTTP proxy command with debug flag if enabled
+	httpProxyCmd := []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/registry/registry-" + spec.Name + ".json"}
+	if logger.IsDebug() {
+		httpProxyCmd = append(httpProxyCmd, "--debug")
+	}
+
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 		Image: "linespec:latest",
-		Cmd:   []string{"proxy", "http", "0.0.0.0:80", "unused", "/app/registry/registry-" + spec.Name + ".json"},
+		Cmd:   httpProxyCmd,
 	}, &container.HostConfig{
 		Binds: []string{
 			r.suite.cwd + ":/app/project",
@@ -568,7 +589,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		defer cancel()
 		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-http-"+spec.Name)
 	}()
-	fmt.Println("✅ HTTP proxy started")
+	logger.Debug("HTTP proxy started")
 
 	// Inspect all proxies to get ports and IPs
 	var dbVerifyPort, httpVerifyPort, proxyHttpIP string
@@ -590,7 +611,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	// Wait for services to be ready on the network
-	fmt.Println("Waiting for proxies to be ready...")
+	logger.Debug("Waiting for proxies to be ready")
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
 		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+dbVerifyPort, 30*time.Second); err != nil {
 			return fmt.Errorf("database proxy not ready: %w", err)
@@ -697,28 +718,30 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
 		hostPort = p[0].HostPort
 	}
-	fmt.Printf("App started on host port: %s\n", hostPort)
+	logger.Debug("App started on host port: %s", hostPort)
 
 	// 5. Wait for App
-	fmt.Println("Waiting for App to be healthy...")
+	logger.Debug("Waiting for App to be healthy")
 	healthURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
 	if err := r.suite.orch.WaitHTTP(ctx, healthURL, 120*time.Second); err != nil {
-		fmt.Println("❌ App failed to become healthy")
-		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer logCancel()
-		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		logger.Debug("App failed to become healthy")
+		if logger.IsDebug() {
+			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer logCancel()
+			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		}
 		return err
 	}
-	fmt.Println("✅ App is healthy")
+	logger.Debug("App is healthy")
 
 	// Warmup for Rails apps to force schema/model loading
 	if serviceConfig.Service.Framework == "rails" {
-		fmt.Println("Warming up Rails app...")
+		logger.Debug("Warming up Rails app")
 		// Send a simple request to force Rails to load models
 		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
 		resp, err := http.Get(warmupURL)
 		if err != nil {
-			fmt.Printf("⚠️ Warmup request failed: %v\n", err)
+			logger.Debug("Warmup request failed: %v", err)
 		} else {
 			resp.Body.Close()
 			// Reduced from 2s to 100ms - health check already confirms Rails is ready
@@ -727,21 +750,23 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	// 6. Trigger Request
-	fmt.Printf("🚀 Triggering RECEIVE: %s %s\n", spec.Receive.Method, spec.Receive.Path)
+	logger.Debug(fmt.Sprintf("Triggering request: %s %s", spec.Receive.Method, spec.Receive.Path))
 	resp, err := r.sendRequest(spec.Receive, spec.BaseDir, hostPort)
 	if err != nil {
-		fmt.Printf("❌ Trigger request failed: %v\n", err)
+		logger.Debug("Trigger request failed: %v", err)
 		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("✅ Received response: %d\n", resp.StatusCode)
+	logger.Debug("Received response: %d", resp.StatusCode)
 
 	// 7. Verify Response
 	if resp.StatusCode != spec.Respond.StatusCode {
-		fmt.Printf("❌ Test failed with status %d. Fetching app logs...\n", resp.StatusCode)
-		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer logCancel()
-		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		logger.Debug("Test failed with status %d. Fetching app logs...", resp.StatusCode)
+		if logger.IsDebug() {
+			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer logCancel()
+			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		}
 		return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
 	}
 
@@ -757,7 +782,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_ = json.Unmarshal(actualRaw, &actual)
 
 		if err := r.comparePayloads(expected, actual, spec.Respond.Noise); err != nil {
-			fmt.Printf("❌ Response body mismatch: %v\n", err)
+			logger.Debug("Response body mismatch: %v", err)
 			return err
 		}
 	}
@@ -773,20 +798,22 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// collectHits already waits for proxy responses with retry logic
 
 	if err := r.registry.VerifyAll(); err != nil {
-		fmt.Printf("❌ Mock verification failed: %v\n", err)
-		logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer logCancel()
-		fmt.Println("📋 Fetching app logs for debugging...")
-		_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		logger.Debug("Mock verification failed: %v", err)
+		if logger.IsDebug() {
+			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer logCancel()
+			logger.Debug("Fetching app logs for debugging")
+			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+		}
 		return err
 	}
 
-	fmt.Println("✨ Test passed!")
+	logger.Debug("Test passed")
 	return nil
 }
 
 func (r *testRunner) collectHits(addr string) {
-	fmt.Printf("Proxy: Collecting hits from %s...\n", addr)
+	logger.Debug("Collecting hits from %s", addr)
 	// Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
 	delays := []time.Duration{50, 100, 200, 400, 800}
 	for i := 0; i < len(delays); i++ {
@@ -945,7 +972,7 @@ func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string
 		query := fmt.Sprintf("SHOW FULL FIELDS FROM `%s`", table)
 		rows, err := db.QueryContext(ctx, query)
 		if err != nil {
-			fmt.Printf("⚠️  Failed to fetch schema for table %s: %v\n", table, err)
+			logger.Debug("Failed to fetch schema for table %s: %v", table, err)
 			continue
 		}
 		defer rows.Close()
@@ -965,20 +992,20 @@ func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string
 				&col.Comment,
 			)
 			if err != nil {
-				fmt.Printf("⚠️  Failed to scan column for table %s: %v\n", table, err)
+				logger.Debug("Failed to scan column for table %s: %v", table, err)
 				continue
 			}
 			columns = append(columns, col)
 		}
 
 		if err := rows.Err(); err != nil {
-			fmt.Printf("⚠️  Error iterating rows for table %s: %v\n", table, err)
+			logger.Debug("Error iterating rows for table %s: %v", table, err)
 			continue
 		}
 
 		if len(columns) > 0 {
 			schemaCache[table] = columns
-			fmt.Printf("✅ Cached schema for table %s (%d columns)\n", table, len(columns))
+			logger.Debug("Cached schema for table %s (%d columns)", table, len(columns))
 		}
 	}
 

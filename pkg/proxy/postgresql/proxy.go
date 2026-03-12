@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 )
@@ -60,7 +61,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	fmt.Printf("PostgreSQL Proxy listening on %s, upstream: %s\n", p.addr, p.upstreamAddr)
+	logger.Debug("PostgreSQL Proxy listening on %s, upstream: %s", p.addr, p.upstreamAddr)
 
 	// Setup context cancellation
 	go func() {
@@ -75,7 +76,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			default:
-				fmt.Printf("Error accepting connection: %v\n", err)
+				logger.Error("Error accepting connection: %v", err)
 				continue
 			}
 		}
@@ -94,21 +95,21 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 	// Handle startup phase (SSL + authentication with client)
 	_, err := p.startup.HandleStartupWithReader(clientReader, clientConn)
 	if err != nil {
-		fmt.Printf("PostgreSQL Proxy: Startup error: %v\n", err)
+		logger.Error("PostgreSQL Proxy: Startup error: %v", err)
 		return
 	}
 
 	// Connect to upstream server
 	upstreamConn, err := net.Dial("tcp", p.upstreamAddr)
 	if err != nil {
-		fmt.Printf("PostgreSQL Proxy: Failed to connect to upstream %s: %v\n", p.upstreamAddr, err)
+		logger.Error("PostgreSQL Proxy: Failed to connect to upstream %s: %v", p.upstreamAddr, err)
 		return
 	}
 	defer upstreamConn.Close()
 
 	// Perform transparent startup with upstream - just forward startup messages
 	if err := p.transparentStartup(clientReader, clientConn, upstreamConn); err != nil {
-		fmt.Printf("PostgreSQL Proxy: Transparent startup failed: %v\n", err)
+		logger.Error("PostgreSQL Proxy: Transparent startup failed: %v", err)
 		return
 	}
 
@@ -197,14 +198,14 @@ func (p *Proxy) proxyTransparently(clientReader *bufio.Reader, clientConn, upstr
 			msg, err := ReadRegularMessage(upstreamConn)
 			if err != nil {
 				if err != io.EOF {
-					fmt.Printf("PostgreSQL Proxy: Error reading from upstream: %v\n", err)
+					logger.Debug("PostgreSQL Proxy: Error reading from upstream: %v", err)
 				}
 				return
 			}
 
 			// Forward to client
 			if err := p.writeMessage(clientConn, msg.Type, msg.Payload); err != nil {
-				fmt.Printf("PostgreSQL Proxy: Error writing to client: %v\n", err)
+				logger.Debug("PostgreSQL Proxy: Error writing to client: %v", err)
 				return
 			}
 		}
@@ -224,7 +225,7 @@ func (p *Proxy) proxyTransparently(clientReader *bufio.Reader, clientConn, upstr
 			msg, err := ReadRegularMessageFromReader(clientReader)
 			if err != nil {
 				if err != io.EOF {
-					fmt.Printf("PostgreSQL Proxy: Error reading from client: %v\n", err)
+					logger.Debug("PostgreSQL Proxy: Error reading from client: %v", err)
 				}
 				return
 			}
@@ -232,13 +233,13 @@ func (p *Proxy) proxyTransparently(clientReader *bufio.Reader, clientConn, upstr
 			// Check if we should intercept this message
 			if p.shouldIntercept(msg) {
 				if err := p.handleInterceptedMessage(msg, clientReader, clientConn, upstreamConn); err != nil {
-					fmt.Printf("PostgreSQL Proxy: Error handling intercepted message: %v\n", err)
+					logger.Error("PostgreSQL Proxy: Error handling intercepted message: %v", err)
 					return
 				}
 			} else {
 				// Forward transparently to upstream
 				if err := p.writeMessage(upstreamConn, msg.Type, msg.Payload); err != nil {
-					fmt.Printf("PostgreSQL Proxy: Error forwarding to upstream: %v\n", err)
+					logger.Debug("PostgreSQL Proxy: Error forwarding to upstream: %v", err)
 					return
 				}
 			}
@@ -578,7 +579,7 @@ func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement) err
 			p.loader.BaseDir = mock.BaseDir
 			payload, err := p.loader.Load(mock.ReturnsFile)
 			if err != nil {
-				fmt.Printf("PostgreSQL Proxy: Error loading payload %s: %v\n", mock.ReturnsFile, err)
+				logger.Error("PostgreSQL Proxy: Error loading payload %s: %v", mock.ReturnsFile, err)
 				return p.result.SendEmptyResultSet(conn, columns)
 			}
 
@@ -642,7 +643,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 			p.loader.BaseDir = mock.BaseDir
 			payload, err := p.loader.Load(mock.ReturnsFile)
 			if err != nil {
-				fmt.Printf("PostgreSQL Proxy: Error loading payload %s: %v\n", mock.ReturnsFile, err)
+				logger.Error("PostgreSQL Proxy: Error loading payload %s: %v", mock.ReturnsFile, err)
 				return p.writeMessage(conn, MsgNoData, nil)
 			}
 

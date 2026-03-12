@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -55,7 +56,7 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 func (p *Proxy) EnableTransparentMode(duration time.Duration) {
 	p.transparentMode = true
 	p.transparentUntil = time.Now().Add(duration)
-	fmt.Printf("🔓 Proxy transparent mode enabled for %v\n", duration)
+	logger.Debug("Proxy transparent mode enabled for %v", duration)
 }
 
 // isTransparent returns true if the proxy should pass through all queries
@@ -66,7 +67,7 @@ func (p *Proxy) isTransparent() bool {
 	// Check if transparent mode has expired
 	if time.Now().After(p.transparentUntil) {
 		p.transparentMode = false
-		fmt.Println("🔒 Proxy transparent mode disabled, now intercepting queries")
+		logger.Debug("Proxy transparent mode disabled, now intercepting queries")
 		return false
 	}
 	return true
@@ -82,9 +83,9 @@ func (p *Proxy) LoadSchema(schemaFile string) error {
 		return fmt.Errorf("failed to parse schema file: %w", err)
 	}
 
-	fmt.Printf("✅ Loaded schema for %d tables\n", len(p.schemaCache))
+	logger.Debug("Loaded schema for %d tables", len(p.schemaCache))
 	for table := range p.schemaCache {
-		fmt.Printf("   - %s\n", table)
+		logger.Debug("  - %s", table)
 	}
 	return nil
 }
@@ -96,7 +97,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	fmt.Printf("MySQL Proxy listening on %s, upstream: %s\n", p.addr, p.upstreamAddr)
+	logger.Debug("MySQL Proxy listening on %s, upstream: %s", p.addr, p.upstreamAddr)
 
 	go func() {
 		<-ctx.Done()
@@ -122,7 +123,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 
 	upstreamConn, err := net.Dial("tcp", p.upstreamAddr)
 	if err != nil {
-		fmt.Printf("Proxy: Failed to connect to upstream %s: %v\n", p.upstreamAddr, err)
+		logger.Error("Proxy: Failed to connect to upstream %s: %v", p.upstreamAddr, err)
 		return
 	}
 	defer upstreamConn.Close()
@@ -152,26 +153,26 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 				query := string(payload[1:])
 
 				// Log all queries for debugging
-				fmt.Printf("Proxy: Query received: %.80s\n", query)
+				logger.Debug("Query received: %.80s", query)
 
 				// Check for transparent mode first - pass through everything
 				if p.isTransparent() {
-					fmt.Printf("Proxy: Transparent mode - passing through: %.50s...\n", query)
+					logger.Debug("Transparent mode - passing through: %.50s", query)
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else if p.isShowFullFieldsQuery(query) {
 					tableName := p.extractShowFullFieldsTable(query)
 					if columns, ok := p.schemaCache[tableName]; ok {
-						fmt.Printf("Proxy: Returning cached schema for table %s\n", tableName)
+						logger.Debug("Returning cached schema for table %s", tableName)
 						p.sendSchemaResponse(clientConn, tableName, columns)
 						continue // Don't forward to upstream
 					}
 					// If not in cache, pass through to upstream
-					fmt.Printf("Proxy: Schema cache miss for table %s, passing through\n", tableName)
+					logger.Debug("Schema cache miss for table %s, passing through", tableName)
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else if p.isWhitelisted(query) {
-					fmt.Printf("Proxy: Whitelisted query passing through: %.50s...\n", query)
+					logger.Debug("Whitelisted query passing through: %.50s", query)
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else {
@@ -182,7 +183,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 						if mock.SQL == "" {
 							mock.SQL = query
 						}
-						fmt.Printf("Proxy: Mocking query for table %s: %s\n", tableName, query)
+						logger.Debug("Mocking query for table %s: %s", tableName, query)
 						p.sendMockResponse(clientConn, mock)
 					} else {
 						_, _ = upstreamConn.Write(header)
@@ -220,7 +221,7 @@ func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement) {
 			p.loader.BaseDir = mock.BaseDir
 			payload, err := p.loader.Load(mock.ReturnsFile)
 			if err != nil {
-				fmt.Printf("Proxy: Error loading payload %s: %v\n", mock.ReturnsFile, err)
+				logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
 				_ = p.sendEmptyResultSet(conn, mock.Table)
 				return
 			}

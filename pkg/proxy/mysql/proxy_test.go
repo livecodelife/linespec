@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 	_ "github.com/go-sql-driver/mysql"
@@ -41,7 +42,7 @@ func TestProxy_Passthrough(t *testing.T) {
 
 	go func() {
 		if err := proxy.Start(ctx); err != nil {
-			fmt.Printf("Proxy start error: %v\n", err)
+			logger.Debug("Proxy start error: %v", err)
 		}
 	}()
 

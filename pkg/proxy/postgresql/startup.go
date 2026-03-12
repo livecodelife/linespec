@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/calebcowen/linespec/pkg/logger"
 )
 
 // StartupHandler manages the connection startup phase
@@ -79,7 +81,7 @@ func (h *StartupHandler) handleSSLRequest(reader *bufio.Reader, conn net.Conn) e
 		if _, err := conn.Write([]byte{'N'}); err != nil {
 			return fmt.Errorf("error sending SSL response: %w", err)
 		}
-		fmt.Println("PostgreSQL Proxy: Declined SSL request, client will retry with plaintext")
+		logger.Debug("PostgreSQL Proxy: Declined SSL request, client will retry with plaintext")
 	}
 
 	return nil

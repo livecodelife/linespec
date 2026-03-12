@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -151,7 +152,7 @@ func (d *DockerOrchestrator) WaitHTTP(ctx context.Context, url string, timeout t
 		resp, err := httpClient.Do(req)
 		if err == nil {
 			resp.Body.Close()
-			fmt.Printf("WaitHTTP: %s returned %d\n", url, resp.StatusCode)
+			logger.Debug("WaitHTTP: %s returned %d", url, resp.StatusCode)
 			if resp.StatusCode < 500 { // 200 or 404 is usually fine for Rails boot
 				return nil
 			}

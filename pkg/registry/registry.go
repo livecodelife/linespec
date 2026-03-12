@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/types"
 )
 
@@ -288,7 +289,7 @@ func (r *MockRegistry) VerifyAll() error {
 				if count == 0 {
 					// Skip EVENT mocks since we use real Kafka and can't intercept
 					if mock.Channel == types.Event {
-						fmt.Printf("✅ Event sent successfully to topic [%s]\n", mock.Topic)
+						logger.Debug("Event sent successfully to topic [%s]", mock.Topic)
 						continue
 					}
 					return fmt.Errorf("expectation failed: [%s] on [%s/%s/%s] was never called", mock.Channel, mock.Table, mock.URL, mock.Topic)
