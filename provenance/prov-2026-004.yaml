@@ -1,0 +1,62 @@
+id: prov-2026-004
+title: "MySQL write expectations are auto-wrapped in transactions by default"
+status: implemented
+created_at: "2026-03-12"
+author: "calebcowen@gmail.com"
+
+intent: >
+  WRITE:MYSQL expectations are automatically wrapped in BEGIN and COMMIT
+  transaction mocks unless explicitly opted out with the NO TRANSACTION
+  keyword. This default exists because most production ORMs (Rails
+  ActiveRecord, Django ORM, Hibernate) wrap write operations in
+  transactions automatically, meaning a LineSpec that omits transaction
+  mocks would fail against a real Rails application even though the
+  application is behaving correctly. The default eliminates this
+  footgun for the common case while preserving the ability to opt out
+  for non-transactional ORMs or direct query execution. The transaction
+  mocks are generated as ordered siblings of the write mock — a BEGIN
+  mock before and a COMMIT mock after — and are named with a
+  -transaction-N suffix to distinguish them from the write mock itself.
+
+constraints:
+  - Transaction wrapping must be the default — engineers must never need
+    to add BEGIN and COMMIT expectations manually for standard ORM usage
+  - Opting out must be explicit and per-expectation via the NO TRANSACTION
+    keyword — there is no global opt-out setting
+  - The generated BEGIN and COMMIT mocks must be ordered immediately before
+    and after the write mock in the mock sequence — no other mocks may be
+    interleaved between them by the compiler
+  - Transaction mock generation must be invisible to the engineer in the
+    DSL — it must not appear in the .linespec file syntax
+  - NO TRANSACTION must be a statement-level modifier, not a file-level
+    or test-level setting
+
+affected_scope:
+  - pkg/compiler/**
+  - pkg/proxy/mysql/**
+  - docs/LINESPEC.md
+  - docs/README.md
+
+forbidden_scope:
+  - pkg/proxy/postgresql/**
+  - pkg/dsl/lexer.go
+
+supersedes: null
+superseded_by: null
+related:
+  - prov-2026-001
+  - prov-2026-005
+
+associated_linespecs:
+  - examples/todo-linespecs/**
+  - examples/user-linespecs/**
+
+associated_traces: []
+
+monitors: []
+
+tags:
+  - mysql
+  - transactions
+  - compiler
+  - orm

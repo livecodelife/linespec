@@ -1,0 +1,59 @@
+id: prov-2026-002
+title: "Deterministic DSL with no inference, heuristics, or natural language"
+status: implemented
+created_at: "2026-03-12"
+author: "calebcowen@gmail.com"
+
+intent: >
+  The LineSpec DSL is a strict, deterministic specification language. It must
+  be trivial to parse, produce identical output for identical input on every
+  run, and contain no ambiguity that requires interpretation. Engineers
+  specifying behavior must express it precisely in the DSL syntax — the
+  compiler never infers intent from prose, makes assumptions about missing
+  fields, or applies heuristics to recover from ambiguous input. If a
+  specification is invalid, the compiler must fail with a clear error rather
+  than making a best-effort attempt to interpret it. This property is what
+  makes LineSpec suitable as the evaluation layer for agent-generated
+  implementations — the evaluation cannot be fooled or gamed by probabilistic
+  output because it is purely deterministic.
+
+constraints:
+  - The lexer and parser must reject any input that does not conform exactly
+    to the defined grammar — no fuzzy matching, no optional syntax that
+    requires contextual interpretation
+  - Compilation must be purely functional — identical input always produces
+    identical output with no dependence on environment, time, or external state
+  - Error messages must identify the exact line and token that caused the
+    failure — the engineer must never need to guess why a spec failed to parse
+  - No natural language processing, machine learning, or probabilistic logic
+    may be introduced anywhere in the parsing or compilation pipeline
+  - New statement types or keywords added to the DSL must be backward
+    incompatible by default — existing valid specs must continue to parse
+    correctly, but ambiguous constructs must never be silently accepted
+
+affected_scope:
+  - pkg/dsl/**
+  - pkg/compiler/**
+  - pkg/types/**
+  - docs/LINESPEC.md
+  - docs/AGENTS.md
+
+forbidden_scope:
+  - pkg/proxy/**
+
+supersedes: null
+superseded_by: null
+related:
+  - prov-2026-001
+
+associated_linespecs: []
+
+associated_traces: []
+
+monitors: []
+
+tags:
+  - architecture
+  - dsl
+  - compiler
+  - core

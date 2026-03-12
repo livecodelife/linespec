@@ -1,0 +1,50 @@
+id: prov-2026-001
+title: "Protocol-level proxy interception for language-agnostic test evaluation"
+status: implemented
+created_at: "2026-03-12"
+author: "caleb.cowen@gmail.com"
+
+intent: >
+  LineSpec evaluates service behavior by intercepting traffic at the TCP/protocol
+  layer rather than through application-level mocking, dependency injection, or
+  language-specific test frameworks. The proxy sits between the system under test
+  and its real dependencies, intercepting MySQL, PostgreSQL, HTTP, and Kafka
+  traffic at the wire protocol level. This makes LineSpec evaluations valid
+  regardless of the implementation language, runtime, or framework of the service
+  being tested. A specification written today remains valid if the implementation
+  is regenerated in a different language tomorrow.
+
+constraints:
+  - Interception must occur at the network/protocol layer, never through
+    application-level hooks, monkey-patching, or runtime instrumentation
+  - The system under test must not require modification to be tested — no
+    test-specific imports, interfaces, or configuration changes should be
+    required in the application code
+  - Proxy implementations must be protocol-correct — they must complete the
+    full handshake expected by real clients and must not rely on clients
+    being lenient about malformed responses
+  - Each protocol proxy must be independently startable and testable without
+    requiring the others to be running
+
+affected_scope:
+  - pkg/proxy/**
+  - pkg/registry/**
+  - cmd/linespec/main.go
+
+forbidden_scope:
+  - "re:.*_test\\.go$"
+
+supersedes: null
+superseded_by: null
+related: []
+
+associated_linespecs: []
+
+associated_traces: []
+
+monitors: []
+
+tags:
+  - architecture
+  - proxy
+  - core

@@ -1,0 +1,56 @@
+id: prov-2026-003
+title: "In-memory compilation at test runtime — no persisted test artifacts"
+status: implemented
+created_at: "2026-03-12"
+author: "calebcowen@gmail.com"
+
+intent: >
+  LineSpec compiles specifications to mocks and test cases in memory at
+  runtime rather than generating persisted artifact files (such as KTest
+  and KMock YAML files) that are saved to disk and replayed separately.
+  The LineSpec file itself is the complete and authoritative source of
+  truth. The compiled representation is an implementation detail of the
+  test runner — it is generated on demand, used to drive the proxy and
+  evaluate the response, and then discarded. This eliminates an entire
+  class of drift where persisted artifacts diverge from the specifications
+  that were supposed to generate them, and removes the need for engineers
+  to manage or commit generated files alongside their specifications.
+
+constraints:
+  - No test artifact files (mocks, test case definitions, or intermediate
+    representations) may be written to disk as part of the normal test
+    execution path
+  - The test runner must be able to execute a specification from a cold
+    start with only the .linespec file and its referenced payload files
+    present on disk — no prior compilation step should be required
+  - The in-memory representation used by the proxy must be derived
+    entirely from the parsed DSL types in pkg/types — it must not
+    introduce a separate artifact schema that could drift from the DSL
+  - Payload files referenced via WITH and RETURNS clauses are the only
+    external files the runner may read at test time
+
+affected_scope:
+  - pkg/runner/**
+  - pkg/registry/**
+  - pkg/compiler/**
+
+forbidden_scope:
+  - pkg/dsl/**
+  - pkg/proxy/**
+
+supersedes: null
+superseded_by: null
+related:
+  - prov-2026-001
+  - prov-2026-002
+
+associated_linespecs: []
+
+associated_traces: []
+
+monitors: []
+
+tags:
+  - architecture
+  - runner
+  - compiler
