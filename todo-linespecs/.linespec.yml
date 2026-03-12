@@ -1,0 +1,36 @@
+service:
+  name: todo-api
+  service_dir: todo-api
+  type: web
+  framework: rails
+  port: 3000
+  health_endpoint: /up
+  docker_compose: docker-compose.yml
+  build_context: .
+  start_command: bundle exec rails server -b 0.0.0.0 -p 3000
+  environment:
+    KAFKA_BROKERS: kafka:29092
+    KAFKA_TOPIC: todo-events
+    USER_SERVICE_URL: http://user-service.local/api/v1/users/auth
+
+database:
+  type: mysql
+  image: mysql:8.4
+  port: 3306
+  container: db
+  init_script: init.sql
+  database: todo_api_development
+  username: todo_user
+  password: todo_password
+
+infrastructure:
+  database: true
+  kafka: true
+  external_db: false
+
+dependencies:
+  - name: user-service
+    type: http
+    host: user-service.local
+    port: 3001
+    proxy: true

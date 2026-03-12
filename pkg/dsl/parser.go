@@ -260,6 +260,13 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		}, nil
 	}
 
+	if channelPart == "READ:POSTGRESQL" {
+		return &types.ExpectStatement{
+			Channel: types.ReadPostgreSQL,
+			Table:   rest,
+		}, nil
+	}
+
 	return nil, fmt.Errorf("Unrecognized EXPECT channel at line %d: %s", line, channelPart)
 }
 

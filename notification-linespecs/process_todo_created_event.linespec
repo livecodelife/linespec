@@ -1,0 +1,14 @@
+TEST process_todo_created_event
+
+RECEIVE HTTP:POST /api/v1/notifications/events
+WITH {{payloads/todo_created_event.yaml}}
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/42
+HEADERS
+  Authorization: Bearer service_token_xyz789
+RETURNS {{payloads/user_42.yaml}}
+
+EXPECT WRITE:POSTGRESQL notifications
+WITH {{payloads/notification_insert.yaml}}
+
+RESPOND HTTP:200

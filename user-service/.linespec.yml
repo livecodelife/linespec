@@ -1,0 +1,26 @@
+service:
+  name: user-service
+  type: web
+  framework: rails
+  port: 3001
+  health_endpoint: /up
+  docker_compose: docker-compose.yml
+  build_context: .
+  start_command: bundle exec rails server -b 0.0.0.0 -p 3001
+
+database:
+  type: mysql
+  image: mysql:8.4
+  port: 3306
+  container: db
+  init_script: init.sql
+  database: todo_api_development
+  username: todo_user
+  password: todo_password
+
+infrastructure:
+  database: true
+  kafka: false
+  external_db: false
+
+dependencies: []

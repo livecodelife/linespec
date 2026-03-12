@@ -86,19 +86,23 @@ func TestParser_CreateUserSuccess(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	if len(spec.Expects) != 1 {
-		t.Errorf("Expected 1 expect, got %d", len(spec.Expects))
+	if len(spec.Expects) != 2 {
+		t.Errorf("Expected 2 expects, got %d", len(spec.Expects))
 	}
 
-	if spec.Expects[0].Channel != types.WriteMySQL {
-		t.Errorf("Expected channel WRITE_MYSQL, got %s", spec.Expects[0].Channel)
+	if spec.Expects[0].Channel != types.ReadMySQL {
+		t.Errorf("Expected first channel READ_MYSQL, got %s", spec.Expects[0].Channel)
 	}
 
-	if len(spec.Expects[0].Verify) != 1 {
-		t.Errorf("Expected 1 verify rule, got %d", len(spec.Expects[0].Verify))
+	if spec.Expects[1].Channel != types.WriteMySQL {
+		t.Errorf("Expected second channel WRITE_MYSQL, got %s", spec.Expects[1].Channel)
 	}
 
-	if spec.Expects[0].Verify[0].Type != "CONTAINS" {
-		t.Errorf("Expected verify type CONTAINS, got %s", spec.Expects[0].Verify[0].Type)
+	if len(spec.Expects[1].Verify) != 1 {
+		t.Errorf("Expected 1 verify rule for write expect, got %d", len(spec.Expects[1].Verify))
+	}
+
+	if spec.Expects[1].Verify[0].Type != "CONTAINS" {
+		t.Errorf("Expected verify type CONTAINS, got %s", spec.Expects[1].Verify[0].Type)
 	}
 }

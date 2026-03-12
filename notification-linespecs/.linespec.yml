@@ -1,0 +1,38 @@
+service:
+  name: notification-service
+  service_dir: notification-service
+  type: web
+  framework: fastapi
+  port: 3002
+  health_endpoint: /health
+  docker_compose: docker-compose.yml
+  build_context: .
+  start_command: uvicorn app.main:app --host 0.0.0.0 --port 3002
+  environment:
+    KAFKA_BROKERS: kafka:29092
+    KAFKA_TOPIC: todo-events
+    KAFKA_GROUP_ID: notification-service-group
+    USER_SERVICE_URL: http://user-service.local:80/api/v1/users/auth
+    DATABASE_URL: postgresql+asyncpg://notification_user:notification_password@db:5432/notification_service
+
+database:
+  type: postgresql
+  image: postgres:16-alpine
+  port: 5432
+  container: db
+  init_script: init.sql
+  database: notification_service
+  username: notification_user
+  password: notification_password
+
+infrastructure:
+  database: true
+  kafka: true
+  external_db: false
+
+dependencies:
+  - name: user-service
+    type: http
+    host: user-service.local
+    port: 3001
+    proxy: true

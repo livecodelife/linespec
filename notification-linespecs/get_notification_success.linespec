@@ -1,0 +1,19 @@
+TEST get_notification_success
+
+RECEIVE HTTP:GET /api/v1/notifications/1
+HEADERS
+  Authorization: Bearer token_abc123xyz
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+HEADERS
+  Authorization: Bearer token_abc123xyz
+RETURNS {{payloads/authenticated_user.yaml}}
+
+EXPECT READ:POSTGRESQL notifications
+USING_SQL """
+SELECT * FROM notifications WHERE id = 1 AND recipient = 'john@example.com'
+"""
+RETURNS {{payloads/notification_single.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/notification_single_response.yaml}}
