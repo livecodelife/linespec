@@ -12,13 +12,13 @@ Current bottlenecks identified:
 |-------|----------|--------|--------|
 | 10s transparent mode wait per MySQL test | runner.go:451 | ✅ **FIXED** | High |
 | WaitTCPInternal spawns Alpine container | orchestrator.go:110-169 | ✅ **FIXED** | Medium |
-| Hardcoded 2s Rails warmup sleep | runner.go:626 | Pending | Medium |
-| 500ms sleep in verification | runner.go:672, 692 | Pending | Low |
+| Hardcoded 2s Rails warmup sleep | runner.go:714-726 | ✅ **FIXED** | Medium |
+| 500ms sleep in verification | runner.go:766 | ✅ **FIXED** | Low |
 | Sequential test execution | main.go:97-120 | Pending | High for suites |
 | Per-test schema fetching | runner.go:393-430 | ✅ **FIXED** | Low |
 
-**Savings achieved**: ~2 minutes total (~8-10s per MySQL test)  
-**Remaining potential**: 5-8s per test + 2-4x suite speedup with parallelism
+**Savings achieved**: ~2 minutes 45 seconds total (~12-13s per MySQL test)  
+**Remaining potential**: 2-4x suite speedup with parallelism
 
 ---
 
@@ -96,7 +96,7 @@ func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, a
 
 ## Optimization 3: Reduce Hardcoded Sleeps
 
-**Priority**: Medium | **Estimated Savings**: 2-3s per test | **Complexity**: Very Low
+**Status**: ✅ **COMPLETE** | **Priority**: Medium | **Estimated Savings**: 2-3s per test | **Complexity**: Very Low
 
 ### Problem
 
@@ -297,7 +297,7 @@ After implementing Optimization 1, verify that:
 |------|-------------|--------|---------|
 | 1 | Eliminate Transparent Mode | ✅ **COMPLETE** | ~2 min total (~8-10s per MySQL test) |
 | 2 | Fix WaitTCPInternal | ✅ **COMPLETE** | 2-5s per test |
-| 3 | Reduce Hardcoded Sleeps | Pending | 2-3s per test |
+| 3 | Reduce Hardcoded Sleeps | ✅ **COMPLETE** | 2-3s per test |
 | 4 | Cache Schema Globally | (covered by #1) | - |
 | 5 | Parallel Test Execution | Pending | 2-4x for suites |
 

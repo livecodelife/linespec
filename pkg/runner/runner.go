@@ -109,10 +109,10 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 
 	// Run Rails migrations once for all services
 	fmt.Println("Running Rails migrations...")
-	if err := s.runMigrations(ctx, "user-service", "3001"); err != nil {
+	if err := s.runMigrations(ctx, "user-service"); err != nil {
 		return fmt.Errorf("failed to run user-service migrations: %w", err)
 	}
-	if err := s.runMigrations(ctx, "todo-api", "3000"); err != nil {
+	if err := s.runMigrations(ctx, "todo-api"); err != nil {
 		return fmt.Errorf("failed to run todo-api migrations: %w", err)
 	}
 	fmt.Println("✅ Migrations complete")
@@ -241,7 +241,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 	return nil
 }
 
-func (s *TestSuite) runMigrations(ctx context.Context, serviceDir, appPort string) error {
+func (s *TestSuite) runMigrations(ctx context.Context, serviceDir string) error {
 	// Start a temporary container to run migrations
 	containerName := "linespec-migrate-" + serviceDir
 
@@ -367,7 +367,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		dbType := serviceConfig.Database.Type
 		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
 
-		if dbType == "postgresql" {
+		switch dbType {
+		case "postgresql":
 			// Start PostgreSQL container for this service
 			dbContainerName = "linespec-db-" + spec.Name
 			db := serviceConfig.Database
@@ -446,7 +447,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}
 			fmt.Println("✅ PostgreSQL proxy is ready")
 
-		} else if dbType == "mysql" {
+		case "mysql":
 			// MySQL: use shared database with proxy
 			dbContainerName = "linespec-shared-db"
 
@@ -715,8 +716,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		fmt.Println("Warming up Rails app...")
 		// Send a simple request to force Rails to load models
 		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
-		http.Get(warmupURL)
-		time.Sleep(2 * time.Second) // Give Rails time to load models
+		resp, err := http.Get(warmupURL)
+		if err != nil {
+			fmt.Printf("⚠️ Warmup request failed: %v\n", err)
+		} else {
+			resp.Body.Close()
+			// Reduced from 2s to 100ms - health check already confirms Rails is ready
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 	// 6. Trigger Request
@@ -762,7 +769,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if httpVerifyPort != "" {
 		r.collectHits("localhost:" + httpVerifyPort)
 	}
-	time.Sleep(500 * time.Millisecond)
+	// REMOVED: time.Sleep(500 * time.Millisecond)
+	// collectHits already waits for proxy responses with retry logic
 
 	if err := r.registry.VerifyAll(); err != nil {
 		fmt.Printf("❌ Mock verification failed: %v\n", err)
@@ -779,10 +787,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 func (r *testRunner) collectHits(addr string) {
 	fmt.Printf("Proxy: Collecting hits from %s...\n", addr)
-	for i := 0; i < 5; i++ {
+	// Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
+	delays := []time.Duration{50, 100, 200, 400, 800}
+	for i := 0; i < len(delays); i++ {
 		resp, err := http.Get("http://" + addr + "/verify")
 		if err != nil {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(delays[i] * time.Millisecond)
 			continue
 		}
 		defer resp.Body.Close()
