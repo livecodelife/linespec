@@ -1,0 +1,37 @@
+id: prov-2026-009
+title: Auto-affected_scope must be saveable from status command with clear UX
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: >
+  The current auto_affected_scope feature in the provenance status command has
+  confusing UX. When enabled, it populates affected_scope in-memory from git
+  commits for display purposes, but does not persist the changes to the YAML
+  file. This creates a misleading experience where users see populated data
+  in the output, but running the command again shows empty scope because the
+  file was never updated.
+  
+  The intent is to provide a clear path for users to optionally save the
+  auto-populated scope without forcing automatic saves that might surprise
+  users who only wanted to check status. Both ephemeral viewing and persistent
+  saving should be available, with clear communication about which mode is active.
+constraints:
+  - Running status without flags should NOT auto-save scope changes (no breaking change)
+  - Running status --save-scope should auto-populate AND persist the scope to the YAML file
+  - When scope is auto-populated but not saved, display a clear message mentioning both available save mechanisms (--save-scope flag or lock-scope command)
+  - The save operation should only affect observed-mode records that were actually auto-populated
+  - The UX message must be shown in both human and JSON output formats when scope was populated but not saved
+  - The message should be actionable and mention both available save mechanisms
+affected_scope: []
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+  - ux
+  - provenance
+  - git
+  - cli

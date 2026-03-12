@@ -217,21 +217,41 @@ func (c *Commands) Lint(opts LintOptions) error {
 
 // StatusOptions holds options for the status command
 type StatusOptions struct {
-	RecordID string
-	Filter   string // open | implemented | superseded | deprecated | tag:xxx
-	Format   string // human | json
+	RecordID  string
+	Filter    string // open | implemented | superseded | deprecated | tag:xxx
+	Format    string // human | json
+	SaveScope bool   // persist auto-populated scope to file
 }
 
 // Status shows record status
 func (c *Commands) Status(opts StatusOptions) error {
+	// Track which records were auto-populated (for UX message)
+	var autoPopulatedRecords []*Record
+
 	// Auto-populate scope if configured
 	if c.Config.AutoAffectedScope {
 		for _, record := range c.Loader.Records {
 			if record.Status == StatusOpen && record.ScopeMode() == "observed" {
+				// Store original scope length to detect if it changed
+				originalLen := len(record.AffectedScope)
 				if err := c.Checker.AutoPopulateScope(record); err != nil {
 					// Non-fatal, just log
 					fmt.Fprintf(os.Stderr, "Warning: Could not auto-populate scope for %s: %v\n", record.ID, err)
+				} else if len(record.AffectedScope) > originalLen {
+					// Scope was actually populated with new files
+					autoPopulatedRecords = append(autoPopulatedRecords, record)
 				}
+			}
+		}
+	}
+
+	// Persist scope if --save-scope flag is used
+	if opts.SaveScope && len(autoPopulatedRecords) > 0 {
+		for _, record := range autoPopulatedRecords {
+			if err := c.Loader.SaveRecord(record); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Could not save scope for %s: %v\n", record.ID, err)
+			} else {
+				fmt.Fprintf(c.Formatter.Output, "✓ Saved auto-populated scope for %s (%d files)\n", record.ID, len(record.AffectedScope))
 			}
 		}
 	}
@@ -243,11 +263,28 @@ func (c *Commands) Status(opts StatusOptions) error {
 			if !exists {
 				return fmt.Errorf("record not found: %s", opts.RecordID)
 			}
-			return c.Formatter.FormatJSON(record)
+			// Include UX message in JSON if scope was auto-populated but not saved
+			result := map[string]interface{}{
+				"record": record,
+			}
+			if len(autoPopulatedRecords) > 0 && !opts.SaveScope {
+				result["_notice"] = "Scope auto-populated (not saved). Use --save-scope flag or run 'linespec provenance lock-scope' to persist"
+				result["_auto_populated_records"] = getRecordIDs(autoPopulatedRecords)
+			}
+			return c.Formatter.FormatJSON(result)
 		}
-		return c.Formatter.FormatJSON(c.Loader.Records)
+		// For all records, include notice if applicable
+		result := map[string]interface{}{
+			"records": c.Loader.Records,
+		}
+		if len(autoPopulatedRecords) > 0 && !opts.SaveScope {
+			result["_notice"] = "Scope auto-populated (not saved). Use --save-scope flag or run 'linespec provenance lock-scope' to persist"
+			result["_auto_populated_records"] = getRecordIDs(autoPopulatedRecords)
+		}
+		return c.Formatter.FormatJSON(result)
 	}
 
+	// Human format output
 	if opts.RecordID != "" {
 		record, exists := c.Loader.GetRecord(opts.RecordID)
 		if !exists {
@@ -259,7 +296,30 @@ func (c *Commands) Status(opts StatusOptions) error {
 		c.Formatter.FormatStatus(c.Loader, c.Config.Enforcement, opts.Filter)
 	}
 
+	// Show UX message for ephemeral mode (auto-populated but not saved)
+	if len(autoPopulatedRecords) > 0 && !opts.SaveScope {
+		fmt.Fprintln(c.Formatter.Output)
+		fmt.Fprintln(c.Formatter.Output, "⚠ Scope auto-populated (not saved)")
+		fmt.Fprintln(c.Formatter.Output, "  To persist these changes, use either:")
+		fmt.Fprintln(c.Formatter.Output, "    --save-scope flag: linespec provenance status --save-scope")
+		fmt.Fprintln(c.Formatter.Output, "    lock-scope command: linespec provenance lock-scope --record <id>")
+		fmt.Fprintln(c.Formatter.Output)
+		fmt.Fprintln(c.Formatter.Output, "  Auto-populated records:")
+		for _, record := range autoPopulatedRecords {
+			fmt.Fprintf(c.Formatter.Output, "    - %s (%d files)\n", record.ID, len(record.AffectedScope))
+		}
+	}
+
 	return nil
+}
+
+// getRecordIDs extracts IDs from a slice of records
+func getRecordIDs(records []*Record) []string {
+	ids := make([]string, len(records))
+	for i, r := range records {
+		ids[i] = r.ID
+	}
+	return ids
 }
 
 // GraphOptions holds options for the graph command

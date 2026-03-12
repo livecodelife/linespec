@@ -1,6 +1,6 @@
 id: prov-2026-007
 title: "Service discovery and configuration must be flexible, not hardcoded"
-status: open
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: >
@@ -21,14 +21,22 @@ constraints:
   - All paths must be relative to the working directory or configured base directory
   - Service discovery must work for any valid directory structure without code changes
 
-affected_scope: []
+affected_scope:
+  - pkg/runner/runner.go
 
 forbidden_scope: []
 
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs: []
+associated_linespecs:
+  - examples/todo-linespecs/create_todo_success.linespec
+  - examples/todo-linespecs/create_todo_unauthenticated.linespec
+  - examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+  - examples/todo-linespecs/delete_todo_success.linespec
+  - examples/todo-linespecs/get_todo_success.linespec
+  - examples/todo-linespecs/list_todos_success.linespec
+  - examples/todo-linespecs/update_todo_success.linespec
 associated_traces: []
 monitors: []
 tags:

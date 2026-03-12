@@ -514,6 +514,8 @@ func parseStatusOptions(args []string) provenance.StatusOptions {
 				opts.Format = args[i+1]
 				i++
 			}
+		case "--save-scope":
+			opts.SaveScope = true
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance status [options]
 
@@ -522,6 +524,7 @@ Options:
   --filter status            Filter by status (open|implemented|superseded|deprecated)
   --filter tag:name          Filter by tag
   --format format            Output format (human|json)
+  --save-scope               Persist auto-populated scope to file (only affects observed-mode records)
   --help                     Show this help message`)
 			os.Exit(0)
 		}
