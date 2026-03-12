@@ -27,12 +27,13 @@ import (
 )
 
 type TestSuite struct {
-	orch        *docker.DockerOrchestrator
-	networkName string
-	dbHostPort  string
-	kafkaReady  bool
-	cwd         string
-	tempDir     string // Temp directory for shared files like schema cache
+	orch           *docker.DockerOrchestrator
+	networkName    string
+	dbHostPort     string
+	kafkaReady     bool
+	cwd            string
+	tempDir        string                            // Temp directory for shared files like schema cache
+	serviceConfigs map[string]*config.LineSpecConfig // Discovered service configurations
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -49,16 +50,139 @@ func NewTestSuite() (*TestSuite, error) {
 	}
 
 	return &TestSuite{
-		orch:        orch,
-		networkName: "linespec-shared-net",
-		cwd:         cwd,
-		tempDir:     tempDir,
+		orch:           orch,
+		networkName:    "linespec-shared-net",
+		cwd:            cwd,
+		tempDir:        tempDir,
+		serviceConfigs: make(map[string]*config.LineSpecConfig),
 	}, nil
+}
+
+// DiscoverServices searches for services with .linespec.yml configuration files
+// in the current directory and subdirectories (up to 2 levels deep for performance)
+func (s *TestSuite) DiscoverServices() error {
+	logger.Debug("Discovering services from .linespec.yml files")
+
+	// Walk current directory looking for .linespec.yml files
+	err := filepath.Walk(s.cwd, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip directories we can't read
+		}
+
+		// Skip hidden directories and vendor
+		if info.IsDir() && (strings.HasPrefix(info.Name(), ".") || info.Name() == "vendor" || info.Name() == "node_modules") {
+			return filepath.SkipDir
+		}
+
+		// Only look for .linespec.yml at the root of service directories
+		if !info.IsDir() && info.Name() == ".linespec.yml" {
+			serviceDir := filepath.Dir(path)
+			serviceName := filepath.Base(serviceDir)
+
+			// Load the configuration
+			cfg, err := config.LoadConfigFile(path)
+			if err != nil {
+				logger.Debug("Failed to load config from %s: %v", path, err)
+				return nil
+			}
+
+			// Store the service configuration
+			s.serviceConfigs[serviceName] = cfg
+			logger.Debug("Discovered service: %s at %s", serviceName, serviceDir)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to discover services: %w", err)
+	}
+
+	if len(s.serviceConfigs) == 0 {
+		logger.Debug("No services discovered from .linespec.yml files")
+	}
+
+	return nil
+}
+
+// FindInitScript looks for init.sql in discovered MySQL services
+func (s *TestSuite) FindInitScript() string {
+	// First, look for init.sql in services configured to use MySQL
+	for serviceName, cfg := range s.serviceConfigs {
+		// Skip PostgreSQL services
+		if cfg.Database != nil && cfg.Database.Type == "postgresql" {
+			logger.Debug("Skipping PostgreSQL service %s for init.sql", serviceName)
+			continue
+		}
+
+		serviceDir := cfg.BaseDir
+		if serviceDir == "" {
+			// Construct from service name relative to cwd
+			serviceDir = filepath.Join(s.cwd, serviceName)
+		}
+
+		// Check for init.sql in service directory
+		initSqlPath := filepath.Join(serviceDir, "init.sql")
+		if _, err := os.Stat(initSqlPath); err == nil {
+			// Validate it's a MySQL-compatible script (basic check)
+			content, err := os.ReadFile(initSqlPath)
+			if err == nil && !containsPostgresSyntax(string(content)) {
+				logger.Debug("Found MySQL-compatible init.sql in service %s: %s", serviceName, initSqlPath)
+				return initSqlPath
+			}
+		}
+	}
+
+	// Fallback: look for init.sql in common locations with MySQL services
+	fallbackPaths := []string{
+		filepath.Join(s.cwd, "init.sql"),
+		filepath.Join(s.cwd, "db", "init.sql"),
+		filepath.Join(s.cwd, "examples", "user-service", "init.sql"),
+	}
+
+	for _, path := range fallbackPaths {
+		if _, err := os.Stat(path); err == nil {
+			// Validate it's not PostgreSQL
+			content, err := os.ReadFile(path)
+			if err == nil && !containsPostgresSyntax(string(content)) {
+				logger.Debug("Found MySQL-compatible init.sql at fallback location: %s", path)
+				return path
+			}
+		}
+	}
+
+	logger.Debug("No MySQL-compatible init.sql found, database will start empty")
+	return ""
+}
+
+// containsPostgresSyntax checks if SQL content contains PostgreSQL-specific syntax
+func containsPostgresSyntax(content string) bool {
+	postgresPatterns := []string{
+		"pg_database",
+		"pg_tables",
+		"SERIAL PRIMARY KEY",
+		"TIMESTAMP WITH TIME ZONE",
+		"\\gexec",
+		"\\c ",
+	}
+
+	contentLower := strings.ToLower(content)
+	for _, pattern := range postgresPatterns {
+		if strings.Contains(contentLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	// Clean up any existing infrastructure first
 	s.CleanupSharedInfrastructure(context.Background())
+
+	// Discover services from .linespec.yml files
+	if err := s.DiscoverServices(); err != nil {
+		return fmt.Errorf("failed to discover services: %w", err)
+	}
 
 	// Create shared network
 	_, err := s.orch.CreateNetwork(ctx, s.networkName)
@@ -67,14 +191,19 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	// Start shared MySQL
-	serviceDir := "user-service"
-	initSqlPath := filepath.Join(s.cwd, serviceDir, "init.sql")
+	// Find init.sql from discovered services or fallback to common locations
+	initSqlPath := s.FindInitScript()
+
+	var binds []string
+	if initSqlPath != "" {
+		binds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/init.sql", initSqlPath)}
+	}
 
 	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image: "mysql:8.4",
 		Env:   []string{"MYSQL_ROOT_PASSWORD=rootpassword", "MYSQL_DATABASE=todo_api_development", "MYSQL_USER=todo_user", "MYSQL_PASSWORD=todo_password"},
 	}, &container.HostConfig{
-		Binds: []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/init.sql", initSqlPath)},
+		Binds: binds,
 		PortBindings: map[nat.Port][]nat.PortBinding{
 			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
@@ -103,18 +232,26 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 	logger.Debug("MySQL is ready")
 
-	// Wait for init.sql to complete
-	if err := s.waitForDBInit(ctx); err != nil {
-		return fmt.Errorf("failed waiting for DB init: %w", err)
+	// Wait for init.sql to complete (if provided)
+	if initSqlPath != "" {
+		if err := s.waitForDBInit(ctx); err != nil {
+			return fmt.Errorf("failed waiting for DB init: %w", err)
+		}
 	}
 
-	// Run Rails migrations once for all services
+	// Run Rails migrations for all discovered Rails services
 	logger.Debug("Running Rails migrations")
-	if err := s.runMigrations(ctx, "user-service"); err != nil {
-		return fmt.Errorf("failed to run user-service migrations: %w", err)
-	}
-	if err := s.runMigrations(ctx, "todo-api"); err != nil {
-		return fmt.Errorf("failed to run todo-api migrations: %w", err)
+	for serviceName, cfg := range s.serviceConfigs {
+		if cfg.Service.Framework == "rails" {
+			serviceDir := cfg.BaseDir
+			if serviceDir == "" {
+				serviceDir = filepath.Join(s.cwd, serviceName)
+			}
+			if err := s.runMigrations(ctx, serviceName, serviceDir); err != nil {
+				logger.Debug("Failed to run migrations for %s: %v", serviceName, err)
+				// Continue with other services, don't fail completely
+			}
+		}
 	}
 	logger.Debug("Migrations complete")
 
@@ -242,9 +379,9 @@ SET FOREIGN_KEY_CHECKS = 1;
 	return nil
 }
 
-func (s *TestSuite) runMigrations(ctx context.Context, serviceDir string) error {
+func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, serviceDir string) error {
 	// Start a temporary container to run migrations
-	containerName := "linespec-migrate-" + serviceDir
+	containerName := "linespec-migrate-" + serviceName
 
 	// Clean up any existing migration container
 	_ = s.orch.StopAndRemoveContainer(context.Background(), containerName)
@@ -260,7 +397,7 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceDir string) error 
 	}
 
 	_, err := s.orch.StartContainer(ctx, &container.Config{
-		Image: serviceDir + ":latest",
+		Image: serviceName + ":latest",
 		Env:   appEnv,
 		Cmd:   []string{"bundle", "exec", "rails", "db:migrate"},
 	}, &container.HostConfig{

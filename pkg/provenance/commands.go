@@ -531,7 +531,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Get list of modified provenance records
-modified_records=$(git diff --cached --name-only | grep "^provenance/prov-" | sed 's|provenance/||' | sed 's|\.yml$||')
+modified_records=$(git diff --cached --name-only | grep "^provenance/prov-" | sed 's|provenance/||' | sed -E 's|\.ya?ml$||')
 
 # Lint modified records
 for record in $modified_records; do
