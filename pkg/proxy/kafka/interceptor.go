@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 )
 
@@ -23,20 +24,20 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 }
 
 func (i *Interceptor) Start(ctx context.Context) error {
-	fmt.Printf("Kafka Interceptor: Starting on %s\n", i.addr)
+	logger.Debug("Kafka Interceptor: Starting on %s", i.addr)
 	ln, err := net.Listen("tcp", i.addr)
 	if err != nil {
-		fmt.Printf("Kafka Interceptor: Failed to listen: %v\n", err)
+		logger.Error("Kafka Interceptor: Failed to listen: %v", err)
 		return err
 	}
-	fmt.Printf("Kafka Interceptor: Successfully listening on %s\n", ln.Addr())
+	logger.Debug("Kafka Interceptor: Successfully listening on %s", ln.Addr())
 	defer ln.Close()
 
-	fmt.Printf("Kafka Interceptor: Entering accept loop\n")
+	logger.Debug("Kafka Interceptor: Entering accept loop")
 
 	go func() {
 		<-ctx.Done()
-		fmt.Println("Kafka Interceptor: Context cancelled, closing listener")
+		logger.Debug("Kafka Interceptor: Context cancelled, closing listener")
 		ln.Close()
 	}()
 
@@ -45,43 +46,43 @@ func (i *Interceptor) Start(ctx context.Context) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				fmt.Println("Kafka Interceptor: Accept error due to context done")
+				logger.Debug("Kafka Interceptor: Accept error due to context done")
 				return nil
 			default:
-				fmt.Printf("Kafka Interceptor: Accept error (continuing): %v\n", err)
+				logger.Debug("Kafka Interceptor: Accept error (continuing): %v", err)
 				continue
 			}
 		}
-		fmt.Printf("Kafka Interceptor: Accepted connection from %s\n", conn.RemoteAddr())
+		logger.Debug("Kafka Interceptor: Accepted connection from %s", conn.RemoteAddr())
 		go i.handleConn(conn)
 	}
 }
 
 func (i *Interceptor) handleConn(conn net.Conn) {
 	defer conn.Close()
-	fmt.Printf("Kafka Interceptor: New connection from %s\n", conn.RemoteAddr())
+	logger.Debug("Kafka Interceptor: New connection from %s", conn.RemoteAddr())
 
 	for {
 		lenBuf := make([]byte, 4)
 		if _, err := io.ReadFull(conn, lenBuf); err != nil {
 			if err != io.EOF {
-				fmt.Printf("Kafka Interceptor: Error reading length: %v\n", err)
+				logger.Debug("Kafka Interceptor: Error reading length: %v", err)
 			} else {
 				fmt.Printf("Kafka Interceptor: Client closed connection (EOF)\n")
 			}
 			return
 		}
 		length := binary.BigEndian.Uint32(lenBuf)
-		fmt.Printf("Kafka Interceptor: Reading request of length %d\n", length)
+		logger.Debug("Kafka Interceptor: Reading request of length %d", length)
 
 		request := make([]byte, length)
 		if _, err := io.ReadFull(conn, request); err != nil {
-			fmt.Printf("Kafka Interceptor: Error reading request: %v\n", err)
+			logger.Debug("Kafka Interceptor: Error reading request: %v", err)
 			return
 		}
 
 		if length < 8 {
-			fmt.Printf("Kafka Interceptor: Request too short (%d bytes)\n", length)
+			logger.Debug("Kafka Interceptor: Request too short (%d bytes)", length)
 			continue
 		}
 
@@ -89,31 +90,31 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 		apiVersion := binary.BigEndian.Uint16(request[2:4])
 		correlationID := request[4:8]
 
-		fmt.Printf("Kafka Interceptor: apiKey=%d apiVersion=%d correlationID=%d\n", apiKey, apiVersion, binary.BigEndian.Uint32(correlationID))
+		logger.Debug("Kafka Interceptor: apiKey=%d apiVersion=%d correlationID=%d", apiKey, apiVersion, binary.BigEndian.Uint32(correlationID))
 
-		fmt.Printf("Kafka Interceptor: Handling apiKey=%d\n", apiKey)
+		logger.Debug("Kafka Interceptor: Handling apiKey=%d", apiKey)
 		switch apiKey {
 		case 18: // ApiVersions
-			fmt.Println("Kafka Interceptor: Sending ApiVersions response")
+			logger.Debug("Kafka Interceptor: Sending ApiVersions response")
 			i.sendApiVersionsResponse(conn, correlationID)
-			fmt.Println("Kafka Interceptor: ApiVersions response sent")
+			logger.Debug("Kafka Interceptor: ApiVersions response sent")
 		case 3: // Metadata
-			fmt.Println("Kafka Interceptor: Sending Metadata response")
+			logger.Debug("Kafka Interceptor: Sending Metadata response")
 			i.sendMetadataResponse(conn, correlationID)
-			fmt.Println("Kafka Interceptor: Metadata response sent")
+			logger.Debug("Kafka Interceptor: Metadata response sent")
 		case 0: // Produce
 			topic := i.extractProduceTopic(request[8:])
 			if topic != "" {
-				fmt.Printf("Kafka Interceptor: Intercepted Produce to topic %s\n", topic)
+				logger.Debug("Kafka Interceptor: Intercepted Produce to topic %s", topic)
 				i.registry.FindMock(topic, "")
 			} else {
 				// Fallback: hit any EVENT mock if we couldn't parse the topic
-				fmt.Println("Kafka Interceptor: Intercepted Produce (could not parse topic)")
+				logger.Debug("Kafka Interceptor: Intercepted Produce (could not parse topic)")
 				i.registry.FindMock("todo-events", "")
 			}
 			i.sendProduceResponse(conn, correlationID, topic)
 		default:
-			fmt.Printf("Kafka Interceptor: Unhandled apiKey=%d, sending generic response\n", apiKey)
+			logger.Debug("Kafka Interceptor: Unhandled apiKey=%d, sending generic response", apiKey)
 			i.sendGenericResponse(conn, correlationID)
 		}
 	}
@@ -244,7 +245,7 @@ func (i *Interceptor) sendMetadataResponse(conn net.Conn, correlationID []byte) 
 	// isr node = 1 (4 bytes)
 	payload = append(payload, 0, 0, 0, 1)
 
-	fmt.Printf("Kafka Interceptor: Sending Metadata response (%d bytes)\n", len(payload))
+	logger.Debug("Kafka Interceptor: Sending Metadata response (%d bytes)", len(payload))
 	i.writeResponse(conn, payload)
 }
 

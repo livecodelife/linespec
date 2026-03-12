@@ -3,10 +3,12 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
+	"github.com/calebcowen/linespec/pkg/logger"
 	"github.com/calebcowen/linespec/pkg/registry"
 	"github.com/calebcowen/linespec/pkg/types"
 )
@@ -39,7 +41,7 @@ func (i *Interceptor) Start(ctx context.Context) error {
 		server.Shutdown(context.Background())
 	}()
 
-	fmt.Printf("HTTP Interceptor listening on %s\n", i.addr)
+	logger.Debug("HTTP Interceptor listening on %s", i.addr)
 	err := server.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
@@ -51,7 +53,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 1. Find mock in registry
 	path := r.URL.Path
 	method := r.Method
-	fmt.Printf("HTTP Interceptor: Intercepted %s %s (Host: %s)\n", method, path, r.Host)
+	logger.Debug("Intercepted %s %s (Host: %s)", method, path, r.Host)
 
 	// Extract headers from request
 	requestHeaders := make(map[string]string)
@@ -60,7 +62,15 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			requestHeaders[k] = v[0]
 		}
 	}
-	fmt.Printf("HTTP Interceptor: Request headers: %v\n", requestHeaders)
+	logger.Debug("Request headers: %v", requestHeaders)
+
+	// Also extract authorization from request body (for Rails apps that send auth in body)
+	bodyAuth := i.extractAuthFromBody(r)
+	if bodyAuth != "" {
+		logger.Debug("Found authorization in body: %s", bodyAuth)
+		// Add it to headers for matching purposes
+		requestHeaders["Authorization"] = bodyAuth
+	}
 
 	// Try common variants of the key
 	keys := []string{
@@ -79,7 +89,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		fmt.Printf("HTTP Interceptor: No mock found for %s %s (Tried keys: %v)\n", method, path, keys)
+		logger.Debug("No mock found for %s %s (Tried keys: %v)", method, path, keys)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -89,7 +99,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		i.loader.BaseDir = mock.BaseDir
 		payload, err := i.loader.Load(mock.ReturnsFile)
 		if err != nil {
-			fmt.Printf("HTTP Interceptor: Error loading payload %s: %v\n", mock.ReturnsFile, err)
+			logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -111,4 +121,43 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// extractAuthFromBody extracts authorization from request body
+// Rails apps often send auth as: { "authorization": "Bearer token" }
+func (i *Interceptor) extractAuthFromBody(r *http.Request) string {
+	// Only parse body for GET/POST/PATCH/PUT methods with Content-Type: application/json
+	if r.Body == nil {
+		return ""
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		return ""
+	}
+
+	// Read body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return ""
+	}
+	// Restore body for potential future reads
+	r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
+	if len(bodyBytes) == 0 {
+		return ""
+	}
+
+	// Try to parse as JSON
+	var bodyMap map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+		return ""
+	}
+
+	// Look for authorization field
+	if auth, ok := bodyMap["authorization"].(string); ok && auth != "" {
+		return auth
+	}
+
+	return ""
 }

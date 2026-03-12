@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/calebcowen/linespec/pkg/logger"
 )
 
 // StartupHandler manages the connection startup phase
@@ -79,7 +81,7 @@ func (h *StartupHandler) handleSSLRequest(reader *bufio.Reader, conn net.Conn) e
 		if _, err := conn.Write([]byte{'N'}); err != nil {
 			return fmt.Errorf("error sending SSL response: %w", err)
 		}
-		fmt.Println("PostgreSQL Proxy: Declined SSL request, client will retry with plaintext")
+		logger.Debug("PostgreSQL Proxy: Declined SSL request, client will retry with plaintext")
 	}
 
 	return nil
@@ -158,8 +160,41 @@ func (h *StartupHandler) sendReadyForQuery(conn net.Conn) error {
 	return err
 }
 
-// HandleTerminate handles connection termination
-func (h *StartupHandler) HandleTerminate(conn net.Conn) {
-	// Client sent Terminate message, just close the connection
-	conn.Close()
+// HandleStartupWithReader handles startup using a provided buffered reader
+func (h *StartupHandler) HandleStartupWithReader(reader *bufio.Reader, conn net.Conn) (map[string]string, error) {
+	// Check for and handle SSL request
+	if err := h.handleSSLRequest(reader, conn); err != nil {
+		return nil, fmt.Errorf("SSL handling error: %w", err)
+	}
+
+	// Read startup message
+	startupMsg, err := h.readStartupMessage(reader)
+	if err != nil {
+		return nil, fmt.Errorf("error reading startup message: %w", err)
+	}
+
+	// Parse startup parameters
+	params := ParseStartupMessage(startupMsg)
+
+	// Send authentication OK (trust authentication)
+	if err := h.sendAuthenticationOK(conn); err != nil {
+		return nil, fmt.Errorf("error sending auth OK: %w", err)
+	}
+
+	// Send server parameters
+	if err := h.sendServerParameters(conn, params); err != nil {
+		return nil, fmt.Errorf("error sending server params: %w", err)
+	}
+
+	// Send backend key data (for cancellation support)
+	if err := h.sendBackendKeyData(conn); err != nil {
+		return nil, fmt.Errorf("error sending backend key data: %w", err)
+	}
+
+	// Send ReadyForQuery
+	if err := h.sendReadyForQuery(conn); err != nil {
+		return nil, fmt.Errorf("error sending ready for query: %w", err)
+	}
+
+	return params, nil
 }

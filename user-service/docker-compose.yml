@@ -41,7 +41,9 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - user-service-network
+      user-service-network:
+        aliases:
+          - user-service.local
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
