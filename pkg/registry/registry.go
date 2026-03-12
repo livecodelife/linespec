@@ -330,14 +330,15 @@ func (r *MockRegistry) GetHits() map[string]int {
 		// For DB: Channel-Table-SQL (only for READ operations with explicit SQL)
 		// For WRITE: Channel-Table only (SQL is auto-generated at runtime)
 		var key string
-		if mock.Channel == types.HTTP {
-			key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-		} else if mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL {
-			// READ operations: include SQL to distinguish different queries
-			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
-		} else {
+		switch mock.Channel {
+			case types.HTTP:
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+			case types.ReadMySQL, types.ReadPostgreSQL:
+				// READ operations: include SQL to distinguish different queries
+				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+			default:
 			// WRITE and other operations: use Channel-Table only
-			key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
 		}
 		res[key] = count
 	}
@@ -351,12 +352,13 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 		for _, mock := range mocks {
 			// Use same key format as GetHits
 			var key string
-			if mock.Channel == types.HTTP {
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-			} else if mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL {
-				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
-			} else {
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+			switch mock.Channel {
+				case types.HTTP:
+					key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+				case types.ReadMySQL, types.ReadPostgreSQL:
+					key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+				default:
+					key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
 			}
 			if count, ok := hostHits[key]; ok {
 				r.hits[mock] += count

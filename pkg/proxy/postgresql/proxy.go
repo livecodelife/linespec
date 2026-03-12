@@ -108,7 +108,7 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 	defer upstreamConn.Close()
 
 	// Perform transparent startup with upstream - just forward startup messages
-	if err := p.transparentStartup(clientReader, clientConn, upstreamConn); err != nil {
+	if err := p.transparentStartup(clientConn, upstreamConn); err != nil {
 		logger.Error("PostgreSQL Proxy: Transparent startup failed: %v", err)
 		return
 	}
@@ -119,7 +119,7 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 
 // transparentStartup handles the initial startup by forwarding client messages to upstream
 // and upstream responses back to client, completely transparently
-func (p *Proxy) transparentStartup(clientReader *bufio.Reader, clientConn, upstreamConn net.Conn) error {
+func (p *Proxy) transparentStartup(clientConn, upstreamConn net.Conn) error {
 	// Send startup message to upstream
 	startupMsg := p.createStartupMessage("notification_user", "notification_service")
 	if _, err := upstreamConn.Write(startupMsg); err != nil {
@@ -684,7 +684,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 			if len(returningColumns) > 0 {
 				// Generate a synthetic row with the returning columns
 				columns = returningColumns
-				row := p.generateSyntheticReturnRow(mock, returningColumns)
+				row := p.generateSyntheticReturnRow(returningColumns)
 				rows = []map[string]interface{}{row}
 			} else {
 				// For writes without RETURNING clause, send NoData
@@ -1072,7 +1072,7 @@ func (p *Proxy) extractReturningColumns(sql string) []string {
 }
 
 // generateSyntheticReturnRow generates a synthetic row for INSERT RETURNING operations
-func (p *Proxy) generateSyntheticReturnRow(mock *types.ExpectStatement, columns []string) map[string]interface{} {
+func (p *Proxy) generateSyntheticReturnRow(columns []string) map[string]interface{} {
 	row := make(map[string]interface{})
 
 	for _, col := range columns {

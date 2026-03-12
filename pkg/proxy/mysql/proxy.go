@@ -164,7 +164,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					tableName := p.extractShowFullFieldsTable(query)
 					if columns, ok := p.schemaCache[tableName]; ok {
 						logger.Debug("Returning cached schema for table %s", tableName)
-						p.sendSchemaResponse(clientConn, tableName, columns)
+						p.sendSchemaResponse(clientConn, columns)
 						continue // Don't forward to upstream
 					}
 					// If not in cache, pass through to upstream
@@ -467,7 +467,7 @@ func (p *Proxy) isShowFullFieldsQuery(query string) bool {
 }
 
 // sendSchemaResponse sends a MySQL result set response for SHOW FULL FIELDS from cached schema
-func (p *Proxy) sendSchemaResponse(conn net.Conn, tableName string, columns []ColumnInfo) error {
+func (p *Proxy) sendSchemaResponse(conn net.Conn, columns []ColumnInfo) error {
 	// MySQL SHOW FULL FIELDS returns 9 columns:
 	// Field, Type, Collation, Null, Key, Default, Extra, Privileges, Comment
 	columnNames := []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}

@@ -42,7 +42,7 @@ func (h *StartupHandler) HandleStartup(conn net.Conn) (map[string]string, error)
 	}
 
 	// Send server parameters
-	if err := h.sendServerParameters(conn, params); err != nil {
+	if err := h.sendServerParameters(conn); err != nil {
 		return nil, fmt.Errorf("error sending server params: %w", err)
 	}
 
@@ -123,7 +123,7 @@ func (h *StartupHandler) sendAuthenticationOK(conn net.Conn) error {
 }
 
 // sendServerParameters sends server configuration parameters
-func (h *StartupHandler) sendServerParameters(conn net.Conn, clientParams map[string]string) error {
+func (h *StartupHandler) sendServerParameters(conn net.Conn) error {
 	// Send some standard PostgreSQL parameters
 	params := map[string]string{
 		"server_version":              "14.0",
@@ -182,7 +182,7 @@ func (h *StartupHandler) HandleStartupWithReader(reader *bufio.Reader, conn net.
 	}
 
 	// Send server parameters
-	if err := h.sendServerParameters(conn, params); err != nil {
+	if err := h.sendServerParameters(conn); err != nil {
 		return nil, fmt.Errorf("error sending server params: %w", err)
 	}
 

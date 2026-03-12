@@ -220,26 +220,6 @@ func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[
 	return err
 }
 
-// inferTypeOID infers PostgreSQL type OID from Go type
-func inferTypeOID(val interface{}) uint32 {
-	switch v := val.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		// BIGINT = 20
-		_ = v
-		return 20
-	case float32, float64:
-		// FLOAT8 = 701
-		return 701
-	case bool:
-		// BOOL = 16
-		_ = v
-		return 16
-	default:
-		// Default to TEXT = 25
-		return 25
-	}
-}
-
 // encodeTimestampBinary converts a timestamp value to PostgreSQL binary format
 // PostgreSQL timestamps are int64 values representing microseconds since 2000-01-01 00:00:00 UTC
 func encodeTimestampBinary(val interface{}) ([]byte, error) {
@@ -284,46 +264,6 @@ func encodeTimestampBinary(val interface{}) ([]byte, error) {
 	binary.BigEndian.PutUint64(result, uint64(microseconds))
 
 	return result, nil
-}
-
-// toInt64 converts a value to int64
-func toInt64(val interface{}) (int64, error) {
-	switch v := val.(type) {
-	case int:
-		return int64(v), nil
-	case int8:
-		return int64(v), nil
-	case int16:
-		return int64(v), nil
-	case int32:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case uint:
-		return int64(v), nil
-	case uint8:
-		return int64(v), nil
-	case uint16:
-		return int64(v), nil
-	case uint32:
-		return int64(v), nil
-	case uint64:
-		return int64(v), nil
-	case float32:
-		return int64(v), nil
-	case float64:
-		return int64(v), nil
-	case string:
-		// Try to parse as integer
-		var result int64
-		_, err := fmt.Sscanf(v, "%d", &result)
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse integer from string: %v", v)
-		}
-		return result, nil
-	default:
-		return 0, fmt.Errorf("unsupported type for integer conversion: %T", val)
-	}
 }
 
 // toInt32 converts a value to int32
