@@ -11,7 +11,7 @@ Current bottlenecks identified:
 | Issue | Location | Status | Impact |
 |-------|----------|--------|--------|
 | 10s transparent mode wait per MySQL test | runner.go:451 | ✅ **FIXED** | High |
-| WaitTCPInternal spawns Alpine container | orchestrator.go:110-169 | Pending | Medium |
+| WaitTCPInternal spawns Alpine container | orchestrator.go:110-169 | ✅ **FIXED** | Medium |
 | Hardcoded 2s Rails warmup sleep | runner.go:626 | Pending | Medium |
 | 500ms sleep in verification | runner.go:672, 692 | Pending | Low |
 | Sequential test execution | main.go:97-120 | Pending | High for suites |
@@ -57,7 +57,7 @@ Pre-load schema once during shared infrastructure setup, eliminate transparent m
 
 ## Optimization 2: Fix WaitTCPInternal
 
-**Priority**: High | **Estimated Savings**: 2-5s per container start | **Complexity**: Low
+**Status**: ✅ **COMPLETE** | **Priority**: High | **Estimated Savings**: 2-5s per container start | **Complexity**: Low
 
 ### Problem
 
@@ -296,7 +296,7 @@ After implementing Optimization 1, verify that:
 | Step | Optimization | Status | Savings |
 |------|-------------|--------|---------|
 | 1 | Eliminate Transparent Mode | ✅ **COMPLETE** | ~2 min total (~8-10s per MySQL test) |
-| 2 | Fix WaitTCPInternal | Pending | 2-5s per test |
+| 2 | Fix WaitTCPInternal | ✅ **COMPLETE** | 2-5s per test |
 | 3 | Reduce Hardcoded Sleeps | Pending | 2-3s per test |
 | 4 | Cache Schema Globally | (covered by #1) | - |
 | 5 | Parallel Test Execution | Pending | 2-4x for suites |

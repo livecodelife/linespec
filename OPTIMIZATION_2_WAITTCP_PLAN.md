@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Status**: Pending  
+**Status**: ✅ **COMPLETE**  
 **Priority**: High  
 **Estimated Savings**: 2-5s per container start  
 **Complexity**: Low  
@@ -280,13 +280,13 @@ If issues arise:
 
 ## Success Criteria
 
-- [ ] `WaitTCPInternal` uses direct TCP dial (no Alpine containers)
-- [ ] All 6 call sites updated to use host ports
-- [ ] All existing tests pass
-- [ ] No Alpine containers spawned during test runs
-- [ ] 2-5s improvement in test execution time per test
-- [ ] Code review approved
-- [ ] No regression in test reliability
+- [x] `WaitTCPInternal` uses direct TCP dial (no Alpine containers)
+- [x] All 6 call sites updated to use host ports
+- [x] All existing tests pass
+- [x] No Alpine containers spawned during test runs
+- [x] 2-5s improvement in test execution time per test
+- [x] Code review approved
+- [x] No regression in test reliability
 
 ---
 
