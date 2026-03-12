@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 type TestSuite struct {
@@ -84,15 +85,22 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	fmt.Println("Waiting for shared DB to be ready...")
-	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "real-db:3306", 60*time.Second); err != nil {
-		return err
+	// Get host port for direct connection from host (with retry)
+	s.dbHostPort, err = s.waitForContainerPort(ctx, "linespec-shared-db", "3306/tcp", 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to get shared DB host port: %w", err)
+	}
+	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+s.dbHostPort, 60*time.Second); err != nil {
+		return fmt.Errorf("shared DB not ready: %w", err)
 	}
 
-	// Get the host port for DB reset
-	inspect, _ := s.orch.GetContainerInspect(ctx, "linespec-shared-db")
-	if p, ok := inspect.NetworkSettings.Ports["3306/tcp"]; ok && len(p) > 0 {
-		s.dbHostPort = p[0].HostPort
+	// Additional wait for MySQL to fully initialize and accept connections
+	// Use actual MySQL ping to verify readiness instead of fixed delays
+	fmt.Println("Verifying MySQL is ready...")
+	if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, "todo_user", "todo_password", "todo_api_development", 30*time.Second); err != nil {
+		return fmt.Errorf("MySQL not accepting connections: %w", err)
 	}
+	fmt.Println("✅ MySQL is ready")
 
 	// Wait for init.sql to complete
 	if err := s.waitForDBInit(ctx); err != nil {
@@ -160,8 +168,19 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed to start Kafka: %w", err)
 	}
 
-	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "kafka:29092", 60*time.Second); err != nil {
-		return err
+	// Get Kafka host port for direct connection from host (with retry)
+	kafkaHostPort, err := s.waitForContainerPort(ctx, "linespec-shared-kafka", "29092/tcp", 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to get Kafka host port: %w", err)
+	}
+	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+kafkaHostPort, 60*time.Second); err != nil {
+		return fmt.Errorf("Kafka not ready: %w", err)
+	}
+
+	// Wait for Kafka to be ready (actual TCP connection check)
+	fmt.Println("Waiting for Kafka to be ready...")
+	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+kafkaHostPort, 60*time.Second); err != nil {
+		return fmt.Errorf("Kafka not ready: %w", err)
 	}
 	s.kafkaReady = true
 
@@ -170,21 +189,34 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 }
 
 func (s *TestSuite) waitForDBInit(ctx context.Context) error {
-	// Poll for table creation to confirm init.sql completed
+	// Poll until we can make an actual MySQL connection
+	// This confirms init.sql has completed and handles restart period
 	deadline := time.Now().Add(30 * time.Second)
+
+	// Suppress MySQL driver internal logging during polling
+	mysql.SetLogger(log.New(io.Discard, "", 0))
+	defer mysql.SetLogger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
+
 	for time.Now().Before(deadline) {
-		// Try to connect via TCP to the host-mapped port
 		if s.dbHostPort != "" {
-			if err := s.orch.WaitTCP(ctx, "localhost:"+s.dbHostPort, 2*time.Second); err == nil {
-				// Give a moment for init.sql to fully apply
-				time.Sleep(2 * time.Second)
-				return nil
+			// Try to make an actual MySQL connection
+			dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+				"todo_user", "todo_password", "localhost", s.dbHostPort, "todo_api_development")
+			db, err := sql.Open("mysql", dsn)
+			if err == nil {
+				ctx2, cancel := context.WithTimeout(ctx, 2*time.Second)
+				err = db.PingContext(ctx2)
+				cancel()
+				db.Close()
+				if err == nil {
+					return nil
+				}
 			}
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(200 * time.Millisecond):
 		}
 	}
 	return fmt.Errorf("timeout waiting for DB initialization")
@@ -244,6 +276,11 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceDir, appPort strin
 	select {
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
+			// Stream logs to see what went wrong
+			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer logCancel()
+			fmt.Printf("❌ Migrations failed with exit code %d. Fetching logs...\n", status.StatusCode)
+			_ = s.orch.StreamLogs(logCtx, containerName, os.Stdout, os.Stderr)
 			return fmt.Errorf("migrations failed with exit code %d", status.StatusCode)
 		}
 		return nil
@@ -361,7 +398,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			// Wait for PostgreSQL to be ready
 			fmt.Println("Waiting for PostgreSQL to be ready...")
-			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "real-db:"+dbPort, 30*time.Second); err != nil {
+			// Get host port for direct connection from host (with retry)
+			postgresHostPort, err := r.suite.waitForContainerPort(ctx, dbContainerName, dbPort+"/tcp", 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to get PostgreSQL host port: %w", err)
+			}
+			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+postgresHostPort, 30*time.Second); err != nil {
 				return fmt.Errorf("PostgreSQL not ready: %w", err)
 			}
 
@@ -393,7 +435,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			// Wait for proxy to be ready
 			fmt.Println("Waiting for PostgreSQL proxy to be ready...")
-			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:"+dbPort, 30*time.Second); err != nil {
+			// Get proxy verify endpoint host port for direct connection from host (with retry)
+			// Note: The proxy listens on dbPort internally, but only exposes 8081 to host
+			proxyVerifyPort, err := r.suite.waitForContainerPort(ctx, "proxy-db-"+spec.Name, "8081/tcp", 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to get PostgreSQL proxy verify port: %w", err)
+			}
+			if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+proxyVerifyPort, 30*time.Second); err != nil {
 				return fmt.Errorf("PostgreSQL proxy not ready: %w", err)
 			}
 			fmt.Println("✅ PostgreSQL proxy is ready")
@@ -542,14 +590,15 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// Wait for services to be ready on the network
 	fmt.Println("Waiting for proxies to be ready...")
-	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
-		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
-		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "db:"+dbPort, 30*time.Second); err != nil {
+	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
+		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+dbVerifyPort, 30*time.Second); err != nil {
 			return fmt.Errorf("database proxy not ready: %w", err)
 		}
 	}
-	if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "user-service.local:80", 30*time.Second); err != nil {
-		return fmt.Errorf("HTTP proxy not ready: %w", err)
+	if httpVerifyPort != "" {
+		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+httpVerifyPort, 30*time.Second); err != nil {
+			return fmt.Errorf("HTTP proxy not ready: %w", err)
+		}
 	}
 
 	// 4. Start SUT
@@ -924,6 +973,62 @@ func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string
 	}
 
 	return schemaCache, nil
+}
+
+// waitForContainerPort polls until a container's port binding is available
+func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, port string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		inspect, err := s.orch.GetContainerInspect(ctx, containerName)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+				continue
+			}
+		}
+		if p, ok := inspect.NetworkSettings.Ports[nat.Port(port)]; ok && len(p) > 0 && p[0].HostPort != "" {
+			return p[0].HostPort, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	return "", fmt.Errorf("timeout waiting for container %s port %s binding", containerName, port)
+}
+
+// waitForMySQL polls until MySQL is accepting connections using actual MySQL driver
+// Handles MySQL restart during initialization by continuing to retry on any error
+func (s *TestSuite) waitForMySQL(ctx context.Context, host, port, user, password, database string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		user, password, host, port, database)
+
+	// Suppress MySQL driver internal logging during polling
+	mysql.SetLogger(log.New(io.Discard, "", 0))
+	defer mysql.SetLogger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
+
+	for time.Now().Before(deadline) {
+		db, err := sql.Open("mysql", dsn)
+		if err == nil {
+			ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
+			err = db.PingContext(ctx2)
+			cancel()
+			db.Close()
+			if err == nil {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("timeout waiting for MySQL at %s:%s", host, port)
 }
 
 // Deprecated: Use NewTestSuite instead

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -107,66 +106,24 @@ func (d *DockerOrchestrator) GetContainerIP(ctx context.Context, id string, netw
 
 // Prober methods
 
+// WaitTCPInternal waits for a TCP service to be available.
+// Uses direct TCP dial from host instead of spawning Alpine containers.
+// The address parameter should be in "host:port" format (e.g., "localhost:3306").
 func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, address string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-
-	// Start a single Alpine container for polling
-	config := &container.Config{
-		Image: "alpine:latest",
-		Cmd:   []string{"sleep", "300"}, // Keep container alive for polling
-	}
-
-	waiterID, err := d.StartContainer(ctx, config, &container.HostConfig{}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{networkName: {}},
-	}, "waiter-"+fmt.Sprintf("%d", time.Now().UnixNano()))
-	if err != nil {
-		return fmt.Errorf("failed to start waiter container: %w", err)
-	}
-	defer d.StopAndRemoveContainer(context.Background(), waiterID)
-
-	// Poll using exec commands in the same container
 	for time.Now().Before(deadline) {
-		// Create exec config for nc command
-		execConfig := types.ExecConfig{
-			AttachStdout: true,
-			AttachStderr: true,
-			Cmd:          []string{"nc", "-z", "-w", "1", strings.Split(address, ":")[0], strings.Split(address, ":")[1]},
+		conn, err := net.DialTimeout("tcp", address, 1*time.Second)
+		if err == nil {
+			conn.Close()
+			return nil
 		}
-
-		execID, err := d.cli.ContainerExecCreate(ctx, waiterID, execConfig)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		if err := d.cli.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{}); err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		// Wait for exec to complete with short timeout
-		execDeadline := time.Now().Add(2 * time.Second)
-		for time.Now().Before(execDeadline) {
-			inspect, err := d.cli.ContainerExecInspect(ctx, execID.ID)
-			if err != nil {
-				break
-			}
-			if !inspect.Running {
-				if inspect.ExitCode == 0 {
-					return nil
-				}
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
-	return fmt.Errorf("timeout waiting for internal TCP %s", address)
+	return fmt.Errorf("timeout waiting for TCP %s", address)
 }
 
 func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeout time.Duration) error {
