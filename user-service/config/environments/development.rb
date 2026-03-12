@@ -1,6 +1,10 @@
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
+  # Allow requests from any host (for Docker networking)
+  config.hosts << "user-service.local"
+  config.hosts << "user-service.local:3001"
+
   # Settings specified here will take precedence over those in config/application.rb.
 
   # In the development environment your application's code is reloaded any time

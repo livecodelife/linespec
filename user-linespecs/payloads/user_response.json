@@ -2,6 +2,7 @@
   "id": 42,
   "name": "John Doe",
   "email": "john@example.com",
+  "password_digest": "$2b$10$RPPs.VHi0Kpr6niRJCo5m.4KIzE8BpOI2Ok.1mVDnK.T9j4VwGxE6",
   "token": "token_abc123xyz",
   "created_at": "2026-01-01T00:00:00.000Z",
   "updated_at": "2026-01-01T00:00:00.000Z"

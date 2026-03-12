@@ -1,12 +1,9 @@
 class User < ApplicationRecord
+  has_secure_password
+
   validates :email, presence: true, uniqueness: true
-  validates :password, presence: true, on: :create
 
   before_validation :generate_token, if: -> { token.blank? }
-
-  def authenticate(password)
-    BCrypt::Password.new(password_digest) == password
-  end
 
   private
 

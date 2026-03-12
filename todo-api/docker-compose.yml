@@ -63,12 +63,20 @@ services:
       RAILS_ENV: development
       KAFKA_BROKERS: kafka:29092
       KAFKA_TOPIC: todo-events
+      USER_SERVICE_URL: http://user-service.local:3001/api/v1/users/auth
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/up"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - default
+      - user-service-network
 
 volumes:
   mysql_data:
+
+networks:
+  user-service-network:
+    external: true

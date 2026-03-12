@@ -62,6 +62,30 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 	return "unknown"
 }
 
+// GetTables returns a list of unique table names registered in the registry
+func (r *MockRegistry) GetTables() []string {
+	r.RLock()
+	defer r.RUnlock()
+
+	tableSet := make(map[string]bool)
+	for key, mocks := range r.mocks {
+		// Check if any mock for this key is a database operation
+		for _, mock := range mocks {
+			if mock.Channel == types.ReadMySQL || mock.Channel == types.WriteMySQL ||
+				mock.Channel == types.ReadPostgreSQL || mock.Channel == types.WritePostgreSQL {
+				tableSet[key] = true
+				break
+			}
+		}
+	}
+
+	tables := make([]string, 0, len(tableSet))
+	for table := range tableSet {
+		tables = append(tables, table)
+	}
+	return tables
+}
+
 // PeekMock checks if a mock exists without incrementing hit count (used for testing intercept)
 func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatement, bool) {
 	r.RLock()

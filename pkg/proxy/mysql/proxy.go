@@ -2,11 +2,15 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/calebcowen/linespec/pkg/dsl"
 	"github.com/calebcowen/linespec/pkg/registry"
@@ -15,19 +19,74 @@ import (
 )
 
 type Proxy struct {
-	addr         string
-	upstreamAddr string
-	registry     *registry.MockRegistry
-	loader       *dsl.PayloadLoader
+	addr             string
+	upstreamAddr     string
+	registry         *registry.MockRegistry
+	loader           *dsl.PayloadLoader
+	schemaCache      map[string][]ColumnInfo // table name -> column definitions
+	transparentMode  bool                    // When true, pass through all queries
+	transparentUntil time.Time               // Time until which to stay in transparent mode
+}
+
+type ColumnInfo struct {
+	Field      string         `json:"Field"`
+	Type       string         `json:"Type"`
+	Collation  sql.NullString `json:"Collation"`
+	Null       string         `json:"Null"`
+	Key        string         `json:"Key"`
+	Default    sql.NullString `json:"Default"`
+	Extra      string         `json:"Extra"`
+	Privileges string         `json:"Privileges"`
+	Comment    string         `json:"Comment"`
 }
 
 func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 	return &Proxy{
-		addr:         addr,
-		upstreamAddr: upstreamAddr,
-		registry:     reg,
-		loader:       &dsl.PayloadLoader{},
+		addr:            addr,
+		upstreamAddr:    upstreamAddr,
+		registry:        reg,
+		loader:          &dsl.PayloadLoader{},
+		schemaCache:     make(map[string][]ColumnInfo),
+		transparentMode: false,
 	}
+}
+
+// EnableTransparentMode enables transparent passthrough mode for a specified duration
+func (p *Proxy) EnableTransparentMode(duration time.Duration) {
+	p.transparentMode = true
+	p.transparentUntil = time.Now().Add(duration)
+	fmt.Printf("🔓 Proxy transparent mode enabled for %v\n", duration)
+}
+
+// isTransparent returns true if the proxy should pass through all queries
+func (p *Proxy) isTransparent() bool {
+	if !p.transparentMode {
+		return false
+	}
+	// Check if transparent mode has expired
+	if time.Now().After(p.transparentUntil) {
+		p.transparentMode = false
+		fmt.Println("🔒 Proxy transparent mode disabled, now intercepting queries")
+		return false
+	}
+	return true
+}
+
+func (p *Proxy) LoadSchema(schemaFile string) error {
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+
+	if err := json.Unmarshal(data, &p.schemaCache); err != nil {
+		return fmt.Errorf("failed to parse schema file: %w", err)
+	}
+
+	fmt.Printf("✅ Loaded schema for %d tables\n", len(p.schemaCache))
+	for table := range p.schemaCache {
+		fmt.Printf("   - %s\n", table)
+	}
+	return nil
 }
 
 func (p *Proxy) Start(ctx context.Context) error {
@@ -91,7 +150,28 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 			cmd := payload[0]
 			if cmd == 0x03 { // COM_QUERY
 				query := string(payload[1:])
-				if p.isWhitelisted(query) {
+
+				// Log all queries for debugging
+				fmt.Printf("Proxy: Query received: %.80s\n", query)
+
+				// Check for transparent mode first - pass through everything
+				if p.isTransparent() {
+					fmt.Printf("Proxy: Transparent mode - passing through: %.50s...\n", query)
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				} else if p.isShowFullFieldsQuery(query) {
+					tableName := p.extractShowFullFieldsTable(query)
+					if columns, ok := p.schemaCache[tableName]; ok {
+						fmt.Printf("Proxy: Returning cached schema for table %s\n", tableName)
+						p.sendSchemaResponse(clientConn, tableName, columns)
+						continue // Don't forward to upstream
+					}
+					// If not in cache, pass through to upstream
+					fmt.Printf("Proxy: Schema cache miss for table %s, passing through\n", tableName)
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				} else if p.isWhitelisted(query) {
+					fmt.Printf("Proxy: Whitelisted query passing through: %.50s...\n", query)
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else {
@@ -351,4 +431,117 @@ func (p *Proxy) extractTable(query string) string {
 		}
 	}
 	return "unknown"
+}
+
+// extractShowFullFieldsTable extracts table name from SHOW FULL FIELDS FROM <table> query
+func (p *Proxy) extractShowFullFieldsTable(query string) string {
+	// Match patterns like:
+	// SHOW FULL FIELDS FROM `users`
+	// SHOW FULL FIELDS FROM users
+	// SHOW FULL COLUMNS FROM `users`
+	// SHOW COLUMNS FROM `users`
+	patterns := []string{
+		`(?i)SHOW\s+FULL\s+FIELDS\s+FROM\s+\x60?(\w+)\x60?`,
+		`(?i)SHOW\s+FULL\s+COLUMNS\s+FROM\s+\x60?(\w+)\x60?`,
+		`(?i)SHOW\s+FIELDS\s+FROM\s+\x60?(\w+)\x60?`,
+		`(?i)SHOW\s+COLUMNS\s+FROM\s+\x60?(\w+)\x60?`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(query)
+		if len(matches) >= 2 {
+			table := matches[1]
+			// Convert to lowercase for consistent lookup
+			return strings.ToLower(table)
+		}
+	}
+
+	return ""
+}
+
+// isShowFullFieldsQuery checks if the query is a SHOW FULL FIELDS/COLUMNS query
+func (p *Proxy) isShowFullFieldsQuery(query string) bool {
+	return p.extractShowFullFieldsTable(query) != ""
+}
+
+// sendSchemaResponse sends a MySQL result set response for SHOW FULL FIELDS from cached schema
+func (p *Proxy) sendSchemaResponse(conn net.Conn, tableName string, columns []ColumnInfo) error {
+	// MySQL SHOW FULL FIELDS returns 9 columns:
+	// Field, Type, Collation, Null, Key, Default, Extra, Privileges, Comment
+	columnNames := []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+
+	// Column count packet (seq=1)
+	if err := p.writePacket(conn, 1, []byte{byte(len(columnNames))}); err != nil {
+		return err
+	}
+
+	// Column definition packets (seq=2 to seq=10)
+	seq := uint8(2)
+	for _, colName := range columnNames {
+		colDef := p.makeColumnDef("todo_api_development", "", colName, mysql.MYSQL_TYPE_VAR_STRING, 0)
+		if err := p.writePacket(conn, seq, colDef); err != nil {
+			return err
+		}
+		seq++
+	}
+
+	// EOF packet after column definitions (seq=10)
+	if err := p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
+		return err
+	}
+	seq++
+
+	// Row data packets
+	for _, col := range columns {
+		var rowData []byte
+
+		// Field (column name)
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Field))...)
+
+		// Type
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Type))...)
+
+		// Collation (can be nil)
+		if !col.Collation.Valid || col.Collation.String == "" {
+			rowData = append(rowData, 0xfb) // NULL
+		} else {
+			rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Collation.String))...)
+		}
+
+		// Null (YES/NO)
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Null))...)
+
+		// Key (PRI, UNI, MUL, or empty)
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Key))...)
+
+		// Default (can be nil)
+		if !col.Default.Valid || col.Default.String == "" {
+			rowData = append(rowData, 0xfb) // NULL
+		} else {
+			rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Default.String))...)
+		}
+
+		// Extra
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(col.Extra))...)
+
+		// Privileges (use default if not specified)
+		privileges := col.Privileges
+		if privileges == "" {
+			privileges = "select,insert,update,references"
+		}
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(privileges))...)
+
+		// Comment (use empty if not specified)
+		comment := col.Comment
+		rowData = append(rowData, mysql.PutLengthEncodedString([]byte(comment))...)
+
+		if err := p.writePacket(conn, seq, rowData); err != nil {
+			return err
+		}
+		seq++
+	}
+
+	// Final EOF packet
+	return p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0})
 }

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type TestSuite struct {
@@ -369,11 +372,55 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			// MySQL: use shared database with proxy
 			dbContainerName = "linespec-shared-db"
 
+			// Extract table names from spec and fetch schema for caching
+			tables := extractTableNamesFromSpec(spec)
+			if len(tables) > 0 {
+				fmt.Printf("📋 Fetching schema for tables: %v\n", tables)
+				schemaCache, err := r.suite.fetchSchemaFromDatabase(
+					ctx, tables,
+					"localhost", r.suite.dbHostPort,
+					serviceConfig.Database.Username,
+					serviceConfig.Database.Password,
+					serviceConfig.Database.Database,
+				)
+				if err != nil {
+					fmt.Printf("⚠️  Failed to fetch schema: %v\n", err)
+				} else if len(schemaCache) > 0 {
+					// Save schema to file for proxy to load
+					schemaFile := filepath.Join(r.tempDir, "schema-"+spec.Name+".json")
+					schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
+					if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+						fmt.Printf("⚠️  Failed to write schema file: %v\n", err)
+					} else {
+						fmt.Printf("✅ Schema cached to %s\n", schemaFile)
+					}
+				}
+			}
+
 			// Start database proxy
 			fmt.Println("Starting MySQL proxy...")
+
+			// Build proxy command with optional schema file
+			proxyCmd := []string{
+				"proxy", "mysql",
+				"0.0.0.0:" + dbPort,
+				"real-db:" + dbPort,
+				"/app/registry/registry-" + spec.Name + ".json",
+			}
+
+			// Check if schema file exists and add it to command
+			schemaFile := filepath.Join(r.tempDir, "schema-"+spec.Name+".json")
+			if _, err := os.Stat(schemaFile); err == nil {
+				proxyCmd = append(proxyCmd, "/app/registry/schema-"+spec.Name+".json")
+			}
+
+			// Add transparent mode duration (10s) for Rails to cache schema
+			// This should expire before the actual test request
+			proxyCmd = append(proxyCmd, "10s")
+
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
-				Cmd:   []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, "/app/registry/registry-" + spec.Name + ".json"},
+				Cmd:   proxyCmd,
 			}, &container.HostConfig{
 				Binds: []string{
 					r.suite.cwd + ":/app/project",
@@ -394,6 +441,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, "proxy-db-"+spec.Name)
 			}()
 			fmt.Println("✅ MySQL proxy started")
+
+			// Stream proxy logs for debugging (only during development)
+			go func() {
+				logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer logCancel()
+				_ = r.suite.orch.StreamLogs(logCtx, "proxy-db-"+spec.Name, os.Stdout, os.Stderr)
+			}()
 		}
 	}
 
@@ -563,6 +617,15 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	fmt.Println("✅ App is healthy")
 
+	// Warmup for Rails apps to force schema/model loading
+	if serviceConfig.Service.Framework == "rails" {
+		fmt.Println("Warming up Rails app...")
+		// Send a simple request to force Rails to load models
+		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
+		http.Get(warmupURL)
+		time.Sleep(2 * time.Second) // Give Rails time to load models
+	}
+
 	// 6. Trigger Request
 	fmt.Printf("🚀 Triggering RECEIVE: %s %s\n", spec.Receive.Method, spec.Receive.Path)
 	resp, err := r.sendRequest(spec.Receive, spec.BaseDir, hostPort)
@@ -711,6 +774,112 @@ func (r *testRunner) compareRecursive(exp, act interface{}, path string, noise m
 		}
 	}
 	return nil
+}
+
+// SchemaCache represents the cached schema for tables
+type SchemaCache map[string][]ColumnInfo
+
+// ColumnInfo represents a single column from SHOW FULL FIELDS
+type ColumnInfo struct {
+	Field      string         `json:"Field"`
+	Type       string         `json:"Type"`
+	Collation  sql.NullString `json:"Collation"`
+	Null       string         `json:"Null"`
+	Key        string         `json:"Key"`
+	Default    sql.NullString `json:"Default"`
+	Extra      string         `json:"Extra"`
+	Privileges string         `json:"Privileges"`
+	Comment    string         `json:"Comment"`
+}
+
+// extractTableNamesFromSpec extracts table names from EXPECT statements in the spec
+func extractTableNamesFromSpec(spec *types.TestSpec) []string {
+	tableMap := make(map[string]bool)
+
+	for _, expect := range spec.Expects {
+		switch expect.Channel {
+		case types.ReadMySQL, types.WriteMySQL:
+			if expect.Table != "" {
+				tableMap[expect.Table] = true
+			}
+		}
+	}
+
+	// Convert map to slice
+	tables := make([]string, 0, len(tableMap))
+	for table := range tableMap {
+		tables = append(tables, table)
+	}
+
+	return tables
+}
+
+// fetchSchemaFromDatabase queries the real database for schema of specified tables
+func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string, dbHost, dbPort, dbUser, dbPass, dbName string) (SchemaCache, error) {
+	if len(tables) == 0 {
+		return make(SchemaCache), nil
+	}
+
+	// Build DSN for MySQL connection
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		dbUser, dbPass, dbHost, dbPort, dbName)
+
+	// Connect to database
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer db.Close()
+
+	// Test connection
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	schemaCache := make(SchemaCache)
+
+	for _, table := range tables {
+		query := fmt.Sprintf("SHOW FULL FIELDS FROM `%s`", table)
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to fetch schema for table %s: %v\n", table, err)
+			continue
+		}
+		defer rows.Close()
+
+		var columns []ColumnInfo
+		for rows.Next() {
+			var col ColumnInfo
+			err := rows.Scan(
+				&col.Field,
+				&col.Type,
+				&col.Collation,
+				&col.Null,
+				&col.Key,
+				&col.Default,
+				&col.Extra,
+				&col.Privileges,
+				&col.Comment,
+			)
+			if err != nil {
+				fmt.Printf("⚠️  Failed to scan column for table %s: %v\n", table, err)
+				continue
+			}
+			columns = append(columns, col)
+		}
+
+		if err := rows.Err(); err != nil {
+			fmt.Printf("⚠️  Error iterating rows for table %s: %v\n", table, err)
+			continue
+		}
+
+		if len(columns) > 0 {
+			schemaCache[table] = columns
+			fmt.Printf("✅ Cached schema for table %s (%d columns)\n", table, len(columns))
+		}
+	}
+
+	return schemaCache, nil
 }
 
 // Deprecated: Use NewTestSuite instead

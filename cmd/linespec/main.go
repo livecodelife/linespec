@@ -49,7 +49,8 @@ func main() {
 			if err != nil {
 				return err
 			}
-			if !info.IsDir() && strings.HasSuffix(p, ".linespec") {
+			// Only include files with .linespec extension, excluding files like Dockerfile.linespec
+			if !info.IsDir() && filepath.Ext(p) == ".linespec" && !strings.Contains(strings.ToLower(filepath.Base(p)), "dockerfile") {
 				testFiles = append(testFiles, p)
 			}
 			return nil
@@ -131,7 +132,7 @@ func main() {
 
 func runProxy() {
 	if len(os.Args) < 5 {
-		fmt.Println("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file]")
+		fmt.Println("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [schema-file]")
 		os.Exit(1)
 	}
 
@@ -180,6 +181,30 @@ func runProxy() {
 	switch pType {
 	case "mysql":
 		p := mysql.NewProxy(addr, upstream, reg)
+		// Load schema file if provided (6th argument)
+		if len(os.Args) > 6 {
+			schemaFile := os.Args[6]
+			fmt.Printf("📄 Loading schema file: %s\n", schemaFile)
+			if _, err := os.Stat(schemaFile); err != nil {
+				fmt.Printf("⚠️  Schema file does not exist: %v\n", err)
+			} else {
+				if err := p.LoadSchema(schemaFile); err != nil {
+					fmt.Printf("⚠️  Failed to load schema file: %v\n", err)
+					// Don't exit - schema is optional
+				}
+			}
+		} else {
+			fmt.Println("📄 No schema file provided (len(os.Args) =", len(os.Args), ")")
+		}
+		// Check for transparent mode duration (7th argument)
+		if len(os.Args) > 7 {
+			transparentDuration := os.Args[7]
+			if duration, err := time.ParseDuration(transparentDuration); err == nil {
+				p.EnableTransparentMode(duration)
+			} else {
+				fmt.Printf("⚠️  Invalid transparent duration: %v\n", err)
+			}
+		}
 		proxyErr = p.Start(ctx)
 	case "postgresql":
 		p := postgresql.NewProxy(addr, upstream, reg)
