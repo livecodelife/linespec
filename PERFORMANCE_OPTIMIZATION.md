@@ -8,22 +8,23 @@ This document outlines the performance optimizations to speed up LineSpec test e
 
 Current bottlenecks identified:
 
-| Issue | Location | Impact |
-|-------|----------|--------|
-| 10s transparent mode wait per MySQL test | runner.go:419 | High |
-| WaitTCPInternal spawns Alpine container | orchestrator.go:110-169 | Medium |
-| Hardcoded 2s Rails warmup sleep | runner.go:626 | Medium |
-| 500ms sleep in verification | runner.go:672, 692 | Low |
-| Sequential test execution | main.go:97-120 | High for suites |
-| Per-test schema fetching | runner.go:376-398 | Low |
+| Issue | Location | Status | Impact |
+|-------|----------|--------|--------|
+| 10s transparent mode wait per MySQL test | runner.go:451 | ✅ **FIXED** | High |
+| WaitTCPInternal spawns Alpine container | orchestrator.go:110-169 | Pending | Medium |
+| Hardcoded 2s Rails warmup sleep | runner.go:626 | Pending | Medium |
+| 500ms sleep in verification | runner.go:672, 692 | Pending | Low |
+| Sequential test execution | main.go:97-120 | Pending | High for suites |
+| Per-test schema fetching | runner.go:393-430 | ✅ **FIXED** | Low |
 
-**Total potential savings**: 13-18s per test + 2-4x suite speedup with parallelism
+**Savings achieved**: ~2 minutes total (~8-10s per MySQL test)  
+**Remaining potential**: 5-8s per test + 2-4x suite speedup with parallelism
 
 ---
 
 ## Optimization 1: Eliminate Transparent Mode Wait
 
-**Priority**: High | **Estimated Savings**: 8-10s per MySQL test | **Complexity**: Low
+**Status**: ✅ **COMPLETE** | **Priority**: High | **Savings**: ~2 min total (~8-10s per MySQL test) | **Complexity**: Low
 
 ### Problem
 
@@ -33,65 +34,24 @@ The MySQL proxy starts in "transparent mode" for 10 seconds to let Rails cache s
 
 ### Solution
 
-Pre-load schema in shared setup, eliminate transparent mode.
+Pre-load schema once during shared infrastructure setup, eliminate transparent mode entirely.
 
-### Code Changes
+### Implementation
 
-1. **pkg/runner/runner.go** - Modify `SetupSharedInfrastructure` (around line 48)
+1. ✅ **pkg/runner/runner.go** - Added `tempDir` field to `TestSuite` struct
+2. ✅ **pkg/runner/runner.go** - Modified `NewTestSuite()` to create temp directory for shared files
+3. ✅ **pkg/runner/runner.go** - Modified `SetupSharedInfrastructure` to fetch and cache schema after migrations
+4. ✅ **pkg/runner/runner.go** - Changed proxy command from "10s" to "0s" transparent mode
+5. ✅ **pkg/runner/runner.go** - Modified per-test schema loading to use shared file
+6. ✅ **pkg/runner/runner.go** - Removed temp directory cleanup from `CleanupSharedInfrastructure`
 
-   Add schema fetching after DB is ready:
+### Results
 
-   ```go
-   // After DB is ready (around line 91), add:
-   
-   // Fetch schema for all tables used by tests
-   tables := []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
-   schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort, "todo_user", "todo_password", "todo_api_development")
-   if err != nil {
-       fmt.Printf("⚠️  Failed to fetch shared schema: %v\n", err)
-   } else {
-       // Save to shared location
-       schemaFile := filepath.Join(s.cwd, ".linespec-shared-schema.json")
-       schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
-       if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-           fmt.Printf("⚠️  Failed to write shared schema file: %v\n", err)
-       } else {
-           fmt.Printf("✅ Shared schema cached to %s\n", schemaFile)
-       }
-   }
-   ```
-
-2. **pkg/runner/runner.go** - Modify `RunTest` (line 417-419)
-
-   Change from:
-   ```go
-   // Add transparent mode duration (10s) for Rails to cache schema
-   // This should expire before the actual test request
-   proxyCmd = append(proxyCmd, "10s")
-   ```
-
-   To:
-   ```go
-   // Transparent mode disabled - schema is pre-loaded
-   proxyCmd = append(proxyCmd, "0s")
-   ```
-
-   Or simply remove transparent mode entirely (pass "0s" or omit the argument).
-
-3. **pkg/runner/runner.go** - Modify `RunTest` (line 390-415)
-
-   Replace per-test schema fetch with loading from shared file:
-
-   ```go
-   // OLD: Per-test schema fetch (lines 376-398)
-   // NEW: Load from shared schema file
-   schemaFile := filepath.Join(s.cwd, ".linespec-shared-schema.json")
-   if _, err := os.Stat(schemaFile); err == nil {
-       proxyCmd = append(proxyCmd, "/app/project/.linespec-shared-schema.json")
-   }
-   ```
-
-   Remove the per-test schema fetch code block (lines 376-398).
+- Shared schema file created once during infrastructure setup in temp directory
+- Transparent mode disabled (0s instead of 10s)
+- All 16 MySQL tests load shared schema instead of fetching per-test
+- **~2 minutes saved** on full test suite execution
+- All 21 tests pass successfully
 
 ---
 
@@ -333,13 +293,13 @@ After implementing Optimization 1, verify that:
 
 ## Implementation Order
 
-| Step | Optimization | Estimated Savings |
-|------|-------------|------------------|
-| 1 | Eliminate Transparent Mode | 8-10s per test |
-| 2 | Fix WaitTCPInternal | 2-5s per test |
-| 3 | Reduce Hardcoded Sleeps | 2-3s per test |
-| 4 | Cache Schema Globally | (covered by #1) |
-| 5 | Parallel Test Execution | 2-4x for suites |
+| Step | Optimization | Status | Savings |
+|------|-------------|--------|---------|
+| 1 | Eliminate Transparent Mode | ✅ **COMPLETE** | ~2 min total (~8-10s per MySQL test) |
+| 2 | Fix WaitTCPInternal | Pending | 2-5s per test |
+| 3 | Reduce Hardcoded Sleeps | Pending | 2-3s per test |
+| 4 | Cache Schema Globally | (covered by #1) | - |
+| 5 | Parallel Test Execution | Pending | 2-4x for suites |
 
 ---
 

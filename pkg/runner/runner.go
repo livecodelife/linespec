@@ -30,6 +30,7 @@ type TestSuite struct {
 	dbHostPort  string
 	kafkaReady  bool
 	cwd         string
+	tempDir     string // Temp directory for shared files like schema cache
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -38,10 +39,18 @@ func NewTestSuite() (*TestSuite, error) {
 		return nil, err
 	}
 	cwd, _ := os.Getwd()
+
+	// Create temp directory for shared files
+	tempDir, err := os.MkdirTemp("", "linespec-suite-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create suite temp directory: %w", err)
+	}
+
 	return &TestSuite{
 		orch:        orch,
 		networkName: "linespec-shared-net",
 		cwd:         cwd,
+		tempDir:     tempDir,
 	}, nil
 }
 
@@ -99,6 +108,24 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed to run todo-api migrations: %w", err)
 	}
 	fmt.Println("✅ Migrations complete")
+
+	// Fetch schema for all tables after migrations complete
+	// This is done once and shared across all tests
+	tables := []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+	schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
+		"todo_user", "todo_password", "todo_api_development")
+	if err != nil {
+		fmt.Printf("⚠️  Failed to fetch shared schema: %v\n", err)
+	} else {
+		// Save to shared location in temp directory
+		schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
+		schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
+		if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+			fmt.Printf("⚠️  Failed to write shared schema file: %v\n", err)
+		} else {
+			fmt.Printf("✅ Shared schema cached to %s\n", schemaFile)
+		}
+	}
 
 	// Start shared Kafka
 	_, err = s.orch.StartContainer(ctx, &container.Config{
@@ -231,6 +258,9 @@ func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-kafka")
 	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-db")
 	_ = s.orch.RemoveNetwork(ctx, s.networkName)
+
+	// Note: We don't clean up tempDir here - it's needed for shared schema file
+	// The OS will automatically clean up /tmp directories
 }
 
 func (s *TestSuite) RunTest(ctx context.Context, specPath string) error {
@@ -372,27 +402,42 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			// MySQL: use shared database with proxy
 			dbContainerName = "linespec-shared-db"
 
-			// Extract table names from spec and fetch schema for caching
-			tables := extractTableNamesFromSpec(spec)
-			if len(tables) > 0 {
-				fmt.Printf("📋 Fetching schema for tables: %v\n", tables)
-				schemaCache, err := r.suite.fetchSchemaFromDatabase(
-					ctx, tables,
-					"localhost", r.suite.dbHostPort,
-					serviceConfig.Database.Username,
-					serviceConfig.Database.Password,
-					serviceConfig.Database.Database,
-				)
-				if err != nil {
-					fmt.Printf("⚠️  Failed to fetch schema: %v\n", err)
-				} else if len(schemaCache) > 0 {
-					// Save schema to file for proxy to load
-					schemaFile := filepath.Join(r.tempDir, "schema-"+spec.Name+".json")
-					schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
-					if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+			// Load schema from shared file (pre-fetched during SetupSharedInfrastructure)
+			// This is faster than fetching per-test and eliminates the need for transparent mode
+			sharedSchemaFile := filepath.Join(r.suite.tempDir, ".linespec-shared-schema.json")
+			schemaFile := filepath.Join(r.tempDir, "schema-"+spec.Name+".json")
+
+			if _, err := os.Stat(sharedSchemaFile); err == nil {
+				// Copy shared schema to test-specific location
+				data, err := os.ReadFile(sharedSchemaFile)
+				if err == nil {
+					if err := os.WriteFile(schemaFile, data, 0644); err != nil {
 						fmt.Printf("⚠️  Failed to write schema file: %v\n", err)
 					} else {
-						fmt.Printf("✅ Schema cached to %s\n", schemaFile)
+						fmt.Printf("✅ Loaded shared schema for test\n")
+					}
+				} else {
+					fmt.Printf("⚠️  Failed to read shared schema: %v\n", err)
+				}
+			} else {
+				// Fallback: extract tables from spec and fetch fresh (for backward compatibility)
+				fmt.Printf("📋 Shared schema not found, fetching per-test...\n")
+				tables := extractTableNamesFromSpec(spec)
+				if len(tables) > 0 {
+					schemaCache, err := r.suite.fetchSchemaFromDatabase(
+						ctx, tables,
+						"localhost", r.suite.dbHostPort,
+						serviceConfig.Database.Username,
+						serviceConfig.Database.Password,
+						serviceConfig.Database.Database,
+					)
+					if err != nil {
+						fmt.Printf("⚠️  Failed to fetch schema: %v\n", err)
+					} else if len(schemaCache) > 0 {
+						schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
+						if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+							fmt.Printf("⚠️  Failed to write schema file: %v\n", err)
+						}
 					}
 				}
 			}
@@ -409,14 +454,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}
 
 			// Check if schema file exists and add it to command
-			schemaFile := filepath.Join(r.tempDir, "schema-"+spec.Name+".json")
 			if _, err := os.Stat(schemaFile); err == nil {
 				proxyCmd = append(proxyCmd, "/app/registry/schema-"+spec.Name+".json")
 			}
 
-			// Add transparent mode duration (10s) for Rails to cache schema
-			// This should expire before the actual test request
-			proxyCmd = append(proxyCmd, "10s")
+			// Add transparent mode duration (0s) - schema is pre-loaded from shared file
+			// This saves ~10s per test by eliminating the transparent mode wait
+			proxyCmd = append(proxyCmd, "0s")
 
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
