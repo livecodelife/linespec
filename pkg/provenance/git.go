@@ -98,7 +98,8 @@ func (g *Git) GetCommitsInRange(from, to string) ([]string, error) {
 
 // GetCommitsForRecord returns all commits that reference a given record ID
 func (g *Git) GetCommitsForRecord(recordID string) ([]string, error) {
-	cmd := exec.Command("git", "log", "--all", "--grep", fmt.Sprintf("[%s]", recordID), "--format=%H")
+	// Escape square brackets for git grep (otherwise interpreted as character range)
+	cmd := exec.Command("git", "log", "--all", "--grep", fmt.Sprintf("\\[%s\\]", recordID), "--format=%H")
 	if g.RepoRoot != "" {
 		cmd.Dir = g.RepoRoot
 	}
