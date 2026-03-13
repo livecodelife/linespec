@@ -425,8 +425,12 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 	if data, err := os.ReadFile(filePath); err == nil {
 		var fullConfig config.LineSpecConfig
 		if err := yaml.Unmarshal(data, &fullConfig); err == nil && fullConfig.Provenance != nil {
+			// Get the directory containing the config file
+			configDir := filepath.Dir(filePath)
+
 			if fullConfig.Provenance.Dir != "" {
-				cfg.Dir = fullConfig.Provenance.Dir
+				// Make provenance dir relative to config file location
+				cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)
 			}
 			if fullConfig.Provenance.Enforcement != "" {
 				cfg.Enforcement = fullConfig.Provenance.Enforcement
