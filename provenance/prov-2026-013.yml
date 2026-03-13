@@ -1,19 +1,19 @@
 id: prov-2026-013
 title: Allow open provenance records to modify their own YAML files during commit hook validation
-status: open
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: |
     The provenance commit hook currently blocks commits that modify a provenance record's own YAML file unless that file is explicitly listed in the record's affected_scope. This creates a practical problem: when marking a record as implemented, the status change modifies the YAML file, but the commit hook rejects the commit because the file isn't in scope.
-    
+
     This decision allows open provenance records to modify their own YAML definition files when the commit is tagged with that record's ID. This enables the natural workflow where a record starts as open, accumulates scope from commits, and then transitions to implemented without requiring manual scope manipulation or hook bypass.
-    
+
     The key principles are:
     1. An open record may modify its own file when referenced in the commit
     2. Forbidden scope still applies regardless of status (explicit overrides)
     3. Once implemented, the record becomes immutable as before
     4. Path comparisons must handle relative vs absolute paths correctly
-    
+
     This change maintains the integrity of the provenance system while removing the friction in the final step of the record lifecycle.
 constraints:
     - Open records MUST be allowed to change their own YAML file when the commit is tagged with that record ID
@@ -26,7 +26,7 @@ constraints:
     - The change MUST be backward compatible (no breaking changes to record format)
 affected_scope:
     - pkg/provenance/git.go
-    - pkg/provenance/git_test.go
+    - pkg/provenance/provenance_test.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
