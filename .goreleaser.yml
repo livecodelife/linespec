@@ -88,7 +88,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -156,7 +156,7 @@ brews:
       name: goreleaserbot
       email: bot@goreleaser.com
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    folder: Formula
+    directory: Formula
     homepage: "https://github.com/livecodelife/linespec"
     description: "Provenance Records - Structured YAML artifacts for documenting architectural decisions"
     license: "MIT"
@@ -180,7 +180,7 @@ brews:
       name: goreleaserbot
       email: bot@goreleaser.com
     commit_msg_template: "Brew formula update for {{ .ProjectName }}-beta version {{ .Tag }}"
-    folder: Formula
+    directory: Formula
     homepage: "https://github.com/livecodelife/linespec"
     description: "LineSpec (Beta) - Provenance Records + Integration Testing"
     license: "MIT"
@@ -195,4 +195,3 @@ brews:
 
 # Disable other artifact types for now
 nfpms: []
-snapshots: []
