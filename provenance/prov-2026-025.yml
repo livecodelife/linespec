@@ -1,0 +1,41 @@
+id: prov-2026-025
+title: Implement provenance context command for file-targeted constraint retrieval
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  Provide a `linespec provenance context` command that accepts file paths and returns
+  all provenance records governing those files, including full supersession ancestry
+  and scope conflicts. This enables agents and engineers to retrieve their complete
+  constraint context before making changes, eliminating the need to know record IDs
+  in advance or manually synthesize information from multiple commands.
+constraints:
+  - MUST accept file paths as positional arguments or --files flag
+  - MUST match files against affected_scope and forbidden_scope patterns of all records
+  - MUST follow supersedes chains to build full ancestry for each matched record
+  - MUST render ancestors in condensed form when they appear only via ancestry
+  - MUST detect and surface scope conflicts between open records matching same file
+  - MUST list open records before implemented records in output
+  - MUST support --format compact for token-efficient output without decorative characters
+  - MUST support --format json for structured output for tooling consumption
+  - MUST NOT modify records, trigger linting, or run LineSpecs
+  - MUST use pattern-based matching consistent with existing CLI scope resolution
+  - SHOULD be injectable directly into agent context windows at session start
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/types.go
+  - cmd/linespec/main_stable.go
+  - pkg/provenance/provenance_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - cli
+  - context-retrieval
