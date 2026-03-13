@@ -36,3 +36,9 @@ dependencies:
     host: user-service.local
     port: 3001
     proxy: true
+
+provenance:
+  dir: provenance/
+  enforcement: warn
+  commit_tag_required: true
+  auto_affected_scope: true

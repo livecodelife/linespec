@@ -28,5 +28,5 @@ dependencies: []
 provenance:
   dir: provenance/
   enforcement: warn
-  commit_tag_required: false
+  commit_tag_required: true
   auto_affected_scope: true
