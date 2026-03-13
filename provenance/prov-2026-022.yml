@@ -1,0 +1,33 @@
+id: prov-2026-022
+title: Release v1.0.3 - Add sealed_at_sha field for stale scope detection
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Release version 1.0.3 containing the sealed_at_sha field feature for Provenance Records.
+    
+    This release introduces a new field that captures the git SHA when a record is marked
+    as implemented, enabling smarter stale scope detection that reduces false positives.
+
+constraints:
+    - MUST include all changes from prov-2026-021
+    - MUST update CHANGELOG.md with release notes
+    - MUST create git tag v1.0.3
+    - MUST push release to remote
+
+affected_scope:
+    - CHANGELOG.md
+    - provenance/prov-2026-022.yml
+
+related:
+    - prov-2026-021
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - release
+    - v1.0.3

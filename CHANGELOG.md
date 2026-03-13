@@ -5,6 +5,26 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-03-13
+
+### Added
+
+- **sealed_at_sha field** ([prov-2026-021](./provenance/prov-2026-021.yml)) - New field in Provenance Records that captures the HEAD git SHA when a record is marked as `implemented`. This enables smarter stale scope detection that reduces false positives by only warning on files that have actually changed since the record was sealed.
+  - Automatically set by `linespec provenance complete` command
+  - Validated by `linespec provenance lint` (7-40 hex characters)
+  - Displayed by `linespec provenance status` for implemented records
+  - Used by `linespec provenance check` to filter stale scope warnings
+- **Stale scope warning filtering** ([prov-2026-021](./provenance/prov-2026-021.yml)) - The check command now uses `git diff <sealed_at_sha> HEAD` to verify files have actually changed since sealing before surfacing warnings, reducing noise for engineers making safe refactors.
+
+### Changed
+
+- **Documentation** ([prov-2026-021](./provenance/prov-2026-021.yml)) - Updated `PROVENANCE_RECORDS.md` and `AGENTS.md` with sealed_at_sha field documentation and schema reference.
+
+### Related Provenance Records
+
+- [prov-2026-021](./provenance/prov-2026-021.yml) - Add sealed_at_sha field for stale scope detection
+- [prov-2026-022](./provenance/prov-2026-022.yml) - This release
+
 ## [1.0.2] - 2026-03-13
 
 ### Fixed
