@@ -29,6 +29,9 @@ constraints:
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/formatter.go
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: go-test
 related:
   - prov-2026-021
 tags:
