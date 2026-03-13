@@ -1,6 +1,6 @@
 id: prov-2026-022
 title: Release v1.0.3 - Add sealed_at_sha field for stale scope detection
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: |
@@ -24,7 +24,7 @@ related:
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
-sealed_at_sha: ""
+sealed_at_sha: 0322207c7f22fad1a62bdc055a1dfdc9494a232e
 associated_linespecs: []
 associated_traces: []
 monitors: []
