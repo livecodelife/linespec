@@ -1,0 +1,59 @@
+id: prov-2026-022
+title: Fix SaveRecord to preserve YAML formatting when completing records
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Fix a bug where the `SaveRecord` function reformat YAML files when marking records 
+    as implemented, destroying the original formatting including folded scalars, 
+    indentation, and comment preservation.
+
+    **The Problem:**
+    When running `linespec provenance complete`, the `SaveRecord` function was using 
+    `yaml.Marshal()` to serialize the entire record struct back to YAML. This caused:
+    - Folded scalars (`>`) to become double-quoted strings with `\n` escapes
+    - Loss of original indentation and formatting
+    - Destruction of any comments in the YAML
+    - Overall unreadable output compared to hand-written records
+
+    **The Solution:**
+    Parse the existing YAML into an AST node tree using `yaml.v3`'s Node API, then 
+    update only the specific fields that need changing (status, sealed_at_sha, 
+    superseded_by) while preserving all other formatting, indentation, and structure.
+
+    **Key Changes:**
+    - Read existing file content before writing
+    - Use `yaml.Node` to parse into AST tree
+    - Update only changed fields in the node tree
+    - Re-encode preserving original formatting
+
+    **Benefits:**
+    - Intent fields with folded scalars (`>`) remain readable
+    - No more `\n` escape sequences in output
+    - Maintains hand-written formatting
+    - Future-proof for comment preservation
+constraints:
+    - MUST preserve original YAML formatting when updating records
+    - MUST maintain folded scalars (>) without converting to quoted strings
+    - MUST NOT introduce escape sequences (\n) in place of actual newlines
+    - MUST only update fields that have changed (status, sealed_at_sha, superseded_by)
+    - MUST use yaml.v3 Node API for AST-based editing
+    - MUST fallback to full marshal for new files
+    - MUST handle both existing and new record files
+    - MUST NOT corrupt or lose any existing YAML structure
+affected_scope:
+    - pkg/provenance/loader.go
+    - provenance/prov-2026-021.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-021
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - bugfix
+    - yaml-formatting
+    - loader
+    - preservation
