@@ -1,6 +1,6 @@
 id: prov-2026-028
 title: Add implicit environment variable substitution to LineSpec DSL
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -34,7 +34,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 44e36bfef253b7b31ba59a2edcc3669ffa401b08
 associated_specs:
   - path: examples/user-linespecs/authenticate_user_success.linespec
     type: linespec
