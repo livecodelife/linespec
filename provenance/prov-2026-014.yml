@@ -1,23 +1,23 @@
 id: prov-2026-014
 title: Use both pre-commit and commit-msg hooks for provenance validation
-status: open
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: |
     The current pre-commit hook has a fundamental design flaw: it checks committed files (HEAD) rather than staged files, and cannot access the commit message being written. This causes it to validate the wrong commit at the wrong time.
-    
+
     This decision establishes a two-hook strategy that separates concerns properly:
-    
+
     1. **pre-commit hook**: Runs early, validates that modified provenance records are well-formed (linting), and performs any quick checks that don't need the commit message
-    
+
     2. **commit-msg hook**: Runs after the user writes their message, receives the commit message file as an argument, validates that provenance IDs in the message match the staged files, and enforces scope constraints
-    
+
     This separation ensures:
     - The commit message is available when we need to extract provenance IDs
     - Staged files are checked against the correct provenance records
     - Each hook has a single, clear responsibility
     - The workflow is natural and doesn't surprise users
-    
+
     The implementation requires adding a `--staged` flag and `--message-file` option to the `linespec provenance check` command to support checking staged files against a message file.
 constraints:
     - The pre-commit hook MUST only lint modified provenance records, not check scope
