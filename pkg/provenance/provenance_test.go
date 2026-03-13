@@ -526,3 +526,284 @@ func TestCheckStagedRejectsImplementedRecords(t *testing.T) {
 		})
 	}
 }
+
+// TestContextCommand tests the context command functionality
+func TestContextCommand(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir := t.TempDir()
+	provenanceDir := filepath.Join(tmpDir, "provenance")
+	if err := os.MkdirAll(provenanceDir, 0755); err != nil {
+		t.Fatalf("Failed to create provenance dir: %v", err)
+	}
+
+	// Create test records
+	records := []*Record{
+		{
+			ID:             "prov-2026-001",
+			Title:          "First Open Record",
+			Status:         StatusOpen,
+			CreatedAt:      "2026-03-01",
+			Author:         "test@example.com",
+			Intent:         "Test intent for first record",
+			Constraints:    []string{"Constraint 1", "Constraint 2"},
+			AffectedScope:  []string{"pkg/alpha/*.go", "pkg/beta/**/*.go"},
+			ForbiddenScope: []string{},
+			FilePath:       filepath.Join(provenanceDir, "prov-2026-001.yml"),
+		},
+		{
+			ID:             "prov-2026-002",
+			Title:          "Second Open Record",
+			Status:         StatusOpen,
+			CreatedAt:      "2026-03-02",
+			Author:         "test@example.com",
+			Intent:         "Test intent for second record",
+			Constraints:    []string{"Constraint 3"},
+			AffectedScope:  []string{"pkg/alpha/*.go"}, // Overlaps with 001
+			ForbiddenScope: []string{},
+			FilePath:       filepath.Join(provenanceDir, "prov-2026-002.yml"),
+		},
+		{
+			ID:             "prov-2026-003",
+			Title:          "Implemented Record",
+			Status:         StatusImplemented,
+			CreatedAt:      "2026-03-03",
+			Author:         "test@example.com",
+			Intent:         "This record is implemented",
+			Constraints:    []string{"Constraint 4"},
+			AffectedScope:  []string{"pkg/gamma/*.go"},
+			ForbiddenScope: []string{},
+			FilePath:       filepath.Join(provenanceDir, "prov-2026-003.yml"),
+		},
+		{
+			ID:             "prov-2026-004",
+			Title:          "Superseded Record",
+			Status:         StatusSuperseded,
+			CreatedAt:      "2026-03-04",
+			Author:         "test@example.com",
+			Intent:         "This record is superseded",
+			Constraints:    []string{},
+			AffectedScope:  []string{"pkg/old-delta/*.go"}, // Different scope, doesn't match directly
+			ForbiddenScope: []string{},
+			SupersededBy:   "prov-2026-005",
+			FilePath:       filepath.Join(provenanceDir, "prov-2026-004.yml"),
+		},
+		{
+			ID:             "prov-2026-005",
+			Title:          "Record That Supersedes",
+			Status:         StatusImplemented,
+			CreatedAt:      "2026-03-05",
+			Author:         "test@example.com",
+			Intent:         "This record supersedes prov-2026-004",
+			Constraints:    []string{},
+			AffectedScope:  []string{"pkg/delta/*.go", "pkg/epsilon/*.go"},
+			ForbiddenScope: []string{},
+			Supersedes:     "prov-2026-004",
+			FilePath:       filepath.Join(provenanceDir, "prov-2026-005.yml"),
+		},
+	}
+
+	// Create loader with test records
+	loader := NewLoader(provenanceDir, nil)
+	loader.Records = records
+	loader.RecordsByID = make(map[string]*Record)
+	for _, r := range records {
+		loader.RecordsByID[r.ID] = r
+	}
+
+	// Create commands
+	config := &ProvenanceConfig{
+		Dir:         provenanceDir,
+		Enforcement: "warn",
+	}
+	output := &testWriter{}
+	formatter := NewFormatter(output, false)
+	commands := &Commands{
+		Loader:    loader,
+		Formatter: formatter,
+		Config:    config,
+	}
+
+	tests := []struct {
+		name              string
+		files             []string
+		expectedMatches   int
+		expectedConflicts int
+	}{
+		{
+			name:              "Single file matching single record",
+			files:             []string{"pkg/gamma/file.go"},
+			expectedMatches:   1,
+			expectedConflicts: 0,
+		},
+		{
+			name:              "File matching multiple open records (conflict)",
+			files:             []string{"pkg/alpha/main.go"},
+			expectedMatches:   2,
+			expectedConflicts: 1,
+		},
+		{
+			name:              "File with superseded ancestry",
+			files:             []string{"pkg/delta/file.go"},
+			expectedMatches:   2, // prov-2026-005 (direct) + prov-2026-004 (ancestor via supersedes chain)
+			expectedConflicts: 0,
+		},
+		{
+			name:              "Multiple files different records",
+			files:             []string{"pkg/gamma/file.go", "pkg/beta/sub/file.go"},
+			expectedMatches:   2, // prov-2026-003 + prov-2026-001
+			expectedConflicts: 0,
+		},
+		{
+			name:              "No matching records",
+			files:             []string{"pkg/unknown/file.go"},
+			expectedMatches:   0,
+			expectedConflicts: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := commands.buildContextResult(tt.files)
+
+			if len(result.DirectMatches) != tt.expectedMatches {
+				t.Errorf("Expected %d matches, got %d", tt.expectedMatches, len(result.DirectMatches))
+			}
+
+			if len(result.Conflicts) != tt.expectedConflicts {
+				t.Errorf("Expected %d conflicts, got %d", tt.expectedConflicts, len(result.Conflicts))
+			}
+
+			// Verify all input files are present
+			if len(result.Files) != len(tt.files) {
+				t.Errorf("Expected %d files in result, got %d", len(tt.files), len(result.Files))
+			}
+
+			// Verify ancestors are tracked for superseded records
+			if tt.name == "File with superseded ancestry" {
+				// Find prov-2026-005 and check that prov-2026-004 is in its ancestry
+				foundWithAncestry := false
+				for _, ctx := range result.DirectMatches {
+					if ctx.Record.ID == "prov-2026-005" {
+						// Check that prov-2026-004 is in the ancestors list
+						for _, ancestorID := range ctx.Ancestors {
+							if ancestorID == "prov-2026-004" {
+								foundWithAncestry = true
+								break
+							}
+						}
+					}
+				}
+				if !foundWithAncestry {
+					t.Error("Expected prov-2026-005 to have prov-2026-004 in its ancestry")
+				}
+
+				// Also verify prov-2026-004 is in the results as an ancestor-only record
+				foundAncestorOnly := false
+				for _, ctx := range result.DirectMatches {
+					if ctx.Record.ID == "prov-2026-004" && ctx.IsAncestor {
+						foundAncestorOnly = true
+						break
+					}
+				}
+				if !foundAncestorOnly {
+					t.Error("Expected prov-2026-004 to be included as an ancestor-only record")
+				}
+			}
+		})
+	}
+}
+
+// TestContextCommandSorting tests that records are sorted correctly (open first)
+func TestContextCommandSorting(t *testing.T) {
+	tmpDir := t.TempDir()
+	provenanceDir := filepath.Join(tmpDir, "provenance")
+	if err := os.MkdirAll(provenanceDir, 0755); err != nil {
+		t.Fatalf("Failed to create provenance dir: %v", err)
+	}
+
+	// Create records with different statuses
+	records := []*Record{
+		{
+			ID:            "prov-2026-003",
+			Title:         "Implemented Record",
+			Status:        StatusImplemented,
+			CreatedAt:     "2026-03-03",
+			Author:        "test@example.com",
+			Intent:        "Test",
+			AffectedScope: []string{"pkg/test/*.go"},
+			FilePath:      filepath.Join(provenanceDir, "prov-2026-003.yml"),
+		},
+		{
+			ID:            "prov-2026-001",
+			Title:         "Open Record 1",
+			Status:        StatusOpen,
+			CreatedAt:     "2026-03-01",
+			Author:        "test@example.com",
+			Intent:        "Test",
+			AffectedScope: []string{"pkg/test/*.go"},
+			FilePath:      filepath.Join(provenanceDir, "prov-2026-001.yml"),
+		},
+		{
+			ID:            "prov-2026-002",
+			Title:         "Open Record 2",
+			Status:        StatusOpen,
+			CreatedAt:     "2026-03-02",
+			Author:        "test@example.com",
+			Intent:        "Test",
+			AffectedScope: []string{"pkg/test/*.go"},
+			FilePath:      filepath.Join(provenanceDir, "prov-2026-002.yml"),
+		},
+	}
+
+	loader := NewLoader(provenanceDir, nil)
+	loader.Records = records
+	loader.RecordsByID = make(map[string]*Record)
+	for _, r := range records {
+		loader.RecordsByID[r.ID] = r
+	}
+
+	config := &ProvenanceConfig{
+		Dir:         provenanceDir,
+		Enforcement: "warn",
+	}
+	output := &testWriter{}
+	formatter := NewFormatter(output, false)
+	commands := &Commands{
+		Loader:    loader,
+		Formatter: formatter,
+		Config:    config,
+	}
+
+	result := commands.buildContextResult([]string{"pkg/test/file.go"})
+
+	// Verify order: open records first, then implemented
+	if len(result.DirectMatches) != 3 {
+		t.Fatalf("Expected 3 matches, got %d", len(result.DirectMatches))
+	}
+
+	// First two should be open records (sorted by ID)
+	if result.DirectMatches[0].Record.ID != "prov-2026-001" {
+		t.Errorf("Expected first record to be prov-2026-001 (open), got %s", result.DirectMatches[0].Record.ID)
+	}
+	if result.DirectMatches[1].Record.ID != "prov-2026-002" {
+		t.Errorf("Expected second record to be prov-2026-002 (open), got %s", result.DirectMatches[1].Record.ID)
+	}
+	// Third should be implemented
+	if result.DirectMatches[2].Record.ID != "prov-2026-003" {
+		t.Errorf("Expected third record to be prov-2026-003 (implemented), got %s", result.DirectMatches[2].Record.ID)
+	}
+}
+
+// testWriter is a test helper that captures output
+type testWriter struct {
+	content []byte
+}
+
+func (w *testWriter) Write(p []byte) (n int, err error) {
+	w.content = append(w.content, p...)
+	return len(p), nil
+}
+
+func (w *testWriter) String() string {
+	return string(w.content)
+}

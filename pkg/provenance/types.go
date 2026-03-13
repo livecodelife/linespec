@@ -241,3 +241,23 @@ func CurrentYear() int {
 func CurrentDate() string {
 	return time.Now().Format("2006-01-02")
 }
+
+// ContextRecord represents a record in the context output
+type ContextRecord struct {
+	Record     *Record  // The record itself
+	IsAncestor bool     // True if this record is only in ancestry, not directly matched
+	Ancestors  []string // Chain of supersedes relationships (oldest first, i.e., the chain from current to oldest ancestor)
+}
+
+// ContextResult holds the complete context output
+type ContextResult struct {
+	Files         []string         // Input files
+	DirectMatches []*ContextRecord // Records that directly match the files
+	Conflicts     []ScopeConflict  // Overlapping open records
+}
+
+// ScopeConflict represents two or more open records with overlapping scope
+type ScopeConflict struct {
+	File      string   // The file with conflicting governance
+	RecordIDs []string // The IDs of conflicting records
+}

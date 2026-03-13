@@ -655,3 +655,300 @@ func buildJSONNode(loader *Loader, id string, visited map[string]bool) *JSONGrap
 
 	return node
 }
+
+// FormatContext formats the context command output in human-readable format
+func (f *Formatter) FormatContext(result *ContextResult) {
+	// Header
+	fmt.Fprintf(f.Output, "\n%s\n\n", f.colored("PROVENANCE CONTEXT", colorBold))
+	fmt.Fprintf(f.Output, "Files: %s\n\n", strings.Join(result.Files, ", "))
+
+	// Group records by status
+	var open, implemented, others []*ContextRecord
+	for _, ctx := range result.DirectMatches {
+		switch ctx.Record.Status {
+		case StatusOpen:
+			open = append(open, ctx)
+		case StatusImplemented:
+			implemented = append(implemented, ctx)
+		default:
+			others = append(others, ctx)
+		}
+	}
+
+	// Output open records first
+	if len(open) > 0 {
+		fmt.Fprintf(f.Output, "%s\n\n", f.colored("OPEN RECORDS", colorCyan))
+		for _, ctx := range open {
+			f.formatContextRecord(ctx, false)
+		}
+	}
+
+	// Output implemented records
+	if len(implemented) > 0 {
+		fmt.Fprintf(f.Output, "%s\n\n", f.colored("IMPLEMENTED RECORDS", colorGreen))
+		for _, ctx := range implemented {
+			f.formatContextRecord(ctx, false)
+		}
+	}
+
+	// Output other records (superseded, deprecated)
+	if len(others) > 0 {
+		fmt.Fprintf(f.Output, "%s\n\n", f.colored("OTHER RECORDS", colorYellow))
+		for _, ctx := range others {
+			f.formatContextRecord(ctx, false)
+		}
+	}
+
+	// Output conflicts
+	if len(result.Conflicts) > 0 {
+		fmt.Fprintf(f.Output, "%s\n\n", f.colored("SCOPE CONFLICTS", colorRed))
+		for _, conflict := range result.Conflicts {
+			fmt.Fprintf(f.Output, "  %s\n", f.colored("⚠", colorYellow))
+			fmt.Fprintf(f.Output, "    File: %s\n", conflict.File)
+			fmt.Fprintf(f.Output, "    Conflicting records: %s\n", strings.Join(conflict.RecordIDs, ", "))
+			fmt.Fprintln(f.Output)
+		}
+	}
+
+	// Summary
+	if len(result.DirectMatches) == 0 {
+		fmt.Fprintf(f.Output, "%s No provenance records govern these files.\n\n", f.colored("→", colorCyan))
+	} else {
+		fmt.Fprintf(f.Output, "%s %d record(s) govern these files\n\n", f.colored("✓", colorGreen), len(result.DirectMatches))
+	}
+}
+
+// formatContextRecord formats a single context record
+func (f *Formatter) formatContextRecord(ctx *ContextRecord, compact bool) {
+	record := ctx.Record
+
+	// Record header with status color
+	var statusColor string
+	switch record.Status {
+	case StatusOpen:
+		statusColor = colorCyan
+	case StatusImplemented:
+		statusColor = colorGreen
+	case StatusSuperseded, StatusDeprecated:
+		statusColor = colorYellow
+	}
+
+	ancestorLabel := ""
+	if ctx.IsAncestor {
+		ancestorLabel = f.colored(" [ANCESTOR]", colorYellow)
+	}
+
+	fmt.Fprintf(f.Output, "  %s%s\n", f.colored(record.ID, colorBold), ancestorLabel)
+	fmt.Fprintf(f.Output, "  Status: %s\n", f.colored(string(record.Status), statusColor))
+	fmt.Fprintf(f.Output, "  Title: %s\n", record.Title)
+
+	// Intent
+	if record.Intent != "" {
+		fmt.Fprintf(f.Output, "  %s\n", f.colored("Intent:", colorBold))
+		lines := strings.Split(record.Intent, "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" {
+				fmt.Fprintf(f.Output, "    %s\n", trimmed)
+			}
+		}
+	}
+
+	// Constraints
+	if len(record.Constraints) > 0 {
+		fmt.Fprintf(f.Output, "  %s\n", f.colored("Constraints:", colorBold))
+		for _, c := range record.Constraints {
+			fmt.Fprintf(f.Output, "    · %s\n", c)
+		}
+	}
+
+	// Ancestry
+	if len(ctx.Ancestors) > 0 {
+		fmt.Fprintf(f.Output, "  %s\n", f.colored("Ancestry:", colorBold))
+		fmt.Fprintf(f.Output, "    Supersedes: %s\n", strings.Join(ctx.Ancestors, " → "))
+	}
+
+	// Scope (only for direct matches, not ancestors)
+	if !ctx.IsAncestor {
+		if len(record.AffectedScope) > 0 {
+			fmt.Fprintf(f.Output, "  %s\n", f.colored("Affected Scope:", colorBold))
+			for _, s := range record.AffectedScope {
+				fmt.Fprintf(f.Output, "    · %s\n", s)
+			}
+		}
+		if len(record.ForbiddenScope) > 0 {
+			fmt.Fprintf(f.Output, "  %s\n", f.colored("Forbidden Scope:", colorBold))
+			for _, s := range record.ForbiddenScope {
+				fmt.Fprintf(f.Output, "    · %s\n", s)
+			}
+		}
+	}
+
+	fmt.Fprintln(f.Output)
+}
+
+// FormatContextCompact formats the context in a compact, token-efficient format
+func (f *Formatter) FormatContextCompact(result *ContextResult) {
+	// Minimal header
+	fmt.Fprintf(f.Output, "CONTEXT: %s\n\n", strings.Join(result.Files, ","))
+
+	// Group by status
+	var open, implemented, others []*ContextRecord
+	for _, ctx := range result.DirectMatches {
+		switch ctx.Record.Status {
+		case StatusOpen:
+			open = append(open, ctx)
+		case StatusImplemented:
+			implemented = append(implemented, ctx)
+		default:
+			others = append(others, ctx)
+		}
+	}
+
+	// Open records
+	if len(open) > 0 {
+		fmt.Fprintln(f.Output, "OPEN:")
+		for _, ctx := range open {
+			f.formatCompactRecord(ctx)
+		}
+	}
+
+	// Implemented records
+	if len(implemented) > 0 {
+		fmt.Fprintln(f.Output, "IMPLEMENTED:")
+		for _, ctx := range implemented {
+			f.formatCompactRecord(ctx)
+		}
+	}
+
+	// Other records
+	if len(others) > 0 {
+		fmt.Fprintln(f.Output, "OTHER:")
+		for _, ctx := range others {
+			f.formatCompactRecord(ctx)
+		}
+	}
+
+	// Conflicts
+	if len(result.Conflicts) > 0 {
+		fmt.Fprintln(f.Output, "CONFLICTS:")
+		for _, conflict := range result.Conflicts {
+			fmt.Fprintf(f.Output, "FILE:%s RECORDS:%s\n", conflict.File, strings.Join(conflict.RecordIDs, ","))
+		}
+		fmt.Fprintln(f.Output)
+	}
+
+	// Summary count
+	fmt.Fprintf(f.Output, "TOTAL:%d\n", len(result.DirectMatches))
+}
+
+// formatCompactRecord formats a record in compact style
+func (f *Formatter) formatCompactRecord(ctx *ContextRecord) {
+	record := ctx.Record
+
+	// Single line header
+	ancestorNote := ""
+	if ctx.IsAncestor {
+		ancestorNote = " [A]"
+	}
+	fmt.Fprintf(f.Output, "%s%s %s\n", record.ID, ancestorNote, record.Title)
+
+	// Intent (first line only, truncated if needed)
+	if record.Intent != "" {
+		intent := strings.TrimSpace(record.Intent)
+		lines := strings.Split(intent, "\n")
+		firstLine := strings.TrimSpace(lines[0])
+		if len(firstLine) > 100 {
+			firstLine = firstLine[:97] + "..."
+		}
+		fmt.Fprintf(f.Output, "INTENT:%s\n", firstLine)
+	}
+
+	// Constraints (if any)
+	if len(record.Constraints) > 0 {
+		fmt.Fprintf(f.Output, "CONSTRAINTS:\n")
+		for _, c := range record.Constraints {
+			// Truncate long constraints
+			constraint := c
+			if len(constraint) > 80 {
+				constraint = constraint[:77] + "..."
+			}
+			fmt.Fprintf(f.Output, "-%s\n", constraint)
+		}
+	}
+
+	// Ancestry (compact format)
+	if len(ctx.Ancestors) > 0 {
+		fmt.Fprintf(f.Output, "ANCESTRY:%s\n", strings.Join(ctx.Ancestors, ">"))
+	}
+
+	// Empty line between records
+	fmt.Fprintln(f.Output)
+}
+
+// FormatContextJSON formats the context as JSON
+func (f *Formatter) FormatContextJSON(result *ContextResult) error {
+	type JSONContextRecord struct {
+		ID             string   `json:"id"`
+		Title          string   `json:"title"`
+		Status         string   `json:"status"`
+		Intent         string   `json:"intent,omitempty"`
+		Constraints    []string `json:"constraints,omitempty"`
+		IsAncestor     bool     `json:"is_ancestor"`
+		Ancestors      []string `json:"ancestors,omitempty"`
+		AffectedScope  []string `json:"affected_scope,omitempty"`
+		ForbiddenScope []string `json:"forbidden_scope,omitempty"`
+	}
+
+	type JSONScopeConflict struct {
+		File      string   `json:"file"`
+		RecordIDs []string `json:"record_ids"`
+	}
+
+	type JSONContextResult struct {
+		Files        []string            `json:"files"`
+		Records      []JSONContextRecord `json:"records"`
+		Conflicts    []JSONScopeConflict `json:"conflicts,omitempty"`
+		TotalRecords int                 `json:"total_records"`
+	}
+
+	jsonResult := JSONContextResult{
+		Files:        result.Files,
+		Records:      make([]JSONContextRecord, 0, len(result.DirectMatches)),
+		Conflicts:    make([]JSONScopeConflict, 0, len(result.Conflicts)),
+		TotalRecords: len(result.DirectMatches),
+	}
+
+	// Convert records
+	for _, ctx := range result.DirectMatches {
+		jsonRecord := JSONContextRecord{
+			ID:          ctx.Record.ID,
+			Title:       ctx.Record.Title,
+			Status:      string(ctx.Record.Status),
+			Intent:      ctx.Record.Intent,
+			Constraints: ctx.Record.Constraints,
+			IsAncestor:  ctx.IsAncestor,
+			Ancestors:   ctx.Ancestors,
+		}
+
+		// Only include scope for direct matches
+		if !ctx.IsAncestor {
+			jsonRecord.AffectedScope = ctx.Record.AffectedScope
+			jsonRecord.ForbiddenScope = ctx.Record.ForbiddenScope
+		}
+
+		jsonResult.Records = append(jsonResult.Records, jsonRecord)
+	}
+
+	// Convert conflicts
+	for _, conflict := range result.Conflicts {
+		jsonResult.Conflicts = append(jsonResult.Conflicts, JSONScopeConflict{
+			File:      conflict.File,
+			RecordIDs: conflict.RecordIDs,
+		})
+	}
+
+	encoder := json.NewEncoder(f.Output)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(jsonResult)
+}

@@ -700,3 +700,171 @@ fi
 
 	return nil
 }
+
+// ContextOptions holds options for the context command
+type ContextOptions struct {
+	Files      []string // File paths to check (positional args or --files)
+	Format     string   // Output format: human (default), compact, json
+	ConfigFile string   // Path to custom .linespec.yml file
+}
+
+// Context retrieves provenance context for the given files
+func (c *Commands) Context(opts ContextOptions) error {
+	if len(opts.Files) == 0 {
+		c.Formatter.FormatError("No files specified. Provide file paths as arguments or use --files flag.")
+		return fmt.Errorf("no files specified")
+	}
+
+	// Build context result
+	result := c.buildContextResult(opts.Files)
+
+	// Output based on format
+	switch opts.Format {
+	case "json":
+		return c.Formatter.FormatContextJSON(result)
+	case "compact":
+		c.Formatter.FormatContextCompact(result)
+	default:
+		c.Formatter.FormatContext(result)
+	}
+
+	return nil
+}
+
+// buildContextResult builds the context result for the given files
+func (c *Commands) buildContextResult(files []string) *ContextResult {
+	result := &ContextResult{
+		Files:         files,
+		DirectMatches: make([]*ContextRecord, 0),
+		Conflicts:     make([]ScopeConflict, 0),
+	}
+
+	// Track which records directly match files
+	directMatches := make(map[string]bool)
+
+	// Track open record conflicts per file
+	fileToOpenRecords := make(map[string][]string)
+
+	// Find matching records for each file
+	for _, file := range files {
+		matchingOpenRecords := make([]string, 0)
+
+		for _, record := range c.Loader.Records {
+			inScope, err := record.IsInScope(file)
+			if err != nil {
+				// Skip records with invalid scope patterns
+				continue
+			}
+
+			if inScope {
+				directMatches[record.ID] = true
+
+				// Track open records for conflict detection
+				if record.Status == StatusOpen {
+					matchingOpenRecords = append(matchingOpenRecords, record.ID)
+				}
+			}
+		}
+
+		// Check for conflicts (>1 open records matching same file)
+		if len(matchingOpenRecords) > 1 {
+			result.Conflicts = append(result.Conflicts, ScopeConflict{
+				File:      file,
+				RecordIDs: matchingOpenRecords,
+			})
+		}
+
+		fileToOpenRecords[file] = matchingOpenRecords
+	}
+
+	// Build ContextRecords for direct matches with ancestry
+	contextRecords := make(map[string]*ContextRecord)
+
+	for recordID := range directMatches {
+		record, exists := c.Loader.GetRecord(recordID)
+		if !exists {
+			continue
+		}
+
+		ctxRecord := &ContextRecord{
+			Record:     record,
+			IsAncestor: false,
+			Ancestors:  make([]string, 0),
+		}
+
+		// Follow supersedes chain to build ancestry
+		visited := make(map[string]bool)
+		current := record.Supersedes
+
+		for current != "" && current != "null" {
+			if visited[current] {
+				// Circular reference detected, stop
+				break
+			}
+			visited[current] = true
+
+			ancestor, exists := c.Loader.GetRecord(current)
+			if !exists {
+				break
+			}
+
+			ctxRecord.Ancestors = append(ctxRecord.Ancestors, current)
+
+			// If this ancestor isn't already a direct match, add it as an ancestor-only record
+			if !directMatches[current] {
+				if _, alreadyAdded := contextRecords[current]; !alreadyAdded {
+					ancestorCtx := &ContextRecord{
+						Record:     ancestor,
+						IsAncestor: true,
+						Ancestors:  make([]string, 0),
+					}
+					contextRecords[current] = ancestorCtx
+				}
+			}
+
+			current = ancestor.Supersedes
+		}
+
+		contextRecords[recordID] = ctxRecord
+	}
+
+	// Convert map to slice and sort
+	result.DirectMatches = c.sortContextRecords(contextRecords)
+
+	return result
+}
+
+// sortContextRecords sorts context records: open first, then implemented, then others
+// Within each group, sort by ID chronologically
+func (c *Commands) sortContextRecords(records map[string]*ContextRecord) []*ContextRecord {
+	var open, implemented, others []*ContextRecord
+
+	for _, ctxRecord := range records {
+		switch ctxRecord.Record.Status {
+		case StatusOpen:
+			open = append(open, ctxRecord)
+		case StatusImplemented:
+			implemented = append(implemented, ctxRecord)
+		default:
+			others = append(others, ctxRecord)
+		}
+	}
+
+	// Sort each group by ID
+	sortByID := func(records []*ContextRecord) {
+		for i := 0; i < len(records); i++ {
+			for j := i + 1; j < len(records); j++ {
+				if records[i].Record.ID > records[j].Record.ID {
+					records[i], records[j] = records[j], records[i]
+				}
+			}
+		}
+	}
+
+	sortByID(open)
+	sortByID(implemented)
+	sortByID(others)
+
+	// Combine: open first, then implemented, then others
+	return append(append(open, implemented...), others...)
+}
