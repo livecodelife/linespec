@@ -24,3 +24,9 @@ infrastructure:
   external_db: false
 
 dependencies: []
+
+provenance:
+  dir: provenance/
+  enforcement: warn
+  commit_tag_required: false
+  auto_affected_scope: true
