@@ -1,0 +1,48 @@
+id: prov-2026-019
+title: Fix self-modification exception for open→implemented transition in allowlist mode
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    When completing a provenance record (transitioning from status: open to status: implemented),
+    the commit-msg hook should allow the record to modify its own YAML file even when the record
+    is in allowlist mode (non-empty affected_scope).
+
+    The bug was discovered during the v1.0.1 release: prov-2026-018 had affected_scope with specific
+    files (CHANGELOG.md, .goreleaser.yml, README.md) but not its own YAML file. When trying to commit
+    the status change to "implemented", the commit-msg hook blocked it with a scope violation.
+
+    Root cause analysis:
+    The self-modification exception in CheckStaged() checks if record.Status == StatusOpen and
+    the file is the record's own file. If the file is not in forbidden_scope, it should skip the
+    IsInScope check. However, during testing, this logic appeared to work correctly in isolation,
+    suggesting the bug may be related to timing, hook ordering, or another edge case.
+
+    This fix needs to ensure that:
+    1. Open records can always modify their own YAML files when completing them
+    2. The self-modification exception takes precedence over allowlist mode checks
+    3. The completion transition (open → implemented) is always allowed for the record file itself
+constraints:
+    - MUST allow open records to modify their own files during the completion transition
+    - MUST properly detect the completion transition vs other modifications
+    - MUST maintain existing behavior for all other scope checks
+    - SHOULD add test coverage for this specific edge case
+affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/provenance_test.go
+    - AGENTS.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-013
+    - prov-2026-015
+    - prov-2026-018
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - bugfix
+    - git-hooks
+    - scope-validation
+    - self-modification

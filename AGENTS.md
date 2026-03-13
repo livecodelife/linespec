@@ -440,6 +440,10 @@ Provenance records represent architectural decisions with meaningful lifecycles:
 ```bash
 linespec provenance create --title "Your decision title"
 ```
+**Important:** Add `--no-edit` flag when running in non-interactive environments (like automated scripts or when you don't want to open an editor):
+```bash
+linespec provenance create --title "Your decision title" --no-edit
+```
 Never write provenance record YAML files manually. The CLI ensures proper ID generation, validation, and metadata.
 
 **When to create a new record:**
