@@ -35,7 +35,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/user-linespecs/authenticate_user_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_success.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags: []
