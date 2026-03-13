@@ -576,7 +576,7 @@ func (c *CommitChecker) loadStagedRecord(filePath string) (*Record, error) {
 // isCompletionTransition checks if the file is transitioning from open to implemented
 // by comparing the HEAD version with the staged version
 func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {
-	return c.isCompletionTransitionBetween("HEAD", ":"+filePath, filePath)
+	return c.isCompletionTransitionBetween("HEAD", "", filePath)
 }
 
 // isCompletionTransitionForCommit checks if the file is transitioning from open to implemented
@@ -586,7 +586,9 @@ func (c *CommitChecker) isCompletionTransitionForCommit(commit, filePath string)
 }
 
 // isCompletionTransitionBetween checks if the file is transitioning from open to implemented
-// by comparing the beforeRef version with the afterRef version
+// by comparing the beforeRef version with the afterRef version.
+// For staged comparison, pass empty string as afterRef to use ":filepath" syntax.
+// For commit comparison, pass the commit SHA as afterRef.
 func (c *CommitChecker) isCompletionTransitionBetween(beforeRef, afterRef, filePath string) (bool, error) {
 	// Read the before version (what was there before)
 	cmd := exec.Command("git", "show", beforeRef+":"+filePath)
@@ -605,7 +607,16 @@ func (c *CommitChecker) isCompletionTransitionBetween(beforeRef, afterRef, fileP
 	}
 
 	// Read the after version
-	cmd = exec.Command("git", "show", afterRef+":"+filePath)
+	var afterRefSpec string
+	if afterRef == "" {
+		// Staged file: use ":filepath" syntax
+		afterRefSpec = ":" + filePath
+	} else {
+		// Commit: use "commit:filepath" syntax
+		afterRefSpec = afterRef + ":" + filePath
+	}
+
+	cmd = exec.Command("git", "show", afterRefSpec)
 	if c.Git.RepoRoot != "" {
 		cmd.Dir = c.Git.RepoRoot
 	}
