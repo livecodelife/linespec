@@ -1,29 +1,19 @@
 id: prov-2026-011
 title: Fix -c/--config flag to resolve provenance directory relative to config file location
-status: open
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
-intent: >
-  The -c/--config flag was added in prov-2026-010 to allow specifying a custom
-  .linespec.yml configuration file. However, when using this flag with a config
-  file in a subdirectory (e.g., examples/user-service/.linespec.yml), the provenance
-  directory was being resolved relative to the current working directory instead
-  of relative to the config file location.
-  
-  This caused the provenance loader to look for records in the wrong directory,
-  resulting in "Record not found" errors when trying to lint or complete records
-  from service-level provenance directories.
-  
-  The fix ensures that when a custom config file is specified, the provenance
-  directory path is resolved relative to the directory containing the config file,
-  not the process's current working directory.
+intent: |
+    The -c/--config flag was added in prov-2026-010 to allow specifying a custom .linespec.yml configuration file. However, when using this flag with a config file in a subdirectory (e.g., examples/user-service/.linespec.yml), the provenance directory was being resolved relative to the current working directory instead of relative to the config file location.
+    This caused the provenance loader to look for records in the wrong directory, resulting in "Record not found" errors when trying to lint or complete records from service-level provenance directories.
+    The fix ensures that when a custom config file is specified, the provenance directory path is resolved relative to the directory containing the config file, not the process's current working directory.
 constraints:
-  - When using -c/--config flag, the provenance directory must be resolved relative to the config file location
-  - Records must be discoverable from service-level provenance directories when using -c flag
-  - The fix must not break existing behavior when -c flag is not used
-  - The path resolution must work correctly for both absolute and relative config file paths
+    - When using -c/--config flag, the provenance directory must be resolved relative to the config file location
+    - Records must be discoverable from service-level provenance directories when using -c flag
+    - The fix must not break existing behavior when -c flag is not used
+    - The path resolution must work correctly for both absolute and relative config file paths
 affected_scope:
-  - cmd/linespec/main.go
+    - cmd/linespec/main.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
@@ -32,7 +22,7 @@ associated_linespecs: []
 associated_traces: []
 monitors: []
 tags:
-  - bugfix
-  - cli
-  - provenance
-  - path-resolution
+    - bugfix
+    - cli
+    - provenance
+    - path-resolution
