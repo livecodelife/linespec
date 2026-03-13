@@ -587,6 +587,34 @@ git commit -m "Complete user auth [prov-2026-042]"
 
 ---
 
+### Never Bypass Git Hooks
+
+**CRITICAL RULE:** Never use `--no-verify` or `--no-hooks` flags when committing changes.
+
+The git hooks are there for a reason - they enforce provenance scope rules and ensure code quality. Bypassing them:
+- Allows commits that violate scope constraints
+- Breaks the provenance tracking workflow
+- Can introduce bugs or unapproved changes
+
+**If a commit is blocked by hooks:**
+1. Read the error message carefully
+2. Fix the underlying issue (wrong files staged, scope violations, etc.)
+3. Re-stage and commit normally
+4. Ask the user for guidance if you're unsure
+
+**Never do this:**
+```bash
+git commit --no-verify -m "message"  # WRONG - bypasses hooks
+git commit --no-hooks -m "message"     # WRONG - bypasses hooks
+```
+
+**Always do this:**
+```bash
+git commit -m "message [prov-YYYY-NNN]"  # CORRECT - runs hooks normally
+```
+
+---
+
 ## Part 5: Important Notes for AI Agents
 
 ### What LineSpec Actually Does
