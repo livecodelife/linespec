@@ -1,6 +1,6 @@
 id: prov-2026-025
 title: Implement provenance context command for file-targeted constraint retrieval
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -31,7 +31,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 469328a96c3ce9beab2cc947f2e2e518d5dd57b9
 associated_linespecs: []
 associated_traces: []
 monitors: []
