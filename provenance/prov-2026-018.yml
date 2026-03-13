@@ -1,0 +1,42 @@
+id: prov-2026-018
+title: Release v1.0.1 with improved git hooks and self-modification exception
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: |
+    This release includes several improvements to the Provenance Records git hook system and related documentation.
+
+    Key improvements since v1.0.0:
+    1. Two-hook git strategy (prov-2026-014) - Separates concerns between pre-commit (linting) and commit-msg (scope validation) hooks for better validation workflow
+    2. Self-modification exception (prov-2026-013) - Open records can now modify their own YAML files when completing them, enabling natural workflow completion
+    3. Fixed self-modification exception logic (prov-2026-015) - Properly checks forbidden_scope instead of IsInScope
+    4. New CLI flags - Added --staged and --message-file to linespec provenance check command
+    5. Updated documentation (prov-2026-016) - AGENTS.md and PROVENANCE_RECORDS.md now reflect the two-hook strategy
+
+    This is a patch release (v1.0.1) as it contains bugfixes and improvements to existing functionality without breaking changes.
+constraints:
+    - MUST update CHANGELOG.md with all changes since v1.0.0
+    - MUST create git tag v1.0.1 after changelog is committed
+    - SHOULD verify all tests pass before tagging
+    - MUST include provenance record ID [prov-2026-018] in release commit
+    - Release notes MUST reference related provenance records
+affected_scope:
+    - CHANGELOG.md
+    - .goreleaser.yml
+    - README.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-013
+    - prov-2026-014
+    - prov-2026-015
+    - prov-2026-016
+    - prov-2026-012
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - release
+    - v1.0.1
+    - changelog
