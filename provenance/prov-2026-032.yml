@@ -1,0 +1,37 @@
+id: prov-2026-032
+title: Improve stale scope warning message clarity
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  The current stale scope warning message is confusing and contradictory. It states
+  that files "haven't changed since record sealed" when the user is actively
+  modifying those files in their current commit. This creates cognitive dissonance
+  and doesn't clearly communicate what action the user should take.
+  
+  The stale scope feature (from prov-2026-021) is designed to warn when users
+  modify files that are in the scope of already-implemented records. This is
+  valuable for catching unintended scope creep, but the current message implies
+  the opposite of what's happening.
+  
+  The improved message should:
+  1. Clearly state that the user is modifying a file governed by an implemented record
+  2. Explain that the record was sealed and shouldn't need further changes
+  3. Provide a concrete action (supersede the record) if the changes conflict with the original decision
+  4. Include the specific git command to create the superseding record
+constraints:
+  - The stale scope warning MUST clearly indicate the user is modifying a file in an implemented record's scope
+  - The warning MUST include the record ID and the sealed SHA for reference
+  - The warning MUST explain that implemented records should not need further changes
+  - The warning MUST suggest creating a superseding record as the resolution path
+  - The warning MUST include the specific CLI command to create a superseding record
+  - The parenthetical explanation MUST be removed or replaced with actionable guidance
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+related:
+  - prov-2026-021
+tags:
+  - ux
+  - error-messages
+  - provenance
