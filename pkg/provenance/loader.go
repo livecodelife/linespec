@@ -184,7 +184,7 @@ func (l *Loader) GetAllIDs() []string {
 	return ids
 }
 
-// SaveRecord saves a record to its file path
+// SaveRecord saves a record to its file path, preserving original YAML formatting
 func (l *Loader) SaveRecord(record *Record) error {
 	if record.FilePath == "" {
 		return fmt.Errorf("record has no file path")
@@ -196,18 +196,201 @@ func (l *Loader) SaveRecord(record *Record) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Marshal to YAML
-	data, err := yaml.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
+	// Read existing file to preserve formatting
+	existingData, err := os.ReadFile(record.FilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read existing file: %w", err)
+	}
+
+	var output []byte
+	if os.IsNotExist(err) {
+		// New file - marshal normally
+		output, err = yaml.Marshal(record)
+		if err != nil {
+			return fmt.Errorf("failed to marshal record: %w", err)
+		}
+	} else {
+		// Existing file - preserve formatting by updating specific fields
+		output = l.updateRecordYAMLText(existingData, record)
 	}
 
 	// Write to file
-	if err := os.WriteFile(record.FilePath, data, 0644); err != nil {
+	if err := os.WriteFile(record.FilePath, output, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	return nil
+}
+
+// updateRecordYAMLText updates specific fields in the YAML text while preserving formatting
+func (l *Loader) updateRecordYAMLText(existingData []byte, record *Record) []byte {
+	content := string(existingData)
+	lines := strings.Split(content, "\n")
+
+	// Track if we're inside a multiline scalar (after | or >)
+	inMultilineScalar := false
+	multilineIndent := ""
+
+	// Track which fields we've updated
+	sealedAtShaUpdated := false
+
+	// Scan through lines and update specific fields
+	for i, line := range lines {
+		// Check if we're entering a multiline scalar
+		if !inMultilineScalar {
+			trimmed := strings.TrimSpace(line)
+
+			// Check for multiline scalar indicators at end of line
+			if strings.HasSuffix(trimmed, " |") || strings.HasSuffix(trimmed, " >") ||
+				strings.Contains(trimmed, " | ") || strings.Contains(trimmed, " > ") {
+				inMultilineScalar = true
+				// Get the indentation of this line for tracking
+				multilineIndent = l.getIndentation(line)
+				continue
+			}
+
+			// Only update top-level fields (not inside multiline content)
+			// Check if this is a top-level field by looking at indentation
+			indent := l.getIndentation(line)
+			if indent == "" || indent == "  " || indent == "    " {
+				// Update status field (top-level only)
+				if strings.HasPrefix(trimmed, "status:") {
+					lines[i] = l.updateFieldValue(line, "status", string(record.Status))
+				}
+
+				// Update sealed_at_sha field (top-level only)
+				if strings.HasPrefix(trimmed, "sealed_at_sha:") {
+					lines[i] = l.updateFieldValue(line, "sealed_at_sha", record.SealedAtSHA)
+					sealedAtShaUpdated = true
+				}
+
+				// Update superseded_by field (top-level only)
+				if strings.HasPrefix(trimmed, "superseded_by:") {
+					lines[i] = l.updateFieldValue(line, "superseded_by", record.SupersededBy)
+				}
+			}
+		} else {
+			// We're inside a multiline scalar
+			// Check if this line ends the scalar (empty line or less/equal indent)
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				// Empty line - scalar might end here or continue
+				continue
+			}
+
+			currentIndent := l.getIndentation(line)
+			// If we hit a line with less or equal indentation to the field that started the scalar,
+			// we're back to regular fields
+			if len(currentIndent) <= len(multilineIndent) && !strings.HasPrefix(line, " ") {
+				inMultilineScalar = false
+				multilineIndent = ""
+
+				// Process this line as a regular field
+				if strings.HasPrefix(trimmed, "status:") {
+					lines[i] = l.updateFieldValue(line, "status", string(record.Status))
+				}
+				if strings.HasPrefix(trimmed, "sealed_at_sha:") {
+					lines[i] = l.updateFieldValue(line, "sealed_at_sha", record.SealedAtSHA)
+					sealedAtShaUpdated = true
+				}
+				if strings.HasPrefix(trimmed, "superseded_by:") {
+					lines[i] = l.updateFieldValue(line, "superseded_by", record.SupersededBy)
+				}
+			}
+		}
+	}
+
+	// Add sealed_at_sha field if it wasn't found and needs to be added
+	if record.SealedAtSHA != "" && !sealedAtShaUpdated {
+		// Find the best place to insert (after monitors or before tags)
+		insertIndex := -1
+		lastFieldIndex := -1
+
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			// Track the last known field (not a list item or blank line, and not inside multiline)
+			if trimmed != "" && !strings.HasPrefix(trimmed, "-") &&
+				!strings.HasPrefix(trimmed, "#") && strings.Contains(trimmed, ":") &&
+				!l.isInsideMultiline(lines, i) {
+				// Skip if this is part of a multiline scalar
+				if !strings.HasSuffix(trimmed, "|") && !strings.HasSuffix(trimmed, ">") {
+					lastFieldIndex = i
+				}
+			}
+		}
+
+		if lastFieldIndex >= 0 {
+			insertIndex = lastFieldIndex + 1
+			// Get indentation from the previous field
+			indent := l.getIndentation(lines[lastFieldIndex])
+			newLine := indent + "sealed_at_sha: " + record.SealedAtSHA
+
+			// Insert the new line
+			lines = append(lines[:insertIndex], append([]string{newLine}, lines[insertIndex:]...)...)
+		}
+	}
+
+	return []byte(strings.Join(lines, "\n"))
+}
+
+// isInsideMultiline checks if the given line is inside a multiline scalar
+func (l *Loader) isInsideMultiline(lines []string, targetIndex int) bool {
+	for i := 0; i < targetIndex; i++ {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		// Check if we started a multiline scalar
+		if strings.HasSuffix(trimmed, " |") || strings.HasSuffix(trimmed, " >") ||
+			strings.Contains(trimmed, " | ") || strings.Contains(trimmed, " > ") {
+			// Check if target line is after this and indented more
+			baseIndent := l.getIndentation(line)
+			for j := i + 1; j < targetIndex; j++ {
+				if strings.TrimSpace(lines[j]) == "" {
+					continue
+				}
+				currentIndent := l.getIndentation(lines[j])
+				if len(currentIndent) > len(baseIndent) {
+					return true
+				}
+				// If we hit a line at same or less indent, multiline ended
+				if len(currentIndent) <= len(baseIndent) {
+					break
+				}
+			}
+		}
+	}
+	return false
+}
+
+// updateFieldValue updates a field's value while preserving indentation
+func (l *Loader) updateFieldValue(line, fieldName, newValue string) string {
+	// Get the indentation from the original line
+	indent := l.getIndentation(line)
+
+	// If newValue is empty, keep the original format (field: "" or field: null)
+	if newValue == "" {
+		// Check if original had empty quotes
+		if strings.Contains(line, `""`) || strings.Contains(line, `" "`) {
+			return indent + fieldName + `: ""`
+		}
+		// Check if original had null
+		if strings.Contains(line, "null") {
+			return indent + fieldName + ": null"
+		}
+		return line // Keep original if we can't determine
+	}
+
+	return indent + fieldName + ": " + newValue
+}
+
+// getIndentation returns the leading whitespace of a line
+func (l *Loader) getIndentation(line string) string {
+	for i, c := range line {
+		if c != ' ' && c != '\t' {
+			return line[:i]
+		}
+	}
+	return line
 }
 
 // FilterByStatus returns records filtered by status
