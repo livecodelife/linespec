@@ -1,0 +1,41 @@
+id: prov-2026-033
+title: Fix dead record detection to handle glob patterns
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  The dead record detection in the linter currently only checks exact file paths
+  and skips all glob/regex patterns. This causes false positives where records
+  are marked as "dead" when their glob patterns (like pkg/proxy/**) still match
+  existing files, but they also have an exact path that was renamed or deleted.
+
+  For example, prov-2026-001 has affected_scope containing pkg/proxy/** (a glob)
+  and cmd/linespec/main.go (an exact path). Since main.go was renamed to
+  main_stable.go/main_beta.go, the linter incorrectly marks the record as dead,
+  even though pkg/proxy/** still matches many existing files.
+
+  The fix must change the logic to verify that at least one file exists matching
+  ANY of the patterns in affected_scope (including globs and regex), rather than
+  checking only exact paths.
+constraints:
+  - The dead records check MUST consider glob patterns when determining if a record is dead
+  - The dead records check MUST only consider affected_scope (forbidden_scope is ignored)
+  - A record MUST only be marked as dead when NO files match ANY of the scope patterns in affected_scope
+  - The check MUST verify that at least one file exists matching any pattern in affected_scope
+  - Exact paths, glob patterns, and regex patterns in affected_scope MUST all be evaluated
+affected_scope:
+  - pkg/provenance/linter.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - bug-fix
+  - linter
+  - provenance
+  - scope-validation
