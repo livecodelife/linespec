@@ -1,0 +1,58 @@
+id: prov-2026-035
+title: 'Release v1.1.0 - Breaking change: associated_specs field'
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  Release version 1.1.0 of LineSpec with breaking changes to the provenance
+  record schema. This release replaces the `associated_linespecs` field with
+  `associated_specs`, enabling teams to link any proof artifacts (not just
+  LineSpec files) to their architectural decisions.
+
+  Key changes in this release:
+  - Breaking: Replace associated_linespecs with associated_specs field
+  - Bug fix: Path validation in linter now handles all os.Stat errors
+  - Bug fix: Dead record detection properly handles glob patterns
+  - Improvement: Clearer stale scope warning messages with actionable guidance
+
+  Since there are no external users yet, this breaking change is implemented
+  without deprecation period. Teams using the old schema will need to update
+  their provenance records to use the new field name.
+
+constraints:
+  - The version string in main_stable.go MUST be updated from v1.0.0 to v1.1.0
+  - The CHANGELOG.md MUST be updated with the v1.1.0 release notes
+  - All modified files MUST be committed with the provenance record ID
+  - The git tag v1.1.0 MUST be created and pushed to the remote
+
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - CHANGELOG.md
+  - README.md
+  - AGENTS.md
+  - PROVENANCE_RECORDS.md
+  - LINESPEC.md
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+
+related:
+  - prov-2026-027
+  - prov-2026-031
+  - prov-2026-032
+  - prov-2026-033
+
+sealed_at_sha: ""
+
+associated_specs:
+  - path: pkg/provenance/provenance_test.go
+    type: go-test
+
+associated_traces: []
+monitors: []
+
+tags:
+    - release
+    - breaking-change

@@ -6,7 +6,7 @@
 > ```bash
 > go build -tags beta -o linespec ./cmd/linespec
 > # or
-> go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+> go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.1.0
 > ```
 > 
 > See [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md) for the stable Provenance Records feature.

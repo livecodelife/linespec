@@ -162,7 +162,7 @@ LineSpec Testing is a DSL-based integration testing framework for containerized 
 go build -tags beta -o linespec ./cmd/linespec
 
 # Or install via go install
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.1.0
 ```
 
 ### Beta Commands

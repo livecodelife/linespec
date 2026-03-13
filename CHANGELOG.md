@@ -5,6 +5,44 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-13
+
+### Breaking Changes
+
+- **Replace associated_linespecs with associated_specs field** ([prov-2026-027](./provenance/prov-2026-027.yml)) - Breaking change to the provenance record schema. The `associated_linespecs` field has been replaced with `associated_specs`, which accepts any file path as proof artifacts with an optional `type` annotation.
+  - Teams can now link any proof artifacts (RSpec, pytest, Jest, etc.) to their architectural decisions
+  - The old `associated_linespecs` key is rejected with a clear error message
+  - Type annotations help the linter understand the kind of artifact being referenced
+  - Since there are no external users yet, this is implemented as a breaking change rather than a deprecation
+
+### Fixed
+
+- **Path validation in linter** ([prov-2026-031](./provenance/prov-2026-031.yml)) - Fixed two critical validation bugs that allowed invalid file paths to pass validation silently:
+  - Now handles ALL os.Stat errors for associated_specs paths, not just IsNotExist
+  - Validates that exact paths in affected_scope and forbidden_scope exist (including untracked files)
+  - Validates that exact paths are files, not directories
+  - Validates that glob and regex patterns match at least one existing file (including untracked)
+  - Scope path validation only applies to OPEN records (preserving dead records feature)
+
+- **Dead record detection with glob patterns** ([prov-2026-033](./provenance/prov-2026-033.yml)) - Fixed false positives where records were marked as "dead" when their glob patterns (like `pkg/proxy/**`) still matched existing files. The dead records check now considers glob patterns when determining if a record is dead.
+
+### Changed
+
+- **Improved stale scope warning messages** ([prov-2026-032](./provenance/prov-2026-032.yml)) - Updated warning messages to be clearer and more actionable:
+  - Clearly indicates the user is modifying a file in an implemented record's scope
+  - Includes the record ID and sealed SHA for reference
+  - Explains that implemented records should not need further changes
+  - Suggests creating a superseding record as the resolution path
+  - Includes the specific CLI command to create a superseding record
+
+### Related Provenance Records
+
+- [prov-2026-027](./provenance/prov-2026-027.yml) - Breaking change: Replace associated_linespecs with associated_specs
+- [prov-2026-031](./provenance/prov-2026-031.yml) - Fix path validation in linter
+- [prov-2026-032](./provenance/prov-2026-032.yml) - Improve stale scope warning message clarity
+- [prov-2026-033](./provenance/prov-2026-033.yml) - Fix dead record detection to handle glob patterns
+- [prov-2026-035](./provenance/prov-2026-035.yml) - This release
+
 ## [1.0.4] - 2026-03-13
 
 ### Fixed

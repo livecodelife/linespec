@@ -57,12 +57,12 @@ LineSpec v1.0.0 makes **Provenance Records** the primary, stable feature - struc
 brew tap livecodelife/linespec
 brew install linespec
 # OR
-go install github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+go install github.com/livecodelife/linespec/cmd/linespec@v1.1.0
 
 # Beta (all features)
 brew install linespec-beta
 # OR
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.1.0
 ```
 
 ---
@@ -219,7 +219,7 @@ LineSpec Testing is a DSL-based integration testing framework for containerized 
 ```bash
 go build -tags beta -o linespec ./cmd/linespec
 # OR
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.1.0
 ```
 
 ### Beta Commands
