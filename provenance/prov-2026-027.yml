@@ -1,6 +1,6 @@
 id: prov-2026-027
 title: Breaking change - Replace associated_linespecs with associated_specs field accepting any file path
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -42,7 +42,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-003
-sealed_at_sha: ""
+sealed_at_sha: e162c092a6748c4745cc07dac1599bcf0d4d6447
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: go_test
