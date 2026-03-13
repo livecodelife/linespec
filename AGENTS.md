@@ -484,6 +484,16 @@ linespec provenance create --title "Your decision title" --no-edit
 ```
 Never write provenance record YAML files manually. The CLI ensures proper ID generation, validation, and metadata.
 
+**CRITICAL RULE:** Always validate provenance records before proceeding:
+```bash
+# After creating a record, lint it to ensure no errors
+linespec provenance lint --record prov-YYYY-NNN
+
+# For open records with associated_specs, run checks too
+linespec provenance check --record prov-YYYY-NNN
+```
+Any lint errors or check failures must be fixed before proceeding with implementation.
+
 **When to create a new record:**
 - Adding new functionality or features
 - Changing existing behavior or APIs

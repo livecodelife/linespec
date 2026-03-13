@@ -1,5 +1,5 @@
 provenance:
-  enforcement: none           # none | warn | strict
+  enforcement: strict           # none | warn | strict
   dir: provenance/            # relative to repo root
   shared_repos: []            # paths or URLs to shared provenance repositories
   commit_tag_required: true  # whether commits must reference a prov ID
