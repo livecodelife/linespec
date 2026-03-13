@@ -154,16 +154,24 @@ linespec provenance lock-scope --record prov-2026-001
 
 ### Git Integration
 
+**Two-Hook Strategy:**
+The provenance system uses two git hooks that work together:
+
+1. **pre-commit hook**: Runs first, lints modified provenance records for syntax/validity
+2. **commit-msg hook**: Runs after you write your message, checks staged files against provenance scope
+
 **Commit message format:**
 ```bash
 git commit -m "Add feature [prov-2026-042]"
 git commit -m "Fix auth [prov-2026-001] [prov-2026-002]"
 ```
 
-**Install pre-commit hooks:**
+**Install git hooks:**
 ```bash
-linespec provenance install-hooks
+linespec provenance install-hooks  # Installs both pre-commit and commit-msg hooks
 ```
+
+**Note:** The hooks respect the local `./linespec` binary when available (for development), otherwise fall back to the system `linespec`.
 
 ### Configuration (.linespec.yml)
 
@@ -184,7 +192,7 @@ provenance:
 | `lint` | Validate records; use --record, --enforcement, --format |
 | `status` | View status; use --record, --filter, --save-scope |
 | `graph` | Render graph; use --root, --filter, --format |
-| `check` | Check commits; use --commit, --range, --record |
+| `check` | Check commits; use --commit, --range, --record, --staged, --message-file |
 | `lock-scope` | Lock to allowlist; use --record, --dry-run |
 | `complete` | Mark implemented; use --record, --force |
 | `deprecate` | Mark deprecated; use --record, --reason |
@@ -460,6 +468,50 @@ Never write provenance record YAML files manually. The CLI ensures proper ID gen
 5. IF open record exists in allowlist mode:
    → Verify changes match affected_scope
    → Discuss scope expansion with user if needed
+```
+
+### Self-Modification Exception
+
+**Open records can modify their own YAML files.** When a commit is tagged with a provenance record ID and modifies that record's own file, the commit is allowed even if the file is not explicitly listed in `affected_scope`. This enables the natural workflow:
+
+```
+1. Create record (status: open)
+2. Make code changes, commit with [prov-YYYY-NNN]
+3. Complete the record: linespec provenance complete --record prov-YYYY-NNN
+4. Commit the completion: git commit -m "Complete [prov-YYYY-NNN]"
+   ↑ This commit is allowed because it's the completion transition!
+```
+
+**Important:**
+- The exception only applies when `status: open`
+- If the record file is in `forbidden_scope`, changes are blocked regardless
+- Once `status: implemented`, the record becomes immutable
+- The commit-msg hook enforces this validation
+
+### Complete Workflow Example
+
+```bash
+# 1. Create a new record
+linespec provenance create --title "Add user authentication"
+# Creates prov-2026-042 with status: open
+
+# 2. Make implementation changes
+git add src/auth/
+git commit -m "Add auth module [prov-2026-042]"
+# → pre-commit hook: lints the record
+# → commit-msg hook: checks staged files are in scope (or auto-tracked in observed mode)
+
+# 3. Complete the implementation work
+# ... more commits as needed ...
+
+# 4. Mark record as implemented
+linespec provenance complete --record prov-2026-042
+# Updates status: implemented
+
+git add provenance/prov-2026-042.yml
+git commit -m "Complete user auth [prov-2026-042]"
+# → commit-msg hook: allows this because it's the completion commit!
+#   (open → implemented transition with only the status field changing)
 ```
 
 ---

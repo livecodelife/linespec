@@ -1,0 +1,43 @@
+id: prov-2026-016
+title: Update AGENTS.md and PROVENANCE_RECORDS.md with two-hook strategy and CLI usage guidelines
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: |
+    The implementation of prov-2026-014 (two-hook strategy) and prov-2026-015 (self-modification exception fix) introduced significant changes to how the git hooks work. The documentation needs to be updated to reflect these changes so users and agents understand the new workflow.
+    
+    Additionally, we discovered during implementation that AGENTS.md was missing a critical rule about using the CLI to create provenance records rather than writing YAML files manually. This needs to be documented clearly.
+    
+    The documentation updates should cover:
+    1. The two-hook strategy (pre-commit for linting, commit-msg for scope validation)
+    2. The --staged and --message-file flags for the check command
+    3. The self-modification exception for open records
+    4. The requirement to use CLI for creating records
+    5. Updated hook installation instructions
+    6. Clear workflow examples showing the complete lifecycle
+constraints:
+    - AGENTS.md MUST document the two-hook strategy and CLI usage rule
+    - PROVENANCE_RECORDS.md MUST be updated with new check command flags
+    - Both files MUST include examples of the complete workflow
+    - The documentation MUST clarify the difference between pre-commit and commit-msg hooks
+    - The self-modification exception MUST be explained with examples
+    - The install-hooks command documentation MUST reflect that it installs both hooks
+    - The commit_tag_required configuration MUST be documented in the workflow section
+affected_scope:
+    - AGENTS.md
+    - PROVENANCE_RECORDS.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-014
+    - prov-2026-015
+    - prov-2026-013
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - documentation
+    - git-hooks
+    - provenance
+    - workflow

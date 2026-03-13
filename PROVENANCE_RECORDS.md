@@ -330,13 +330,27 @@ linespec provenance check --range HEAD~5..HEAD
 
 # Check against specific record only
 linespec provenance check --record prov-2026-001
+
+# Check staged files (used by commit-msg hook)
+linespec provenance check --staged --message-file .git/COMMIT_EDITMSG
 ```
 
 **Options:**
 - `--commit SHA` - Check specific commit (default: HEAD)
 - `--range SHA..SHA` - Check commit range
 - `--record prov-YYYY-NNN` - Check only against specific record
+- `--staged` - Check staged files instead of committed files
+- `--message-file path` - Path to commit message file (for use with --staged)
 - `-c, --config path` - Use custom config
+
+**Use with git hooks:**
+
+```bash
+# commit-msg hook usage
+linespec provenance check --staged --message-file "$1"
+```
+
+This is used by the commit-msg hook to validate staged files against the commit message being written.
 
 ### Lock Scope
 
@@ -433,6 +447,13 @@ provenance:
 
 ## Git Integration
 
+### Two-Hook Strategy
+
+The provenance system uses two git hooks that work together:
+
+1. **pre-commit hook**: Runs first, lints modified provenance records for syntax/validity
+2. **commit-msg hook**: Runs after you write your message, checks staged files against provenance scope
+
 ### Commit Message Format
 
 Reference provenance records in commit messages:
@@ -450,21 +471,72 @@ git commit -m "Update user service [prov-2026-001-user-service]"
 
 ### Pre-commit Hook
 
-The pre-commit hook validates that:
+The pre-commit hook validates that modified provenance records are well-formed:
 
-1. **All modified files are in scope** of referenced provenance records
-2. **No files match forbidden_scope** patterns
-3. **Records referenced actually exist**
+- **Linting**: Checks YAML syntax, required fields, and valid values
+- **Quick validation**: Ensures records can be parsed and loaded
+
+### Commit-msg Hook
+
+The commit-msg hook validates scope constraints:
+
+- **Extracts IDs**: Parses provenance IDs from the commit message
+- **Checks staged files**: Validates that staged files are in scope of referenced records
+- **Enforces commit_tag_required**: Blocks commits without provenance IDs when configured
+- **Self-modification exception**: Allows open records to modify their own YAML files
 
 ### Git Hook Installation
 
 ```bash
-# Install automatically
+# Install both hooks automatically
 linespec provenance install-hooks
 
-# Or manually add to .git/hooks/pre-commit:
+# This creates:
+#   .git/hooks/pre-commit  - Lints modified provenance records
+#   .git/hooks/commit-msg  - Checks staged files against scope
+```
+
+**Note:** Both hooks respect the local `./linespec` binary when available (for development), otherwise fall back to the system `linespec`.
+
+### Manual Hook Setup
+
+If you prefer manual installation:
+
+```bash
+# pre-commit hook
 #!/bin/sh
-linespec provenance check --commit HEAD
+# Use local binary if available
+if [ -f "./linespec" ]; then
+    LINESPEC="./linespec"
+else
+    LINESPEC="linespec"
+fi
+
+# Lint modified provenance records
+modified_records=$(git diff --cached --name-only | grep "^provenance/prov-")
+for record in $modified_records; do
+    $LINESPEC provenance lint --record "$record"
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+done
+
+# commit-msg hook
+#!/bin/sh
+COMMIT_MSG_FILE="$1"
+
+if [ -f "./linespec" ]; then
+    LINESPEC="./linespec"
+else
+    LINESPEC="linespec"
+fi
+
+# Check staged files against scope
+$LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE"
+if [ $? -ne 0 ]; then
+    echo "Commit blocked due to provenance scope violations"
+    exit 1
+fi
 ```
 
 ### CI Integration
