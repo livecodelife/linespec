@@ -5,6 +5,21 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-03-13
+
+### Fixed
+
+- **Self-modification exception for completion transition** ([prov-2026-019](./provenance/prov-2026-019.yml)) - Fixed bug where completing a provenance record (transitioning `status: open` → `status: implemented`) was being blocked by the commit-msg hook when the record was in allowlist mode (non-empty `affected_scope`). The hook now properly detects the completion transition by comparing the HEAD version with the staged version.
+
+### Changed
+
+- **Documentation** ([prov-2026-019](./provenance/prov-2026-019.yml)) - Updated `AGENTS.md` with `--no-edit` flag documentation for CLI usage in non-interactive environments.
+
+### Related Provenance Records
+
+- [prov-2026-019](./provenance/prov-2026-019.yml) - Bug fix for self-modification exception
+- [prov-2026-020](./provenance/prov-2026-020.yml) - This release
+
 ## [1.0.1] - 2026-03-12
 
 ### Added
