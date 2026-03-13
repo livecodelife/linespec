@@ -1,0 +1,43 @@
+id: prov-2026-024
+title: Release v1.0.4 - Enforce immutability for implemented records
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Release version 1.0.4 containing the fix for enforcing immutability of implemented
+    provenance records.
+    
+    This release ensures that once a provenance record is marked as `implemented`,
+    it becomes truly immutable. The commit-msg hook now rejects any commits tagged
+    with an implemented record ID, preventing engineers from accidentally making
+    changes under finalized architectural decisions.
+    
+    **Key Changes:**
+    - The commit-msg hook validates record status before allowing commits
+    - Implemented records trigger a violation: "is already implemented - cannot commit with this ID"
+    - Clear guidance provided to create a new record or supersede the existing one
+    - Completion transition (open → implemented) is still allowed
+
+constraints:
+    - MUST include all changes from prov-2026-023
+    - MUST update CHANGELOG.md with release notes
+    - MUST create git tag v1.0.4
+    - MUST push release to remote
+
+affected_scope:
+    - CHANGELOG.md
+    - README.md
+    - PROVENANCE_RECORDS.md
+
+related:
+    - prov-2026-023
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - release
+    - v1.0.4

@@ -487,6 +487,24 @@ The commit-msg hook validates scope constraints:
 - **Checks staged files**: Validates that staged files are in scope of referenced records
 - **Enforces commit_tag_required**: Blocks commits without provenance IDs when configured
 - **Self-modification exception**: Allows open records to modify their own YAML files
+- **Implemented record enforcement**: Rejects commits tagged with already-implemented records (they are immutable)
+
+**Implemented Record Enforcement:**
+
+Once a provenance record is marked as `implemented`, it becomes immutable. The commit-msg hook will reject any commits tagged with an implemented record ID:
+
+```bash
+# This will FAIL - prov-2026-001 is already implemented
+git commit -m "Fix typo [prov-2026-001]"
+# Error: prov-2026-001 is already implemented - cannot commit with this ID. 
+#        Create a new record or supersede this one.
+
+# Instead, create a new record or supersede:
+linespec provenance create --title "Fix typo in auth" --supersedes prov-2026-001
+git commit -m "Fix typo [prov-2026-042]"
+```
+
+The only exception is the completion transition (when a record's own file changes from `status: open` to `status: implemented`), which is allowed.
 
 ### Git Hook Installation
 
