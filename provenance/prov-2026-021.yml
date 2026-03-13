@@ -1,8 +1,9 @@
 id: prov-2026-021
 title: Add sealed_at_sha field to Provenance Records for stale scope detection
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
+sealed_at_sha: d8ae6f2d2c6899f0ecac075bcf341effb8770bbb
 intent: |
     Add a new `sealed_at_sha` field to the Provenance Record schema that captures the 
     HEAD git SHA at the exact moment a record is marked implemented. This enables 
