@@ -1,0 +1,49 @@
+id: prov-2026-023
+title: 'Fix: Reject commits tagged with implemented provenance records'
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Fix a bug where the commit-msg hook allows commits tagged with already-implemented 
+    provenance records. Implemented records should be immutable - no new commits should 
+    be allowed to reference them since the architectural decision is finalized.
+    
+    **The Problem:**
+    When a commit message includes a provenance ID (e.g., [prov-2026-021]), the commit-msg
+    hook loads the record and checks scope, but doesn't validate whether the record is already
+    in "implemented" status. This allows engineers to continue making changes under an
+    implemented record, violating the immutability principle.
+    
+    **The Solution:**
+    Add a status check in the CheckStaged function before processing scope validation.
+    If a record is implemented, return a violation explaining that implemented records
+    are immutable and a new record must be created or the existing one superseded.
+    
+    **Exception:**
+    The completion transition (open → implemented) must still be allowed, which is already
+    handled by the isCompletionTransition check.
+
+constraints:
+    - MUST check if a record is implemented before allowing commits tagged with it
+    - MUST return a clear violation error when attempting to commit to an implemented record
+    - MUST still allow the completion transition (open → implemented) for the record's own file
+    - MUST provide helpful guidance on creating a new record or superseding the existing one
+    - MUST NOT affect the existing self-modification exception for open records
+    - MUST include test coverage for the new enforcement
+
+affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+
+related:
+    - prov-2026-021
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - bugfix
+    - enforcement
