@@ -17,7 +17,6 @@ constraints:
 
 affected_scope:
     - CHANGELOG.md
-    - provenance/prov-2026-022.yml
 
 related:
     - prov-2026-021
