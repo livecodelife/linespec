@@ -7,16 +7,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/types"
 )
 
 type Parser struct {
-	tokens []Token
-	pos    int
+	tokens   []Token
+	pos      int
+	Resolver *interpolate.Resolver
 }
 
 func NewParser(tokens []Token) *Parser {
 	return &Parser{tokens: tokens, pos: 0}
+}
+
+// NewParserWithResolver creates a parser with a resolver for variable substitution
+func NewParserWithResolver(tokens []Token, resolver *interpolate.Resolver) *Parser {
+	return &Parser{tokens: tokens, pos: 0, Resolver: resolver}
 }
 
 func (p *Parser) peek() *Token {
@@ -71,7 +78,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 
 	spec.Receive.Channel = types.HTTP
 	spec.Receive.Method = strings.ToUpper(m[1])
-	spec.Receive.Path = m[2]
+	spec.Receive.Path = p.resolve(m[2])
 
 	if p.peek().Type == TokenWith {
 		spec.Receive.WithFile = p.consume().Literal
@@ -79,7 +86,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 
 	if p.peek().Type == TokenHeaders {
 		headersToken := p.consume()
-		spec.Receive.Headers = parseHeaders(headersToken.Literal)
+		spec.Receive.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
 	}
 
 	for p.peek().Type == TokenExpect {
@@ -124,6 +131,22 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	return spec, nil
 }
 
+// resolve applies variable substitution if a resolver is configured
+func (p *Parser) resolve(s string) string {
+	if p.Resolver != nil && interpolate.HasVariables(s) {
+		return p.Resolver.Resolve(s)
+	}
+	return s
+}
+
+// resolveHeaders applies variable substitution to all header values
+func (p *Parser) resolveHeaders(headers map[string]string) map[string]string {
+	if p.Resolver == nil {
+		return headers
+	}
+	return p.Resolver.ResolveMap(headers)
+}
+
 func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 	token := p.consume()
 	expect, err := parseExpectChannel(token.Literal, token.Line)
@@ -131,10 +154,15 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		return nil, err
 	}
 
+	// Apply variable substitution to URL for HTTP expectations
+	if expect.Channel == types.HTTP && expect.URL != "" {
+		expect.URL = p.resolve(expect.URL)
+	}
+
 	// Handle HEADERS for HTTP expectations
 	if p.peek().Type == TokenHeaders {
 		headersToken := p.consume()
-		expect.Headers = parseHeaders(headersToken.Literal)
+		expect.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
 	}
 
 	if p.peek().Type == TokenUsingSql {
@@ -143,7 +171,7 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		if err != nil {
 			return nil, err
 		}
-		expect.SQL = sqlToken.Literal
+		expect.SQL = p.resolve(sqlToken.Literal)
 	}
 
 	if p.peek().Type == TokenNoTransaction {

@@ -13,15 +13,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/livecodelife/linespec/pkg/config"
-	"github.com/livecodelife/linespec/pkg/docker"
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
+	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/docker"
+	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
+	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/types"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -452,16 +453,20 @@ type testRunner struct {
 	suite    *TestSuite
 	registry *registry.MockRegistry
 	config   *config.LineSpecConfig
-	tempDir  string // Temp directory for registry and other test artifacts
+	tempDir  string                // Temp directory for registry and other test artifacts
+	resolver *interpolate.Resolver // Resolver for environment variable substitution
 }
 
 func (r *testRunner) run(ctx context.Context, specPath string) error {
+	// Create resolver for environment variable substitution
+	r.resolver = interpolate.NewResolver()
+
 	// 1. Load Spec
 	tokens, err := dsl.LexFile(specPath)
 	if err != nil {
 		return err
 	}
-	parser := dsl.NewParser(tokens)
+	parser := dsl.NewParserWithResolver(tokens, r.resolver)
 	spec, err := parser.Parse(specPath)
 	if err != nil {
 		return err
@@ -799,6 +804,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		appEnv = append(appEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Add generated environment variables for ${VAR_NAME} substitutions
+	// These are generated at test time to prevent hardcoded value matching
+	generatedEnv := r.resolver.GetGeneratedEnv()
+	if len(generatedEnv) > 0 {
+		logger.Debug("Injecting %d generated environment variables", len(generatedEnv))
+		appEnv = append(appEnv, generatedEnv...)
+	}
+
 	// Add USER_SERVICE_URL for services that depend on user-service
 	for _, dep := range serviceConfig.Dependencies {
 		if dep.Name == "user-service" && dep.Type == "http" {
@@ -908,7 +921,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	if spec.Respond.WithFile != "" {
-		loader := &dsl.PayloadLoader{BaseDir: spec.BaseDir}
+		loader := dsl.NewPayloadLoaderWithResolver(spec.BaseDir, r.resolver)
 		expected, err := loader.Load(spec.Respond.WithFile)
 		if err != nil {
 			return fmt.Errorf("failed to load expected response payload: %v", err)
@@ -974,7 +987,7 @@ func (r *testRunner) sendRequest(receive types.ReceiveStatement, baseDir string,
 	url := "http://localhost:" + port + receive.Path
 	var body io.Reader
 	if receive.WithFile != "" {
-		loader := &dsl.PayloadLoader{BaseDir: baseDir}
+		loader := dsl.NewPayloadLoaderWithResolver(baseDir, r.resolver)
 		payload, err := loader.Load(receive.WithFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load trigger payload: %v", err)
