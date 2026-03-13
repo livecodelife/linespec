@@ -1,6 +1,6 @@
 id: prov-2026-001-notification-service
 title: Add SERVICE_TOKEN environment variable for user-service authentication
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -18,7 +18,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2aa44aed6ffb9c098f52fe7cb313db23b9b3c9fd
 associated_linespecs: []
 associated_traces: []
 monitors: []
