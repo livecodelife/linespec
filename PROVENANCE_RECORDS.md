@@ -117,6 +117,8 @@ status: implemented
 created_at: "2026-03-12"
 author: "caleb.cowen@gmail.com"
 
+sealed_at_sha: "a3f92c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+
 intent: >
   LineSpec evaluates service behavior by intercepting traffic at the TCP/protocol
   layer rather than through application-level mocking...
@@ -192,6 +194,7 @@ tags:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `sealed_at_sha` | string | Git SHA captured when record marked implemented (CLI-only, immutable) |
 | `associated_linespecs` | array | LineSpec test files validating this decision |
 | `associated_traces` | array | Trace files or test output |
 | `monitors` | array | URLs or alerts for runtime monitoring |
@@ -550,6 +553,77 @@ Add to your CI pipeline:
     go install github.com/livecodelife/linespec/cmd/linespec@latest
     linespec provenance lint --enforcement strict
     linespec provenance check --range HEAD~10..HEAD
+```
+
+---
+
+## Sealed at SHA and Stale Scope Warnings
+
+### What is `sealed_at_sha`?
+
+When a provenance record is marked as `implemented`, the CLI automatically captures the current HEAD git SHA and stores it in the `sealed_at_sha` field. This field is:
+
+- **Immutable** - Set once by the CLI, never modified after
+- **CLI-only** - Never set manually
+- **Timestamp** - Captures the exact moment a decision was "locked in"
+- **Only on implemented records** - Open/superseded/deprecated records don't have this field
+
+Example:
+```yaml
+id: prov-2026-001
+title: "Add user authentication"
+status: implemented
+created_at: "2026-03-12"
+author: "user@example.com"
+
+sealed_at_sha: "a3f92c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+#          ↑ Captured when `linespec provenance complete` was run
+```
+
+### Stale Scope Warnings
+
+The `sealed_at_sha` field enables a feature called **stale scope warnings**. When checking commits against provenance records:
+
+1. If a commit touches files in a record's `affected_scope`
+2. The CLI runs `git diff <sealed_at_sha> HEAD` on those files
+3. If files **haven't actually changed** since the record was sealed, a warning is shown
+
+**Why this matters:**
+- Reduces false positives from files that were incidentally in scope
+- Distinguishes between meaningful changes and safe refactors
+- Gives engineers context about whether a change needs review
+
+**Example warning:**
+```
+⚠ Stale scope warnings in staged (non-blocking):
+
+  • prov-2026-001 lists pkg/utils/helpers.go in affected_scope, but 
+    file unchanged since record sealed at a3f92c1
+    (File listed in affected_scope but unchanged since record sealed)
+```
+
+**Key characteristics:**
+- **Non-blocking** - These are warnings, not errors
+- **Informational** - Helps engineers make informed decisions
+- **Configurable** - Controlled by the `enforcement` setting
+
+### Viewing the Sealed SHA
+
+The sealed SHA is displayed in the status output for implemented records:
+
+```bash
+linespec provenance status --record prov-2026-001
+```
+
+Output:
+```
+prov-2026-001  ·  implemented
+────────────────────────────────────────────────────────────
+
+Title:        Add user authentication
+Author:       user@example.com
+Created:      2026-03-12
+Sealed at:    a3f92c1        ← Shows the short SHA
 ```
 
 ---

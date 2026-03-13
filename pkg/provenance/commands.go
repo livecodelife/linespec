@@ -398,11 +398,27 @@ type CheckOptions struct {
 // Check checks commits for violations
 func (c *Commands) Check(opts CheckOptions) error {
 	var violations []Violation
+	var staleWarnings []StaleScopeWarning
 	var err error
 
 	if opts.Staged {
 		// Check staged files
 		violations, err = c.Checker.CheckStaged(opts.MessageFile, c.Config.CommitTagRequired)
+		if err != nil {
+			c.Formatter.FormatError(fmt.Sprintf("Check failed: %v", err))
+			return err
+		}
+
+		// Check for stale scope warnings on staged files
+		stagedFiles, err := c.Git.GetStagedFiles()
+		if err == nil {
+			for _, record := range c.Loader.Records {
+				if record.Status == StatusImplemented && record.SealedAtSHA != "" {
+					warnings := c.Checker.CheckForStaleScopeWarnings(record, stagedFiles)
+					staleWarnings = append(staleWarnings, warnings...)
+				}
+			}
+		}
 	} else if opts.Range != "" {
 		// Check range
 		parts := strings.Split(opts.Range, "..")
@@ -444,7 +460,7 @@ func (c *Commands) Check(opts CheckOptions) error {
 	if opts.Staged {
 		label = "staged"
 	}
-	c.Formatter.FormatCheckResult(violations, label)
+	c.Formatter.FormatCheckResult(violations, staleWarnings, label)
 
 	if len(violations) > 0 {
 		return fmt.Errorf("forbidden scope violations found")
@@ -544,8 +560,16 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
-	// Update status
+	// Capture HEAD SHA for sealing
+	headSHA, err := c.Git.GetHeadSHA()
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to get HEAD SHA: %v", err))
+		return err
+	}
+
+	// Update status and seal
 	record.Status = StatusImplemented
+	record.SealedAtSHA = headSHA
 
 	// Save record
 	if err := c.Loader.SaveRecord(record); err != nil {

@@ -148,6 +148,10 @@ func (f *Formatter) FormatStatusDetailed(record *Record, loader *Loader) {
 	fmt.Fprintf(f.Output, "Author:       %s\n", record.Author)
 	fmt.Fprintf(f.Output, "Created:      %s\n", record.CreatedAt)
 
+	if record.Status == StatusImplemented && record.SealedAtSHA != "" {
+		fmt.Fprintf(f.Output, "Sealed at:    %s\n", record.SealedAtSHA[:7])
+	}
+
 	if record.Supersedes != "" && record.Supersedes != "null" {
 		fmt.Fprintf(f.Output, "Supersedes:   %s\n", record.Supersedes)
 	} else {
@@ -434,39 +438,54 @@ func (f *Formatter) printGraphNodeSimple(record *Record) {
 }
 
 // FormatCheckResult formats the check command output
-func (f *Formatter) FormatCheckResult(violations []Violation, commit string) {
-	if len(violations) == 0 {
+func (f *Formatter) FormatCheckResult(violations []Violation, staleWarnings []StaleScopeWarning, commit string) {
+	if len(violations) == 0 && len(staleWarnings) == 0 {
 		fmt.Fprintf(f.Output, "\n%s No forbidden scope violations in %s\n\n",
 			f.colored("✓", colorGreen), commit)
 		return
 	}
 
-	fmt.Fprintf(f.Output, "\n%s Forbidden scope violation in %s\n\n",
-		f.colored("✗", colorRed), commit)
+	if len(violations) > 0 {
+		fmt.Fprintf(f.Output, "\n%s Forbidden scope violation in %s\n\n",
+			f.colored("✗", colorRed), commit)
 
-	// Group by record
-	byRecord := make(map[string][]Violation)
-	for _, v := range violations {
-		byRecord[v.RecordID] = append(byRecord[v.RecordID], v)
-	}
-
-	for recordID, vs := range byRecord {
-		if recordID == "" {
-			// Special case: no record ID means it's a general violation (e.g., missing tag)
-			for _, v := range vs {
-				fmt.Fprintf(f.Output, "  %s\n", v.Message)
-			}
-		} else {
-			fmt.Fprintf(f.Output, "  %s forbids changes to:\n", recordID)
-			for _, v := range vs {
-				fmt.Fprintf(f.Output, "    · %s\n", v.File)
-			}
+		// Group by record
+		byRecord := make(map[string][]Violation)
+		for _, v := range violations {
+			byRecord[v.RecordID] = append(byRecord[v.RecordID], v)
 		}
-		fmt.Fprintln(f.Output)
+
+		for recordID, vs := range byRecord {
+			if recordID == "" {
+				// Special case: no record ID means it's a general violation (e.g., missing tag)
+				for _, v := range vs {
+					fmt.Fprintf(f.Output, "  %s\n", v.Message)
+				}
+			} else {
+				fmt.Fprintf(f.Output, "  %s forbids changes to:\n", recordID)
+				for _, v := range vs {
+					fmt.Fprintf(f.Output, "    · %s\n", v.File)
+				}
+			}
+			fmt.Fprintln(f.Output)
+		}
+
+		fmt.Fprintf(f.Output, "  %s If this change is intentional, create a new Provenance Record\n", f.colored("Hint:", colorCyan))
+		fmt.Fprintf(f.Output, "       that supersedes the governing record and governs this file.\n")
 	}
 
-	fmt.Fprintf(f.Output, "  %s If this change is intentional, create a new Provenance Record\n", f.colored("Hint:", colorCyan))
-	fmt.Fprintf(f.Output, "       that supersedes the governing record and governs this file.\n\n")
+	if len(staleWarnings) > 0 {
+		fmt.Fprintf(f.Output, "\n%s Stale scope warnings in %s (non-blocking):\n\n",
+			f.colored("⚠", colorYellow), commit)
+
+		for _, w := range staleWarnings {
+			fmt.Fprintf(f.Output, "  • %s\n", w.Message)
+			fmt.Fprintln(f.Output, "    (File listed in affected_scope but unchanged since record sealed)")
+			fmt.Fprintln(f.Output)
+		}
+	}
+
+	fmt.Fprintln(f.Output)
 }
 
 // FormatCreateSuccess formats the create command success output

@@ -171,6 +171,45 @@ func (g *Git) GetGitEmail() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetHeadSHA returns the SHA of the current HEAD commit
+func (g *Git) GetHeadSHA() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	if g.RepoRoot != "" {
+		cmd.Dir = g.RepoRoot
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD SHA: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// GetFilesChangedSince returns files that have changed between two SHAs
+func (g *Git) GetFilesChangedSince(fromSHA, toSHA string) ([]string, error) {
+	cmd := exec.Command("git", "diff", "--name-only", fmt.Sprintf("%s..%s", fromSHA, toSHA))
+	if g.RepoRoot != "" {
+		cmd.Dir = g.RepoRoot
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get files changed since %s: %w", fromSHA, err)
+	}
+
+	files := strings.Split(string(output), "\n")
+	var result []string
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			result = append(result, f)
+		}
+	}
+
+	return result, nil
+}
+
 // GetStagedFiles returns files staged for commit
 func (g *Git) GetStagedFiles() ([]string, error) {
 	cmd := exec.Command("git", "diff", "--cached", "--name-only")
@@ -525,4 +564,56 @@ func (c *CommitChecker) AutoPopulateScope(record *Record) error {
 	}
 
 	return nil
+}
+
+// StaleScopeWarning represents a warning about files in scope that haven't changed since sealing
+type StaleScopeWarning struct {
+	RecordID string
+	File     string
+	Message  string
+}
+
+// CheckForStaleScopeWarnings checks implemented records for files in affected_scope
+// that haven't actually changed since the record was sealed
+func (c *CommitChecker) CheckForStaleScopeWarnings(record *Record, changedFiles []string) []StaleScopeWarning {
+	var warnings []StaleScopeWarning
+
+	// Only check implemented records with sealed_at_sha
+	if record.Status != StatusImplemented || record.SealedAtSHA == "" {
+		return warnings
+	}
+
+	// Get files that have actually changed since sealing
+	filesChangedSinceSeal, err := c.Git.GetFilesChangedSince(record.SealedAtSHA, "HEAD")
+	if err != nil {
+		// If we can't determine, assume all files have changed (safer, fewer false positives)
+		return warnings
+	}
+
+	// Build a set of files that have changed since sealing
+	changedSinceSeal := make(map[string]bool)
+	for _, f := range filesChangedSinceSeal {
+		changedSinceSeal[f] = true
+	}
+
+	// For each file being changed in this commit
+	for _, changedFile := range changedFiles {
+		// Check if this file is in the record's affected_scope
+		inScope, err := record.IsInScope(changedFile)
+		if err != nil || !inScope {
+			continue
+		}
+
+		// Check if this specific file has changed since sealing
+		if !changedSinceSeal[changedFile] {
+			// File hasn't changed since record was sealed - this is a stale scope warning
+			warnings = append(warnings, StaleScopeWarning{
+				RecordID: record.ID,
+				File:     changedFile,
+				Message:  fmt.Sprintf("%s lists %s in affected_scope, but file unchanged since record sealed at %s", record.ID, changedFile, record.SealedAtSHA[:7]),
+			})
+		}
+	}
+
+	return warnings
 }

@@ -55,6 +55,7 @@ type Record struct {
 	Related      []string `yaml:"related"`
 
 	// Proof of completion
+	SealedAtSHA         string   `yaml:"sealed_at_sha"`
 	AssociatedLineSpecs []string `yaml:"associated_linespecs"`
 	AssociatedTraces    []string `yaml:"associated_traces"`
 	Monitors            []string `yaml:"monitors"`

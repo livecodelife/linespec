@@ -151,6 +151,9 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 
 	// Validate immutability for implemented records
 	l.validateImmutability(record, result)
+
+	// Validate sealed_at_sha field
+	l.validateSealedAtSHA(record, result)
 }
 
 // validateRequiredFields checks that all required fields are present and non-empty
@@ -502,5 +505,33 @@ func (l *Linter) checkDeadRecords(result *LintResult) {
 				Severity: SeverityWarning,
 			})
 		}
+	}
+}
+
+// validateSealedAtSHA checks that sealed_at_sha is only present on implemented records and has valid format
+func (l *Linter) validateSealedAtSHA(record *Record, result *LintResult) {
+	if record.SealedAtSHA == "" {
+		return // Not set, that's fine
+	}
+
+	// sealed_at_sha should only be set for implemented records
+	if record.Status != StatusImplemented {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "sealed_at_sha",
+			Message:  fmt.Sprintf("sealed_at_sha is set but record status is %s (should only be set for implemented records)", record.Status),
+			Severity: SeverityWarning,
+		})
+	}
+
+	// Validate SHA format (should be 7-40 hex characters)
+	shaPattern := regexp.MustCompile(`^[a-f0-9]{7,40}$`)
+	if !shaPattern.MatchString(record.SealedAtSHA) {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "sealed_at_sha",
+			Message:  fmt.Sprintf("Invalid sealed_at_sha format: %s (expected 7-40 hex characters)", record.SealedAtSHA),
+			Severity: SeverityWarning,
+		})
 	}
 }

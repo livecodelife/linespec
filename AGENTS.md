@@ -408,6 +408,36 @@ provenance/                     # Your provenance records
 
 ## Part 4: Provenance Records Rules
 
+### Constraints Field Guidelines
+
+**Constraints should describe behavioral rules** — what the system must or must not do — rather than listing implementation actions like "add X to file Y".
+
+**Good constraints (behavioral):**
+```yaml
+constraints:
+  - MUST validate email format before saving user records
+  - MUST NOT allow password reuse from last 5 iterations
+  - MUST encrypt sensitive fields at rest using AES-256
+  - MUST log all authentication attempts with timestamp and IP
+```
+
+**Avoid (implementation details):**
+```yaml
+constraints:
+  - MUST add ValidateEmail() function to pkg/users/validator.go  # Too specific
+  - MUST update database schema to add encrypted_password column  # Implementation detail
+  - MUST write unit tests for all new functions  # Process, not behavior
+```
+
+**Why behavioral constraints matter:**
+- They describe the contract the system must uphold
+- They're testable (can be verified against behavior, not file contents)
+- They remain valid even as implementation changes
+- They focus on user-visible outcomes rather than internal mechanics
+
+**When to list implementation:**
+Use `affected_scope` to specify which files/modules will be modified. Keep constraints focused on what those changes must accomplish.
+
 ### Never Implement Without User Confirmation
 
 **CRITICAL RULE:** Never change a provenance record's status to `implemented` without explicitly asking the user first.
