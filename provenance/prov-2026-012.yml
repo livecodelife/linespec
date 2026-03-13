@@ -1,20 +1,20 @@
 id: prov-2026-012
-title: "LineSpec v1.0.0 release strategy: Provenance Records as stable, LineSpec Testing as beta via build tags"
-status: open
+title: 'LineSpec v1.0.0 release strategy: Provenance Records as stable, LineSpec Testing as beta via build tags'
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: |
     LineSpec currently contains two major features: Provenance Records (fully functional CLI subsystem) and LineSpec Integration Testing (DSL-based testing with proxies). To provide a clear release strategy that reflects the maturity of each component, we will release v1.0.0 with Provenance Records as the stable, production-ready feature while LineSpec Testing remains in beta.
-    
+
     The beta status of LineSpec Testing will be enforced at compile time using Go build tags. The default build (no tags) will only include Provenance Records functionality. When built with the `-tags beta` flag, the binary will include both Provenance Records and LineSpec Testing commands (test, proxy).
-    
+
     This approach allows users to install a stable, lightweight tool for provenance management without being exposed to beta testing features. Users who want the full experience can opt-in by building with the beta tag or installing pre-built beta binaries from GitHub Releases.
-    
+
     The release will be distributed via:
     1. GitHub Releases with GoReleaser (stable and beta artifacts)
     2. Homebrew personal tap (livecodelife/linespec) with separate formulas for stable and beta
     3. Go install with module path github.com/livecodelife/linespec
-    
+
     This decision establishes a clear separation between stable and experimental functionality, sets expectations appropriately for users, and provides multiple installation paths for different use cases.
 constraints:
     - The default build (no tags) MUST only include provenance commands - test and proxy commands must be completely excluded
@@ -52,7 +52,7 @@ affected_scope:
     - .goreleaser.yml
     - .github/workflows/release.yml
 forbidden_scope:
-    - "re:.*_test\\.go$"
+    - re:.*_test\.go$
     - pkg/provenance/**
     - provenance/*.yml
 supersedes: ""
