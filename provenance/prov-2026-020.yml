@@ -1,6 +1,6 @@
 id: prov-2026-020
 title: Release v1.0.2 with bug fix for self-modification exception
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: |
