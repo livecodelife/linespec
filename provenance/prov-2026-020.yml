@@ -1,0 +1,19 @@
+id: prov-2026-020
+title: Test record for bug reproduction
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: Testing the self-modification exception bug.
+constraints: []
+affected_scope:
+  - README.md
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+  - test
