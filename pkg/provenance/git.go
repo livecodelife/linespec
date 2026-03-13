@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Git provides git operations for provenance integration
@@ -369,15 +371,22 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 			// NEW: Allow open records to modify their own YAML file
 			// This is the "self-modification exception" for open records
 			if record.Status == StatusOpen && isRecordFile(file, record) {
-				// Check if the record file itself is in forbidden_scope
-				inScope, err := record.IsInScope(file)
-				if err != nil {
-					return nil, err
+				// Check if the record file itself is explicitly in forbidden_scope
+				isForbidden := false
+				for _, pattern := range record.ForbiddenScope {
+					matches, err := MatchPattern(file, pattern)
+					if err != nil {
+						return nil, err
+					}
+					if matches {
+						isForbidden = true
+						break
+					}
 				}
-				if inScope {
-					continue // Allowed - open record modifying its own file
+				if !isForbidden {
+					continue // Allowed - open record modifying its own file (not forbidden)
 				}
-				// If not inScope, it means it's in forbidden_scope, so fall through to violation
+				// If forbidden, fall through to violation
 			}
 
 			// Check if file is in scope
@@ -398,6 +407,28 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 	}
 
 	return violations, nil
+}
+
+// loadStagedRecord loads a record from the staged version of a file
+func (c *CommitChecker) loadStagedRecord(filePath string) (*Record, error) {
+	// Read the staged content using git show
+	cmd := exec.Command("git", "show", ":"+filePath)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read staged file: %w", err)
+	}
+
+	// Parse the YAML
+	var record Record
+	if err := yaml.Unmarshal(output, &record); err != nil {
+		return nil, fmt.Errorf("failed to parse staged record: %w", err)
+	}
+
+	return &record, nil
 }
 
 // AutoPopulateScope populates affected_scope from git commits for a record

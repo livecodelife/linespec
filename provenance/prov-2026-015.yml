@@ -1,0 +1,31 @@
+id: prov-2026-015
+title: Fix self-modification exception to properly check forbidden_scope
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: |
+    During testing of the two-hook strategy (prov-2026-014), we discovered that the self-modification exception logic was checking IsInScope() which validates both affected_scope and forbidden_scope. This caused a bug where open records couldn't modify their own YAML files unless the file was explicitly listed in affected_scope.
+    
+    This fix changes the logic to check forbidden_scope directly. An open record should be allowed to modify its own file unless that file is explicitly listed in forbidden_scope. This is more intuitive and matches the intended workflow.
+    
+    Additionally, we removed an overly permissive completion commit check that was allowing any commit to an implemented record's file as long as the staged version had status: implemented. This was incorrect - once a record is implemented, it should be immutable.
+constraints:
+    - The self-modification exception MUST check forbidden_scope directly, not IsInScope
+    - Open records MUST be allowed to modify their own files unless explicitly forbidden
+    - Implemented records MUST remain immutable after completion
+    - The completion commit check MUST NOT allow arbitrary modifications to implemented records
+affected_scope:
+    - pkg/provenance/git.go
+    - provenance/prov-2026-015.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-014
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - bugfix
+    - provenance
+    - git-hooks
