@@ -1,0 +1,75 @@
+id: prov-2026-021
+title: Add sealed_at_sha field to Provenance Records for stale scope detection
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Add a new `sealed_at_sha` field to the Provenance Record schema that captures the 
+    HEAD git SHA at the exact moment a record is marked implemented. This enables 
+    smarter scope warnings that avoid false positives from files listed in scope 
+    but unchanged since the record was proven.
+
+    **The Problem:**
+    When `linespec provenance check` runs against implemented records, it currently 
+    warns on any commit that touches files in `affected_scope`, even if those files 
+    haven't actually changed since the record was completed. This creates noise 
+    for engineers who may be making safe refactors to files that were incidentally 
+    in scope but not meaningfully modified.
+
+    **The Solution:**
+    Store the git SHA when a record transitions to `implemented` status. When checking 
+    commits against scope, use `git diff <sealed_at_sha> HEAD` to verify files have 
+    actually changed since sealing before surfacing warnings. This reduces false 
+    positives while still catching meaningful behavioral changes.
+
+    **Key Properties:**
+    - Set automatically by CLI during `linespec provenance complete`
+    - Immutable - never set manually, never modifiable after the fact
+    - Only present on `implemented` records
+    - Same immutability tier as `id`, `created_at`, and `author`
+    - Warning-level only - non-blocking by design
+
+    **Schema Addition:**
+    ```yaml
+    sealed_at_sha: "a3f92c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+    ```
+
+    **Affected Commands:**
+    - `linespec provenance complete` - captures and writes HEAD SHA
+    - `linespec provenance check` - uses SHA to filter stale scope warnings
+    - `linespec provenance status` - displays sealed SHA for implemented records
+    - `linespec provenance lint` - validates SHA format and presence
+constraints:
+    - MUST capture the HEAD git SHA when a record is marked as implemented
+    - MUST write the captured SHA to the `sealed_at_sha` field automatically (CLI-only, never manual)
+    - MUST only set `sealed_at_sha` when status transitions from open to implemented
+    - MUST treat `sealed_at_sha` as immutable after implementation (same tier as id, created_at, author)
+    - MUST validate SHA format (7-40 hex characters) during lint operations
+    - MUST NOT allow modification of `sealed_at_sha` after it has been set
+    - MUST NOT set `sealed_at_sha` on records with status other than implemented
+    - MUST display sealed SHA in status output for implemented records
+    - MUST skip stale scope warnings if files in affected_scope haven't changed since the sealed SHA
+    - MUST use `git diff <sealed_at_sha> HEAD` to determine if files have actually changed
+    - MUST surface stale scope warnings at warning-level only (non-blocking)
+    - MUST warn (not error) when a commit touches files in scope that are unchanged since sealing
+affected_scope:
+    - pkg/provenance/types.go
+    - pkg/provenance/git.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/formatter.go
+    - PROVENANCE_RECORDS.md
+    - AGENTS.md
+    - pkg/provenance/*_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - feature
+    - schema
+    - git-integration
+    - provenance-records
