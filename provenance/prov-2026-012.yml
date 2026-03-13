@@ -1,0 +1,72 @@
+id: prov-2026-012
+title: "LineSpec v1.0.0 release strategy: Provenance Records as stable, LineSpec Testing as beta via build tags"
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: |
+    LineSpec currently contains two major features: Provenance Records (fully functional CLI subsystem) and LineSpec Integration Testing (DSL-based testing with proxies). To provide a clear release strategy that reflects the maturity of each component, we will release v1.0.0 with Provenance Records as the stable, production-ready feature while LineSpec Testing remains in beta.
+    
+    The beta status of LineSpec Testing will be enforced at compile time using Go build tags. The default build (no tags) will only include Provenance Records functionality. When built with the `-tags beta` flag, the binary will include both Provenance Records and LineSpec Testing commands (test, proxy).
+    
+    This approach allows users to install a stable, lightweight tool for provenance management without being exposed to beta testing features. Users who want the full experience can opt-in by building with the beta tag or installing pre-built beta binaries from GitHub Releases.
+    
+    The release will be distributed via:
+    1. GitHub Releases with GoReleaser (stable and beta artifacts)
+    2. Homebrew personal tap (livecodelife/linespec) with separate formulas for stable and beta
+    3. Go install with module path github.com/livecodelife/linespec
+    
+    This decision establishes a clear separation between stable and experimental functionality, sets expectations appropriately for users, and provides multiple installation paths for different use cases.
+constraints:
+    - The default build (no tags) MUST only include provenance commands - test and proxy commands must be completely excluded
+    - Beta-tagged builds MUST include all functionality - provenance, test, and proxy commands
+    - Help text in stable builds MUST NOT show beta commands or mention their existence
+    - Module path MUST be updated from github.com/calebcowen/linespec to github.com/livecodelife/linespec
+    - All internal imports MUST be updated to use the new module path
+    - GoReleaser configuration MUST create separate build pipelines for stable and beta
+    - Beta releases MUST be marked as pre-release in GitHub
+    - Homebrew formulas MUST be in separate tap repository (livecodelife/homebrew-linespec)
+    - Stable homebrew formula MUST install only stable binary
+    - Beta homebrew formula MUST install beta binary and be named linespec-beta to allow side-by-side installation
+    - Windows platform support is optional - included if builds succeed, skipped if not
+    - All proxy packages (mysql, postgresql, http, kafka) MUST be behind beta build tags
+    - Test runner and registry packages MUST be behind beta build tags
+    - Documentation MUST clearly distinguish stable vs beta features in all three files (README, AGENTS, LINESPEC)
+    - PROVENANCE_RECORDS.md MUST be created as the primary documentation with no beta warnings
+    - Release notes MUST emphasize Provenance Records as the v1.0.0 feature
+    - Build tests MUST verify that stable builds don't contain beta code paths
+affected_scope:
+    - cmd/linespec/main.go
+    - cmd/linespec/main_stable.go (new)
+    - cmd/linespec/main_beta.go (new)
+    - pkg/proxy/mysql/
+    - pkg/proxy/postgresql/
+    - pkg/proxy/http/
+    - pkg/proxy/kafka/
+    - pkg/runner/
+    - pkg/registry/
+    - go.mod
+    - README.md
+    - AGENTS.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md (new)
+    - .goreleaser.yml (new)
+    - .github/workflows/release.yml (new)
+forbidden_scope:
+    - "re:.*_test\\.go$"
+    - pkg/provenance/**
+    - provenance/*.yml
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-006
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - release
+    - versioning
+    - beta
+    - goreleaser
+    - homebrew
+    - build-tags
+    - v1.0.0
