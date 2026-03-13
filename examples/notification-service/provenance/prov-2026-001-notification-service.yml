@@ -1,0 +1,25 @@
+id: prov-2026-001-notification-service
+title: Add SERVICE_TOKEN environment variable for user-service authentication
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  The notification-service was failing to create notifications because it used a hardcoded
+  invalid token ("service_token_xyz789") when fetching user details from user-service.
+  This caused all todo_created events to fail with "User not found" errors.
+
+constraints:
+  - MUST use SERVICE_TOKEN environment variable for service-to-service authentication
+  - MUST NOT hardcode authentication tokens in source code
+
+affected_scope:
+  - examples/notification-service/app/auth.py
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags: []
