@@ -58,6 +58,7 @@ affected_scope:
     - pkg/provenance/commands.go
     - pkg/provenance/linter.go
     - pkg/provenance/formatter.go
+    - pkg/provenance/loader.go
     - PROVENANCE_RECORDS.md
     - AGENTS.md
     - pkg/provenance/*_test.go
