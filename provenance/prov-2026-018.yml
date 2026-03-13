@@ -1,6 +1,6 @@
 id: prov-2026-018
 title: Release v1.0.1 with improved git hooks and self-modification exception
-status: open
+status: implemented
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: |
