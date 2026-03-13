@@ -406,6 +406,35 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 			continue
 		}
 
+		// Check if the record is already implemented
+		// Implemented records are immutable - no new commits should reference them
+		if record.Status == StatusImplemented {
+			// Check if this is the completion transition (open → implemented)
+			// which is the only allowed operation on an implemented record's file
+			isCompletion := false
+			for _, file := range files {
+				if isRecordFile(file, record) {
+					isComp, err := c.isCompletionTransition(file)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
+					} else if isComp {
+						isCompletion = true
+						break
+					}
+				}
+			}
+
+			if !isCompletion {
+				violations = append(violations, Violation{
+					RecordID: recordID,
+					File:     "",
+					Commit:   "staged",
+					Message:  fmt.Sprintf("%s is already implemented - cannot commit with this ID. Create a new record or supersede this one.", recordID),
+				})
+				continue
+			}
+		}
+
 		for _, file := range files {
 			// NEW: Allow open records to modify their own YAML file
 			// This is the "self-modification exception" for open records
