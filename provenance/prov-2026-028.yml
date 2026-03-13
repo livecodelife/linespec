@@ -1,0 +1,41 @@
+id: prov-2026-028
+title: Add implicit environment variable substitution to LineSpec DSL
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  LineSpec tests can currently only catch hardcoded values if the test author explicitly
+  writes VERIFY rules with specific patterns. This makes it easy to accidentally write a test
+  that matches the buggy implementation instead of validating correct behavior.
+
+  This feature adds implicit environment variable substitution using ${VAR_NAME} syntax.
+  The test runner will generate random values for these variables at test time, ensuring
+  that the actual service implementation must read from environment variables to match
+  the expected values in the test mocks.
+
+  This enables LineSpec to catch hardcoded tokens, API keys, and other configuration
+  values that should be read from the environment.
+
+constraints:
+  - MUST support ${VAR_NAME} syntax in HTTP headers
+  - MUST support ${VAR_NAME} syntax in HTTP URLs and paths
+  - MUST support ${VAR_NAME} syntax in payload files (YAML/JSON)
+  - MUST generate random values at test runtime to prevent hardcoded matching
+  - MUST inject generated values into service container environment
+
+affected_scope:
+  - pkg/dsl/parser.go
+  - pkg/dsl/payload.go
+  - pkg/runner/runner.go
+  - pkg/interpolate/interpolate.go
+  - pkg/interpolate/interpolate_test.go
+  - pkg/dsl/interpolate_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
