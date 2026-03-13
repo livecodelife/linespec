@@ -67,7 +67,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:

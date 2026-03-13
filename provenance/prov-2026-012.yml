@@ -59,7 +59,7 @@ supersedes: ""
 superseded_by: ""
 related:
     - prov-2026-006
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:

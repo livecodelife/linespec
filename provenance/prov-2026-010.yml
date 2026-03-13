@@ -31,9 +31,11 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs:
-    - examples/user-linespecs/create_user_success.linespec
-    - examples/user-linespecs/create_user_already_exists.linespec
+associated_specs:
+    - path: examples/user-linespecs/create_user_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/create_user_already_exists.linespec
+      type: linespec
 associated_traces: []
 monitors: []
 tags:

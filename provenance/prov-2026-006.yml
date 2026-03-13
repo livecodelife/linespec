@@ -20,7 +20,7 @@ superseded_by: ""
 related:
     - prov-2026-001
     - prov-2026-002
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:

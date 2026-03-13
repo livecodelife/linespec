@@ -32,7 +32,7 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: 469328a96c3ce9beab2cc947f2e2e518d5dd57b9
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:

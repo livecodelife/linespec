@@ -24,7 +24,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 sealed_at_sha: 0322207c7f22fad1a62bdc055a1dfdc9494a232e
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:

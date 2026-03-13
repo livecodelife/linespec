@@ -29,14 +29,21 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs:
-  - examples/todo-linespecs/create_todo_success.linespec
-  - examples/todo-linespecs/create_todo_unauthenticated.linespec
-  - examples/todo-linespecs/create_todo_unavailable_user_service.linespec
-  - examples/todo-linespecs/delete_todo_success.linespec
-  - examples/todo-linespecs/get_todo_success.linespec
-  - examples/todo-linespecs/list_todos_success.linespec
-  - examples/todo-linespecs/update_todo_success.linespec
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags:

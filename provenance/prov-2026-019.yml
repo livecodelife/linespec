@@ -38,7 +38,7 @@ related:
     - prov-2026-013
     - prov-2026-015
     - prov-2026-018
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:
