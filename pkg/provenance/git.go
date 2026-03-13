@@ -3,6 +3,7 @@ package provenance
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -143,7 +144,16 @@ func (g *Git) GetFilesChangedInCommits(commits []string) ([]string, error) {
 	return result, nil
 }
 
-// GetGitEmail returns the configured git user email
+// isRecordFile checks if a file path matches a record's file path
+// Handles path normalization (relative vs absolute)
+func isRecordFile(filePath string, record *Record) bool {
+	// Get the base filename from both paths
+	fileBase := filepath.Base(filePath)
+	recordBase := filepath.Base(record.FilePath)
+
+	// Compare base filenames
+	return fileBase == recordBase
+}
 func (g *Git) GetGitEmail() (string, error) {
 	cmd := exec.Command("git", "config", "user.email")
 	if g.RepoRoot != "" {
@@ -202,12 +212,21 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 
 	for _, recordID := range recordIDs {
 		record, exists := c.Loader.GetRecord(recordID)
-		if !exists {
-			// Unknown record ID, skip
-			continue
-		}
 
 		for _, file := range files {
+			// NEW: Skip scope check if this is the record's own file and status is open
+			// This allows open records to modify their own YAML files
+			if exists && record.Status == StatusOpen && isRecordFile(file, record) {
+				continue // Allow this file change
+			}
+
+			if !exists {
+				// Unknown record ID, skip scope check for this record
+				// (This allows new record creation to pass)
+				continue
+			}
+
+			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
 				return nil, err

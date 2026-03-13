@@ -376,3 +376,47 @@ func TestExtractProvenanceIDs(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRecordFile(t *testing.T) {
+	tests := []struct {
+		name       string
+		filePath   string
+		recordPath string
+		want       bool
+	}{
+		{
+			name:       "relative path matches",
+			filePath:   "provenance/prov-2026-001.yml",
+			recordPath: "/repo/provenance/prov-2026-001.yml",
+			want:       true,
+		},
+		{
+			name:       "absolute path matches",
+			filePath:   "/repo/provenance/prov-2026-001.yml",
+			recordPath: "/repo/provenance/prov-2026-001.yml",
+			want:       true,
+		},
+		{
+			name:       "different files",
+			filePath:   "provenance/prov-2026-001.yml",
+			recordPath: "/repo/provenance/prov-2026-002.yml",
+			want:       false,
+		},
+		{
+			name:       "different directories same filename",
+			filePath:   "other/prov-2026-001.yml",
+			recordPath: "/repo/provenance/prov-2026-001.yml",
+			want:       true, // Matches by basename
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			record := &Record{FilePath: tt.recordPath}
+			got := isRecordFile(tt.filePath, record)
+			if got != tt.want {
+				t.Errorf("isRecordFile(%q, %q) = %v, want %v", tt.filePath, tt.recordPath, got, tt.want)
+			}
+		})
+	}
+}
