@@ -3,7 +3,7 @@ class CreateUsers < ActiveRecord::Migration[7.2]
     create_table :users, if_not_exists: true do |t|
       t.string :name
       t.string :email
-      t.string :password
+      t.string :password_digest
       t.string :token
       t.timestamps
     end
