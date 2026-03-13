@@ -1,0 +1,31 @@
+id: prov-2026-002-user-service
+title: Add provenance configuration section to .linespec.yml
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: >
+  The user-service currently lacks a provenance configuration section in its
+  .linespec.yml file. This prevents the service from defining its own provenance
+  settings independently from the root LineSpec tool configuration.
+  
+  By adding a provenance section to the user-service's .linespec.yml, the service
+  can specify its own provenance directory, enforcement level, and other settings.
+  This enables the service to be linted and managed independently.
+constraints:
+  - The .linespec.yml must include a provenance section with at minimum a dir field
+  - The provenance dir must point to the service's local provenance directory
+  - The configuration must be valid YAML and parseable by the LineSpec config loader
+  - The service must be independently lint-able when running from its directory
+affected_scope:
+  - .linespec.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+  - configuration
+  - provenance
+  - user-service
