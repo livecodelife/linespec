@@ -66,10 +66,10 @@ type Record struct {
 	FilePath string `yaml:"-"`
 }
 
-// IDPattern is the regex for valid provenance record IDs: prov-YYYY-NNN
-var IDPattern = regexp.MustCompile(`^prov-(\d{4})-(\d{3})$`)
+// IDPattern is the regex for valid provenance record IDs: prov-YYYY-NNN or prov-YYYY-NNN-service-name
+var IDPattern = regexp.MustCompile(`^prov-(\d{4})-(\d{3})(?:-[a-z0-9-]+)?$`)
 
-// IsValidID returns true if the ID matches the prov-YYYY-NNN format
+// IsValidID returns true if the ID matches the prov-YYYY-NNN format (with optional service suffix)
 func IsValidID(id string) bool {
 	return IDPattern.MatchString(id)
 }

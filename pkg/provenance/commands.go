@@ -78,6 +78,8 @@ type CreateOptions struct {
 	Supersedes string
 	Tags       []string
 	NoEdit     bool
+	IDSuffix   string // Service suffix for ID (e.g., "user-service" creates prov-YYYY-NNN-user-service)
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Create creates a new provenance record
@@ -86,6 +88,11 @@ func (c *Commands) Create(opts CreateOptions) error {
 	existingIDs := c.Loader.GetAllIDs()
 	year := CurrentYear()
 	id := NextID(year, existingIDs)
+
+	// Append service suffix if provided
+	if opts.IDSuffix != "" {
+		id = fmt.Sprintf("%s-%s", id, opts.IDSuffix)
+	}
 
 	// Get author
 	author, err := c.Git.GetGitEmail()
@@ -181,6 +188,7 @@ type LintOptions struct {
 	RecordID    string
 	Enforcement string
 	Format      string // human | json
+	ConfigFile  string // Path to custom .linespec.yml file
 }
 
 // Lint runs the linter
@@ -217,10 +225,11 @@ func (c *Commands) Lint(opts LintOptions) error {
 
 // StatusOptions holds options for the status command
 type StatusOptions struct {
-	RecordID  string
-	Filter    string // open | implemented | superseded | deprecated | tag:xxx
-	Format    string // human | json
-	SaveScope bool   // persist auto-populated scope to file
+	RecordID   string
+	Filter     string // open | implemented | superseded | deprecated | tag:xxx
+	Format     string // human | json
+	SaveScope  bool   // persist auto-populated scope to file
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Status shows record status
@@ -324,9 +333,10 @@ func getRecordIDs(records []*Record) []string {
 
 // GraphOptions holds options for the graph command
 type GraphOptions struct {
-	Root   string // Start from specific record
-	Filter string // open | implemented | superseded | deprecated
-	Format string // human | json | dot
+	Root       string // Start from specific record
+	Filter     string // open | implemented | superseded | deprecated
+	Format     string // human | json | dot
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Graph shows the provenance graph
@@ -377,9 +387,10 @@ func (c *Commands) outputDotGraph(opts GraphOptions) error {
 
 // CheckOptions holds options for the check command
 type CheckOptions struct {
-	Commit string // Single commit to check (default: HEAD)
-	Range  string // Range to check (e.g., SHA..SHA)
-	Record string // Check only against a specific record
+	Commit     string // Single commit to check (default: HEAD)
+	Range      string // Range to check (e.g., SHA..SHA)
+	Record     string // Check only against a specific record
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Check checks commits for violations
@@ -432,8 +443,9 @@ func (c *Commands) Check(opts CheckOptions) error {
 
 // LockScopeOptions holds options for the lock-scope command
 type LockScopeOptions struct {
-	RecordID string
-	DryRun   bool
+	RecordID   string
+	DryRun     bool
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // LockScope locks the scope of a record
@@ -479,8 +491,9 @@ func (c *Commands) LockScope(opts LockScopeOptions) error {
 
 // CompleteOptions holds options for the complete command
 type CompleteOptions struct {
-	RecordID string
-	Force    bool
+	RecordID   string
+	Force      bool
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Complete marks a record as implemented
@@ -534,8 +547,9 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 
 // DeprecateOptions holds options for the deprecate command
 type DeprecateOptions struct {
-	RecordID string
-	Reason   string
+	RecordID   string
+	Reason     string
+	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // Deprecate marks a record as deprecated

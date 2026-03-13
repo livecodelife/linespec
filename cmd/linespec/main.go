@@ -325,41 +325,73 @@ func runProvenance() {
 	switch subcommand {
 	case "create":
 		opts := parseCreateOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Create(opts); err != nil {
 			os.Exit(1)
 		}
 	case "lint":
 		opts := parseLintOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Lint(opts); err != nil {
 			os.Exit(1)
 		}
 	case "status":
 		opts := parseStatusOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Status(opts); err != nil {
 			os.Exit(1)
 		}
 	case "graph":
 		opts := parseGraphOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Graph(opts); err != nil {
 			os.Exit(1)
 		}
 	case "check":
 		opts := parseCheckOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Check(opts); err != nil {
 			os.Exit(1)
 		}
 	case "lock-scope":
 		opts := parseLockScopeOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.LockScope(opts); err != nil {
 			os.Exit(1)
 		}
 	case "complete":
 		opts := parseCompleteOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Complete(opts); err != nil {
 			os.Exit(1)
 		}
 	case "deprecate":
 		opts := parseDeprecateOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
 		if err := cmds.Deprecate(opts); err != nil {
 			os.Exit(1)
 		}
@@ -378,6 +410,10 @@ func runProvenance() {
 }
 
 func loadProvenanceConfig() *provenance.ProvenanceConfig {
+	return loadProvenanceConfigFromFile(".linespec.yml")
+}
+
+func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig {
 	cfg := &provenance.ProvenanceConfig{
 		Dir:               "provenance",
 		Enforcement:       "warn",
@@ -385,8 +421,8 @@ func loadProvenanceConfig() *provenance.ProvenanceConfig {
 		AutoAffectedScope: true,
 	}
 
-	// Try to load from .linespec.yml if it exists
-	if data, err := os.ReadFile(".linespec.yml"); err == nil {
+	// Try to load from specified file if it exists
+	if data, err := os.ReadFile(filePath); err == nil {
 		var fullConfig config.LineSpecConfig
 		if err := yaml.Unmarshal(data, &fullConfig); err == nil && fullConfig.Provenance != nil {
 			if fullConfig.Provenance.Dir != "" {
@@ -402,6 +438,19 @@ func loadProvenanceConfig() *provenance.ProvenanceConfig {
 	}
 
 	return cfg
+}
+
+// reloadConfigIfNeeded reloads the config and commands if a custom config file is specified
+func reloadConfigIfNeeded(cfg **provenance.ProvenanceConfig, cmds **provenance.Commands, configFile string, repoRoot string) error {
+	if configFile != "" {
+		*cfg = loadProvenanceConfigFromFile(configFile)
+		newCmds, err := provenance.NewCommands(*cfg, repoRoot, os.Stdout, true)
+		if err != nil {
+			return fmt.Errorf("failed to initialize provenance with custom config: %w", err)
+		}
+		*cmds = newCmds
+	}
+	return nil
 }
 
 func printProvenanceUsage() {
@@ -443,6 +492,16 @@ func parseCreateOptions(args []string) provenance.CreateOptions {
 			}
 		case "--no-edit":
 			opts.NoEdit = true
+		case "-i", "--id-suffix":
+			if i+1 < len(args) {
+				opts.IDSuffix = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance create [options]
 
@@ -451,6 +510,8 @@ Options:
   --supersedes prov-YYYY-NNN Pre-populate the supersedes field
   --tag tag1,tag2            Pre-populate tags
   --no-edit                  Write without opening editor
+  -i, --id-suffix name       Append service suffix to ID (e.g., user-service)
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -479,6 +540,11 @@ func parseLintOptions(args []string) provenance.LintOptions {
 				opts.Format = args[i+1]
 				i++
 			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance lint [options]
 
@@ -486,6 +552,7 @@ Options:
   --record prov-YYYY-NNN     Lint a single record
   --enforcement level        Override enforcement (none|warn|strict)
   --format format            Output format (human|json)
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -516,6 +583,11 @@ func parseStatusOptions(args []string) provenance.StatusOptions {
 			}
 		case "--save-scope":
 			opts.SaveScope = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance status [options]
 
@@ -525,6 +597,7 @@ Options:
   --filter tag:name          Filter by tag
   --format format            Output format (human|json)
   --save-scope               Persist auto-populated scope to file (only affects observed-mode records)
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -553,6 +626,11 @@ func parseGraphOptions(args []string) provenance.GraphOptions {
 				opts.Format = args[i+1]
 				i++
 			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance graph [options]
 
@@ -560,6 +638,7 @@ Options:
   --root prov-YYYY-NNN       Start graph from a specific record
   --filter status            Show only records with given status
   --format format            Output format (human|json|dot)
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -588,6 +667,11 @@ func parseCheckOptions(args []string) provenance.CheckOptions {
 				opts.Record = args[i+1]
 				i++
 			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance check [options]
 
@@ -595,6 +679,7 @@ Options:
   --commit SHA               Check a specific commit (default: HEAD)
   --range SHA..SHA           Check a range of commits
   --record prov-YYYY-NNN     Check only against a specific record
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -615,12 +700,18 @@ func parseLockScopeOptions(args []string) provenance.LockScopeOptions {
 			}
 		case "--dry-run":
 			opts.DryRun = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance lock-scope [options]
 
 Options:
   --record prov-YYYY-NNN     Required. The record to lock
   --dry-run                  Print scope without writing
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -647,12 +738,18 @@ func parseCompleteOptions(args []string) provenance.CompleteOptions {
 			}
 		case "--force":
 			opts.Force = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance complete [options]
 
 Options:
   --record prov-YYYY-NNN     Required. The record to mark as implemented
   --force                    Skip LineSpec existence check
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -680,6 +777,11 @@ func parseDeprecateOptions(args []string) provenance.DeprecateOptions {
 		case "--reason":
 			if i+1 < len(args) {
 				opts.Reason = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
 				i++
 			}
 		case "--help", "-h":
@@ -725,6 +827,7 @@ func printDeprecateUsage() {
 
 Options:
   --record prov-YYYY-NNN     Required. The record to deprecate
-  --reason "..."             Deprecation reason
+  --reason "..."             Reason for deprecation
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 }

@@ -14,12 +14,17 @@ func TestIsValidID(t *testing.T) {
 		{"prov-2025-001", true},
 		{"prov-2026-031", true},
 		{"prov-1999-999", true},
-		{"prov-2025-01", false},   // missing leading zero
-		{"prov-2025-0001", false}, // too many digits
-		{"prov-2025-1", false},    // missing leading zeros
-		{"prov-25-001", false},    // two digit year
-		{"prov-2025", false},      // missing sequence
-		{"PROV-2025-001", false},  // uppercase
+		{"prov-2026-001-user-service", true},  // service suffix format
+		{"prov-2026-002-todo-api", true},      // service suffix format
+		{"prov-2026-003-my-service", true},    // service suffix with hyphen
+		{"prov-2025-01", false},               // missing leading zero
+		{"prov-2025-0001", false},             // too many digits
+		{"prov-2025-1", false},                // missing leading zeros
+		{"prov-25-001", false},                // two digit year
+		{"prov-2025", false},                  // missing sequence
+		{"PROV-2025-001", false},              // uppercase
+		{"prov-2026-001-UserService", false},  // uppercase in suffix
+		{"prov-2026-001_user_service", false}, // underscore in suffix
 		{"", false},
 		{"some-id", false},
 	}
@@ -324,5 +329,50 @@ tags: []
 	}
 	if !hasIntentError {
 		t.Error("Expected missing intent error for invalid record")
+	}
+}
+
+func TestExtractProvenanceIDs(t *testing.T) {
+	git := NewGit("")
+
+	tests := []struct {
+		message string
+		want    []string
+	}{
+		{
+			message: "Fix bug [prov-2026-001]",
+			want:    []string{"prov-2026-001"},
+		},
+		{
+			message: "Add feature [prov-2026-001-user-service] for user service",
+			want:    []string{"prov-2026-001-user-service"},
+		},
+		{
+			message: "Multiple changes [prov-2026-001] and [prov-2026-002-todo-api]",
+			want:    []string{"prov-2026-001", "prov-2026-002-todo-api"},
+		},
+		{
+			message: "No provenance ID here",
+			want:    nil,
+		},
+		{
+			message: "Mixed formats [prov-2026-001] [prov-2026-002-service]",
+			want:    []string{"prov-2026-001", "prov-2026-002-service"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.message, func(t *testing.T) {
+			got := git.ExtractProvenanceIDs(tt.message)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractProvenanceIDs(%q) = %v, want %v", tt.message, got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractProvenanceIDs(%q)[%d] = %q, want %q", tt.message, i, got[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
