@@ -640,27 +640,50 @@ func (l *Linter) findScopeOverlap(a, b *Record) []string {
 }
 
 // checkDeadRecords checks if any governed files have been deleted
+// A record is only considered dead if NO files match ANY of the patterns in affected_scope
 func (l *Linter) checkDeadRecords(result *LintResult) {
 	for _, record := range l.Loader.Records {
-		allFiles := append(record.AffectedScope, record.ForbiddenScope...)
+		// Only check affected_scope - forbidden_scope is ignored for dead record detection
+		// A record should only be dead when no files match any affected_scope pattern
+		if len(record.AffectedScope) == 0 {
+			continue // No scope to check
+		}
 
-		allDeleted := true
-		anyFiles := false
+		anyMatch := false
 
-		for _, pattern := range allFiles {
-			// Skip patterns that are globs or regex
-			if isPattern(pattern) {
+		for _, pattern := range record.AffectedScope {
+			// Skip empty patterns
+			if strings.TrimSpace(pattern) == "" {
 				continue
 			}
 
-			anyFiles = true
+			// Check regex patterns
+			if len(pattern) > 3 && pattern[:3] == "re:" {
+				if l.patternHasMatches(pattern, true) {
+					anyMatch = true
+					break
+				}
+				continue
+			}
+
+			// Check glob patterns
+			if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
+				if l.patternHasMatches(pattern, false) {
+					anyMatch = true
+					break
+				}
+				continue
+			}
+
+			// Check exact paths
 			if _, err := os.Stat(pattern); !os.IsNotExist(err) {
-				allDeleted = false
+				anyMatch = true
 				break
 			}
 		}
 
-		if anyFiles && allDeleted {
+		// Only mark as dead if no patterns matched any files
+		if !anyMatch {
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "scope",
@@ -669,6 +692,42 @@ func (l *Linter) checkDeadRecords(result *LintResult) {
 			})
 		}
 	}
+}
+
+// patternHasMatches checks if a pattern matches at least one file
+// If isRegex is true, treats pattern as a regex (with "re:" prefix stripped)
+// Otherwise treats pattern as a glob
+func (l *Linter) patternHasMatches(pattern string, isRegex bool) bool {
+	if isRegex {
+		regex := pattern[3:] // Strip "re:" prefix
+		re, err := regexp.Compile(regex)
+		if err != nil {
+			return false // Invalid regex can't match anything
+		}
+
+		foundMatch := false
+		filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if re.MatchString(path) {
+				foundMatch = true
+				return filepath.SkipDir
+			}
+			return nil
+		})
+		return foundMatch
+	}
+
+	// Glob pattern
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return false
+	}
+	return len(matches) > 0
 }
 
 // validateSealedAtSHA checks that sealed_at_sha is only present on implemented records and has valid format
