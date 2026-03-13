@@ -1,0 +1,54 @@
+id: prov-2026-026
+title: Fix CheckCommit to reject implemented records and support completion transition
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: |
+    Fix a bug where `CheckCommit` function does not reject commits tagged with already-implemented
+    provenance records and does not properly detect completion transitions (open → implemented).
+    
+    **The Problem:**
+    The fix in prov-2026-020 and prov-2026-023 added implemented record enforcement and completion
+    transition detection to `CheckStaged` (used by commit-msg hook), but `CheckCommit` (used for
+    checking historical commits) was left unchanged. This causes `CheckCommit` to fail when
+    validating commits that completed a provenance record, because:
+    1. It doesn't check if a record is already implemented before processing scope validation
+    2. It doesn't detect completion transitions and allow them as an exception
+    3. The record file is not in its own affected_scope (per prov-2026-021 rule)
+    
+    **The Solution:**
+    Add implemented record enforcement and completion transition detection to `CheckCommit`,
+    sharing the core logic with `CheckStaged` through a dynamic approach that understands
+    whether to compare HEAD vs staged (for commit-msg hook) or parent vs current (for
+    historical commit checking).
+    
+    **Design Approach:**
+    Extract the common logic into reusable methods that can work with different git reference
+    pairs (HEAD:staged for CheckStaged, parent:commit for CheckCommit) without duplicating
+    the enforcement rules and transition detection logic.
+constraints:
+    - MUST add implemented record enforcement to CheckCommit (reject commits tagged with already-implemented records)
+    - MUST add completion transition detection to CheckCommit (allow open → implemented transitions)
+    - MUST reuse logic between CheckStaged and CheckCommit without code duplication
+    - MUST support both HEAD vs staged comparison (for commit-msg hook) and parent vs current comparison (for historical commits)
+    - MUST maintain the same forbidden_scope check for completion transitions
+    - MUST NOT break existing CheckStaged functionality
+    - MUST include test coverage for the new CheckCommit enforcement
+affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+    - prov-2026-023
+    - prov-2026-020
+    - prov-2026-021
+sealed_at_sha: ""
+associated_linespecs: []
+associated_traces: []
+monitors: []
+tags:
+    - bugfix
+    - enforcement
+    - refactoring
