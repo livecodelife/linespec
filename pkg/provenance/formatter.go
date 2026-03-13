@@ -451,9 +451,16 @@ func (f *Formatter) FormatCheckResult(violations []Violation, commit string) {
 	}
 
 	for recordID, vs := range byRecord {
-		fmt.Fprintf(f.Output, "  %s forbids changes to:\n", recordID)
-		for _, v := range vs {
-			fmt.Fprintf(f.Output, "    · %s\n", v.File)
+		if recordID == "" {
+			// Special case: no record ID means it's a general violation (e.g., missing tag)
+			for _, v := range vs {
+				fmt.Fprintf(f.Output, "  %s\n", v.Message)
+			}
+		} else {
+			fmt.Fprintf(f.Output, "  %s forbids changes to:\n", recordID)
+			for _, v := range vs {
+				fmt.Fprintf(f.Output, "    · %s\n", v.File)
+			}
 		}
 		fmt.Fprintln(f.Output)
 	}

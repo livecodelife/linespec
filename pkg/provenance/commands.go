@@ -402,7 +402,7 @@ func (c *Commands) Check(opts CheckOptions) error {
 
 	if opts.Staged {
 		// Check staged files
-		violations, err = c.Checker.CheckStaged(opts.MessageFile)
+		violations, err = c.Checker.CheckStaged(opts.MessageFile, c.Config.CommitTagRequired)
 	} else if opts.Range != "" {
 		// Check range
 		parts := strings.Split(opts.Range, "..")

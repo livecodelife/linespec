@@ -32,9 +32,9 @@ constraints:
 affected_scope:
     - pkg/provenance/commands.go
     - pkg/provenance/git.go
+    - pkg/provenance/formatter.go
     - .git/hooks/pre-commit
     - .git/hooks/commit-msg
-    - pkg/provenance/commands.go
     - cmd/linespec/main_stable.go
 forbidden_scope: []
 supersedes: ""

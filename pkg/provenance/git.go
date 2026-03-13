@@ -309,7 +309,7 @@ func (c *CommitChecker) CheckRange(from, to string) ([]Violation, error) {
 }
 
 // CheckStaged checks staged files against provenance records referenced in a commit message
-func (c *CommitChecker) CheckStaged(messageFile string) ([]Violation, error) {
+func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) ([]Violation, error) {
 	// Read the commit message
 	var message string
 	var err error
@@ -328,7 +328,19 @@ func (c *CommitChecker) CheckStaged(messageFile string) ([]Violation, error) {
 
 	recordIDs := c.Git.ExtractProvenanceIDs(message)
 	if len(recordIDs) == 0 {
-		// No provenance IDs in commit message, nothing to check
+		// No provenance IDs in commit message
+		if commitTagRequired {
+			// Commit tag is required but none found - this is a violation
+			return []Violation{
+				{
+					RecordID: "",
+					File:     "",
+					Commit:   "staged",
+					Message:  "Commit tag required but no provenance ID found in message",
+				},
+			}, nil
+		}
+		// Commit tag not required, nothing to check
 		return nil, nil
 	}
 
