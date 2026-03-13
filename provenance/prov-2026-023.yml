@@ -34,6 +34,7 @@ constraints:
 affected_scope:
     - pkg/provenance/git.go
     - pkg/provenance/git_test.go
+    - pkg/provenance/provenance_test.go
 
 related:
     - prov-2026-021
