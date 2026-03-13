@@ -428,6 +428,12 @@ Provenance records represent architectural decisions with meaningful lifecycles:
 
 **CRITICAL RULE:** Create a provenance record for every architectural or behavioral decision that affects the codebase, unless covered by an existing open record.
 
+**CRITICAL RULE:** Always use the CLI to create provenance records:
+```bash
+linespec provenance create --title "Your decision title"
+```
+Never write provenance record YAML files manually. The CLI ensures proper ID generation, validation, and metadata.
+
 **When to create a new record:**
 - Adding new functionality or features
 - Changing existing behavior or APIs
