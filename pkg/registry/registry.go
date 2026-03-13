@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/calebcowen/linespec/pkg/logger"
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/types"
 )
 
 type MockRegistry struct {

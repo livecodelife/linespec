@@ -1,367 +1,502 @@
-# Agent Guidelines for LineSpec
+# Agent Guidelines for LineSpec v1.0.0
 
-This file provides guidance for agents working on the LineSpec codebase.
+This file provides guidance for agents working with LineSpec, organized by feature status.
+
+---
 
 ## For AI Agents Helping End Users
 
-When a user has installed LineSpec and asks you to help write LineSpec files:
+### Reading Order (Updated for v1.0.0)
 
-1. **Read files in this order:**
-   - First: `AGENTS.md` (this file) - for project context
-   - Second: `LINESPEC.md` - for complete syntax reference
-   - Third: `README.md` - for usage examples
+When a user has installed LineSpec v1.0.0:
 
-2. **Documentation location:** After installation, docs are in:
-   - `<go-install-path>/pkg/mod/github.com/anomalyco/linespec@<version>/docs/`
+1. **First:** `AGENTS.md` (this file) - for project context
+2. **Second:** `PROVENANCE_RECORDS.md` - for the stable Provenance Records feature
+3. **Third:** `README.md` - for installation and overview
+4. **Fourth:** `LINESPEC.md` - for beta LineSpec Testing features (only if requested)
+
+### Feature Status
+
+| Feature | Status | Documentation |
+|---------|--------|---------------|
+| **Provenance Records** | ✅ **Stable (v1.0.0)** | PROVENANCE_RECORDS.md |
+| **LineSpec Testing** | 🚧 **Beta** | LINESPEC.md |
+
+### Documentation Location
+
+After installation, docs are in the repository root:
+- `PROVENANCE_RECORDS.md`
+- `README.md`
+- `AGENTS.md`
+- `LINESPEC.md` (Beta)
 
 ---
 
-## Project Overview
+## Project Overview (v1.0.0)
 
-LineSpec is a DSL-based integration testing tool that executes service behavior specifications directly. It uses a custom domain-specific language (.linespec files) to define test cases, then runs them against containerized services with database and HTTP mocking capabilities.
+LineSpec v1.0.0 makes **Provenance Records** the primary, stable feature - structured YAML artifacts that capture architectural decisions. **LineSpec Testing** remains in beta as an opt-in feature.
 
-Unlike traditional integration testing tools, LineSpec:
-- Parses .linespec files directly (no compile step)
-- Manages Docker containers automatically
-- Provides MySQL/PostgreSQL proxies for query interception
-- Mocks external HTTP services with automatic DNS resolution
-- Validates SQL queries at runtime with VERIFY clauses
+### What's New in v1.0.0
 
----
+**Stable:**
+- Provenance Records CLI subsystem (`provenance` command)
+- Git integration with pre-commit hooks
+- Graph visualization of decisions
+- Scope enforcement (affected_scope, forbidden_scope)
+- Monorepo support with ID suffixes (e.g., `prov-2026-001-user-service`)
 
-## Build, Lint, and Test Commands
+**Beta (build with `-tags beta`):**
+- LineSpec Testing (`test` command)
+- Protocol proxies (`proxy` command)
+- DSL-based integration testing
 
 ### Installation
-```bash
-go install ./cmd/linespec
-```
 
-### Build
 ```bash
-go build -o linespec ./cmd/linespec
-```
+# Stable (Provenance Records only)
+brew tap livecodelife/linespec
+brew install linespec
+# OR
+go install github.com/livecodelife/linespec/cmd/linespec@v1.0.0
 
-### Development
-```bash
-go run ./cmd/linespec
-```
-
-### Test
-```bash
-go test ./...
-```
-
-### Run a Single Test
-```bash
-go test -run TestName ./pkg/dsl
-```
-
-Or use verbose mode:
-```bash
-go test -v ./...
+# Beta (all features)
+brew install linespec-beta
+# OR
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
 ```
 
 ---
 
-## Code Style Guidelines
+## Part 1: Provenance Records (Stable)
 
-### Go Configuration
-- Go version: 1.21+
-- Standard Go formatting (use `gofmt` or `go fmt`)
+### Core Concepts
 
-### Imports
-- Use standard Go import style
-- Group imports: standard library, then third-party, then internal
-- Example:
-  ```go
-  import (
-      "fmt"
-      "os"
-      
-      "gopkg.in/yaml.v3"
-      
-      "github.com/anomalyco/linespec/pkg/dsl"
-  )
-  ```
+Provenance Records are structured YAML files that document:
 
-### Naming Conventions
-- **Files**: snake_case (e.g., `lexer.go`, `parser.go`)
-- **Types/Interfaces**: PascalCase (e.g., `TestSpec`, `ExpectStatement`)
-- **Structs**: PascalCase (e.g., `LineSpecError`)
-- **Functions/Variables**: camelCase (e.g., `tokenize`, `specFile`)
-- **Constants**: PascalCase or camelCase (e.g., `ExamplesDir`)
-- **Package names**: lowercase, single word (e.g., `dsl`, `runner`, `proxy`)
+- **Intent** - What we want to achieve and why
+- **Constraints** - Rules that must be followed  
+- **Scope** - What files are affected (or explicitly forbidden)
+- **Status** - Where in the lifecycle (open → implemented → superseded/deprecated)
+- **Relationships** - How decisions connect via supersedes/superseded_by
 
-### Error Handling
-- Use idiomatic Go error handling with `error` interface
-- Create custom error types when needed
-- Include context in error messages
-- Example:
-  ```go
-  type LineSpecError struct {
-      Message string
-      Line    int
-  }
-  
-  func (e *LineSpecError) Error() string {
-      if e.Line > 0 {
-          return fmt.Sprintf("line %d: %s", e.Line, e.Message)
-      }
-      return e.Message
-  }
-  ```
+They provide a **queryable history** of architectural decisions that can be linted, graphed, and enforced at commit time.
 
-### Code Structure
-- One package per directory
-- Separate concerns: `cmd/`, `pkg/dsl/`, `pkg/runner/`, `pkg/proxy/`
-- Tests go in same package with `_test.go` suffix
-- Test files: `*_test.go`
+### Quick Start
 
-### Formatting
-- Use `gofmt` or `go fmt` for consistent formatting
-- Use tabs for indentation (standard Go)
-- No trailing whitespace
-- One blank line between import groups
+```bash
+# Create a record
+linespec provenance create --title "Add user authentication"
 
-### Best Practices
-- Always handle errors explicitly
-- Use `defer` for resource cleanup
-- Prefer composition over inheritance
-- Use interfaces to define contracts
-- Keep functions small and focused
-- Write table-driven tests
+# Validate
+linespec provenance lint
+
+# View graph
+linespec provenance graph
+
+# Mark as implemented
+linespec provenance complete --record prov-2026-001
+```
+
+### Schema Reference
+
+```yaml
+id: prov-YYYY-NNN                    # or prov-YYYY-NNN-service-name
+title: "Decision title"
+status: open|implemented|superseded|deprecated
+created_at: "YYYY-MM-DD"
+author: "email@example.com"
+
+intent: >
+  What we want to achieve and why.
+
+constraints:
+  - Rule 1
+  - Rule 2
+
+affected_scope:
+  - pkg/feature/**
+  - "re:pattern"
+
+forbidden_scope:
+  - "re:.*_test\\.go$"
+
+supersedes: "prov-2026-001"          # or null
+superseded_by: "prov-2026-003"      # or null
+related:
+  - prov-2026-002
+
+tags:
+  - architecture
+  - feature
+```
+
+### Pattern Matching for Scope
+
+- **Exact:** `pkg/proxy/mysql/proxy.go`
+- **Glob:** `pkg/proxy/**/*.go`
+- **Regex:** `"re:.*_test\\.go$"`
+
+### Scope Modes
+
+**Observed Mode** (empty affected_scope):
+- Tracks all changed files automatically from git
+- Good for early development
+- No enforcement until locked
+
+**Allowlist Mode** (non-empty affected_scope):
+- Only allows changes to listed files
+- Good for mature, locked-in decisions
+- Use `lock-scope` to transition from observed
+
+```bash
+linespec provenance lock-scope --record prov-2026-001
+```
+
+### Git Integration
+
+**Commit message format:**
+```bash
+git commit -m "Add feature [prov-2026-042]"
+git commit -m "Fix auth [prov-2026-001] [prov-2026-002]"
+```
+
+**Install pre-commit hooks:**
+```bash
+linespec provenance install-hooks
+```
+
+### Configuration (.linespec.yml)
+
+```yaml
+provenance:
+  dir: provenance                    # Records directory (default: provenance)
+  enforcement: warn                  # none|warn|strict
+  commit_tag_required: false       # Require IDs in commits
+  auto_affected_scope: true        # Auto-populate from git history
+  shared_repos: []                 # Additional directories (monorepos)
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `create` | Create new record with optional --title, --supersedes, --tag |
+| `lint` | Validate records; use --record, --enforcement, --format |
+| `status` | View status; use --record, --filter, --save-scope |
+| `graph` | Render graph; use --root, --filter, --format |
+| `check` | Check commits; use --commit, --range, --record |
+| `lock-scope` | Lock to allowlist; use --record, --dry-run |
+| `complete` | Mark implemented; use --record, --force |
+| `deprecate` | Mark deprecated; use --record, --reason |
+| `install-hooks` | Install git hooks |
+
+**[Complete reference → PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)**
 
 ---
 
-## Project Structure
+## Part 2: LineSpec Testing (Beta)
 
-```
-cmd/
-  linespec/          # CLI entry point
-    main.go
-pkg/
-  dsl/               # DSL lexer and parser
-    lexer.go
-    parser.go
-    payload.go
-  types/             # Core data structures
-    types.go
-  runner/            # Test execution engine
-    runner.go
-  registry/          # Mock registration & matching
-    registry.go
-  proxy/             # Proxy implementations
-    mysql/           # MySQL proxy with query matching
-    postgresql/      # PostgreSQL proxy
-    http/            # HTTP interceptor
-    kafka/           # Kafka interceptor
-  config/            # Configuration system
-    types.go
-    parser.go
-  docker/            # Docker orchestration
-    orchestrator.go
-examples/
-  test-set-0/        # .linespec input fixtures
-    *.linespec
-    payloads/        # YAML payload files for test data
+> 🚧 **Beta Feature** - Build with `-tags beta` to enable
+
+LineSpec Testing is a DSL-based integration testing framework for containerized services. It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic.
+
+### Installation (Beta)
+
+```bash
+go build -tags beta -o linespec ./cmd/linespec
+# OR
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
 ```
 
----
+### Beta Commands
 
-## Key Design Patterns
+```bash
+# Run integration tests
+linespec test <path-to-linespec-files>
 
-### Pipeline Architecture
-The test runner follows a pipeline: `parse → setup → execute → verify → teardown`
-
-1. **Parse** — Load and parse .linespec files
-2. **Setup** — Start shared infrastructure (MySQL, Kafka)
-3. **Execute** — For each test:
-   - Start database proxy
-   - Start HTTP proxy with DNS aliases
-   - Start application container
-   - Send HTTP trigger request
-   - Collect hits from `/verify` endpoint
-4. **Verify** — Validate response, SQL queries, HTTP mock usage
-5. **Teardown** — Stop test-specific containers
-
-### DSL Syntax
-
-LineSpec uses a declarative syntax to define service behavior:
-
+# Start protocol proxies
+linespec proxy mysql <listen-addr> <upstream-addr>
+linespec proxy postgresql <listen-addr> <upstream-addr>
+linespec proxy http <listen-addr> <upstream-addr>
+linespec proxy kafka <listen-addr> <upstream-addr>
 ```
-TEST <name>
-RECEIVE HTTP:<METHOD> <URL>
-[WITH {{payloads/request.yaml}}]
-[HEADERS
-  <header>: <value>]
 
-EXPECT <CHANNEL> <resource>
-[USING_SQL """
-<raw-sql>
-"""]
-[WITH {{payloads/input.yaml}}]
-[RETURNS {{payloads/output.yaml}}]
-[RETURNS EMPTY]
-[VERIFY query CONTAINS 'string']
-[VERIFY query NOT_CONTAINS 'string']
-[VERIFY query MATCHES /regex/]
+### DSL Quick Reference
 
-EXPECT_NOT <CHANNEL> <resource>
-[USING_SQL """
-<raw-sql>
-"""]
+```linespec
+TEST create-user
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/request.yaml}}
+HEADERS
+  Authorization: Bearer token
 
-RESPOND HTTP:<STATUS_CODE>
-[WITH {{payloads/response.yaml}}]
-[NOISE
-  body.<field>]
+EXPECT WRITE:MYSQL users
+WITH {{payloads/data.yaml}}
+VERIFY query CONTAINS 'password_digest'
+
+RESPOND HTTP:201
+WITH {{payloads/response.yaml}}
+NOISE
+  body.id
+  body.created_at
 ```
 
 ### Statement Types
 
-- `TEST` — Test name declaration (optional, defaults to filename)
-- `RECEIVE` — Trigger request (exactly one required, must be first)
-- `EXPECT` — External dependencies that MUST occur (zero or more)
-  - `HTTP:<METHOD> <URL>` — External HTTP calls
-  - `READ_MYSQL <table>` — Database reads
-  - `WRITE_MYSQL <table>` — Database writes
-  - `READ_POSTGRESQL <table>` — PostgreSQL reads
-  - `WRITE_POSTGRESQL <table>` — PostgreSQL writes
-  - `EVENT:<topic>` / `MESSAGE:<topic>` — Message queue events (both aliases work)
-- `EXPECT_NOT` — Negative assertions (zero or more)
-  - `WRITE_MYSQL <table>` — Assert that a write does NOT occur
-  - `READ_MYSQL <table>` — Assert that a read does NOT occur
-- `RESPOND` — Response (exactly one required, must be last)
-- `NOISE` — Response noise filter (optional, follows RESPOND)
-- `NO TRANSACTION` — Disable auto-transaction for WRITE_MYSQL (parsed but proxy behavior is same)
+| Statement | Description |
+|-----------|-------------|
+| `TEST` | Test name (optional, defaults to filename) |
+| `RECEIVE` | Incoming HTTP request (required, first) |
+| `EXPECT` | External dependencies (HTTP, DB reads/writes, events) |
+| `EXPECT_NOT` | Negative assertions (what should NOT happen) |
+| `RESPOND` | System response (required, last) |
+| `NOISE` | Fields to ignore in comparison |
 
-### Configuration System
+### VERIFY Operators
 
-LineSpec uses `.linespec.yml` files for service configuration:
+```linespec
+VERIFY query CONTAINS 'string'
+VERIFY query NOT_CONTAINS 'string'
+VERIFY query MATCHES /regex/
+```
+
+### Configuration (.linespec.yml)
 
 ```yaml
 service:
   name: todo-api
-  service_dir: todo-api
   type: web
-  framework: rails
   port: 3000
-  health_endpoint: /up
   docker_compose: docker-compose.yml
-  build_context: .
-  start_command: bundle exec rails server -b 0.0.0.0 -p 3000
-  environment:
-    KAFKA_BROKERS: kafka:29092
 
 database:
   type: mysql|postgresql
   image: mysql:8.4
-  port: 3306|5432
-  database: todo_api_development
-  username: todo_user
-  password: todo_password
+  port: 3306
 
 infrastructure:
   database: true
-  kafka: true
-  external_db: false
-
-dependencies:
-  - name: user-service
-    type: http
-    host: user-service.local
-    port: 3001
-    proxy: true
+  kafka: false
 ```
 
-### Proxy Pattern Matching
+**[Complete DSL reference → LINESPEC.md](./LINESPEC.md)**
 
-The proxy matches queries using a hierarchy:
+---
 
-1. **Exact match first** (normalized by removing backticks, lowercasing)
-2. **Query type checking** — SELECT mocks only match SELECT queries, not INSERT/UPDATE/DELETE
-3. **Pattern matching** — For INSERT/UPDATE/DELETE, match by table name prefix
-4. **Table matching** — For SELECT, match by table name in FROM clause
+## Part 3: Build, Test, and Development
 
-Example matching:
-```
-Mock:    insert into users (name, email) values (...)
-Rails:   INSERT INTO `users` (`name`, `email`, `created_at`) VALUES (...)
-Result:  ✓ MATCH (normalized + table prefix)
-```
+### Build Commands
 
-### Infrastructure Pass-Through
-These queries always pass through to the real database (never matched against mocks):
-- `SET NAMES ...`
-- `COM_PING`
-- `information_schema` queries
-- `schema_migrations` checks
-- `SHOW FULL FIELDS ...`
-- `SHOW ...` queries
-- `BEGIN`, `COMMIT`, `ROLLBACK` (transaction statements)
+```bash
+# Stable build (Provenance only)
+go build -o linespec ./cmd/linespec
 
-### Verification Types
+# Beta build (all features)
+go build -tags beta -o linespec ./cmd/linespec
 
-LineSpec supports two types of verification:
+# Development
+go run ./cmd/linespec
+go run -tags beta ./cmd/linespec
 
-**1. SQL Verification (`VERIFY query ...`)**
-Validates actual SQL queries executed by the application:
-- `VERIFY query CONTAINS 'string'` — Query must include the string
-- `VERIFY query NOT_CONTAINS 'string'` — Query must NOT include the string
-- `VERIFY query MATCHES /regex/` — Query must match the regex pattern
-
-**2. HTTP Mock Verification (automatic)**
-Tests fail if HTTP mocks are defined but not invoked:
-- Catches fallback behavior (rescue blocks providing default values)
-- Validates external service calls actually happen
-- Prevents silent test bypasses
-
-When verification fails, the test runner displays:
-```
-✗ test-1 FAIL
-
-  🔒 SQL Verification Error:
-    VERIFY FAILED: Query does not contain 'password_digest'.
-    Actual query: INSERT INTO `users` (`name`, `email`, `password`) ...
-
-  Expected status : 201
-  Actual status   : 500
+# Cross-compile
+GOOS=darwin GOARCH=amd64 go build -o linespec-darwin-amd64 ./cmd/linespec
+GOOS=linux GOARCH=amd64 go build -o linespec-linux-amd64 ./cmd/linespec
 ```
 
-### Negative Assertions (EXPECT_NOT)
+### Test Commands
 
-Use `EXPECT_NOT` to assert that certain operations do NOT occur:
+```bash
+# Run all tests
+go test ./...
 
-```linespec
-TEST create-user-no-email-check
-RECEIVE HTTP:POST http://localhost:3000/users
-WITH {{payloads/user_create.yaml}}
+# Run specific package tests
+go test ./pkg/provenance/...
+go test -v ./pkg/provenance/...
 
-# Assert that we DON'T check for email uniqueness
-EXPECT_NOT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
-"""
+# Run single test
+go test -run TestName ./pkg/provenance
+```
 
-# The actual write
-EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create.yaml}}
+### Code Style Guidelines
 
-RESPOND HTTP:201
+**Go Version:** 1.21+
+
+**Imports:**
+```go
+import (
+    "fmt"
+    "os"
+    
+    "gopkg.in/yaml.v3"
+    
+    "github.com/livecodelife/linespec/pkg/dsl"
+)
+```
+
+**Naming Conventions:**
+- Files: `snake_case.go` (e.g., `lexer.go`, `parser.go`)
+- Types: `PascalCase` (e.g., `TestSpec`, `ExpectStatement`)
+- Functions/Variables: `camelCase` (e.g., `tokenize`, `specFile`)
+- Packages: `lowercase` (e.g., `dsl`, `runner`, `proxy`)
+
+**Error Handling:**
+```go
+type LineSpecError struct {
+    Message string
+    Line    int
+}
+
+func (e *LineSpecError) Error() string {
+    if e.Line > 0 {
+        return fmt.Sprintf("line %d: %s", e.Line, e.Message)
+    }
+    return e.Message
+}
+```
+
+### Project Structure
+
+```
+cmd/
+  linespec/                    # CLI entry point
+    main_stable.go              # Provenance only (build !beta)
+    main_beta.go                # All features (build beta)
+
+pkg/
+  provenance/                   # ✅ Stable - Provenance Records
+    commands.go
+    types.go
+    loader.go
+    linter.go
+    git.go
+    
+  proxy/                        # 🚧 Beta - Protocol proxies
+    mysql/
+    postgresql/
+    http/
+    kafka/
+    
+  runner/                       # 🚧 Beta - Test execution
+  registry/                     # 🚧 Beta - Mock registry
+  dsl/                          # 🚧 Beta - DSL parser
+  config/                       # Shared - Configuration
+  logger/                       # Shared - Logging
+  types/                        # Shared - Core data structures
+
+docs/                           # Documentation
+  PROVENANCE_RECORDS.md         # ✅ Stable reference
+  LINESPEC.md                   # 🚧 Beta reference
+  AGENTS.md                     # This file
+  README.md
+  RELEASE_PLAN.md
+  
+provenance/                     # Your provenance records
+  prov-2026-001.yml
+  prov-2026-002.yml
+  ...
 ```
 
 ---
 
-## Testing Guidelines
+## Part 4: Provenance Records Rules
+
+### Never Implement Without User Confirmation
+
+**CRITICAL RULE:** Never change a provenance record's status to `implemented` without explicitly asking the user first.
+
+Provenance records represent architectural decisions with meaningful lifecycles:
+- **Open** — Decision is being discussed/developed
+- **Implemented** — Decision is final and immutable
+- **Superseded** — Replaced by a newer record
+- **Deprecated** — No longer relevant
+
+**When marked `implemented`:**
+- All fields become immutable (except `monitors` and `associated_traces`)
+- No more scope changes allowed
+- The decision is "locked in"
+
+**Correct workflow:**
+```
+1. Create record → status: open
+2. Make changes described in the record
+3. Run tests to verify
+4. ASK USER: "Should I mark prov-YYYY-NNN as implemented?"
+5. Only after confirmation: linespec provenance complete --record prov-YYYY-NNN
+```
+
+### Provenance Required for All Decisions
+
+**CRITICAL RULE:** Create a provenance record for every architectural or behavioral decision that affects the codebase, unless covered by an existing open record.
+
+**When to create a new record:**
+- Adding new functionality or features
+- Changing existing behavior or APIs
+- Modifying configuration systems or patterns
+- Introducing new dependencies or tools
+- Refactoring with behavioral impact
+
+**When to update an existing record:**
+- The work falls within the scope of an **open** record (status: open)
+- The record is in **observed mode** (empty affected_scope)
+- The changes are consistent with the record's intent
+
+**Correct workflow:**
+```
+1. Identify the work to be done
+2. Check for existing open provenance records covering this scope
+3. IF no open record exists:
+   → Create new record with status: open
+   → Get user confirmation
+   → Make the changes
+4. IF open record exists in observed mode:
+   → Update affected_scope as you work
+   → Changes automatically tracked
+5. IF open record exists in allowlist mode:
+   → Verify changes match affected_scope
+   → Discuss scope expansion with user if needed
+```
+
+---
+
+## Part 5: Important Notes for AI Agents
+
+### What LineSpec Actually Does
+
+**Misconception:** LineSpec "compiles" .linespec files to Keploy artifacts.
+**Reality:** LineSpec parses and executes .linespec files directly. No compilation step.
+
+**Misconception:** There's a `linespec compile` command.
+**Reality:** No compile command. Use `linespec test` directly (requires beta build).
+
+**Misconception:** LineSpec generates YAML artifact files.
+**Reality:** Uses internal registry system. Executes tests directly.
+
+### Common User Questions
+
+**Q: Where are my compiled YAML files?**
+A: LineSpec doesn't generate YAML files. Provenance Records are the authoritative source.
+
+**Q: How do I run my tests?**
+A: Build with `-tags beta`, then use `linespec test <path>`.
+
+**Q: Why is my test failing with "mock not called"?**
+A: HTTP mocks defined with EXPECT must be invoked. Tests fail if mocks are defined but not used to catch silent failures.
+
+**Q: How do I configure my service?**
+A: Create a `.linespec.yml` file with service, database, infrastructure sections.
+
+**Q: What's the difference between stable and beta?**
+A: Stable includes Provenance Records only. Beta adds LineSpec Testing features.
+
+### Testing Guidelines
 
 - Use Go's standard `testing` package
-- Use table-driven tests for multiple test cases
+- Use table-driven tests for multiple cases
 - Use `t.Run()` for subtests
 - Use `t.Cleanup()` for cleanup
-- Verify YAML output structure against expected schemas
 - Test both success and failure cases
 
-Example test structure:
+**Example:**
 ```go
 func TestTokenize(t *testing.T) {
     tests := []struct {
@@ -384,27 +519,15 @@ func TestTokenize(t *testing.T) {
 }
 ```
 
----
+### Payload File Conventions
 
-## Payload File Conventions
-
-### HTTP Request Payloads
-YAML with request body fields:
+**HTTP Request/Response:**
 ```yaml
 name: User One
 email: user_one@example.com
 ```
 
-### HTTP Response Payloads
-YAML with response body fields:
-```yaml
-id: 1
-name: User One
-email: user_one@example.com
-```
-
-### MySQL Read Result Payloads
-YAML with `rows` array:
+**MySQL Read Results:**
 ```yaml
 rows:
   - id: 1
@@ -412,37 +535,19 @@ rows:
     email: user_one@example.com
 ```
 
-The compiler infers MySQL column types from the data (e.g., `id` → BIGINT, `created_at` → DATETIME).
-
-### Empty Result Payloads
-For queries returning no rows, use `RETURNS EMPTY` instead of creating complex payload files:
-
+**Empty Results:**
+Use `RETURNS EMPTY` instead of payload files:
 ```linespec
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
-"""
+USING_SQL """SELECT * FROM users WHERE id = 999"""
 RETURNS EMPTY
-```
-
-The compiler automatically generates proper MySQL TextResultSet column definitions. Only use manual payload files if you need specific column configurations.
-
-### Event Payloads
-YAML with message body fields:
-```yaml
-topic: todo-events
-key: todo-123
-value:
-  id: 1
-  title: Buy milk
-  completed: false
 ```
 
 ---
 
-## Common Patterns
+## Part 6: Common Testing Patterns (Beta)
 
-### Creating a Test for a POST Endpoint
+### Creating a POST Endpoint Test
 
 ```linespec
 TEST create-resource
@@ -461,7 +566,7 @@ NOISE
   body.created_at
 ```
 
-### Creating a Test for a GET Endpoint
+### Creating a GET Endpoint Test
 
 ```linespec
 TEST get-resource
@@ -478,8 +583,6 @@ WITH {{payloads/resource_single.yaml}}
 
 ### Handling Validation Queries
 
-Rails often checks for existing records before creating:
-
 ```linespec
 TEST create-user-with-validation
 RECEIVE HTTP:POST http://localhost:3000/users
@@ -487,9 +590,7 @@ WITH {{payloads/user_create_req.yaml}}
 
 # Validation query - returns empty (no duplicate)
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT 1 AS one FROM `users` WHERE `users`.`email` = 'user@example.com' LIMIT 1
-"""
+USING_SQL """SELECT 1 AS one FROM users WHERE email = 'test@example.com' LIMIT 1"""
 RETURNS EMPTY
 
 # The actual INSERT
@@ -499,16 +600,13 @@ WITH {{payloads/user_create_req.yaml}}
 RESPOND HTTP:201
 ```
 
-### Verifying SQL Query Structure
-
-Use VERIFY clauses to validate the actual SQL executed by the application at runtime:
+### Verifying SQL Structure
 
 ```linespec
 TEST create-user-secure
 RECEIVE HTTP:POST http://localhost:3000/users
 WITH {{payloads/user_create_req.yaml}}
 
-# Example: Ensure password is hashed
 EXPECT WRITE:MYSQL users
 WITH {{payloads/user_with_password_digest.yaml}}
 VERIFY query CONTAINS 'password_digest'
@@ -522,53 +620,29 @@ NOISE
   body.updated_at
 ```
 
-### Testing with External HTTP Dependencies
-
-```linespec
-TEST microservice-call
-RECEIVE HTTP:GET http://localhost:3000/api/data
-HEADERS
-  Authorization: Bearer token123
-
-# Expect a call to external auth service
-EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
-HEADERS
-  Authorization: Bearer token123
-RETURNS {{payloads/authenticated_user.yaml}}
-
-RESPOND HTTP:200
-WITH {{payloads/combined_response.yaml}}
-```
-
-### Using EXPECT_NOT (Negative Assertions)
-
-Assert that certain operations don't happen:
+### Using EXPECT_NOT
 
 ```linespec
 TEST efficient-user-lookup
 RECEIVE HTTP:GET http://localhost:3000/users/123
 
-# Should NOT query all users
+# Assert that we DON'T do a full table scan
 EXPECT_NOT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users`
-"""
+USING_SQL """SELECT * FROM users"""
 
-# Should use indexed lookup
+# Should use indexed lookup instead
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 123 LIMIT 1
-"""
+USING_SQL """SELECT * FROM users WHERE id = 123 LIMIT 1"""
 RETURNS {{payloads/user.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/user.yaml}}
 ```
 
-### Testing PostgreSQL Operations
+### Testing PostgreSQL
 
 ```linespec
-TEST create-postgresql-record
+TEST create-item
 RECEIVE HTTP:POST http://localhost:3000/items
 WITH {{payloads/item_create.yaml}}
 
@@ -580,75 +654,22 @@ RESPOND HTTP:201
 
 ---
 
-## CLI Commands Reference
+## Summary
 
-### `linespec test <path>`
-Execute .linespec test files against a containerized service.
+**For Provenance Records (Stable v1.0.0):**
+- Focus on PROVENANCE_RECORDS.md
+- Use stable installation commands
+- Follow the provenance workflow
+- Never mark as implemented without asking
 
-**Usage:**
-```bash
-linespec test <path-to-linespec-or-directory>
-```
+**For LineSpec Testing (Beta):**
+- Build with `-tags beta`
+- See LINESPEC.md for DSL reference
+- Report issues on GitHub
+- Features may change before stable release
 
-**Arguments:**
-- `<path>` — Path to a .linespec file or directory containing .linespec files
-
-**Prerequisites:**
-- Docker must be installed and running
-- A `.linespec.yml` configuration file must exist in the service directory
-- Required payload YAML files must exist
-
-**What it does:**
-1. Parses the .linespec file(s)
-2. Reads `.linespec.yml` for service configuration
-3. Creates a shared Docker network
-4. Starts shared infrastructure (MySQL, Kafka if configured)
-5. For each test:
-   - Starts database proxy with per-test mock registry
-   - Starts HTTP proxy with DNS aliases for dependencies
-   - Starts the application container
-   - Waits for health check
-   - Sends the HTTP trigger request
-   - Collects hits from `/verify` endpoint
-   - Verifies all mocks were called
-   - Stops test-specific containers
-
-### `linespec proxy <type> <listen> <upstream> [registry]`
-Start a protocol proxy for development/debugging.
-
-**Usage:**
-```bash
-linespec proxy mysql <listen-addr> <upstream-addr> [registry-file]
-linespec proxy postgresql <listen-addr> <upstream-addr> [registry-file]
-linespec proxy http <listen-addr> <upstream-addr> [registry-file]
-linespec proxy kafka <listen-addr> <upstream-addr> [registry-file]
-```
-
----
-
-## Important Notes for AI Agents
-
-### What LineSpec Actually Does (vs. Documentation)
-
-**Misconception:** LineSpec "compiles" .linespec files to Keploy artifacts.
-**Reality:** LineSpec parses .linespec files and executes them directly against containerized services.
-
-**Misconception:** There's a `linespec compile` command.
-**Reality:** No compile command exists. Use `linespec test` directly.
-
-**Misconception:** LineSpec generates KTest and KMock YAML files.
-**Reality:** LineSpec uses an internal registry system and executes tests directly.
-
-### Common User Questions
-
-**Q: Where are my compiled YAML files?**
-A: LineSpec doesn't generate YAML files. It executes tests directly from .linespec files.
-
-**Q: How do I run my tests?**
-A: Use `linespec test <path>` not `linespec compile`.
-
-**Q: Why is my test failing with "mock not called"?**
-A: HTTP mocks defined with EXPECT must be invoked. If your application catches errors and uses fallback behavior, the test will fail. This is intentional to catch silent failures.
-
-**Q: How do I configure my service?**
-A: Create a `.linespec.yml` file in your service directory with service, database, infrastructure, and dependencies sections.
+**Quick links:**
+- [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md) - Stable reference
+- [LINESPEC.md](./LINESPEC.md) - Beta reference
+- [README.md](./README.md) - Overview and installation
+- [RELEASE_PLAN.md](./RELEASE_PLAN.md) - v1.0.0 release details

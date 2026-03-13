@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calebcowen/linespec/pkg/logger"
-	"github.com/calebcowen/linespec/pkg/registry"
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/types"
 	_ "github.com/go-sql-driver/mysql"
 )
 

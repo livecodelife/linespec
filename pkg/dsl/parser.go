@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/types"
 )
 
 type Parser struct {

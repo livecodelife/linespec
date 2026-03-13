@@ -1,264 +1,180 @@
-# LineSpec
+# LineSpec v1.0.0
 
-LineSpec is a DSL-based integration testing tool that executes service behavior specifications directly against containerized services. It uses a custom domain-specific language (.linespec files) to define test cases, then runs them with automatic database and HTTP mocking.
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+**Provenance Records** - Structured YAML artifacts for documenting architectural decisions  
+**LineSpec Testing** - DSL-based integration testing for containerized services (Beta)
+
+---
+
+## Overview
+
+LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
+
+The default installation includes only the stable **Provenance Records** functionality. **LineSpec Testing** features are available as a beta opt-in.
+
+---
 
 ## Installation
 
-### From source (Go)
+### Homebrew (Recommended)
 
 ```bash
-git clone https://github.com/anomalyco/linespec.git
-cd linespec
-go install ./cmd/linespec
+# Install stable version (Provenance Records only)
+brew tap livecodelife/linespec
+brew install linespec
+
+# Or install beta version (includes LineSpec Testing)
+brew install linespec-beta
 ```
 
-The `linespec` binary will be installed to `$GOPATH/bin` (or `$HOME/go/bin` by default).
-
-## Usage
-
-### Running Tests
+### Go Install
 
 ```bash
-linespec test <path>
+# Stable version (Provenance Records only)
+go install github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+
+# Beta version (includes LineSpec Testing)
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
 ```
 
-**Arguments**
+### GitHub Releases
 
-- `<path>` - Path to a `.linespec` file or directory containing `.linespec` files (required)
+Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-**Example**
+- `linespec_1.0.0_*` - Stable version (Provenance only)
+- `linespec-beta_1.0.0_*` - Beta version (All features)
+
+---
+
+## Quick Start - Provenance Records (Stable)
 
 ```bash
-linespec test examples/test-set-0/
-linespec test examples/test-set-0/create-user.linespec
+# 1. Install LineSpec
+brew tap livecodelife/linespec
+brew install linespec
+
+# 2. Create your first provenance record
+linespec provenance create --title "Add user authentication"
+
+# 3. View the decision graph
+linespec provenance graph
+
+# 4. Validate all records
+linespec provenance lint
 ```
 
-**Prerequisites** — Docker must be installed and running.
-
-**How it works:**
-
-1. **Parse** — Loads and parses .linespec files
-2. **Setup** — Starts shared infrastructure (MySQL, Kafka if configured)
-3. **Execute** — For each test:
-   - Starts database proxy with per-test mock registry
-   - Starts HTTP proxy with DNS aliases for dependencies
-   - Starts the application container
-   - Waits for health check
-   - Sends the HTTP trigger request
-   - Collects hits from `/verify` endpoint
-4. **Verify** — Validates response, SQL queries, HTTP mock usage
-5. **Teardown** — Stops test-specific containers
-
-**Expected output:**
-
-```
-✓ Loaded 3 tests
-→ Starting infrastructure...
-✓ MySQL ready (mysql:3306)
-✓ Kafka ready (kafka:29092)
-→ test-1: ✓ test-1 PASS
-→ test-2: ✗ test-2 FAIL
-
-  Expected status : 200
-  Actual status   : 200
-  Body diff:
-    {                                           {
-      "id": 1,                                    "id": 1,
-      "title": "Buy milk"              ~          "title": "Buy bread"
-    }                                           }
-→ test-3: ✓ test-3 PASS
-
-summary: 2 passed, 1 failed
-```
-
-> **Note:** Differing lines are marked with ` ~ ` and are coloured red (expected) / green (actual) in a terminal.
-
-## Configuration
-
-LineSpec uses `.linespec.yml` files for service configuration:
+### Example Provenance Record
 
 ```yaml
-service:
-  name: todo-api
-  service_dir: todo-api
-  type: web
-  framework: rails
-  port: 3000
-  health_endpoint: /up
-  docker_compose: docker-compose.yml
-  build_context: .
-  start_command: bundle exec rails server -b 0.0.0.0 -p 3000
-  environment:
-    KAFKA_BROKERS: kafka:29092
+id: prov-2026-001
+title: "Use PostgreSQL for primary data store"
+status: open
+created_at: "2026-03-15"
+author: "dev@example.com"
 
-database:
-  type: mysql|postgresql
-  image: mysql:8.4
-  port: 3306|5432
-  database: todo_api_development
-  username: todo_user
-  password: todo_password
+intent: >
+  After evaluating options, we choose PostgreSQL for our primary
+  data store due to better JSON support and concurrent write handling.
 
-infrastructure:
-  database: true
-  kafka: true
-  external_db: false
+constraints:
+  - All new tables must use PostgreSQL
+  - Use connection pooling (min 10, max 100)
 
-dependencies:
-  - name: user-service
-    type: http
-    host: user-service.local
-    port: 3001
-    proxy: true
+affected_scope:
+  - pkg/db/**
+  - migrations/**
+
+tags:
+  - architecture
+  - database
 ```
 
-## Specification Format
+**[Complete Provenance Records Reference →](./PROVENANCE_RECORDS.md)**
 
-A `.linespec` file defines a test case with statement types:
+---
 
-### TEST
+## Feature Comparison
 
-Defines the test name:
+| Feature | Provenance Records (v1.0.0) | LineSpec Testing (Beta) |
+|---------|------------------------------|-------------------------|
+| Status | ✅ **Stable** | 🚧 **Beta** |
+| Commands | `provenance` | `test`, `proxy` |
+| Maturity | Production-ready | Active development |
+| Installation | Default | Requires `-tags beta` |
+| Documentation | Complete | In progress |
 
-```
-TEST test-name
-```
+---
 
-If omitted, the filename (without extension) is used as the test name.
+## Provenance Records - Full Feature Set
 
-### RECEIVE
+### CLI Commands
 
-Specifies the incoming HTTP request (required, must be first):
+```bash
+# Record management
+linespec provenance create          # Create new record
+linespec provenance lint            # Validate records
+linespec provenance status          # View status
+linespec provenance graph           # Render decision graph
 
-```
-RECEIVE HTTP:<METHOD> <URL>
-[WITH {{payload/request.yaml}}]
-[HEADERS
-  <header_name>: <header_value>
-  ...]
-```
+# Git integration
+linespec provenance check           # Check commits for violations
+linespec provenance install-hooks   # Install git hooks
 
-- `<METHOD>` - HTTP method (GET, POST, PUT, DELETE, etc.)
-- `<URL>` - Full URL including protocol and host
-- `WITH` (optional) - Path to a YAML file containing the request body
-- `HEADERS` (optional) - Additional HTTP headers with indented key: value pairs
-
-Example:
-```linespec
-RECEIVE HTTP:POST http://localhost:3000/api/todos
-WITH {{payloads/create_todo.yaml}}
-HEADERS
-  Authorization: Bearer token_abc123xyz
+# Lifecycle management
+linespec provenance lock-scope      # Lock scope to allowlist
+linespec provenance complete        # Mark as implemented
+linespec provenance deprecate       # Mark as deprecated
 ```
 
-### EXPECT
+### Key Features
 
-Defines external dependencies that MUST occur (zero or more allowed):
+- **Structured YAML format** - Clear, version-controlled decision records
+- **Scope enforcement** - Automatic validation of what files can be modified
+- **Git integration** - Pre-commit hooks and commit message validation
+- **Graph visualization** - Query and visualize decision relationships
+- **Monorepo support** - Service-specific records with ID suffixes
+- **CI/CD ready** - JSON output and strict enforcement modes
 
-```
-EXPECT <CHANNEL> <resource>
-[USING_SQL """
-<raw-sql-query>
-"""]
-[WITH {{payload/input.yaml}}]
-[RETURNS {{payload/output.yaml}}]
-[RETURNS EMPTY]
-[VERIFY query CONTAINS 'string']
-[VERIFY query NOT_CONTAINS 'string']
-[VERIFY query MATCHES /regex/]
-```
+### Documentation
 
-Supported channels:
-- `HTTP:<METHOD> <URL>` - External HTTP calls
-- `READ_MYSQL <table>` - Database reads (requires `RETURNS` or `RETURNS EMPTY`)
-- `WRITE_MYSQL <table>` - Database writes
-- `READ_POSTGRESQL <table>` - PostgreSQL reads
-- `WRITE_POSTGRESQL <table>` - PostgreSQL writes
-- `EVENT:<topic>` / `MESSAGE:<topic>` - Message queue events (both aliases work)
+- **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** - Complete reference guide
+- **[AGENTS.md](./AGENTS.md)** - Guidelines for AI agents using LineSpec
 
-**HTTP Expectations:**
+---
 
-```linespec
-EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
-HEADERS
-  Authorization: Bearer token_abc123xyz
-RETURNS {{payloads/auth_response.yaml}}
+## LineSpec Testing (Beta)
+
+> 🚧 **Beta Feature**: LineSpec Testing is in active development. Build with `-tags beta` to enable.
+
+LineSpec Testing is a DSL-based integration testing framework for containerized services. It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic and framework-independent.
+
+### Installation (Beta)
+
+```bash
+# Build from source with beta tag
+go build -tags beta -o linespec ./cmd/linespec
+
+# Or install via go install
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
 ```
 
-LineSpec extracts hostnames from HTTP expectations and sets up DNS aliases. Tests fail if HTTP mocks are defined but not invoked.
+### Beta Commands
 
-**MySQL/PostgreSQL Operations:**
+```bash
+# Run integration tests
+linespec test <path-to-linespec-files>
 
-```linespec
-# Read operation (requires RETURNS)
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM users WHERE id = 123
-"""
-RETURNS {{payloads/user.yaml}}
-
-# Write operation
-EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create.yaml}}
-
-# Write with SQL verification
-EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create.yaml}}
-VERIFY query CONTAINS 'password_digest'
+# Start protocol proxies
+linespec proxy mysql <listen> <upstream>
+linespec proxy postgresql <listen> <upstream>
+linespec proxy http <listen> <upstream>
+linespec proxy kafka <listen> <upstream>
 ```
 
-**Empty Results:**
-
-```linespec
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM users WHERE id = 999
-"""
-RETURNS EMPTY
-```
-
-### EXPECT_NOT
-
-Negative assertions — assert that certain operations do NOT occur:
-
-```linespec
-EXPECT_NOT READ:MYSQL users
-USING_SQL """
-SELECT * FROM users
-"""
-```
-
-Useful for testing query optimization (e.g., ensuring the application uses indexed lookups instead of full table scans).
-
-### RESPOND
-
-Specifies the HTTP response (required, must be last):
-
-```
-RESPOND HTTP:<STATUS_CODE>
-[WITH {{payload/response.yaml}}]
-[NOISE
-  body.<field>
-  body.<field>]
-```
-
-- `<STATUS_CODE>` - HTTP status code (200, 201, 400, 500, etc.)
-- `WITH` (optional) - Path to a YAML file containing the response body
-- `NOISE` (optional) - Lists response body fields to ignore during comparison
-
-Example:
-```linespec
-RESPOND HTTP:201
-WITH {{payloads/created_todo.yaml}}
-NOISE
-  body.id
-  body.created_at
-  body.updated_at
-```
-
-## Examples
-
-### Simple Write Operation
+### Example LineSpec Test
 
 ```linespec
 TEST create-user
@@ -267,242 +183,147 @@ WITH {{payloads/user_create_req.yaml}}
 
 EXPECT WRITE:MYSQL users
 WITH {{payloads/user_create_req.yaml}}
+VERIFY query CONTAINS 'password_digest'
 
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}
 NOISE
   body.id
   body.created_at
-  body.updated_at
 ```
 
-### Write with SQL Verification
+### Beta Documentation
 
-```linespec
-TEST create-user-secure
-RECEIVE HTTP:POST http://localhost:3000/users
-WITH {{payloads/user_create_req.yaml}}
+- **[LINESPEC.md](./LINESPEC.md)** - DSL syntax reference (Beta)
+- **[AGENTS.md](./AGENTS.md)** - Testing guidelines (Beta section)
 
-EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create_req.yaml}}
-VERIFY query CONTAINS 'password_digest'
-VERIFY query NOT_CONTAINS 'password'
+---
 
-RESPOND HTTP:201
-WITH {{payloads/user_create_resp.yaml}}
-NOISE
-  body.id
-  body.created_at
-  body.updated_at
-```
+## Configuration
 
-Output when verification fails:
-```
-✗ create-user-secure FAIL
+Create a `.linespec.yml` in your repository root:
 
-  🔒 SQL Verification Error:
-    VERIFY FAILED: Query does not contain 'password_digest'.
-    Actual query: INSERT INTO `users` (`name`, `email`, `password`) ...
-
-  Expected status : 201
-  Actual status   : 500
-```
-
-### HTTP Mock Verification
-
-```linespec
-TEST microservice-call
-RECEIVE HTTP:GET http://localhost:3000/api/data
-HEADERS
-  Authorization: Bearer token123
-
-EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
-HEADERS
-  Authorization: Bearer token123
-RETURNS {{payloads/auth_response.yaml}}
-
-RESPOND HTTP:200
-WITH {{payloads/combined_response.yaml}}
-```
-
-Output when HTTP mock not invoked:
-```
-✗ microservice-call FAIL
-
-  🔌 HTTP Mock Verification Error:
-    HTTP Mock(s) not invoked: microservice-call-mock-0
-
-  Expected status : 200
-  Actual status   : 200
-```
-
-### Read with Empty Results (Not Found)
-
-```linespec
-TEST get-user-not-found
-RECEIVE HTTP:GET http://localhost:3000/users/999
-HEADERS
-  Authorization: Bearer token_abc123xyz
-
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 999 LIMIT 1
-"""
-RETURNS EMPTY
-
-RESPOND HTTP:404
-WITH {{payloads/not_found_error.yaml}}
-```
-
-### Using EXPECT_NOT
-
-```linespec
-TEST efficient-user-lookup
-RECEIVE HTTP:GET http://localhost:3000/users/123
-
-# Assert that we DON'T do a full table scan
-EXPECT_NOT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users`
-"""
-
-# Should use indexed lookup instead
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM `users` WHERE `users`.`id` = 123 LIMIT 1
-"""
-RETURNS {{payloads/user.yaml}}
-
-RESPOND HTTP:200
-WITH {{payloads/user.yaml}}
-```
-
-### PostgreSQL Operations
-
-```linespec
-TEST create-item-postgres
-RECEIVE HTTP:POST http://localhost:3000/items
-WITH {{payloads/item_create.yaml}}
-
-EXPECT WRITE:POSTGRESQL items
-WITH {{payloads/item_create.yaml}}
-
-RESPOND HTTP:201
-```
-
-## VERIFY Operators
-
-The `VERIFY` clause supports three operators for SQL validation:
-
-| Operator | Description |
-|----------|-------------|
-| `CONTAINS '<string>'` | Query must include the specified string |
-| `NOT_CONTAINS '<string>'` | Query must NOT include the specified string |
-| `MATCHES /regex/` | Query must match the specified regex pattern |
-
-Multiple VERIFY clauses can be attached to a single EXPECT statement:
-
-```linespec
-EXPECT WRITE:MYSQL users
-WITH {{payloads/user_data.yaml}}
-VERIFY query CONTAINS 'password_digest'
-VERIFY query NOT_CONTAINS 'password'
-VERIFY query MATCHES /INSERT INTO users/
-```
-
-## Proxy Commands
-
-Start individual protocol proxies for development:
-
-```bash
-linespec proxy mysql <listen-addr> <upstream-addr> [registry-file]
-linespec proxy postgresql <listen-addr> <upstream-addr> [registry-file]
-linespec proxy http <listen-addr> <upstream-addr> [registry-file]
-linespec proxy kafka <listen-addr> <upstream-addr> [registry-file]
-```
-
-## Payload File Conventions
-
-### HTTP Request/Response Payloads
 ```yaml
-name: User One
-email: user_one@example.com
+# Provenance Records configuration
+provenance:
+  dir: provenance                    # Records directory
+  enforcement: warn                  # none|warn|strict
+  commit_tag_required: false         # Require IDs in commits
+  auto_affected_scope: true           # Auto-populate from git
+  shared_repos: []                    # Additional directories (monorepos)
+
+# LineSpec Testing configuration (Beta)
+service:
+  name: my-service
+  type: web
+  port: 3000
+  
+database:
+  type: mysql
+  port: 3306
+
+infrastructure:
+  database: true
+  kafka: false
 ```
 
-### MySQL Read Result Payloads
-```yaml
-rows:
-  - id: 1
-    name: User One
-    email: user_one@example.com
-```
-
-### Event Payloads
-```yaml
-topic: todo-events
-key: todo-123
-value:
-  id: 1
-  title: Buy milk
-  completed: false
-```
+---
 
 ## Development
 
 ```bash
-go run ./cmd/linespec          # Run CLI in development mode
-go build -o linespec ./cmd/linespec  # Build binary
-go test ./...                  # Run tests
+# Clone repository
+git clone https://github.com/livecodelife/linespec.git
+cd linespec
+
+# Build stable version (Provenance only)
+go build -o linespec ./cmd/linespec
+
+# Build beta version (all features)
+go build -tags beta -o linespec ./cmd/linespec
+
+# Run tests
+go test ./pkg/provenance/...
+
+# Run with beta features
+./linespec test ./examples/
 ```
 
-## Key Features
+---
 
-- **Human-readable DSL** - Define service behavior in plain text
-- **Direct execution** - No compile step, tests run immediately from .linespec files
-- **Pattern matching** - SQL queries matched by operation and table, so ORM-specific variations work automatically
-- **Infrastructure pass-through** - Schema queries pass through to real database
-- **HTTP mock interception** - External service calls intercepted with automatic DNS resolution
-- **Strict mock verification** - Tests fail if mocks are defined but not used
-- **Negative assertions** - EXPECT_NOT for testing what should NOT happen
-- **SQL verification** - VERIFY clauses for runtime SQL validation
-- **Per-test isolation** - Each test gets its own mock registry while sharing infrastructure
+## Documentation Index
 
-### Proxy Pattern Matching
+| Document | Status | Description |
+|----------|--------|-------------|
+| **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** | ✅ Stable | Complete provenance reference |
+| **[README.md](./README.md)** | ✅ Stable | This file - overview and installation |
+| **[AGENTS.md](./AGENTS.md)** | ✅ Stable | Guidelines for AI agents |
+| **[LINESPEC.md](./LINESPEC.md)** | 🚧 Beta | DSL syntax for integration testing |
+| **[RELEASE_PLAN.md](./RELEASE_PLAN.md)** | ✅ Stable | v1.0.0 release strategy |
 
-The proxy matches queries using a hierarchy:
+### Reading Order
 
-1. **Exact match first** (normalized by removing backticks, lowercasing)
-2. **Query type checking** — SELECT mocks only match SELECT queries
-3. **Pattern matching** — For INSERT/UPDATE/DELETE, match by table name prefix
-4. **Table matching** — For SELECT, match by table name in FROM clause
+1. **Start here** (README.md) - Installation and overview
+2. **PROVENANCE_RECORDS.md** - Complete reference for stable features
+3. **AGENTS.md** - If using AI agents with LineSpec
+4. **LINESPEC.md** - If using beta testing features
 
-Example:
+---
+
+## FAQ
+
+### What's the difference between stable and beta?
+
+**Stable (default):** Includes only Provenance Records - fully tested and production-ready.
+
+**Beta:** Includes Provenance Records + LineSpec Testing - active development, may have bugs.
+
+### Can I install both versions?
+
+Yes! Using Homebrew:
+```bash
+brew install linespec        # Stable
+brew install linespec-beta   # Beta (installed as 'linespec-beta')
 ```
-Mock:    insert into users (name, email) values (...)
-Rails:   INSERT INTO `users` (`name`, `email`, `created_at`) VALUES (...)
-Result:  ✓ MATCH (normalized + table prefix)
-```
 
-### Infrastructure Pass-Through
+### When will LineSpec Testing be stable?
 
-These queries always pass through to the real database:
-- `SET NAMES ...`
-- `COM_PING`
-- `information_schema` queries
-- `schema_migrations` checks
-- `SHOW ...` queries
-- `BEGIN`, `COMMIT`, `ROLLBACK` (transactions)
+LineSpec Testing will reach v1.0.0 in a future release. The beta is available now for early adopters who want to test and provide feedback.
 
-## How It Works
+### How do I migrate from the old repository?
 
-LineSpec directly parses and executes .linespec files — no compilation step is needed. The test runner:
+The module path changed from `github.com/calebcowen/linespec` to `github.com/livecodelife/linespec`. Update your imports and use the new installation path.
 
-1. Reads `.linespec.yml` for service configuration
-2. Starts shared Docker infrastructure (MySQL, Kafka)
-3. For each test, starts proxies and the application
-4. Sends the HTTP trigger request
-5. Verifies that all expected mocks were called
-6. Validates SQL queries against VERIFY clauses
-7. Compares responses (respecting NOISE fields)
+### Where are my compiled YAML files?
 
-The proxy system intercepts database and HTTP calls, matching them against expectations and returning mock responses when appropriate.
+LineSpec doesn't generate YAML files. Provenance Records are the authoritative source and are executed directly.
+
+---
+
+## Contributing
+
+1. Check for an existing provenance record covering your work
+2. If none exists, create a new record describing your decision
+3. Make your changes
+4. Run the linter: `linespec provenance lint`
+5. Submit a pull request
+
+See [AGENTS.md](./AGENTS.md) for detailed guidelines.
+
+---
+
+## License
+
+MIT License - See [LICENSE](./LICENSE) for details.
+
+---
+
+## Support
+
+- **Issues:** https://github.com/livecodelife/linespec/issues
+- **Discussions:** https://github.com/livecodelife/linespec/discussions
+- **Releases:** https://github.com/livecodelife/linespec/releases
+
+---
+
+**LineSpec v1.0.0** - Built with Provenance Records

@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/calebcowen/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/logger"
 )
 
 // StartupHandler manages the connection startup phase

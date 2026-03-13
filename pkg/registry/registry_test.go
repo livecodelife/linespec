@@ -3,7 +3,7 @@ package registry
 import (
 	"testing"
 
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/types"
 )
 
 func TestMockRegistry_RegisterAndFind(t *testing.T) {

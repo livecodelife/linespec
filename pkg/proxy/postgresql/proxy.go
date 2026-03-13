@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calebcowen/linespec/pkg/dsl"
-	"github.com/calebcowen/linespec/pkg/logger"
-	"github.com/calebcowen/linespec/pkg/registry"
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/types"
 )
 
 // Proxy is a PostgreSQL wire protocol proxy with mock capabilities

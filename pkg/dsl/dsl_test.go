@@ -3,7 +3,7 @@ package dsl
 import (
 	"testing"
 
-	"github.com/calebcowen/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/types"
 )
 
 func TestLexer_GetUserSuccess(t *testing.T) {

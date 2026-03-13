@@ -7,8 +7,8 @@ import (
 	"io"
 	"net"
 
-	"github.com/calebcowen/linespec/pkg/logger"
-	"github.com/calebcowen/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/registry"
 )
 
 type Interceptor struct {

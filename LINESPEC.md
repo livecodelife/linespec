@@ -1,5 +1,16 @@
 # LineSpec DSL Reference
 
+> 🚧 **Beta Feature** - LineSpec Testing is in active development. Build with `-tags beta` to enable these features.
+> 
+> **Installation:**
+> ```bash
+> go build -tags beta -o linespec ./cmd/linespec
+> # or
+> go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.0
+> ```
+> 
+> See [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md) for the stable Provenance Records feature.
+
 LineSpec is a deterministic domain-specific language (DSL) for describing service behavior and defining integration tests that execute directly against containerized services.
 
 The goal of LineSpec is to:

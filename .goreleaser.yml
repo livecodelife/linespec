@@ -1,0 +1,198 @@
+# GoReleaser configuration for LineSpec
+# See: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+# Stable builds (provenance only)
+builds:
+  - id: linespec-stable
+    main: ./cmd/linespec
+    binary: linespec
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    ignore:
+      - goos: windows
+        goarch: arm64
+    # No build tags - this is the stable build with provenance only
+
+  # Beta builds (provenance + test + proxy)
+  - id: linespec-beta
+    main: ./cmd/linespec
+    binary: linespec
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -tags=beta
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+# Archive configurations
+archives:
+  - id: linespec-stable
+    builds:
+      - linespec-stable
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - PROVENANCE_RECORDS.md
+
+  - id: linespec-beta
+    builds:
+      - linespec-beta
+    name_template: >-
+      {{ .ProjectName }}-beta_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - PROVENANCE_RECORDS.md
+      - LINESPEC.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^style:'
+      - '^refactor:'
+      - Merge pull request
+      - Merge branch
+
+# GitHub Release configuration
+release:
+  github:
+    owner: livecodelife
+    name: linespec
+  
+  # If the tag contains 'beta', mark as prerelease
+  prerelease: auto
+  
+  # Release notes template
+  header: |
+    ## LineSpec {{ .Version }}
+    
+    ### Quick Install
+    
+    **Homebrew:**
+    ```bash
+    brew tap livecodelife/linespec
+    brew install linespec{{ if .Prerelease }}-beta{{ end }}
+    ```
+    
+    **Go Install:**
+    ```bash
+    go install github.com/livecodelife/linespec/cmd/linespec@{{ .Version }}
+    ```
+    
+    {{ if .Prerelease }}
+    **Note:** This is a beta release including LineSpec Testing features. For the stable version with Provenance Records only, install without the `-beta` suffix.
+    {{ end }}
+  
+  footer: |
+    ### Documentation
+    
+    - [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md) - Complete provenance reference
+    - [README.md](./README.md) - Installation and quick start{{ if .Prerelease }}
+    - [LINESPEC.md](./LINESPEC.md) - Integration testing reference (beta){{ end }}
+    
+    ### Full Changelog
+    
+    See [CHANGELOG.md](./CHANGELOG.md) for full details.
+
+# Publish to Homebrew tap
+brews:
+  # Stable formula
+  - name: linespec
+    repository:
+      owner: livecodelife
+      name: homebrew-linespec
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url_template: "https://github.com/livecodelife/linespec/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    folder: Formula
+    homepage: "https://github.com/livecodelife/linespec"
+    description: "Provenance Records - Structured YAML artifacts for documenting architectural decisions"
+    license: "MIT"
+    test: |
+      system "#{bin}/linespec", "provenance", "--help"
+    install: |
+      bin.install "linespec"
+    # Only publish stable builds to the main formula
+    ids:
+      - linespec-stable
+    skip_upload: auto
+
+  # Beta formula
+  - name: linespec-beta
+    repository:
+      owner: livecodelife
+      name: homebrew-linespec
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url_template: "https://github.com/livecodelife/linespec/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }}-beta version {{ .Tag }}"
+    folder: Formula
+    homepage: "https://github.com/livecodelife/linespec"
+    description: "LineSpec (Beta) - Provenance Records + Integration Testing"
+    license: "MIT"
+    test: |
+      system "#{bin}/linespec", "provenance", "--help"
+    install: |
+      bin.install "linespec" => "linespec-beta"
+    # Only publish beta builds to the beta formula
+    ids:
+      - linespec-beta
+    skip_upload: auto
+
+# Disable other artifact types for now
+nfpms: []
+snapshots: []

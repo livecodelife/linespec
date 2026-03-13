@@ -5,7 +5,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/calebcowen/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/registry"
 )
 
 // Message represents a generic protocol message

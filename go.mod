@@ -1,4 +1,4 @@
-module github.com/calebcowen/linespec
+module github.com/livecodelife/linespec
 
 go 1.25.7
 
