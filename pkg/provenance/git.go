@@ -389,6 +389,35 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 				// If forbidden, fall through to violation
 			}
 
+			// NEW: Allow completion transition (open → implemented) for the record's own file
+			// This handles the case where the record file on disk has been modified by
+			// `linespec provenance complete` to status: implemented, but the Loader still
+			// reads from disk. We detect the transition by comparing HEAD vs staged.
+			if isRecordFile(file, record) {
+				// Check if this is a completion transition
+				isCompletionTransition, err := c.isCompletionTransition(file)
+				if err != nil {
+					// If we can't determine, fall through to normal scope check
+					fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
+				} else if isCompletionTransition {
+					// This is a completion transition - check if file is not forbidden
+					isForbidden := false
+					for _, pattern := range record.ForbiddenScope {
+						matches, err := MatchPattern(file, pattern)
+						if err != nil {
+							return nil, err
+						}
+						if matches {
+							isForbidden = true
+							break
+						}
+					}
+					if !isForbidden {
+						continue // Allowed - completion transition of record's own file
+					}
+				}
+			}
+
 			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
@@ -429,6 +458,36 @@ func (c *CommitChecker) loadStagedRecord(filePath string) (*Record, error) {
 	}
 
 	return &record, nil
+}
+
+// isCompletionTransition checks if the file is transitioning from open to implemented
+// by comparing the HEAD version with the staged version
+func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {
+	// Read the HEAD version (what's committed)
+	cmd := exec.Command("git", "show", "HEAD:"+filePath)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	headOutput, err := cmd.Output()
+	if err != nil {
+		// If we can't read HEAD, assume it's a new file (not a completion transition)
+		return false, nil
+	}
+
+	var headRecord Record
+	if err := yaml.Unmarshal(headOutput, &headRecord); err != nil {
+		return false, fmt.Errorf("failed to parse HEAD record: %w", err)
+	}
+
+	// Read the staged version
+	stagedRecord, err := c.loadStagedRecord(filePath)
+	if err != nil {
+		return false, err
+	}
+
+	// Check if this is a completion transition:
+	// HEAD has status: open AND staged has status: implemented
+	return headRecord.Status == StatusOpen && stagedRecord.Status == StatusImplemented, nil
 }
 
 // AutoPopulateScope populates affected_scope from git commits for a record
