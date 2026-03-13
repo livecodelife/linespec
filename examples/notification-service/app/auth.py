@@ -48,13 +48,14 @@ async def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     Returns:
         User dict with id, email, name if found, None otherwise
     """
+    service_token = os.getenv("SERVICE_TOKEN", "service_token_xyz789")
     try:
         # Extract base URL from USER_SERVICE_URL (remove /auth suffix)
         base_url = USER_SERVICE_URL.replace("/api/v1/users/auth", "")
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{base_url}/api/v1/users/{user_id}",
-                headers={"Authorization": "Bearer service_token_xyz789"},
+                headers={"Authorization": f"Bearer {service_token}"},
                 timeout=5.0
             )
             
