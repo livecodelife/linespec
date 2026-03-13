@@ -3,6 +3,7 @@ package provenance
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -139,6 +140,9 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 
 	// Validate scope overlap
 	l.validateScopeSelfOverlap(record, result)
+
+	// Validate scope paths exist (only for open records)
+	l.validateScopePaths(record, result)
 
 	// Validate associated_specs
 	l.validateAssociatedSpecs(record, result)
@@ -301,6 +305,145 @@ func (l *Linter) validateScopePatterns(record *Record, result *LintResult) {
 	}
 }
 
+// validateScopePaths checks that scope patterns match actual files (only for open records)
+func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
+	// Only validate scope paths for open records
+	// This preserves dead records functionality
+	if record.Status != StatusOpen {
+		return
+	}
+
+	allPatterns := append(record.AffectedScope, record.ForbiddenScope...)
+
+	for _, pattern := range allPatterns {
+		// Skip empty patterns
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+
+		// Check for regex prefix
+		if len(pattern) > 3 && pattern[:3] == "re:" {
+			l.validateRegexPattern(record, pattern, result)
+			continue
+		}
+
+		// Check for glob pattern
+		if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
+			l.validateGlobPattern(record, pattern, result)
+			continue
+		}
+
+		// Exact path validation
+		l.validateExactPath(record, pattern, result)
+	}
+}
+
+// validateExactPath checks that an exact path exists and is a file
+func (l *Linter) validateExactPath(record *Record, path string, result *LintResult) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "scope",
+				Message:  fmt.Sprintf("Scope path does not exist: %s", path),
+				Severity: SeverityError,
+			})
+		} else {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "scope",
+				Message:  fmt.Sprintf("Cannot access scope path %s: %v", path, err),
+				Severity: SeverityError,
+			})
+		}
+		return
+	}
+
+	if info.IsDir() {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Scope path is a directory, not a file (use glob pattern for directories): %s", path),
+			Severity: SeverityError,
+		})
+	}
+}
+
+// validateGlobPattern checks that a glob pattern matches at least one file
+func (l *Linter) validateGlobPattern(record *Record, pattern string, result *LintResult) {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Invalid glob pattern %q: %v", pattern, err),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	if len(matches) == 0 {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Glob pattern matches no files: %s", pattern),
+			Severity: SeverityError,
+		})
+	}
+}
+
+// validateRegexPattern checks that a regex pattern matches at least one file
+func (l *Linter) validateRegexPattern(record *Record, pattern string, result *LintResult) {
+	regex := pattern[3:] // Strip "re:" prefix
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		// This should already be caught by validateScopePatterns, but double-check
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Invalid regex pattern %q: %v", pattern, err),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	// Walk the filesystem to find matching files
+	foundMatch := false
+	walkErr := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue walking even if we can't access some paths
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if re.MatchString(path) {
+			foundMatch = true
+			return filepath.SkipDir // Stop walking once we find a match
+		}
+		return nil
+	})
+
+	if walkErr != nil {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Error walking filesystem for regex pattern %s: %v", pattern, walkErr),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	if !foundMatch {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "scope",
+			Message:  fmt.Sprintf("Regex pattern matches no files: %s", pattern),
+			Severity: SeverityError,
+		})
+	}
+}
+
 // validateScopeSelfOverlap checks if a pattern appears in both affected_scope and forbidden_scope
 func (l *Linter) validateScopeSelfOverlap(record *Record, result *LintResult) {
 	for _, affected := range record.AffectedScope {
@@ -353,13 +496,33 @@ func matchesPattern(filePath, pattern string) bool {
 
 // validateAssociatedSpecs checks that associated spec files exist
 func (l *Linter) validateAssociatedSpecs(record *Record, result *LintResult) {
-	// Check file existence
+	// Check file existence and accessibility
 	for _, spec := range record.AssociatedSpecs {
-		if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
+		info, err := os.Stat(spec.Path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				result.Add(Issue{
+					RecordID: record.ID,
+					Field:    "associated_specs",
+					Message:  fmt.Sprintf("Proof artifact does not exist: %s", spec.Path),
+					Severity: SeverityError,
+				})
+			} else {
+				result.Add(Issue{
+					RecordID: record.ID,
+					Field:    "associated_specs",
+					Message:  fmt.Sprintf("Cannot access proof artifact %s: %v", spec.Path, err),
+					Severity: SeverityError,
+				})
+			}
+			continue
+		}
+		// Check if it's a directory
+		if info.IsDir() {
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "associated_specs",
-				Message:  fmt.Sprintf("Proof artifact does not exist: %s", spec.Path),
+				Message:  fmt.Sprintf("Proof artifact path is a directory, not a file: %s", spec.Path),
 				Severity: SeverityError,
 			})
 		}
