@@ -49,8 +49,8 @@ affected_scope:
     - AGENTS.md
     - LINESPEC.md
     - PROVENANCE_RECORDS.md (new)
-    - .goreleaser.yml (new)
-    - .github/workflows/release.yml (new)
+    - .goreleaser.yml
+    - .github/workflows/release.yml
 forbidden_scope:
     - "re:.*_test\\.go$"
     - pkg/provenance/**
