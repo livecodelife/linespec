@@ -208,11 +208,11 @@ Subcommands:
   lint [options]             Validate provenance records
   status [options]           Show record status
   graph [options]            Render provenance graph
-  check [options]            Check commits for violations
+  check [options]            Check commits for violations (use --staged for pre-commit)
   lock-scope [options]       Lock scope to allowlist mode
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
-  install-hooks              Install git hooks
+  install-hooks              Install git hooks (pre-commit and commit-msg)
 
 Use "linespec provenance <subcommand> --help" for more information.`)
 }
@@ -414,6 +414,13 @@ func parseCheckOptions(args []string) provenance.CheckOptions {
 				opts.Record = args[i+1]
 				i++
 			}
+		case "--staged":
+			opts.Staged = true
+		case "--message-file":
+			if i+1 < len(args) {
+				opts.MessageFile = args[i+1]
+				i++
+			}
 		case "-c", "--config":
 			if i+1 < len(args) {
 				opts.ConfigFile = args[i+1]
@@ -426,6 +433,8 @@ Options:
   --commit SHA               Check a specific commit (default: HEAD)
   --range SHA..SHA           Check a range of commits
   --record prov-YYYY-NNN     Check only against a specific record
+  --staged                   Check staged files instead of committed
+  --message-file path        Path to commit message file (for staged mode)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)

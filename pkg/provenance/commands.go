@@ -387,23 +387,23 @@ func (c *Commands) outputDotGraph(opts GraphOptions) error {
 
 // CheckOptions holds options for the check command
 type CheckOptions struct {
-	Commit     string // Single commit to check (default: HEAD)
-	Range      string // Range to check (e.g., SHA..SHA)
-	Record     string // Check only against a specific record
-	ConfigFile string // Path to custom .linespec.yml file
+	Commit      string // Single commit to check (default: HEAD)
+	Range       string // Range to check (e.g., SHA..SHA)
+	Record      string // Check only against a specific record
+	Staged      bool   // Check staged files instead of committed
+	MessageFile string // Path to commit message file (for staged mode)
+	ConfigFile  string // Path to custom .linespec.yml file
 }
 
 // Check checks commits for violations
 func (c *Commands) Check(opts CheckOptions) error {
-	commit := opts.Commit
-	if commit == "" {
-		commit = "HEAD"
-	}
-
 	var violations []Violation
 	var err error
 
-	if opts.Range != "" {
+	if opts.Staged {
+		// Check staged files
+		violations, err = c.Checker.CheckStaged(opts.MessageFile)
+	} else if opts.Range != "" {
 		// Check range
 		parts := strings.Split(opts.Range, "..")
 		if len(parts) != 2 {
@@ -412,7 +412,11 @@ func (c *Commands) Check(opts CheckOptions) error {
 		}
 		violations, err = c.Checker.CheckRange(parts[0], parts[1])
 	} else {
-		// Check single commit
+		// Check single commit (default HEAD)
+		commit := opts.Commit
+		if commit == "" {
+			commit = "HEAD"
+		}
 		violations, err = c.Checker.CheckCommit(commit)
 	}
 
@@ -432,7 +436,15 @@ func (c *Commands) Check(opts CheckOptions) error {
 		violations = filtered
 	}
 
-	c.Formatter.FormatCheckResult(violations, commit)
+	// Use appropriate label for output
+	label := opts.Commit
+	if label == "" {
+		label = "HEAD"
+	}
+	if opts.Staged {
+		label = "staged"
+	}
+	c.Formatter.FormatCheckResult(violations, label)
 
 	if len(violations) > 0 {
 		return fmt.Errorf("forbidden scope violations found")
@@ -591,17 +603,17 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 func (c *Commands) InstallHooks() error {
 	hooksDir := filepath.Join(c.RepoRoot, ".git", "hooks")
 
-	// Create pre-commit hook
-	hookPath := filepath.Join(hooksDir, "pre-commit")
-	hookContent := `#!/bin/sh
+	// Create pre-commit hook (only lints)
+	preCommitPath := filepath.Join(hooksDir, "pre-commit")
+	preCommitContent := `#!/bin/sh
 # LineSpec provenance pre-commit hook
+# This hook only lints modified provenance records for syntax/validity
 
-# Check HEAD for forbidden scope violations
-linespec provenance check --commit HEAD
-if [ $? -ne 0 ]; then
-    echo "Commit blocked due to forbidden scope violations"
-    echo "Use 'git commit --no-verify' to bypass this check"
-    exit 1
+# Use the local linespec binary if it exists, otherwise fall back to system
+if [ -f "./linespec" ]; then
+    LINESPEC="./linespec"
+else
+    LINESPEC="linespec"
 fi
 
 # Get list of modified provenance records
@@ -609,7 +621,7 @@ modified_records=$(git diff --cached --name-only | grep "^provenance/prov-" | se
 
 # Lint modified records
 for record in $modified_records; do
-    linespec provenance lint --record "$record"
+    $LINESPEC provenance lint --record "$record"
     if [ $? -ne 0 ]; then
         echo "Commit blocked due to lint errors in $record"
         exit 1
@@ -617,15 +629,48 @@ for record in $modified_records; do
 done
 `
 
-	if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
+	if err := os.WriteFile(preCommitPath, []byte(preCommitContent), 0755); err != nil {
 		return fmt.Errorf("failed to write pre-commit hook: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "\n✓ Installed pre-commit hook to %s\n\n", hookPath)
-	fmt.Fprintln(os.Stdout, "  The hook will:")
-	fmt.Fprintln(os.Stdout, "    · Check for forbidden scope violations")
-	fmt.Fprintln(os.Stdout, "    · Lint modified provenance records")
-	fmt.Fprintln(os.Stdout)
+	// Create commit-msg hook (checks scope)
+	commitMsgPath := filepath.Join(hooksDir, "commit-msg")
+	commitMsgContent := `#!/bin/sh
+# LineSpec provenance commit-msg hook
+# This hook validates staged files against provenance record scope constraints
+
+# Use the local linespec binary if it exists, otherwise fall back to system
+if [ -f "./linespec" ]; then
+    LINESPEC="./linespec"
+else
+    LINESPEC="linespec"
+fi
+
+# The commit message file is passed as the first argument
+COMMIT_MSG_FILE="$1"
+
+# Check staged files against scope constraints using the commit message
+$LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Commit blocked due to provenance scope violations"
+    echo "Use 'git commit --no-verify' to bypass this check"
+    exit 1
+fi
+`
+
+	if err := os.WriteFile(commitMsgPath, []byte(commitMsgContent), 0755); err != nil {
+		return fmt.Errorf("failed to write commit-msg hook: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "\n✓ Installed git hooks to %s\n\n", hooksDir)
+	fmt.Fprintln(os.Stdout, "  pre-commit hook:")
+	fmt.Fprintln(os.Stdout, "    · Lints modified provenance records")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "  commit-msg hook:")
+	fmt.Fprintln(os.Stdout, "    · Checks staged files against provenance scope")
+	fmt.Fprintln(os.Stdout, "    · Validates provenance IDs in commit message")
+	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "  Use 'git commit --no-verify' to bypass when needed.")
 	fmt.Fprintln(os.Stdout)
 

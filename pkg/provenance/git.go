@@ -2,6 +2,7 @@ package provenance
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -168,6 +169,40 @@ func (g *Git) GetGitEmail() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetStagedFiles returns files staged for commit
+func (g *Git) GetStagedFiles() ([]string, error) {
+	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	if g.RepoRoot != "" {
+		cmd.Dir = g.RepoRoot
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get staged files: %w", err)
+	}
+
+	files := strings.Split(string(output), "\n")
+	var result []string
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			result = append(result, f)
+		}
+	}
+
+	return result, nil
+}
+
+// ReadCommitMessageFile reads the commit message from a file
+func (g *Git) ReadCommitMessageFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read commit message file: %w", err)
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
 // CommitChecker checks commits for provenance violations
 type CommitChecker struct {
 	Git    *Git
@@ -214,16 +249,24 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 		record, exists := c.Loader.GetRecord(recordID)
 
 		for _, file := range files {
-			// NEW: Skip scope check if this is the record's own file and status is open
-			// This allows open records to modify their own YAML files
-			if exists && record.Status == StatusOpen && isRecordFile(file, record) {
-				continue // Allow this file change
-			}
-
 			if !exists {
 				// Unknown record ID, skip scope check for this record
 				// (This allows new record creation to pass)
 				continue
+			}
+
+			// NEW: Allow open records to modify their own YAML file
+			// This is the "self-modification exception" for open records
+			if record.Status == StatusOpen && isRecordFile(file, record) {
+				// Check if the record file itself is in forbidden_scope
+				inScope, err := record.IsInScope(file)
+				if err != nil {
+					return nil, err
+				}
+				if inScope {
+					continue // Allowed - open record modifying its own file
+				}
+				// If not inScope, it means it's in forbidden_scope, so fall through to violation
 			}
 
 			// Check if file is in scope
@@ -263,6 +306,86 @@ func (c *CommitChecker) CheckRange(from, to string) ([]Violation, error) {
 	}
 
 	return allViolations, nil
+}
+
+// CheckStaged checks staged files against provenance records referenced in a commit message
+func (c *CommitChecker) CheckStaged(messageFile string) ([]Violation, error) {
+	// Read the commit message
+	var message string
+	var err error
+	if messageFile != "" {
+		message, err = c.Git.ReadCommitMessageFile(messageFile)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Fallback to HEAD commit message if no file provided
+		message, err = c.Git.GetCommitMessage("HEAD")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	recordIDs := c.Git.ExtractProvenanceIDs(message)
+	if len(recordIDs) == 0 {
+		// No provenance IDs in commit message, nothing to check
+		return nil, nil
+	}
+
+	// Get staged files
+	files, err := c.Git.GetStagedFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(files) == 0 {
+		// No staged files, nothing to check
+		return nil, nil
+	}
+
+	var violations []Violation
+
+	for _, recordID := range recordIDs {
+		record, exists := c.Loader.GetRecord(recordID)
+		if !exists {
+			// Unknown record ID, skip scope check for this record
+			// (This allows new record creation to pass)
+			continue
+		}
+
+		for _, file := range files {
+			// NEW: Allow open records to modify their own YAML file
+			// This is the "self-modification exception" for open records
+			if record.Status == StatusOpen && isRecordFile(file, record) {
+				// Check if the record file itself is in forbidden_scope
+				inScope, err := record.IsInScope(file)
+				if err != nil {
+					return nil, err
+				}
+				if inScope {
+					continue // Allowed - open record modifying its own file
+				}
+				// If not inScope, it means it's in forbidden_scope, so fall through to violation
+			}
+
+			// Check if file is in scope
+			inScope, err := record.IsInScope(file)
+			if err != nil {
+				return nil, err
+			}
+
+			if !inScope {
+				violations = append(violations, Violation{
+					RecordID: recordID,
+					File:     file,
+					Commit:   "staged",
+					Message:  fmt.Sprintf("%s forbids changes to %s", recordID, file),
+				})
+			}
+		}
+	}
+
+	return violations, nil
 }
 
 // AutoPopulateScope populates affected_scope from git commits for a record
