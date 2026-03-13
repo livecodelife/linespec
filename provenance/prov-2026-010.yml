@@ -1,0 +1,55 @@
+id: prov-2026-010
+title: Support service-suffix provenance IDs and per-service provenance configuration
+status: open
+created_at: "2026-03-12"
+author: calebcowen@gmail.com
+intent: >
+  The provenance system originally only supported a single ID format: prov-YYYY-NNN.
+  This created a namespace collision when multiple services in a monorepo each wanted
+  their own provenance directory. Services like user-service and todo-api would
+  both want to create prov-2026-001, causing conflicts in commit tagging and scope
+  tracking.
+  
+  This decision extends the ID format to support an optional service suffix:
+  prov-YYYY-NNN-service-name (e.g., prov-2026-001-user-service). This allows each
+  service to have its own provenance directory and records while maintaining
+  a clear, sortable ID structure.
+  
+  Additionally, the shared_repos configuration in .linespec.yml is now functional,
+  allowing the root tool to load and validate provenance records from service
+  directories. This enables centralized linting while maintaining decentralized
+  provenance ownership.
+constraints:
+  - Provenance IDs must match either prov-YYYY-NNN or prov-YYYY-NNN-service-name format
+  - Service-suffix IDs must use lowercase letters, numbers, and hyphens only
+  - The ID pattern regex must correctly extract year and sequence from both formats
+  - Git commit extraction must recognize both formats in commit messages
+  - The provenance loader must load records from configured shared_repos directories
+  - Records with service suffixes must be tracked independently from root records
+  - Lint must validate records from shared_repos and report errors correctly
+  - The CLI create command must support -i/--id-suffix flag to append service suffix to generated IDs
+  - The CLI create command must support -c/--config flag to specify a custom .linespec.yml file path
+  - When using -i flag, the generated ID must be prov-YYYY-NNN-SUFFIX (e.g., prov-2026-001-user-service)
+  - When using -c flag, the CLI must load provenance configuration from the specified file instead of default discovery
+  - Both flags must work independently and together (-i user-service -f examples/user-service/.linespec.yml)
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/git.go
+  - pkg/provenance/loader.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main.go
+  - .linespec.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+associated_linespecs:
+  - examples/user-linespecs/create_user_success.linespec
+  - examples/user-linespecs/create_user_already_exists.linespec
+associated_traces: []
+monitors: []
+tags:
+  - architecture
+  - provenance
+  - monorepo
+  - namespaces
