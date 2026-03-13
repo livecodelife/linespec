@@ -102,23 +102,23 @@ func (c *Commands) Create(opts CreateOptions) error {
 
 	// Create record
 	record := &Record{
-		ID:                  id,
-		Title:               opts.Title,
-		Status:              StatusOpen,
-		CreatedAt:           CurrentDate(),
-		Author:              author,
-		Intent:              "",
-		Constraints:         []string{},
-		AffectedScope:       []string{},
-		ForbiddenScope:      []string{},
-		Supersedes:          opts.Supersedes,
-		SupersededBy:        "",
-		Related:             []string{},
-		AssociatedLineSpecs: []string{},
-		AssociatedTraces:    []string{},
-		Monitors:            []string{},
-		Tags:                opts.Tags,
-		FilePath:            filepath.Join(c.Config.Dir, id+".yml"),
+		ID:               id,
+		Title:            opts.Title,
+		Status:           StatusOpen,
+		CreatedAt:        CurrentDate(),
+		Author:           author,
+		Intent:           "",
+		Constraints:      []string{},
+		AffectedScope:    []string{},
+		ForbiddenScope:   []string{},
+		Supersedes:       opts.Supersedes,
+		SupersededBy:     "",
+		Related:          []string{},
+		AssociatedSpecs:  []AssociatedSpec{},
+		AssociatedTraces: []string{},
+		Monitors:         []string{},
+		Tags:             opts.Tags,
+		FilePath:         filepath.Join(c.Config.Dir, id+".yml"),
 	}
 
 	// Validate supersedes if provided
@@ -538,25 +538,25 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		return fmt.Errorf("already implemented")
 	}
 
-	// Verify associated LineSpecs exist
-	if !opts.Force && len(record.AssociatedLineSpecs) > 0 {
+	// Verify associated specs exist
+	if !opts.Force && len(record.AssociatedSpecs) > 0 {
 		var missing []string
-		for _, path := range record.AssociatedLineSpecs {
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				missing = append(missing, path)
+		for _, spec := range record.AssociatedSpecs {
+			if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
+				missing = append(missing, spec.Path)
 			}
 		}
 
 		if len(missing) > 0 {
-			c.Formatter.FormatError(fmt.Sprintf("Cannot mark %s as implemented\n\n  The following associated LineSpecs do not exist on disk:\n", opts.RecordID))
+			c.Formatter.FormatError(fmt.Sprintf("Cannot mark %s as implemented\n\n  The following associated specs do not exist on disk:\n", opts.RecordID))
 			for _, path := range missing {
 				fmt.Fprintf(os.Stdout, "    · %s  ✗ not found\n", path)
 			}
 			fmt.Fprintln(os.Stdout)
-			fmt.Fprintln(os.Stdout, "  Create the missing LineSpec files or remove them from")
-			fmt.Fprintln(os.Stdout, "  associated_linespecs before completing this record.")
+			fmt.Fprintln(os.Stdout, "  Create the missing spec files or remove them from")
+			fmt.Fprintln(os.Stdout, "  associated_specs before completing this record.")
 			fmt.Fprintln(os.Stdout)
-			return fmt.Errorf("missing linespecs")
+			return fmt.Errorf("missing specs")
 		}
 	}
 

@@ -193,7 +193,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags: []
@@ -247,8 +247,8 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs:
-  - test.linespec
+associated_specs:
+  - path: test.linespec
 associated_traces: []
 monitors: []
 tags: []
@@ -281,7 +281,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags: []

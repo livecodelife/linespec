@@ -88,7 +88,7 @@ func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter stri
 	openWithoutSpecs := 0
 	for _, record := range records {
 		status := string(record.Status)
-		if record.Status == StatusOpen && len(record.AssociatedLineSpecs) == 0 {
+		if record.Status == StatusOpen && len(record.AssociatedSpecs) == 0 {
 			status = "open ⚠"
 			openWithoutSpecs++
 		}
@@ -103,7 +103,7 @@ func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter stri
 		statusColored := status
 		switch record.Status {
 		case StatusOpen:
-			if len(record.AssociatedLineSpecs) == 0 {
+			if len(record.AssociatedSpecs) == 0 {
 				statusColored = f.colored(status, colorYellow)
 			} else {
 				statusColored = f.colored(status, colorCyan)
@@ -114,13 +114,13 @@ func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter stri
 			statusColored = f.colored(status, colorYellow)
 		}
 
-		linespecCount := fmt.Sprintf("%d", len(record.AssociatedLineSpecs))
+		specCount := fmt.Sprintf("%d", len(record.AssociatedSpecs))
 
 		fmt.Fprintf(f.Output, "  %-15s %-20s %-45s %s\n",
 			record.ID,
 			statusColored,
 			title,
-			linespecCount)
+			specCount)
 	}
 
 	// Summary warning
@@ -136,7 +136,7 @@ func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter stri
 func (f *Formatter) FormatStatusDetailed(record *Record, loader *Loader) {
 	// Header
 	status := string(record.Status)
-	if record.Status == StatusOpen && len(record.AssociatedLineSpecs) == 0 {
+	if record.Status == StatusOpen && len(record.AssociatedSpecs) == 0 {
 		status = "open ⚠"
 	}
 
@@ -204,17 +204,17 @@ func (f *Formatter) FormatStatusDetailed(record *Record, loader *Loader) {
 		fmt.Fprintln(f.Output)
 	}
 
-	// Associated LineSpecs
-	fmt.Fprintf(f.Output, "%s\n", f.colored("Associated LineSpecs:", colorBold))
-	if len(record.AssociatedLineSpecs) == 0 {
+	// Associated Specs
+	fmt.Fprintf(f.Output, "%s\n", f.colored("Associated Specs:", colorBold))
+	if len(record.AssociatedSpecs) == 0 {
 		fmt.Fprintf(f.Output, "  (none)\n")
 	} else {
-		for _, path := range record.AssociatedLineSpecs {
+		for _, spec := range record.AssociatedSpecs {
 			exists := "✓ exists"
-			if _, err := os.Stat(path); os.IsNotExist(err) {
+			if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
 				exists = f.colored("✗ not found", colorRed)
 			}
-			fmt.Fprintf(f.Output, "  · %-50s %s\n", path, exists)
+			fmt.Fprintf(f.Output, "  · %-50s %s\n", spec.Path, exists)
 		}
 	}
 	fmt.Fprintln(f.Output)
@@ -379,7 +379,7 @@ func (f *Formatter) printGraphNode(loader *Loader, id string, depth int, visited
 	statusStr := string(record.Status)
 	switch record.Status {
 	case StatusOpen:
-		if len(record.AssociatedLineSpecs) == 0 {
+		if len(record.AssociatedSpecs) == 0 {
 			statusStr = f.colored("open ⚠", colorYellow)
 		} else {
 			statusStr = f.colored("open", colorCyan)
@@ -418,7 +418,7 @@ func (f *Formatter) printGraphNodeSimple(record *Record) {
 	statusStr := string(record.Status)
 	switch record.Status {
 	case StatusOpen:
-		if len(record.AssociatedLineSpecs) == 0 {
+		if len(record.AssociatedSpecs) == 0 {
 			statusStr = f.colored("open ⚠", colorYellow)
 		} else {
 			statusStr = f.colored("open", colorCyan)
@@ -524,14 +524,14 @@ func (f *Formatter) FormatCompleteSuccess(record *Record) {
 		f.colored("✓", colorGreen),
 		record.ID)
 
-	if len(record.AssociatedLineSpecs) > 0 {
-		fmt.Fprintf(f.Output, "  Associated LineSpecs verified:\n")
-		for _, path := range record.AssociatedLineSpecs {
+	if len(record.AssociatedSpecs) > 0 {
+		fmt.Fprintf(f.Output, "  Associated specs verified:\n")
+		for _, spec := range record.AssociatedSpecs {
 			exists := "✓"
-			if _, err := os.Stat(path); os.IsNotExist(err) {
+			if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
 				exists = f.colored("✗ not found", colorRed)
 			}
-			fmt.Fprintf(f.Output, "    · %-50s %s\n", path, exists)
+			fmt.Fprintf(f.Output, "    · %-50s %s\n", spec.Path, exists)
 		}
 	}
 

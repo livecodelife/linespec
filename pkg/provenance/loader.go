@@ -94,6 +94,11 @@ func (l *Loader) LoadFile(path string) (*Record, error) {
 		return nil, err
 	}
 
+	// Check for deprecated field before unmarshaling
+	if strings.Contains(string(data), "associated_linespecs:") {
+		return nil, fmt.Errorf("deprecated field 'associated_linespecs' found, use 'associated_specs' instead (path: %s)", path)
+	}
+
 	var record Record
 	if err := yaml.Unmarshal(data, &record); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)

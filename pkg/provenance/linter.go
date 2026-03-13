@@ -140,8 +140,8 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 	// Validate scope overlap
 	l.validateScopeSelfOverlap(record, result)
 
-	// Validate associated_linespecs
-	l.validateAssociatedLineSpecs(record, result)
+	// Validate associated_specs
+	l.validateAssociatedSpecs(record, result)
 
 	// Validate title length
 	l.validateTitleLength(record, result)
@@ -351,47 +351,47 @@ func matchesPattern(filePath, pattern string) bool {
 	return matches
 }
 
-// validateAssociatedLineSpecs checks that associated linespec files exist
-func (l *Linter) validateAssociatedLineSpecs(record *Record, result *LintResult) {
+// validateAssociatedSpecs checks that associated spec files exist
+func (l *Linter) validateAssociatedSpecs(record *Record, result *LintResult) {
 	// Check file existence
-	for _, path := range record.AssociatedLineSpecs {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
+	for _, spec := range record.AssociatedSpecs {
+		if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
 			result.Add(Issue{
 				RecordID: record.ID,
-				Field:    "associated_linespecs",
-				Message:  fmt.Sprintf("LineSpec file does not exist: %s", path),
+				Field:    "associated_specs",
+				Message:  fmt.Sprintf("Proof artifact does not exist: %s", spec.Path),
 				Severity: SeverityError,
 			})
 		}
 	}
 
 	// Check for enforcement level issues
-	hasLineSpecs := len(record.AssociatedLineSpecs) > 0
+	hasSpecs := len(record.AssociatedSpecs) > 0
 	isOpen := record.Status == StatusOpen
 
-	if isOpen && !hasLineSpecs {
+	if isOpen && !hasSpecs {
 		switch l.Enforcement {
 		case "strict":
 			result.Add(Issue{
 				RecordID: record.ID,
-				Field:    "associated_linespecs",
-				Message:  "No associated LineSpecs (open) [strict]",
+				Field:    "associated_specs",
+				Message:  "No associated specs (open) [strict]",
 				Severity: SeverityError,
 			})
 		case "warn":
 			result.Add(Issue{
 				RecordID: record.ID,
-				Field:    "associated_linespecs",
-				Message:  "No associated LineSpecs (open)",
+				Field:    "associated_specs",
+				Message:  "No associated specs (open)",
 				Severity: SeverityWarning,
 			})
 		case "none":
-			// At none level, give a hint if there are constraints but no linespecs
+			// At none level, give a hint if there are constraints but no specs
 			if len(record.Constraints) > 0 {
 				result.Add(Issue{
 					RecordID: record.ID,
-					Field:    "associated_linespecs",
-					Message:  "Record has constraints but no associated LineSpecs",
+					Field:    "associated_specs",
+					Message:  "Record has constraints but no associated specs",
 					Severity: SeverityHint,
 				})
 			}

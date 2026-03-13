@@ -31,6 +31,12 @@ func (s Status) IsValid() bool {
 	return false
 }
 
+// AssociatedSpec represents a proof artifact with optional type annotation
+type AssociatedSpec struct {
+	Path string `yaml:"path"`
+	Type string `yaml:"type,omitempty"`
+}
+
 // Record represents a single Provenance Record
 // See PROVENANCE_RECORD_SCHEMA.md for full documentation
 type Record struct {
@@ -55,10 +61,10 @@ type Record struct {
 	Related      []string `yaml:"related"`
 
 	// Proof of completion
-	SealedAtSHA         string   `yaml:"sealed_at_sha"`
-	AssociatedLineSpecs []string `yaml:"associated_linespecs"`
-	AssociatedTraces    []string `yaml:"associated_traces"`
-	Monitors            []string `yaml:"monitors"`
+	SealedAtSHA      string           `yaml:"sealed_at_sha"`
+	AssociatedSpecs  []AssociatedSpec `yaml:"associated_specs"`
+	AssociatedTraces []string         `yaml:"associated_traces"`
+	Monitors         []string         `yaml:"monitors"`
 
 	// Tags
 	Tags []string `yaml:"tags"`

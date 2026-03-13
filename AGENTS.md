@@ -125,6 +125,12 @@ superseded_by: "prov-2026-003"      # or null
 related:
   - prov-2026-002
 
+associated_specs:
+  - path: tests/user_creation_spec.rb
+    type: rspec
+  - path: tests/create_user.linespec
+    type: linespec
+
 tags:
   - architecture
   - feature
@@ -411,6 +417,8 @@ provenance/                     # Your provenance records
 ### Constraints Field Guidelines
 
 **Constraints should describe behavioral rules** — what the system must or must not do — rather than listing implementation actions like "add X to file Y".
+
+**Constraints should describe the expected behavior AFTER the changes**, not explain how to make the changes. For example, say "The system MUST do X" not "We MUST change Y to make X happen."
 
 **Good constraints (behavioral):**
 ```yaml

@@ -87,6 +87,10 @@ affected_scope:
   - pkg/db/**
   - migrations/**
 
+associated_specs:
+  - path: tests/db/postgres_integration_spec.rb
+    type: rspec
+
 tags:
   - architecture
   - database

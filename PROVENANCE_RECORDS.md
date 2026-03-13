@@ -141,7 +141,7 @@ superseded_by: null
 related:
   - prov-2026-002
 
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 
@@ -195,7 +195,7 @@ tags:
 | Field | Type | Description |
 |-------|------|-------------|
 | `sealed_at_sha` | string | Git SHA captured when record marked implemented (CLI-only, immutable) |
-| `associated_linespecs` | array | LineSpec test files validating this decision |
+| `associated_specs` | array | Proof artifacts validating this decision. Each entry has `path` (required) and optional `type` (e.g., `linespec`, `rspec`, `pytest`) |
 | `associated_traces` | array | Trace files or test output |
 | `monitors` | array | URLs or alerts for runtime monitoring |
 
@@ -770,9 +770,11 @@ affected_scope:
   - services/user-service/pkg/auth/**
   - services/user-service/handlers/auth.go
 
-associated_linespecs:
-  - services/user-service/specs/auth/login_success.linespec
-  - services/user-service/specs/auth/login_failure.linespec
+associated_specs:
+  - path: services/user-service/specs/auth/login_success.linespec
+    type: linespec
+  - path: services/user-service/specs/auth/login_failure.linespec
+    type: linespec
 
 tags:
   - user-service

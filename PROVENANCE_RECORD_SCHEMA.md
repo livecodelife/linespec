@@ -18,7 +18,7 @@
 | `supersedes` | string | no | no | author |
 | `superseded_by` | string | no | no | CLI |
 | `related` | []string | no | no | author |
-| `associated_linespecs` | []string | no | no | author |
+| `associated_specs` | []object | no | no | author |
 | `associated_traces` | []string | no | **yes** | author |
 | `monitors` | []string | no | **yes** | author |
 | `tags` | []string | no | no | author |
@@ -213,20 +213,23 @@ related:
 
 ---
 
-### `associated_linespecs`
-**Type:** []string  
+### `associated_specs`
+**Type:** []object  
 **Required:** no (enforcement depends on configured lint level)  
-**Format:** List of file paths to `.linespec` files, relative to the repository root.  
+**Format:** List of objects with `path` (required string) and optional `type` (string). The `type` field annotates the kind of proof artifact (e.g., `linespec`, `rspec`, `pytest`, `jest`). If omitted, no type-specific validation is performed.  
 **Example:**
 ```yaml
-associated_linespecs:
-  - todo-linespecs/create_todo_success.linespec
-  - todo-linespecs/create_todo_unauthenticated.linespec
-  - todo-linespecs/create_todo_unavailable_user_service.linespec
+associated_specs:
+  - path: todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: spec/models/user_spec.rb
+    type: rspec
 ```
 **Set by:** Author.  
 **Behavior:** The linter checks that each listed path exists on disk. At `strict` enforcement, an `open` record with no entries here is a lint error. At `warn`, it is a warning. At `none`, no check is performed beyond verifying that listed paths exist if any are provided.  
-**Constraints:** Immutable after `implemented`. The linter does not run the referenced LineSpecs — use `linespec test` for that. The linter only verifies file existence.
+**Constraints:** Immutable after `implemented`. The linter does not run the referenced specs — it only verifies file existence. Semantic validation by type is a future enhancement.
 
 ---
 
@@ -316,10 +319,13 @@ superseded_by: null
 related:
   - prov-2025-028
 
-associated_linespecs:
-  - todo-linespecs/create_todo_success.linespec
-  - todo-linespecs/create_todo_unauthenticated.linespec
-  - todo-linespecs/create_todo_unavailable_user_service.linespec
+associated_specs:
+  - path: todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
 
 associated_traces: []
 
@@ -347,14 +353,14 @@ tags:
 | `superseded_by` agrees with graph | warning | always |
 | `related` references real records | warning | always |
 | A pattern appears in both `affected_scope` and `forbidden_scope` | error | always |
-| `open` record has no `associated_linespecs` | error | strict |
-| `open` record has no `associated_linespecs` | warning | warn |
-| `open` record has `constraints` but no `associated_linespecs` | hint | none |
+| `open` record has no `associated_specs` | error | strict |
+| `open` record has no `associated_specs` | warning | warn |
+| `open` record has `constraints` but no `associated_specs` | hint | none |
 | `open` record has `intent` but no `constraints` | hint | always |
 | `title` exceeds 120 characters | warning | always |
 | Circular supersedes chain detected | error | always |
 | Scope overlap between two open records | warning | always |
 | All files in `affected_scope` and `forbidden_scope` have been deleted | warning | always |
 | `implemented` record has modified immutable fields | warning | always |
-| Listed `associated_linespecs` paths do not exist on disk | error | always |
+| Listed `associated_specs` paths do not exist on disk | error | always |
 | Regex pattern fails to compile | error | always |

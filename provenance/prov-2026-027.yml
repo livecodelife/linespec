@@ -1,0 +1,55 @@
+id: prov-2026-027
+title: Breaking change - Replace associated_linespecs with associated_specs field accepting any file path
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  Replace the `associated_linespecs` field with `associated_specs` as a breaking
+  change. The new field accepts any file path as proof artifacts rather than
+  restricting to `.linespec` files. Add an optional `type` annotation so the
+  linter can understand the kind of artifact being referenced.
+  
+  Since there are no external users yet, this is implemented as a breaking
+  change rather than a deprecation. The old `associated_linespecs` key is
+  rejected entirely rather than supported with warnings.
+  
+  The immediate benefit is that teams with existing test suites (RSpec, pytest,
+  etc.) can satisfy strict enforcement today by associating their existing tests
+  with their records. This builds the habit of linking intent to evidence while
+  LineSpec matures into the richer validation layer. The proof gate becomes
+  meaningful immediately, even before LineSpec is fully functional.
+
+constraints:
+  - The associated_specs field MUST accept any valid file path as proof artifacts
+  - Entries in associated_specs MAY include an optional type annotation to specify the artifact kind
+  - The linter MUST verify that all referenced proof artifacts exist on disk
+  - The linter MUST reject records containing the old associated_linespecs key with a clear error message
+  - At warn enforcement level, the linter MUST emit a warning for records with no associated specs
+  - At strict enforcement level, the linter MUST emit an error for records with no associated specs
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/loader.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/*_test.go
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
+  - AGENTS.md
+  - README.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-003
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/provenance_test.go
+    type: go_test
+associated_traces: []
+monitors: []
+tags:
+  - schema
+  - breaking-change
+  - provenance
+  - testing
