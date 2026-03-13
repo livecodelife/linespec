@@ -480,7 +480,6 @@ func (f *Formatter) FormatCheckResult(violations []Violation, staleWarnings []St
 
 		for _, w := range staleWarnings {
 			fmt.Fprintf(f.Output, "  • %s\n", w.Message)
-			fmt.Fprintln(f.Output, "    (File listed in affected_scope but unchanged since record sealed)")
 			fmt.Fprintln(f.Output)
 		}
 	}

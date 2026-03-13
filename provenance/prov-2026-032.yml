@@ -1,8 +1,9 @@
 id: prov-2026-032
 title: Improve stale scope warning message clarity
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
+sealed_at_sha: f9e960fd0bc5a623c7942ac2e921349e680799c7
 intent: >
   The current stale scope warning message is confusing and contradictory. It states
   that files "haven't changed since record sealed" when the user is actively
@@ -29,6 +30,7 @@ constraints:
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/formatter.go
+  - pkg/provenance/git_test.go
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: go-test
