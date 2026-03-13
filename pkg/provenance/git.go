@@ -157,6 +157,20 @@ func isRecordFile(filePath string, record *Record) bool {
 	// Compare base filenames
 	return fileBase == recordBase
 }
+
+// isFileForbiddenForRecord checks if a file is in the record's forbidden_scope
+func isFileForbiddenForRecord(filePath string, record *Record) (bool, error) {
+	for _, pattern := range record.ForbiddenScope {
+		matches, err := MatchPattern(filePath, pattern)
+		if err != nil {
+			return false, err
+		}
+		if matches {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 func (g *Git) GetGitEmail() (string, error) {
 	cmd := exec.Command("git", "config", "user.email")
 	if g.RepoRoot != "" {
@@ -296,18 +310,63 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 				continue
 			}
 
+			// Check if the record is already implemented
+			// Implemented records are immutable - no new commits should reference them
+			if record.Status == StatusImplemented {
+				// Check if this is the completion transition (open → implemented)
+				// which is the only allowed operation on an implemented record's file
+				isCompletion := false
+				if isRecordFile(file, record) {
+					isComp, err := c.isCompletionTransitionForCommit(commit, file)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
+					} else if isComp {
+						isCompletion = true
+					}
+				}
+
+				if !isCompletion {
+					violations = append(violations, Violation{
+						RecordID: recordID,
+						File:     "",
+						Commit:   commit,
+						Message:  fmt.Sprintf("%s is already implemented - cannot commit with this ID. Create a new record or supersede this one.", recordID),
+					})
+					continue
+				}
+			}
+
 			// NEW: Allow open records to modify their own YAML file
 			// This is the "self-modification exception" for open records
 			if record.Status == StatusOpen && isRecordFile(file, record) {
 				// Check if the record file itself is in forbidden_scope
-				inScope, err := record.IsInScope(file)
+				isForbidden, err := isFileForbiddenForRecord(file, record)
 				if err != nil {
 					return nil, err
 				}
-				if inScope {
+				if !isForbidden {
 					continue // Allowed - open record modifying its own file
 				}
-				// If not inScope, it means it's in forbidden_scope, so fall through to violation
+				// If forbidden, fall through to violation
+			}
+
+			// NEW: Allow completion transition (open → implemented) for the record's own file
+			// This handles the case where a historical commit completed a provenance record
+			if isRecordFile(file, record) {
+				isCompletionTransition, err := c.isCompletionTransitionForCommit(commit, file)
+				if err != nil {
+					// If we can't determine, fall through to normal scope check
+					fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
+				} else if isCompletionTransition {
+					// This is a completion transition - check if file is not forbidden
+					isForbidden, err := isFileForbiddenForRecord(file, record)
+					if err != nil {
+						return nil, err
+					}
+					if !isForbidden {
+						continue // Allowed - completion transition of record's own file
+					}
+				}
 			}
 
 			// Check if file is in scope
@@ -440,16 +499,9 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 			// This is the "self-modification exception" for open records
 			if record.Status == StatusOpen && isRecordFile(file, record) {
 				// Check if the record file itself is explicitly in forbidden_scope
-				isForbidden := false
-				for _, pattern := range record.ForbiddenScope {
-					matches, err := MatchPattern(file, pattern)
-					if err != nil {
-						return nil, err
-					}
-					if matches {
-						isForbidden = true
-						break
-					}
+				isForbidden, err := isFileForbiddenForRecord(file, record)
+				if err != nil {
+					return nil, err
 				}
 				if !isForbidden {
 					continue // Allowed - open record modifying its own file (not forbidden)
@@ -469,16 +521,9 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 					fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
 				} else if isCompletionTransition {
 					// This is a completion transition - check if file is not forbidden
-					isForbidden := false
-					for _, pattern := range record.ForbiddenScope {
-						matches, err := MatchPattern(file, pattern)
-						if err != nil {
-							return nil, err
-						}
-						if matches {
-							isForbidden = true
-							break
-						}
+					isForbidden, err := isFileForbiddenForRecord(file, record)
+					if err != nil {
+						return nil, err
 					}
 					if !isForbidden {
 						continue // Allowed - completion transition of record's own file
@@ -531,31 +576,52 @@ func (c *CommitChecker) loadStagedRecord(filePath string) (*Record, error) {
 // isCompletionTransition checks if the file is transitioning from open to implemented
 // by comparing the HEAD version with the staged version
 func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {
-	// Read the HEAD version (what's committed)
-	cmd := exec.Command("git", "show", "HEAD:"+filePath)
+	return c.isCompletionTransitionBetween("HEAD", ":"+filePath, filePath)
+}
+
+// isCompletionTransitionForCommit checks if the file is transitioning from open to implemented
+// by comparing the parent commit with the current commit
+func (c *CommitChecker) isCompletionTransitionForCommit(commit, filePath string) (bool, error) {
+	return c.isCompletionTransitionBetween(commit+"^", commit, filePath)
+}
+
+// isCompletionTransitionBetween checks if the file is transitioning from open to implemented
+// by comparing the beforeRef version with the afterRef version
+func (c *CommitChecker) isCompletionTransitionBetween(beforeRef, afterRef, filePath string) (bool, error) {
+	// Read the before version (what was there before)
+	cmd := exec.Command("git", "show", beforeRef+":"+filePath)
 	if c.Git.RepoRoot != "" {
 		cmd.Dir = c.Git.RepoRoot
 	}
-	headOutput, err := cmd.Output()
+	beforeOutput, err := cmd.Output()
 	if err != nil {
-		// If we can't read HEAD, assume it's a new file (not a completion transition)
+		// If we can't read beforeRef, assume it's a new file (not a completion transition)
 		return false, nil
 	}
 
-	var headRecord Record
-	if err := yaml.Unmarshal(headOutput, &headRecord); err != nil {
-		return false, fmt.Errorf("failed to parse HEAD record: %w", err)
+	var beforeRecord Record
+	if err := yaml.Unmarshal(beforeOutput, &beforeRecord); err != nil {
+		return false, fmt.Errorf("failed to parse before record: %w", err)
 	}
 
-	// Read the staged version
-	stagedRecord, err := c.loadStagedRecord(filePath)
+	// Read the after version
+	cmd = exec.Command("git", "show", afterRef+":"+filePath)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	afterOutput, err := cmd.Output()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to read after file: %w", err)
+	}
+
+	var afterRecord Record
+	if err := yaml.Unmarshal(afterOutput, &afterRecord); err != nil {
+		return false, fmt.Errorf("failed to parse after record: %w", err)
 	}
 
 	// Check if this is a completion transition:
-	// HEAD has status: open AND staged has status: implemented
-	return headRecord.Status == StatusOpen && stagedRecord.Status == StatusImplemented, nil
+	// beforeRef has status: open AND afterRef has status: implemented
+	return beforeRecord.Status == StatusOpen && afterRecord.Status == StatusImplemented, nil
 }
 
 // AutoPopulateScope populates affected_scope from git commits for a record
