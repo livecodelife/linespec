@@ -522,6 +522,25 @@ Never write provenance record YAML files manually. The CLI ensures proper ID gen
 - Once `status: implemented`, the record becomes immutable
 - The commit-msg hook enforces this validation
 
+### Never Add Record to Its Own Scope
+
+**CRITICAL RULE:** Never add a provenance record's own YAML file to its `affected_scope`.
+
+The self-modification exception already handles this case - open records can always modify their own YAML files when tagged with that record's ID. Adding the record file to `affected_scope` is unnecessary and causes stale scope warnings after the record is completed.
+
+**Correct approach:**
+```yaml
+affected_scope:
+    - CHANGELOG.md           # Files that need to change for this release
+    # provenance/prov-2026-XXX.yml - DO NOT add this!
+```
+
+**Why this matters:**
+- The self-modification exception already allows modifications to the record file
+- Adding it to scope creates a false positive stale scope warning after completion
+- The record file changes are tracked automatically by the commit-msg hook
+- Keeps `affected_scope` focused on actual implementation files
+
 ### Complete Workflow Example
 
 ```bash
