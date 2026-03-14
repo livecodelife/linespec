@@ -1,6 +1,6 @@
 id: prov-2026-037
 title: Release v1.2.0
-status: open
+status: implemented
 created_at: "2026-03-14"
 author: calebcowen@gmail.com
 intent: >
@@ -47,7 +47,7 @@ related:
   - prov-2026-030
   - prov-2026-036
 
-sealed_at_sha: ""
+sealed_at_sha: 0fc2fabcc8f6a0317e5b6db42bcdb8e4c28d1097
 
 associated_specs:
   - path: CHANGELOG.md
