@@ -5,7 +5,7 @@ import (
 )
 
 func TestPayloadLoader_LoadJSON(t *testing.T) {
-	loader := NewPayloadLoader("../../user-linespecs")
+	loader := NewPayloadLoader("../../examples/user-linespecs")
 	payload, err := loader.Load("payloads/user_response.json")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -22,7 +22,7 @@ func TestPayloadLoader_LoadJSON(t *testing.T) {
 }
 
 func TestPayloadLoader_LoadYAML(t *testing.T) {
-	loader := NewPayloadLoader("../../todo-linespecs")
+	loader := NewPayloadLoader("../../examples/todo-linespecs")
 	payload, err := loader.Load("payloads/auth_token_request.yaml")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)

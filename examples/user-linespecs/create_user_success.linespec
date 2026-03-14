@@ -11,7 +11,8 @@ RETURNS EMPTY
 
 EXPECT WRITE:MYSQL users
 WITH {{payloads/user_db_write_record.json}}
-VERIFY query CONTAINS 'password_digest'
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
 
 RESPOND HTTP:201
 WITH {{payloads/user_public_response.json}}

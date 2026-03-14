@@ -7,7 +7,7 @@ import (
 )
 
 func TestParser_AllLineSpecs(t *testing.T) {
-	dirs := []string{"../../user-linespecs", "../../todo-linespecs"}
+	dirs := []string{"../../examples/user-linespecs", "../../examples/todo-linespecs", "../../examples/notification-linespecs"}
 
 	for _, dir := range dirs {
 		files, err := os.ReadDir(dir)

@@ -17,6 +17,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/verify"
 )
 
 // Proxy is a PostgreSQL wire protocol proxy with mock capabilities
@@ -311,6 +312,15 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			mock.SQL = query
 		}
 
+		// Execute VERIFY rules if any
+		if len(mock.Verify) > 0 {
+			if err := verify.VerifySQL(query, mock.Verify); err != nil {
+				p.logDebug("  -> VERIFY failed: %v\n", err)
+				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
+			}
+			p.logDebug("  -> All VERIFY rules passed\n")
+		}
+
 		p.logDebug("  -> Mocking query for table %s\n", tableName)
 		return p.sendMockResponse(clientConn, mock)
 
@@ -337,6 +347,15 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		// Store the actual query in the mock for later use (e.g., for RETURNING clause detection)
 		if mock.SQL == "" {
 			mock.SQL = query
+		}
+
+		// Execute VERIFY rules if any
+		if len(mock.Verify) > 0 {
+			if err := verify.VerifySQL(query, mock.Verify); err != nil {
+				p.logDebug("  -> VERIFY failed: %v\n", err)
+				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
+			}
+			p.logDebug("  -> All VERIFY rules passed\n")
 		}
 
 		p.logDebug("  -> Intercepting extended query for table %s\n", tableName)
@@ -603,6 +622,36 @@ func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement) err
 	default:
 		return p.result.SendEmptyResultSet(conn, columns)
 	}
+}
+
+// sendErrorResponse sends a PostgreSQL error response to the client
+func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
+	// PostgreSQL ErrorResponse message format
+	// 'E' message type, followed by length, then a series of null-terminated field pairs
+	// Common fields:
+	// S - Severity (ERROR, FATAL, PANIC)
+	// C - SQLSTATE error code
+	// M - Primary human-readable error message
+	// H - Hint
+	// P - Position (optional)
+	// \0 - Terminator
+
+	var payload []byte
+	payload = append(payload, 'S') // Severity field
+	payload = append(payload, []byte("ERROR")...)
+	payload = append(payload, 0)
+
+	payload = append(payload, 'C')                // SQLSTATE code
+	payload = append(payload, []byte("42601")...) // syntax_error
+	payload = append(payload, 0)
+
+	payload = append(payload, 'M') // Message field
+	payload = append(payload, []byte(message)...)
+	payload = append(payload, 0)
+
+	payload = append(payload, 0) // Terminator
+
+	return p.writeMessage(conn, MsgErrorResponse, payload)
 }
 
 // sendMockResultSetForExtended sends a mock result set for extended query protocol

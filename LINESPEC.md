@@ -299,9 +299,31 @@ VERIFY query MATCHES /<regex>/
 
 Operators:
 
-* `CONTAINS` — Query must include the specified string
-* `NOT_CONTAINS` — Query must NOT include the specified string
-* `MATCHES` — Query must match the specified regex pattern
+* `CONTAINS` — Query must include the specified string (substring match)
+* `NOT_CONTAINS` — Query must NOT include the specified string (substring match)
+* `MATCHES` — Query must match the specified regex pattern (full Go regexp support)
+
+**Best Practices:**
+
+Use `MATCHES` with word boundaries (`\b`) for precise column name matching to avoid false positives with compound column names:
+
+```
+# GOOD: Uses word boundaries to match exact column name
+VERIFY query MATCHES /\bpassword_digest\b/
+
+# BAD: Would also match 'password_digest' in 'old_password_digest_column'
+VERIFY query CONTAINS 'password_digest'
+```
+
+Use `NOT_CONTAINS` with backtick-wrapped column names to avoid matching compound names:
+
+```
+# GOOD: Checks for exact column reference
+VERIFY query NOT_CONTAINS '`password`'
+
+# BAD: Would fail on 'password_digest' because it contains 'password'
+VERIFY query NOT_CONTAINS 'password'
+```
 
 Example — Password Hashing (Security):
 
@@ -313,8 +335,8 @@ WITH {{user_create_request.yaml}}
 # Ensure password is hashed before storage
 EXPECT WRITE:MYSQL users
 WITH {{user_with_hashed_password.yaml}}
-VERIFY query CONTAINS 'password_digest'
-VERIFY query NOT_CONTAINS 'password'
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
 
 RESPOND HTTP:201
 ```
@@ -329,7 +351,7 @@ WITH {{order_request.yaml}}
 # Ensure all inserts include created_at for audit trails
 EXPECT WRITE:MYSQL orders
 WITH {{order_data.yaml}}
-VERIFY query CONTAINS 'created_at'
+VERIFY query MATCHES /\bcreated_at\b/
 VERIFY query MATCHES /INSERT INTO orders \([^)]+\) VALUES \([^)]+\)/
 
 RESPOND HTTP:201
@@ -340,6 +362,7 @@ Runtime Behavior:
 * When the proxy matches a query to the mock, it checks all VERIFY rules
 * If any rule fails, the test fails with 🔒 SQL Verification Error
 * The actual query is shown in the error message for debugging
+* Verification happens at query interception time in both MySQL and PostgreSQL proxies
 
 ---
 

@@ -269,9 +269,21 @@ NOISE
 ### VERIFY Operators
 
 ```linespec
-VERIFY query CONTAINS 'string'
-VERIFY query NOT_CONTAINS 'string'
-VERIFY query MATCHES /regex/
+VERIFY query CONTAINS 'string'        # Substring match
+VERIFY query NOT_CONTAINS 'string'    # Negative substring match  
+VERIFY query MATCHES /regex/          # Regex match (Go regexp)
+```
+
+**Best Practices:**
+
+Use `MATCHES` with word boundaries (`\b`) for precise column name matching:
+```linespec
+VERIFY query MATCHES /\bpassword_digest\b/  # Matches exact column name
+```
+
+Use backticks with `NOT_CONTAINS` to check for exact column references:
+```linespec
+VERIFY query NOT_CONTAINS '`password`'     # Avoids false positives
 ```
 
 ### Configuration (.linespec.yml)
@@ -766,8 +778,8 @@ WITH {{payloads/user_create_req.yaml}}
 
 EXPECT WRITE:MYSQL users
 WITH {{payloads/user_with_password_digest.yaml}}
-VERIFY query CONTAINS 'password_digest'
-VERIFY query NOT_CONTAINS 'password'
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
 
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}

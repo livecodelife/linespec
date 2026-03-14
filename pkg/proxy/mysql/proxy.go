@@ -12,11 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
-	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/livecodelife/linespec/pkg/verify"
 )
 
 type Proxy struct {
@@ -183,6 +184,16 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 						if mock.SQL == "" {
 							mock.SQL = query
 						}
+						// Execute VERIFY rules if any
+						if len(mock.Verify) > 0 {
+							if err := verify.VerifySQL(query, mock.Verify); err != nil {
+								logger.Error("VERIFY failed for table %s: %v", tableName, err)
+								// Send error response to client
+								p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
+								continue
+							}
+							logger.Debug("All VERIFY rules passed for table %s", tableName)
+						}
 						logger.Debug("Mocking query for table %s: %s", tableName, query)
 						p.sendMockResponse(clientConn, mock)
 					} else {
@@ -341,6 +352,27 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 
 func (p *Proxy) sendMockOK(conn net.Conn) error {
 	payload := []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}
+	return p.writePacket(conn, 1, payload)
+}
+
+// sendErrorResponse sends a MySQL error packet to the client
+func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
+	// MySQL Error Packet format:
+	// 1 byte: 0xff (error indicator)
+	// 2 bytes: error code (16-bit little-endian)
+	// 1 byte: SQL state marker '#'
+	// 5 bytes: SQL state string
+	// n bytes: error message (string)
+	errorCode := uint16(1064) // ER_PARSE_ERROR - generic syntax error
+	sqlState := "42000"       // SQLSTATE for syntax error or access violation
+
+	payload := make([]byte, 0, 9+len(message))
+	payload = append(payload, 0xff)                                // Error indicator
+	payload = append(payload, byte(errorCode), byte(errorCode>>8)) // Error code (little-endian)
+	payload = append(payload, '#')                                 // SQL state marker
+	payload = append(payload, []byte(sqlState)...)                 // SQL state
+	payload = append(payload, []byte(message)...)                  // Error message
+
 	return p.writePacket(conn, 1, payload)
 }
 

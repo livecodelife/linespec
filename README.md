@@ -186,8 +186,9 @@ RECEIVE HTTP:POST http://localhost:3000/users
 WITH {{payloads/user_create_req.yaml}}
 
 EXPECT WRITE:MYSQL users
-WITH {{payloads/user_create_req.yaml}}
-VERIFY query CONTAINS 'password_digest'
+WITH {{payloads/user_db_write_record.yaml}}
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
 
 RESPOND HTTP:201
 WITH {{payloads/user_create_resp.yaml}}

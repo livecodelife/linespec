@@ -7,7 +7,7 @@ import (
 )
 
 func TestLexer_GetUserSuccess(t *testing.T) {
-	tokens, err := LexFile("../../user-linespecs/get_user_success.linespec")
+	tokens, err := LexFile("../../examples/user-linespecs/get_user_success.linespec")
 	if err != nil {
 		t.Fatalf("LexFile failed: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestLexer_GetUserSuccess(t *testing.T) {
 }
 
 func TestParser_GetUserSuccess(t *testing.T) {
-	tokens, err := LexFile("../../user-linespecs/get_user_success.linespec")
+	tokens, err := LexFile("../../examples/user-linespecs/get_user_success.linespec")
 	if err != nil {
 		t.Fatalf("LexFile failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestParser_GetUserSuccess(t *testing.T) {
 }
 
 func TestParser_CreateUserSuccess(t *testing.T) {
-	tokens, err := LexFile("../../user-linespecs/create_user_success.linespec")
+	tokens, err := LexFile("../../examples/user-linespecs/create_user_success.linespec")
 	if err != nil {
 		t.Fatalf("LexFile failed: %v", err)
 	}
@@ -98,11 +98,15 @@ func TestParser_CreateUserSuccess(t *testing.T) {
 		t.Errorf("Expected second channel WRITE_MYSQL, got %s", spec.Expects[1].Channel)
 	}
 
-	if len(spec.Expects[1].Verify) != 1 {
-		t.Errorf("Expected 1 verify rule for write expect, got %d", len(spec.Expects[1].Verify))
+	if len(spec.Expects[1].Verify) != 2 {
+		t.Errorf("Expected 2 verify rules for write expect, got %d", len(spec.Expects[1].Verify))
 	}
 
-	if spec.Expects[1].Verify[0].Type != "CONTAINS" {
-		t.Errorf("Expected verify type CONTAINS, got %s", spec.Expects[1].Verify[0].Type)
+	if spec.Expects[1].Verify[0].Type != "MATCHES" {
+		t.Errorf("Expected first verify type MATCHES, got %s", spec.Expects[1].Verify[0].Type)
+	}
+
+	if spec.Expects[1].Verify[1].Type != "NOT_CONTAINS" {
+		t.Errorf("Expected second verify type NOT_CONTAINS, got %s", spec.Expects[1].Verify[1].Type)
 	}
 }
