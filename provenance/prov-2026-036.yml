@@ -1,0 +1,36 @@
+id: prov-2026-036
+title: Fix formatter to display message when File is empty
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  The FormatCheckResult function in pkg/provenance/formatter.go displays violation
+  information by printing file names with bullet points. However, when a violation
+  occurs because a record is already implemented (status: implemented), the violation
+  has an empty File field since it's not a file-specific scope violation.
+
+  The current code always prints the File field as a bullet point, resulting in
+  confusing output like "prov-2026-028 forbids changes to:" followed by an empty bullet.
+
+  The fix adds a check for empty File fields and displays the violation Message
+  instead, which correctly explains that "prov-2026-028 is already implemented -
+  cannot commit with this ID. Create a new record or supersede this one."
+
+constraints:
+  - MUST handle violations with empty File fields in FormatCheckResult
+  - MUST display the violation Message when File is empty
+  - MUST continue to display File with bullet points when File is non-empty
+affected_scope:
+  - pkg/provenance/formatter.go
+  - pkg/provenance/formatter_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/formatter_test.go
+    type: go_test
+associated_traces: []
+monitors: []
+tags: []
