@@ -1,0 +1,58 @@
+id: prov-2026-030
+title: Extend VERIFY to support HTTP, Kafka, and SQL verification with unified engine
+status: open
+created_at: "2026-03-13"
+author: calebcowen@gmail.com
+intent: >
+  The current VERIFY system is SQL-only and not executed at runtime. This extends VERIFY
+  to be a general-purpose verification system that works across all intercepted traffic:
+  SQL queries, HTTP headers/body/URLs, and Kafka message keys/values/headers.
+
+  The design uses a DRY approach with a unified verification engine that handles all
+  target types. Each interceptor (MySQL, PostgreSQL, HTTP, Kafka) extracts the relevant
+  value from intercepted data and passes it to the verification engine along with the rules.
+
+  This work explicitly preserves and enhances the regex (MATCHES) functionality from prov-2026-029,
+  including full Go regexp support and word boundary matching (\b) for precise validation.
+  All existing operators (CONTAINS, NOT_CONTAINS, MATCHES) are maintained with their
+  current semantics.
+
+  This enables comprehensive validation of service behavior beyond just "was this called".
+
+constraints:
+  - "MUST implement unified verification engine in pkg/verify/ (new package)"
+  - "MUST support SQL target syntax: query"
+  - "MUST support HTTP target syntax: headers.NAME, body, url, path"
+  - "MUST support Kafka target syntax: key, value, headers.NAME"
+  - "MUST support all existing operators: CONTAINS, NOT_CONTAINS, MATCHES"
+  - "MUST execute verification at interception time in all proxies"
+  - "MUST fail tests with clear messages showing expected vs actual"
+  - "MUST preserve backward compatibility with existing VERIFY query syntax"
+  - "MUST document best practices for using MATCHES with word boundaries (\\b) vs CONTAINS for different use cases"
+  - "SHOULD support dynamic verification operators like EXISTS, IS_NUMERIC"
+
+affected_scope:
+  - pkg/verify/**
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/kafka/**
+  - pkg/dsl/parser.go
+  - pkg/types/types.go
+
+related:
+  - prov-2026-029
+forbidden_scope: []
+supersedes: "prov-2026-029"
+superseded_by: ""
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/verify/verify_http_test.go
+    type: go_test
+  - path: pkg/verify/verify_kafka_test.go
+    type: go_test
+  - path: pkg/dsl/dsl_test.go
+    type: go_test
+associated_traces: []
+monitors: []
+tags: []
