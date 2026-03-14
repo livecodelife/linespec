@@ -5,6 +5,24 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-14
+
+### Added (Beta)
+
+- **Extended VERIFY functionality** ([prov-2026-030](./provenance/prov-2026-030.yml)) - Unified verification engine supporting SQL queries, HTTP headers/body/URLs, and Kafka message keys/values/headers. All intercepted traffic can now be validated with CONTAINS, NOT_CONTAINS, and MATCHES operators.
+- **Environment variable substitution** ([prov-2026-028](./provenance/prov-2026-028.yml)) - Implicit ${VAR_NAME} syntax in HTTP headers, URLs, paths, and payload files. Random values are generated at test runtime to catch hardcoded tokens and API keys.
+
+### Fixed (Stable)
+
+- **Formatter empty file handling** ([prov-2026-036](./provenance/prov-2026-036.yml)) - Fixed confusing output when a violation occurs on an implemented record. Now displays the violation message explaining the record is already implemented, instead of showing an empty bullet point.
+
+### Related Provenance Records
+
+- [prov-2026-028](./provenance/prov-2026-028.yml) - Add implicit environment variable substitution to LineSpec DSL
+- [prov-2026-029](./provenance/prov-2026-029.yml) - Implement full VERIFY functionality for SQL queries (superseded by prov-2026-030)
+- [prov-2026-030](./provenance/prov-2026-030.yml) - Extend VERIFY to support HTTP, Kafka, and SQL verification with unified engine
+- [prov-2026-036](./provenance/prov-2026-036.yml) - Fix formatter to display message when File is empty
+
 ## [1.1.0] - 2026-03-13
 
 ### Breaking Changes

@@ -29,7 +29,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v1.1.0
+go install github.com/livecodelife/linespec/cmd/linespec@v1.2.0
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -55,7 +55,7 @@ brew install linespec
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/cmd/linespec@v1.1.0
+go install github.com/livecodelife/linespec/cmd/linespec@v1.2.0
 ```
 
 ### GitHub Releases

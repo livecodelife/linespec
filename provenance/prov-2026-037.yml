@@ -1,0 +1,59 @@
+id: prov-2026-037
+title: Release v1.2.0
+status: open
+created_at: "2026-03-14"
+author: calebcowen@gmail.com
+intent: >
+  Release version 1.2.0 of LineSpec with new beta features and a stable bug fix.
+  
+  Beta Features:
+  - Extended VERIFY functionality (prov-2026-030) with unified verification engine
+    supporting SQL queries, HTTP headers/body/URLs, and Kafka message keys/values/headers
+  - Environment variable substitution (prov-2026-028) with ${VAR_NAME} syntax to catch
+    hardcoded tokens and API keys
+  
+  Stable Fixes:
+  - Formatter empty file handling (prov-2026-036) - clearer error messages when
+    attempting to commit with implemented records
+  
+  Version updates across all documentation and source files.
+
+constraints:
+  - The version string in main_stable.go MUST be updated to v1.2.0
+  - The version string in main_beta.go MUST be updated to v1.2.0-beta
+  - The README.md version strings MUST be updated to v1.2.0
+  - The CHANGELOG.md MUST be updated with v1.2.0 release notes
+  - The PROVENANCE_RECORDS.md install instructions MUST be updated to v1.2.0
+  - The LINESPEC.md install instructions MUST be updated to v1.2.0
+  - All modified files MUST be committed with the provenance record ID
+  - The git tag v1.2.0 MUST be created and pushed
+  - The git tag v1.2.0-beta MUST be created and pushed
+
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - README.md
+  - CHANGELOG.md
+  - PROVENANCE_RECORDS.md
+  - LINESPEC.md
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+
+related:
+  - prov-2026-028
+  - prov-2026-030
+  - prov-2026-036
+
+sealed_at_sha: ""
+
+associated_specs:
+  - path: CHANGELOG.md
+    type: markdown
+associated_traces: []
+monitors: []
+
+tags:
+    - release

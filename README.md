@@ -1,6 +1,6 @@
-# LineSpec v1.0.4
+# LineSpec v1.2.0
 
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -34,18 +34,18 @@ brew install linespec-beta
 
 ```bash
 # Stable version (Provenance Records only)
-go install github.com/livecodelife/linespec/cmd/linespec@v1.0.4
+go install github.com/livecodelife/linespec/cmd/linespec@v1.2.0
 
 # Beta version (includes LineSpec Testing)
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.0.4
+go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.2.0
 ```
 
 ### GitHub Releases
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_1.0.4_*` - Stable version (Provenance only)
-- `linespec-beta_1.0.4_*` - Beta version (All features)
+- `linespec_1.2.0_*` - Stable version (Provenance only)
+- `linespec-beta_1.2.0_*` - Beta version (All features)
 
 ---
 
