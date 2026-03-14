@@ -1,6 +1,6 @@
 id: prov-2026-030
 title: Extend VERIFY to support HTTP, Kafka, and SQL verification with unified engine
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -45,7 +45,7 @@ related:
 forbidden_scope: []
 supersedes: "prov-2026-029"
 superseded_by: ""
-sealed_at_sha: ""
+sealed_at_sha: c64ec3b0f35d280365255a4616c12e9323972ff1
 associated_specs:
   - path: pkg/verify/verify_http_test.go
     type: go_test
