@@ -180,7 +180,7 @@ func runTest() {
 }
 
 func printUsage() {
-	logger.Info(`LineSpec v1.0.0-beta - Provenance Records & Integration Testing
+	logger.Info(`LineSpec v1.1.0-beta - Provenance Records & Integration Testing
 
 Usage: linespec <command> [options]
 
@@ -403,6 +403,15 @@ func runProvenance() {
 		if err := cmds.Deprecate(opts); err != nil {
 			os.Exit(1)
 		}
+	case "context":
+		opts := parseContextOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Context(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -477,6 +486,7 @@ Subcommands:
   lock-scope [options]       Lock scope to allowlist mode
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
+  context [options]          Show provenance context for files
   install-hooks              Install git hooks
 
 Use "linespec provenance <subcommand> --help" for more information.`)
@@ -679,6 +689,13 @@ func parseCheckOptions(args []string) provenance.CheckOptions {
 				opts.Record = args[i+1]
 				i++
 			}
+		case "--staged":
+			opts.Staged = true
+		case "--message-file":
+			if i+1 < len(args) {
+				opts.MessageFile = args[i+1]
+				i++
+			}
 		case "-c", "--config":
 			if i+1 < len(args) {
 				opts.ConfigFile = args[i+1]
@@ -691,6 +708,8 @@ Options:
   --commit SHA               Check a specific commit (default: HEAD)
   --range SHA..SHA           Check a range of commits
   --record prov-YYYY-NNN     Check only against a specific record
+  --staged                   Check staged files instead of committed
+  --message-file path        Path to commit message file (for staged mode)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
@@ -802,6 +821,7 @@ func parseDeprecateOptions(args []string) provenance.DeprecateOptions {
 Options:
   --record prov-YYYY-NNN     Required. The record to deprecate
   --reason "..."             Deprecation reason
+  -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
@@ -842,4 +862,54 @@ Options:
   --reason "..."             Reason for deprecation
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
+}
+
+func parseContextOptions(args []string) provenance.ContextOptions {
+	opts := provenance.ContextOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--files":
+			// Collect all remaining arguments as files
+			for j := i + 1; j < len(args); j++ {
+				if strings.HasPrefix(args[j], "--") {
+					i = j - 1
+					break
+				}
+				opts.Files = append(opts.Files, args[j])
+				if j == len(args)-1 {
+					i = j
+				}
+			}
+		case "--format":
+			if i+1 < len(args) {
+				opts.Format = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance context [options] <files...>
+
+Arguments:
+  <files...>                 File paths to retrieve context for
+
+Options:
+  --files f1 f2 f3          Explicit file list (alternative to positional args)
+  --format format           Output format (human|compact|json)
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message`)
+			os.Exit(0)
+		default:
+			// If not a flag, treat as positional file argument
+			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") {
+				opts.Files = append(opts.Files, args[i])
+			}
+		}
+	}
+
+	return opts
 }
