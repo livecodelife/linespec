@@ -1,6 +1,6 @@
 id: prov-2026-036
 title: Fix formatter to display message when File is empty
-status: open
+status: implemented
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -27,7 +27,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 20519e8063cd3ce530846b3e5599344fb764af30
 associated_specs:
   - path: pkg/provenance/formatter_test.go
     type: go_test
