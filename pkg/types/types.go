@@ -14,9 +14,14 @@ const (
 	Event           ExpectChannel = "EVENT"
 )
 
-// VerifyRule defines a SQL verification rule
+// VerifyRule defines a verification rule for any intercepted data
+// Target syntax:
+//   - SQL: "query"
+//   - HTTP: "headers.NAME", "body", "url", "path"
+//   - Kafka: "key", "value", "headers.NAME"
 type VerifyRule struct {
 	Type    string // CONTAINS, NOT_CONTAINS, MATCHES
+	Target  string // What to verify (query, headers.X, body, url, path, key, value)
 	Pattern string
 }
 

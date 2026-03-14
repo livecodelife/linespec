@@ -299,19 +299,132 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 }
 
 func parseVerifyRule(value string, line int) (*types.VerifyRule, error) {
-	reContains := regexp.MustCompile(`(?i)^query\s+CONTAINS\s+['"](.+?)['"]$`)
-	if m := reContains.FindStringSubmatch(value); m != nil {
-		return &types.VerifyRule{Type: "CONTAINS", Pattern: m[1]}, nil
+	// SQL targets
+	reQueryContains := regexp.MustCompile(`(?i)^query\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reQueryContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "query", Pattern: m[1]}, nil
 	}
 
-	reNotContains := regexp.MustCompile(`(?i)^query\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
-	if m := reNotContains.FindStringSubmatch(value); m != nil {
-		return &types.VerifyRule{Type: "NOT_CONTAINS", Pattern: m[1]}, nil
+	reQueryNotContains := regexp.MustCompile(`(?i)^query\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reQueryNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "query", Pattern: m[1]}, nil
 	}
 
-	reMatches := regexp.MustCompile(`(?i)^query\s+MATCHES\s\/(.+?)\/$`)
-	if m := reMatches.FindStringSubmatch(value); m != nil {
-		return &types.VerifyRule{Type: "MATCHES", Pattern: m[1]}, nil
+	reQueryMatches := regexp.MustCompile(`(?i)^query\s+MATCHES\s/(.+?)/$`)
+	if m := reQueryMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "query", Pattern: m[1]}, nil
+	}
+
+	// HTTP targets: headers.NAME
+	reHeadersContains := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reHeadersContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	reHeadersNotContains := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reHeadersNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	reHeadersMatches := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+MATCHES\s/(.+?)/$`)
+	if m := reHeadersMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	// HTTP targets: body
+	reBodyContains := regexp.MustCompile(`(?i)^body\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reBodyContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "body", Pattern: m[1]}, nil
+	}
+
+	reBodyNotContains := regexp.MustCompile(`(?i)^body\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reBodyNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "body", Pattern: m[1]}, nil
+	}
+
+	reBodyMatches := regexp.MustCompile(`(?i)^body\s+MATCHES\s/(.+?)/$`)
+	if m := reBodyMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "body", Pattern: m[1]}, nil
+	}
+
+	// HTTP targets: url
+	reURLContains := regexp.MustCompile(`(?i)^url\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reURLContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "url", Pattern: m[1]}, nil
+	}
+
+	reURLNotContains := regexp.MustCompile(`(?i)^url\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reURLNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "url", Pattern: m[1]}, nil
+	}
+
+	reURLMatches := regexp.MustCompile(`(?i)^url\s+MATCHES\s/(.+?)/$`)
+	if m := reURLMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "url", Pattern: m[1]}, nil
+	}
+
+	// HTTP targets: path
+	rePathContains := regexp.MustCompile(`(?i)^path\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := rePathContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "path", Pattern: m[1]}, nil
+	}
+
+	rePathNotContains := regexp.MustCompile(`(?i)^path\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := rePathNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "path", Pattern: m[1]}, nil
+	}
+
+	rePathMatches := regexp.MustCompile(`(?i)^path\s+MATCHES\s/(.+?)/$`)
+	if m := rePathMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "path", Pattern: m[1]}, nil
+	}
+
+	// Kafka targets: key
+	reKeyContains := regexp.MustCompile(`(?i)^key\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reKeyContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "key", Pattern: m[1]}, nil
+	}
+
+	reKeyNotContains := regexp.MustCompile(`(?i)^key\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reKeyNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "key", Pattern: m[1]}, nil
+	}
+
+	reKeyMatches := regexp.MustCompile(`(?i)^key\s+MATCHES\s/(.+?)/$`)
+	if m := reKeyMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "key", Pattern: m[1]}, nil
+	}
+
+	// Kafka targets: value
+	reValueContains := regexp.MustCompile(`(?i)^value\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reValueContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "value", Pattern: m[1]}, nil
+	}
+
+	reValueNotContains := regexp.MustCompile(`(?i)^value\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reValueNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "value", Pattern: m[1]}, nil
+	}
+
+	reValueMatches := regexp.MustCompile(`(?i)^value\s+MATCHES\s/(.+?)/$`)
+	if m := reValueMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "value", Pattern: m[1]}, nil
+	}
+
+	// Kafka targets: headers.NAME
+	reKafkaHeadersContains := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reKafkaHeadersContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	reKafkaHeadersNotContains := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reKafkaHeadersNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	reKafkaHeadersMatches := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+MATCHES\s/(.+?)/$`)
+	if m := reKafkaHeadersMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "headers." + m[1], Pattern: m[2]}, nil
 	}
 
 	return nil, fmt.Errorf("Invalid VERIFY format at line %d: %s", line, value)

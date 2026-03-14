@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/pkg/verify"
 )
 
 type Interceptor struct {
@@ -64,6 +66,19 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Debug("Request headers: %v", requestHeaders)
 
+	// Read request body (we need it for verification)
+	var body string
+	if r.Body != nil {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Error("Error reading request body: %v", err)
+		} else {
+			body = string(bodyBytes)
+			// Restore body for potential future reads
+			r.Body = io.NopCloser(strings.NewReader(body))
+		}
+	}
+
 	// Also extract authorization from request body (for Rails apps that send auth in body)
 	bodyAuth := i.extractAuthFromBody(r)
 	if bodyAuth != "" {
@@ -94,7 +109,34 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Load payload if needed
+	// 2. Execute VERIFY rules if any
+	if len(mock.Verify) > 0 {
+		// Filter rules for HTTP targets only
+		httpRules := verify.ExtractVerifyRulesForTarget(mock.Verify, "http")
+		if len(httpRules) > 0 {
+			req := &verify.HTTPRequest{
+				Method:  method,
+				URL:     r.URL.String(),
+				Path:    path,
+				Headers: requestHeaders,
+				Body:    body,
+			}
+			if err := verify.VerifyHTTP(req, httpRules); err != nil {
+				logger.Error("VERIFY failed for HTTP %s %s: %v", method, path, err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Header().Set("Content-Type", "application/json")
+				response := map[string]string{
+					"error": fmt.Sprintf("VERIFY failed: %v", err),
+				}
+				data, _ := json.Marshal(response)
+				w.Write(data)
+				return
+			}
+			logger.Debug("All VERIFY rules passed for HTTP %s %s", method, path)
+		}
+	}
+
+	// 3. Load payload if needed
 	if mock.ReturnsFile != "" {
 		i.loader.BaseDir = mock.BaseDir
 		payload, err := i.loader.Load(mock.ReturnsFile)
