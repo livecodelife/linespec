@@ -464,7 +464,11 @@ func (f *Formatter) FormatCheckResult(violations []Violation, staleWarnings []St
 			} else {
 				fmt.Fprintf(f.Output, "  %s forbids changes to:\n", recordID)
 				for _, v := range vs {
-					fmt.Fprintf(f.Output, "    · %s\n", v.File)
+					if v.File == "" {
+						fmt.Fprintf(f.Output, "    %s\n", v.Message)
+					} else {
+						fmt.Fprintf(f.Output, "    · %s\n", v.File)
+					}
 				}
 			}
 			fmt.Fprintln(f.Output)
