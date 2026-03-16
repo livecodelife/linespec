@@ -1,6 +1,6 @@
 id: prov-2026-84ab4e56
 title: Switch provenance record IDs from sequential numbers to crypto random hex
-status: open
+status: implemented
 created_at: "2026-03-16"
 author: calebcowen@gmail.com
 intent: >
@@ -42,7 +42,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 3ad989398ed679688696c00e035b1b43e22c45e7
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: go-test
