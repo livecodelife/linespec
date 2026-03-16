@@ -80,11 +80,19 @@ They provide a **queryable history** of architectural decisions that can be lint
 
 ### ID Format
 
-Records use the format: `prov-YYYY-NNN` or `prov-YYYY-NNN-service-name`
+Records use the format: `prov-YYYY-XXXXXXXX` or `prov-YYYY-XXXXXXXX-service-name`
+
+Where:
+- `YYYY` is the four-digit year
+- `XXXXXXXX` is 8 cryptographically random hex characters (lowercase)
+
+The year prefix limits the collision probability per year. With 8 hex characters, there are 2^32 (4,294,967,296) possible combinations per year, making collisions extremely unlikely even with concurrent record creation.
 
 Examples:
-- `prov-2026-001` - Root-level decision
-- `prov-2026-001-user-service` - Service-specific decision
+- `prov-2026-a1b2c3d4` - Root-level decision  
+- `prov-2026-deadbeef-user-service` - Service-specific decision
+
+**Backward Compatibility:** The system still accepts the legacy sequential format `prov-YYYY-NNN` for existing records, but all new records use the crypto random format.
 
 ### Status Lifecycle
 
@@ -157,7 +165,7 @@ tags:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique identifier (prov-YYYY-NNN or prov-YYYY-NNN-service) |
+| `id` | string | Unique identifier (prov-YYYY-XXXXXXXX or prov-YYYY-XXXXXXXX-service) |
 | `title` | string | Human-readable title |
 | `status` | string | One of: open, implemented, superseded, deprecated |
 | `created_at` | string | ISO 8601 date (YYYY-MM-DD) |
@@ -229,7 +237,7 @@ linespec provenance create --title "Quick fix" --no-edit
 
 **Options:**
 - `--title "..."` - Pre-populate title
-- `--supersedes prov-YYYY-NNN` - Link to older record
+- `--supersedes prov-YYYY-XXXXXXXX` - Link to older record
 - `--tag tag1,tag2` - Add tags
 - `--no-edit` - Write without opening editor
 - `-i, --id-suffix name` - Append service suffix
@@ -254,7 +262,7 @@ linespec provenance lint --enforcement strict
 ```
 
 **Options:**
-- `--record prov-YYYY-NNN` - Lint single record
+- `--record prov-YYYY-XXXXXXXX` - Lint single record
 - `--enforcement level` - none|warn|strict (default from config)
 - `--format format` - human|json
 - `-c, --config path` - Use custom config
@@ -273,7 +281,7 @@ View record status:
 linespec provenance status
 
 # Detailed view of one record
-linespec provenance status --record prov-2026-001
+linespec provenance status --record prov-2026-a1b2c3d4
 
 # Filter by status
 linespec provenance status --filter open
@@ -283,11 +291,11 @@ linespec provenance status --filter implemented
 linespec provenance status --filter tag:architecture
 
 # Save auto-populated scope
-linespec provenance status --record prov-2026-001 --save-scope
+linespec provenance status --record prov-2026-a1b2c3d4 --save-scope
 ```
 
 **Options:**
-- `--record prov-YYYY-NNN` - Show detailed status
+- `--record prov-YYYY-XXXXXXXX` - Show detailed status
 - `--filter status|tag:name` - Filter results
 - `--format format` - human|json
 - `--save-scope` - Persist auto-populated scope
@@ -302,17 +310,10 @@ Render provenance graph:
 linespec provenance graph
 
 # Graph from specific record
-linespec provenance graph --root prov-2026-001
-
-# Filter by status
-linespec provenance graph --filter implemented
-
-# Export as DOT for Graphviz
-linespec provenance graph --format dot > graph.dot
-```
+linespec provenance graph --root prov-2026-a1b2c3d4
 
 **Options:**
-- `--root prov-YYYY-NNN` - Start from specific record
+- `--root prov-YYYY-XXXXXXXX` - Start from specific record
 - `--filter status` - Show only records with given status
 - `--format format` - human|json|dot
 - `-c, --config path` - Use custom config
@@ -332,7 +333,7 @@ linespec provenance check --commit abc123
 linespec provenance check --range HEAD~5..HEAD
 
 # Check against specific record only
-linespec provenance check --record prov-2026-001
+linespec provenance check --record prov-2026-a1b2c3d4
 
 # Check staged files (used by commit-msg hook)
 linespec provenance check --staged --message-file .git/COMMIT_EDITMSG
@@ -341,7 +342,7 @@ linespec provenance check --staged --message-file .git/COMMIT_EDITMSG
 **Options:**
 - `--commit SHA` - Check specific commit (default: HEAD)
 - `--range SHA..SHA` - Check commit range
-- `--record prov-YYYY-NNN` - Check only against specific record
+- `--record prov-YYYY-XXXXXXXX` - Check only against specific record
 - `--staged` - Check staged files instead of committed files
 - `--message-file path` - Path to commit message file (for use with --staged)
 - `-c, --config path` - Use custom config
@@ -361,14 +362,13 @@ Lock scope to allowlist mode:
 
 ```bash
 # Dry run first
-linespec provenance lock-scope --record prov-2026-001 --dry-run
+linespec provenance lock-scope --record prov-2026-a1b2c3d4 --dry-run
 
 # Lock scope (saves to file)
-linespec provenance lock-scope --record prov-2026-001
-```
+linespec provenance lock-scope --record prov-2026-a1b2c3d4
 
 **Options:**
-- `--record prov-YYYY-NNN` - Required. The record to lock
+- `--record prov-YYYY-XXXXXXXX` - Required. The record to lock
 - `--dry-run` - Print scope without writing
 - `-c, --config path` - Use custom config
 
@@ -378,14 +378,13 @@ Mark record as implemented:
 
 ```bash
 # Normal completion
-linespec provenance complete --record prov-2026-001
+linespec provenance complete --record prov-2026-a1b2c3d4
 
 # Force complete (skip LineSpec check)
-linespec provenance complete --record prov-2026-001 --force
-```
+linespec provenance complete --record prov-2026-a1b2c3d4 --force
 
 **Options:**
-- `--record prov-YYYY-NNN` - Required. The record to mark as implemented
+- `--record prov-YYYY-XXXXXXXX` - Required. The record to mark as implemented
 - `--force` - Skip LineSpec existence check
 - `-c, --config path` - Use custom config
 
@@ -394,11 +393,10 @@ linespec provenance complete --record prov-2026-001 --force
 Mark record as deprecated:
 
 ```bash
-linespec provenance deprecate --record prov-2026-001 --reason "Replaced by new auth system"
-```
+linespec provenance deprecate --record prov-2026-a1b2c3d4 --reason "Replaced by new auth system"
 
 **Options:**
-- `--record prov-YYYY-NNN` - Required. The record to deprecate
+- `--record prov-YYYY-XXXXXXXX` - Required. The record to deprecate
 - `--reason "..."` - Deprecation reason
 - `-c, --config path` - Use custom config
 
@@ -463,13 +461,13 @@ Reference provenance records in commit messages:
 
 ```bash
 # Single record
-git commit -m "Add user authentication [prov-2026-001]"
+git commit -m "Add user authentication [prov-2026-a1b2c3d4]"
 
 # Multiple records
-git commit -m "Fix auth and caching [prov-2026-001] [prov-2026-002]"
+git commit -m "Fix auth and caching [prov-2026-a1b2c3d4] [prov-2026-deadbeef]"
 
 # Service-specific
-git commit -m "Update user service [prov-2026-001-user-service]"
+git commit -m "Update user service [prov-2026-a1b2c3d4-user-service]"
 ```
 
 ### Pre-commit Hook
@@ -494,14 +492,14 @@ The commit-msg hook validates scope constraints:
 Once a provenance record is marked as `implemented`, it becomes immutable. The commit-msg hook will reject any commits tagged with an implemented record ID:
 
 ```bash
-# This will FAIL - prov-2026-001 is already implemented
-git commit -m "Fix typo [prov-2026-001]"
-# Error: prov-2026-001 is already implemented - cannot commit with this ID. 
+# This will FAIL - prov-2026-a1b2c3d4 is already implemented
+git commit -m "Fix typo [prov-2026-a1b2c3d4]"
+# Error: prov-2026-a1b2c3d4 is already implemented - cannot commit with this ID. 
 #        Create a new record or supersede this one.
 
 # Instead, create a new record or supersede:
-linespec provenance create --title "Fix typo in auth" --supersedes prov-2026-001
-git commit -m "Fix typo [prov-2026-042]"
+linespec provenance create --title "Fix typo in auth" --supersedes prov-2026-a1b2c3d4
+git commit -m "Fix typo [prov-2026-deadbeef]"
 ```
 
 The only exception is the completion transition (when a record's own file changes from `status: open` to `status: implemented`), which is allowed.
@@ -680,7 +678,7 @@ For multiple services in one repo:
 
 1. **Root provenance/** - Shared architectural decisions
 2. **Service directories** - Service-specific decisions
-3. **Use ID suffixes** - `prov-2026-001-user-service`
+3. **Use ID suffixes** - `prov-2026-a1b2c3d4-user-service`
 
 ```yaml
 # .linespec.yml
@@ -698,16 +696,16 @@ provenance:
 linespec provenance create --title "New feature"
 
 # 2. Develop (make commits, scope auto-populates)
-git commit -m "Implement feature [prov-2026-042]"
+git commit -m "Implement feature [prov-2026-deadbeef]"
 
 # 3. Lock scope (when feature is complete)
-linespec provenance lock-scope --record prov-2026-042
+linespec provenance lock-scope --record prov-2026-deadbeef
 
 # 4. Complete (status: implemented)
-linespec provenance complete --record prov-2026-042
+linespec provenance complete --record prov-2026-deadbeef
 
 # 5. (Optional) Supersede later
-linespec provenance create --title "Better approach" --supersedes prov-2026-042
+linespec provenance create --title "Better approach" --supersedes prov-2026-deadbeef
 ```
 
 ---
@@ -717,7 +715,7 @@ linespec provenance create --title "Better approach" --supersedes prov-2026-042
 ### Example 1: Simple Architecture Decision
 
 ```yaml
-id: prov-2026-015
+id: prov-2026-a1b2c3d4
 title: "Use PostgreSQL for primary data store"
 status: implemented
 created_at: "2026-03-15"
@@ -751,7 +749,7 @@ tags:
 ### Example 2: Service-Specific Decision
 
 ```yaml
-id: prov-2026-016-user-service
+id: prov-2026-deadbeef-user-service
 title: "Implement JWT-based authentication"
 status: open
 created_at: "2026-03-16"
@@ -785,7 +783,7 @@ tags:
 ### Example 3: Superseding an Old Decision
 
 ```yaml
-id: prov-2026-017
+id: prov-2026-01234567
 title: "Replace Redis caching with in-memory LRU"
 status: implemented
 created_at: "2026-03-17"
@@ -805,7 +803,7 @@ affected_scope:
   - pkg/cache/**
   - cmd/api/main.go
 
-supersedes: prov-2026-008
+supersedes: prov-2026-a1b2c3d4
 tags:
   - performance
   - caching

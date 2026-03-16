@@ -4,6 +4,7 @@
 package provenance
 
 import (
+	"crypto/rand"
 	"fmt"
 	"regexp"
 	"time"
@@ -73,8 +74,9 @@ type Record struct {
 	FilePath string `yaml:"-"`
 }
 
-// IDPattern is the regex for valid provenance record IDs: prov-YYYY-NNN or prov-YYYY-NNN-service-name
-var IDPattern = regexp.MustCompile(`^prov-(\d{4})-(\d{3})(?:-[a-z0-9-]+)?$`)
+// IDPattern is the regex for valid provenance record IDs: prov-YYYY-NNN, prov-YYYY-XXXXXXXX, or with service suffix
+// Supports both legacy sequential format (prov-YYYY-NNN) and new crypto random format (prov-YYYY-XXXXXXXX)
+var IDPattern = regexp.MustCompile(`^prov-(\d{4})-(\d{3}|[a-f0-9]{8})(?:-[a-z0-9-]+)?$`)
 
 // IsValidID returns true if the ID matches the prov-YYYY-NNN format (with optional service suffix)
 func IsValidID(id string) bool {
@@ -219,23 +221,41 @@ func GlobToRegex(glob string) string {
 	return "^" + result + "$"
 }
 
-// NextID generates the next available ID for the given year
-func NextID(year int, existingIDs []string) string {
-	maxSeq := 0
-	prefix := fmt.Sprintf("prov-%d-", year)
+// generateRandomHex generates 8 random hex characters using crypto/rand
+func generateRandomHex() (string, error) {
+	bytes := make([]byte, 4)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%08x", bytes), nil
+}
 
+// NextID generates the next available ID for the given year using crypto random hex
+// Format: prov-YYYY-XXXXXXXX where XXXXXXXX is 8 hex characters
+// Retries up to 10 times if collision occurs, then returns error
+func NextID(year int, existingIDs []string) (string, error) {
+	existingSet := make(map[string]bool)
 	for _, id := range existingIDs {
-		if len(id) > len(prefix) && id[:len(prefix)] == prefix {
-			var seq int
-			if _, err := fmt.Sscanf(id[len(prefix):], "%d", &seq); err == nil {
-				if seq > maxSeq {
-					maxSeq = seq
-				}
-			}
-		}
+		existingSet[id] = true
 	}
 
-	return fmt.Sprintf("%s%03d", prefix, maxSeq+1)
+	prefix := fmt.Sprintf("prov-%d-", year)
+
+	// Try up to 10 times to generate a unique ID
+	for i := 0; i < 10; i++ {
+		hex, err := generateRandomHex()
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random hex: %w", err)
+		}
+
+		newID := prefix + hex
+		if !existingSet[newID] {
+			return newID, nil
+		}
+		// Collision occurred, try again
+	}
+
+	return "", fmt.Errorf("failed to generate unique ID after 10 attempts")
 }
 
 // CurrentYear returns the current year as an integer

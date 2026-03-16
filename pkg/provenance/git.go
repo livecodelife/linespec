@@ -61,9 +61,10 @@ func (g *Git) GetCommitMessage(commit string) (string, error) {
 }
 
 // ExtractProvenanceIDs extracts provenance record IDs from a commit message
-// Format: [prov-YYYY-NNN] or [prov-YYYY-NNN-service-name]
+// Format: [prov-YYYY-NNN], [prov-YYYY-XXXXXXXX], or with service suffix
 func (g *Git) ExtractProvenanceIDs(message string) []string {
-	pattern := regexp.MustCompile(`\[prov-\d{4}-\d{3}(?:-[a-z0-9-]+)?\]`)
+	// Match both legacy sequential format (prov-YYYY-NNN) and new crypto random format (prov-YYYY-XXXXXXXX)
+	pattern := regexp.MustCompile(`\[prov-\d{4}-(?:\d{3}|[a-f0-9]{8})(?:-[a-z0-9-]+)?\]`)
 	matches := pattern.FindAllString(message, -1)
 
 	var ids []string

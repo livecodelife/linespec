@@ -32,8 +32,9 @@
 ### `id`
 **Type:** string  
 **Required:** yes  
-**Format:** `prov-YYYY-NNN` where `YYYY` is the four-digit year and `NNN` is a zero-padded sequence number scoped to the repository, incrementing from `001` each year.  
-**Examples:** `prov-2025-001`, `prov-2025-031`, `prov-2026-001`  
+**Format:** `prov-YYYY-XXXXXXXX` where `YYYY` is the four-digit year and `XXXXXXXX` is 8 cryptographically random lowercase hex characters. The year prefix limits the collision probability per year. With 2^32 possible combinations per year, collisions are extremely unlikely even with concurrent record creation.
+**Examples:** `prov-2026-a1b2c3d4`, `prov-2026-deadbeef`, `prov-2026-01234567`  
+**Legacy Format:** The system accepts the legacy format `prov-YYYY-NNN` (sequential numbers) for existing records, but all new records use the crypto random format.  
 **Set by:** CLI at creation time. Never authored manually.  
 **Constraints:** Immutable after creation. Globally unique within the repository. Used as the reference target in `supersedes` and `related` fields of other records.
 
@@ -180,8 +181,8 @@ forbidden_scope:
 ### `supersedes`
 **Type:** string  
 **Required:** no  
-**Format:** A single valid Provenance Record ID: `prov-YYYY-NNN`  
-**Example:** `supersedes: prov-2025-019`  
+**Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
+**Example:** `supersedes: prov-2026-a1b2c3d4`  
 **Set by:** Author at creation time, optionally pre-populated via `--supersedes` flag.  
 **Behavior:** When this field is set, the CLI automatically sets `superseded_by` on the referenced record and transitions its status to `superseded`. The referenced record must exist and must not already have a `superseded_by` value pointing to a different record.  
 **Constraints:** Immutable after creation. The referenced record must exist in the same repository or a configured shared repository. A record may supersede at most one other record. Circular supersedes chains are a lint error.
@@ -191,7 +192,7 @@ forbidden_scope:
 ### `superseded_by`
 **Type:** string  
 **Required:** no  
-**Format:** A single valid Provenance Record ID: `prov-YYYY-NNN`  
+**Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
 **Set by:** CLI only, automatically, when another record's `supersedes` references this record's ID. Authors never write to this field.  
 **Constraints:** Immutable once set. The CLI reconstructs this value from the graph at load time and will surface a warning if the file's value disagrees with what the graph implies, indicating a manual edit.
 
@@ -204,8 +205,8 @@ forbidden_scope:
 **Example:**
 ```yaml
 related:
-  - prov-2025-028
-  - prov-2025-019
+  - prov-2026-a1b2c3d4
+  - prov-2026-deadbeef
 ```
 **Set by:** Author.  
 **Behavior:** Informational only. Expresses a contextual relationship between records that is not a supersedes relationship — for example, two concurrent records that govern different parts of the same feature, or a record that provides background context for this one. No enforcement behavior. Rendered in `graph` output as dashed edges distinct from supersedes edges.  
@@ -347,7 +348,7 @@ tags:
 | File is valid YAML | error | always |
 | All required fields present and non-empty | error | always |
 | `status` is a known value | error | always |
-| `id` matches `prov-YYYY-NNN` format | error | always |
+| `id` matches `prov-YYYY-XXXXXXXX` format | error | always |
 | `created_at` is a valid ISO 8601 date | error | always |
 | `supersedes` references a real record | error | always |
 | `superseded_by` agrees with graph | warning | always |

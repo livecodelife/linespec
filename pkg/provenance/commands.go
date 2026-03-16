@@ -87,7 +87,11 @@ func (c *Commands) Create(opts CreateOptions) error {
 	// Get next available ID
 	existingIDs := c.Loader.GetAllIDs()
 	year := CurrentYear()
-	id := NextID(year, existingIDs)
+	id, err := NextID(year, existingIDs)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to generate ID: %v", err))
+		return err
+	}
 
 	// Append service suffix if provided
 	if opts.IDSuffix != "" {

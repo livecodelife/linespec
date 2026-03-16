@@ -43,7 +43,7 @@ LineSpec v1.0.0 makes **Provenance Records** the primary, stable feature - struc
 - Git integration with pre-commit hooks
 - Graph visualization of decisions
 - Scope enforcement (affected_scope, forbidden_scope)
-- Monorepo support with ID suffixes (e.g., `prov-2026-001-user-service`)
+- Monorepo support with ID suffixes (e.g., `prov-2026-a1b2c3d4-user-service`)
 
 **Beta (build with `-tags beta`):**
 - LineSpec Testing (`test` command)
@@ -100,7 +100,7 @@ linespec provenance complete --record prov-2026-001
 ### Schema Reference
 
 ```yaml
-id: prov-YYYY-NNN                    # or prov-YYYY-NNN-service-name
+id: prov-YYYY-XXXXXXXX               # or prov-YYYY-XXXXXXXX-service-name (8 hex chars)
 title: "Decision title"
 status: open|implemented|superseded|deprecated
 created_at: "YYYY-MM-DD"
@@ -478,8 +478,8 @@ Provenance records represent architectural decisions with meaningful lifecycles:
 1. Create record → status: open
 2. Make changes described in the record
 3. Run tests to verify
-4. ASK USER: "Should I mark prov-YYYY-NNN as implemented?"
-5. Only after confirmation: linespec provenance complete --record prov-YYYY-NNN
+4. ASK USER: "Should I mark prov-YYYY-XXXXXXXX as implemented?"
+5. Only after confirmation: linespec provenance complete --record prov-YYYY-XXXXXXXX
 ```
 
 ### Provenance Required for All Decisions
@@ -499,10 +499,10 @@ Never write provenance record YAML files manually. The CLI ensures proper ID gen
 **CRITICAL RULE:** Always validate provenance records before proceeding:
 ```bash
 # After creating a record, lint it to ensure no errors
-linespec provenance lint --record prov-YYYY-NNN
+linespec provenance lint --record prov-YYYY-XXXXXXXX
 
 # For open records with associated_specs, run checks too
-linespec provenance check --record prov-YYYY-NNN
+linespec provenance check --record prov-YYYY-XXXXXXXX
 ```
 Any lint errors or check failures must be fixed before proceeding with implementation.
 
@@ -540,9 +540,9 @@ Any lint errors or check failures must be fixed before proceeding with implement
 
 ```
 1. Create record (status: open)
-2. Make code changes, commit with [prov-YYYY-NNN]
-3. Complete the record: linespec provenance complete --record prov-YYYY-NNN
-4. Commit the completion: git commit -m "Complete [prov-YYYY-NNN]"
+2. Make code changes, commit with [prov-YYYY-XXXXXXXX]
+3. Complete the record: linespec provenance complete --record prov-YYYY-XXXXXXXX
+4. Commit the completion: git commit -m "Complete [prov-YYYY-XXXXXXXX]"
    ↑ This commit is allowed because it's the completion transition!
 ```
 
@@ -576,11 +576,11 @@ affected_scope:
 ```bash
 # 1. Create a new record
 linespec provenance create --title "Add user authentication"
-# Creates prov-2026-042 with status: open
+# Creates prov-2026-XXXXXXXX with status: open
 
 # 2. Make implementation changes
 git add src/auth/
-git commit -m "Add auth module [prov-2026-042]"
+git commit -m "Add auth module [prov-2026-XXXXXXXX]"
 # → pre-commit hook: lints the record
 # → commit-msg hook: checks staged files are in scope (or auto-tracked in observed mode)
 
@@ -588,11 +588,11 @@ git commit -m "Add auth module [prov-2026-042]"
 # ... more commits as needed ...
 
 # 4. Mark record as implemented
-linespec provenance complete --record prov-2026-042
+linespec provenance complete --record prov-2026-XXXXXXXX
 # Updates status: implemented
 
-git add provenance/prov-2026-042.yml
-git commit -m "Complete user auth [prov-2026-042]"
+git add provenance/prov-2026-XXXXXXXX.yml
+git commit -m "Complete user auth [prov-2026-XXXXXXXX]"
 # → commit-msg hook: allows this because it's the completion commit!
 #   (open → implemented transition with only the status field changing)
 ```
@@ -622,7 +622,7 @@ git commit --no-hooks -m "message"     # WRONG - bypasses hooks
 
 **Always do this:**
 ```bash
-git commit -m "message [prov-YYYY-NNN]"  # CORRECT - runs hooks normally
+git commit -m "message [prov-YYYY-XXXXXXXX]"  # CORRECT - runs hooks normally
 ```
 
 ---

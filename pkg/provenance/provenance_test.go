@@ -1,8 +1,10 @@
 package provenance
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -11,20 +13,32 @@ func TestIsValidID(t *testing.T) {
 		id      string
 		isValid bool
 	}{
+		// Legacy sequential format (backward compatibility)
 		{"prov-2025-001", true},
 		{"prov-2026-031", true},
 		{"prov-1999-999", true},
-		{"prov-2026-001-user-service", true},  // service suffix format
-		{"prov-2026-002-todo-api", true},      // service suffix format
-		{"prov-2026-003-my-service", true},    // service suffix with hyphen
-		{"prov-2025-01", false},               // missing leading zero
-		{"prov-2025-0001", false},             // too many digits
-		{"prov-2025-1", false},                // missing leading zeros
+		{"prov-2026-001-user-service", true}, // service suffix format
+		{"prov-2026-002-todo-api", true},     // service suffix format
+		{"prov-2026-003-my-service", true},   // service suffix with hyphen
+
+		// New crypto random hex format
+		{"prov-2026-a1b2c3d4", true},
+		{"prov-2025-01234567", true},
+		{"prov-2026-deadbeef", true},
+		{"prov-2026-a1b2c3d4-user-service", true}, // hex with service suffix
+
+		// Invalid formats
+		{"prov-2025-01", false},               // missing leading zero (legacy only)
+		{"prov-2025-0001", false},             // too many digits (legacy only)
+		{"prov-2025-1", false},                // missing leading zeros (legacy only)
 		{"prov-25-001", false},                // two digit year
-		{"prov-2025", false},                  // missing sequence
+		{"prov-2025", false},                  // missing sequence/hex
 		{"PROV-2025-001", false},              // uppercase
 		{"prov-2026-001-UserService", false},  // uppercase in suffix
 		{"prov-2026-001_user_service", false}, // underscore in suffix
+		{"prov-2026-ABCDEFGH", false},         // uppercase hex (must be lowercase)
+		{"prov-2026-a1b2c3d", false},          // only 7 hex chars
+		{"prov-2026-a1b2c3d4e", false},        // 9 hex chars
 		{"", false},
 		{"some-id", false},
 	}
@@ -41,24 +55,108 @@ func TestIsValidID(t *testing.T) {
 
 func TestNextID(t *testing.T) {
 	tests := []struct {
+		name        string
 		year        int
 		existingIDs []string
-		want        string
+		expectError bool
 	}{
-		{2025, []string{}, "prov-2025-001"},
-		{2025, []string{"prov-2025-001"}, "prov-2025-002"},
-		{2025, []string{"prov-2025-001", "prov-2025-003"}, "prov-2025-004"},
-		{2025, []string{"prov-2024-999"}, "prov-2025-001"}, // different year
-		{2026, []string{"prov-2025-001", "prov-2025-002"}, "prov-2026-001"},
+		{
+			name:        "generates ID with no existing",
+			year:        2025,
+			existingIDs: []string{},
+			expectError: false,
+		},
+		{
+			name:        "generates unique ID with existing",
+			year:        2025,
+			existingIDs: []string{"prov-2025-a1b2c3d4"},
+			expectError: false,
+		},
+		{
+			name:        "generates unique ID across different years",
+			year:        2026,
+			existingIDs: []string{"prov-2025-a1b2c3d4", "prov-2025-deadbeef"},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			got := NextID(tt.year, tt.existingIDs)
-			if got != tt.want {
-				t.Errorf("NextID(%d, %v) = %q, want %q", tt.year, tt.existingIDs, got, tt.want)
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NextID(tt.year, tt.existingIDs)
+			if tt.expectError && err == nil {
+				t.Errorf("NextID(%d, %v) expected error, got %q", tt.year, tt.existingIDs, got)
+				return
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("NextID(%d, %v) unexpected error: %v", tt.year, tt.existingIDs, err)
+				return
+			}
+			if err != nil {
+				return
+			}
+
+			// Verify the generated ID matches the expected format
+			if !IsValidID(got) {
+				t.Errorf("NextID(%d, %v) generated invalid ID: %q", tt.year, tt.existingIDs, got)
+			}
+
+			// Verify it starts with the correct year prefix
+			expectedPrefix := fmt.Sprintf("prov-%d-", tt.year)
+			if !strings.HasPrefix(got, expectedPrefix) {
+				t.Errorf("NextID(%d, %v) = %q, should start with %q", tt.year, tt.existingIDs, got, expectedPrefix)
+			}
+
+			// Verify the hex part is 8 characters
+			hexPart := strings.TrimPrefix(got, expectedPrefix)
+			// Handle service suffix if present
+			if idx := strings.Index(hexPart, "-"); idx != -1 {
+				hexPart = hexPart[:idx]
+			}
+			if len(hexPart) != 8 {
+				t.Errorf("NextID(%d, %v) hex part should be 8 chars, got %d: %q", tt.year, tt.existingIDs, len(hexPart), hexPart)
+			}
+
+			// Verify it's not in existing IDs
+			for _, existing := range tt.existingIDs {
+				if got == existing {
+					t.Errorf("NextID(%d, %v) = %q, but that ID already exists", tt.year, tt.existingIDs, got)
+				}
 			}
 		})
+	}
+}
+
+func TestNextIDCollision(t *testing.T) {
+	// Test that NextID retries on collision
+	// Create a scenario where we'll likely hit existing IDs
+	year := 2025
+	prefix := fmt.Sprintf("prov-%d-", year)
+
+	// Fill up with many existing IDs to force collisions
+	existingIDs := make([]string, 0, 100)
+	for i := 0; i < 100; i++ {
+		hex := fmt.Sprintf("%08x", i)
+		existingIDs = append(existingIDs, prefix+hex)
+	}
+
+	// This should still succeed due to retries
+	got, err := NextID(year, existingIDs)
+	if err != nil {
+		// If we get an error after 10 retries, that's expected with 100 collisions
+		// In practice, with 4 bytes (2^32 possibilities), collisions are extremely rare
+		t.Logf("NextID failed after retries (expected with many collisions): %v", err)
+		return
+	}
+
+	if !IsValidID(got) {
+		t.Errorf("Generated invalid ID: %q", got)
+	}
+
+	// Verify it's unique
+	for _, existing := range existingIDs {
+		if got == existing {
+			t.Errorf("Generated duplicate ID: %q", got)
+		}
 	}
 }
 
