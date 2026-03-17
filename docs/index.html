@@ -29,6 +29,7 @@
             <div class="nav-links">
                 <a href="#features">Features</a>
                 <a href="#provenance">Provenance</a>
+                <a href="#semantic-search-feature">AI Search</a>
                 <a href="#testing">Testing</a>
                 <a href="docs.html">Docs</a>
                 <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
@@ -49,7 +50,8 @@
                 <h1>Structured decisions.<br><span class="gradient">Deterministic testing.</span></h1>
                 <p class="hero-description">
                     LineSpec captures the <strong>why</strong> behind your code with Provenance Records, 
-                    and tests the <strong>how</strong> with a DSL that intercepts protocols at the wire level.
+                    surfaces insights with <strong>AI-powered semantic search</strong>, and tests the <strong>how</strong> 
+                    with a DSL that intercepts protocols at the wire level.
                 </p>
                 <div class="hero-actions">
                     <a href="docs.html" class="btn btn-primary btn-large">Read the Docs</a>
@@ -240,6 +242,110 @@ tags:
                     <div class="cli-card">
                         <code>linespec provenance install-hooks</code>
                         <p>Set up git integration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="semantic-search-feature" class="semantic-search-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge highlight">AI-Powered Search</span>
+                <h2>Ask your codebase.<br>Get answers from history.</h2>
+                <p class="section-subtitle">Semantic search powered by embeddings. Query your architectural decisions in natural language.</p>
+            </div>
+
+            <div class="search-showcase">
+                <div class="search-demo">
+                    <div class="search-input-wrapper">
+                        <div class="search-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="M21 21l-4.35-4.35"/>
+                            </svg>
+                        </div>
+                        <div class="search-input">linespec provenance search --query "authentication system"</div>
+                    </div>
+                    <div class="search-results">
+                        <div class="search-result">
+                            <div class="result-match">87% match</div>
+                            <div class="result-title">prov-2026-deadbeef-user-service</div>
+                            <div class="result-desc">Implement JWT-based authentication</div>
+                        </div>
+                        <div class="search-result">
+                            <div class="result-match">72% match</div>
+                            <div class="result-title">prov-2026-a1b2c3d4</div>
+                            <div class="result-desc">Add OAuth2 provider integration</div>
+                        </div>
+                        <div class="search-result">
+                            <div class="result-match">65% match</div>
+                            <div class="result-title">prov-2026-01234567</div>
+                            <div class="result-desc">Session management with Redis</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="search-features">
+                    <div class="search-feature">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </div>
+                        <h4>Natural Language Queries</h4>
+                        <p>Search with plain English. No need to remember exact keywords or tags. The AI understands intent.</p>
+                    </div>
+                    <div class="search-feature">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                                <polyline points="2 17 12 22 22 17"/>
+                                <polyline points="2 12 12 17 22 12"/>
+                            </svg>
+                        </div>
+                        <h4>Automatic Indexing</h4>
+                        <p>Records are indexed automatically when marked complete. GitHub Actions support for team-wide search indexes.</p>
+                    </div>
+                    <div class="search-feature">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                                <path d="M2 12h20"/>
+                            </svg>
+                        </div>
+                        <h4>Provider Flexibility</h4>
+                        <p>Choose your embedding provider. Works with Voyage AI (voyage-4) or OpenAI (text-embedding-3).</p>
+                    </div>
+                    <div class="search-feature">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                        </div>
+                        <h4>Audit Before You Build</h4>
+                        <p>Use <code>linespec provenance audit</code> to check if your planned changes conflict with past decisions.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-showcase">
+                <h3>Configure Your Embedding Provider</h3>
+                <div class="code-showcase compact">
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="code-filename">.linespec.yml</span>
+                            <span class="code-lang">YAML</span>
+                        </div>
+                        <pre><code>provenance:
+  embedding:
+    provider: voyage
+    index_model: voyage-4-large
+    query_model: voyage-4-lite
+    api_key: ${VOYAGE_API_KEY}
+    similarity_threshold: 0.50
+    index_on_complete: true</code></pre>
                     </div>
                 </div>
             </div>

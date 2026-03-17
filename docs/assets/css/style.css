@@ -592,6 +592,7 @@ img {
     padding: var(--spacing-md);
     overflow-x: auto;
     margin: 0;
+    white-space: pre;
 }
 
 .code-example code {
@@ -600,6 +601,7 @@ img {
     line-height: 1.7;
     color: var(--color-text);
     display: block;
+    white-space: pre;
 }
 
 /* Syntax highlighting colors */
@@ -774,6 +776,161 @@ img {
     font-family: var(--font-mono);
     font-size: 0.8125rem;
     color: var(--color-text-primary);
+}
+
+/* ========================================
+   Semantic Search Section
+   ======================================== */
+
+.semantic-search-section {
+    padding: var(--spacing-2xl) 0;
+    background: var(--color-bg);
+}
+
+.semantic-search-section .section-badge.highlight {
+    background: linear-gradient(135deg, #7a8f4a 0%, #47591B 100%);
+    color: #fff;
+}
+
+.search-showcase {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-2xl);
+    align-items: start;
+    margin-top: var(--spacing-xl);
+}
+
+.search-demo {
+    background: var(--color-surface-base);
+    border: 1px solid var(--color-surface-raised);
+    border-radius: 1rem;
+    padding: var(--spacing-lg);
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-surface-raised);
+    border-radius: 0.5rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.search-icon {
+    color: var(--color-accent-light);
+    flex-shrink: 0;
+}
+
+.search-input {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--color-text-primary);
+    flex: 1;
+}
+
+.search-results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.search-result {
+    background: var(--color-surface-raised);
+    border: 0.5px solid #3a4428;
+    border-radius: 0.5rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    transition: transform 150ms ease;
+}
+
+.search-result:hover {
+    transform: translateX(4px);
+}
+
+.result-match {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--color-accent-light);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.result-title {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.result-desc {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.search-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+.search-feature {
+    padding: var(--spacing-md);
+}
+
+.search-feature .feature-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--color-surface-base);
+    border: 1px solid var(--color-surface-raised);
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-accent-light);
+    margin-bottom: var(--spacing-sm);
+}
+
+.search-feature h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.search-feature p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+}
+
+.config-showcase {
+    margin-top: var(--spacing-2xl);
+    text-align: center;
+}
+
+.config-showcase .code-example {
+    text-align: left;
+}
+
+.config-showcase h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-text-primary);
+}
+
+.code-showcase.compact {
+    max-width: 600px;
+    margin: 0 auto;
+    display: block;
+}
+
+.code-showcase.compact .code-example {
+    width: 100%;
 }
 
 /* ========================================
@@ -997,6 +1154,10 @@ img {
         grid-template-columns: 1fr;
     }
     
+    .search-showcase {
+        grid-template-columns: 1fr;
+    }
+    
     .cli-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1029,6 +1190,10 @@ img {
     
     .hero-actions .btn {
         width: 100%;
+    }
+    
+    .search-features {
+        grid-template-columns: 1fr;
     }
     
     .testing-features {
