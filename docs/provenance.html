@@ -58,7 +58,9 @@
                         <li><a href="#schema">Schema Reference</a></li>
                         <li><a href="#cli">CLI Commands</a></li>
                         <li><a href="#config">Configuration</a></li>
+                        <li><a href="#semantic-search">Semantic Search</a></li>
                         <li><a href="#git">Git Integration</a></li>
+                        <li><a href="#sealed-sha">Sealed at SHA</a></li>
                         <li><a href="#best-practices">Best Practices</a></li>
                         <li><a href="#examples">Examples</a></li>
                         <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -90,7 +92,9 @@
                         <li><a href="#schema">Schema Reference</a></li>
                         <li><a href="#cli">CLI Commands</a></li>
                         <li><a href="#config">Configuration</a></li>
+                        <li><a href="#semantic-search">Semantic Search</a></li>
                         <li><a href="#git">Git Integration</a></li>
+                        <li><a href="#sealed-sha">Sealed at SHA</a></li>
                         <li><a href="#best-practices">Best Practices</a></li>
                         <li><a href="#examples">Examples</a></li>
                         <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -521,8 +525,142 @@ linespec provenance status --record prov-2026-a1b2c3d4 --save-scope</code></pre>
 linespec provenance graph
 
 # Graph from specific record
-linespec provenance graph --root prov-2026-a1b2c3d4</code></pre>
+linespec provenance graph --root prov-2026-a1b2c3d4
+
+# Filter by status
+linespec provenance graph --filter implemented
+
+# JSON output
+linespec provenance graph --format json</code></pre>
                     </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--root prov-YYYY-XXXXXXXX</code> - Start from specific record</li>
+                        <li><code>--filter status</code> - Show only records with given status</li>
+                        <li><code>--format format</code> - human|json|dot</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+
+                    <h3>Lock Scope</h3>
+                    <p>Lock scope to allowlist mode:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Dry run first
+linespec provenance lock-scope --record prov-2026-a1b2c3d4 --dry-run
+
+# Lock scope (saves to file)
+linespec provenance lock-scope --record prov-2026-a1b2c3d4</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record prov-YYYY-XXXXXXXX</code> - Required. The record to lock</li>
+                        <li><code>--dry-run</code> - Print scope without writing</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+
+                    <h3>Deprecate</h3>
+                    <p>Mark record as deprecated:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance deprecate --record prov-2026-a1b2c3d4 --reason "Replaced by new auth system"</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record prov-YYYY-XXXXXXXX</code> - Required. The record to deprecate</li>
+                        <li><code>--reason "..."</code> - Deprecation reason</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+
+                    <h3>Search (Semantic)</h3>
+                    <p>Search provenance records by semantic similarity:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Search with natural language query
+linespec provenance search --query "authentication system"
+
+# Limit results
+linespec provenance search --query "database schema" --limit 10</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--query "text"</code> - Required. Natural language search query</li>
+                        <li><code>--limit N</code> - Maximum results to return (default: 5)</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Requirements:</strong> Requires embedding configuration in <code>.linespec.yml</code>. Records must be indexed using <code>linespec provenance index</code>.</p>
+
+                    <h3>Audit (Semantic)</h3>
+                    <p>Audit recent changes against provenance history:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Audit with description
+linespec provenance audit --description "Added password validation"
+
+# Audit with custom config
+linespec provenance audit --description "Refactored user service" -c /path/to/.linespec.yml</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--description "text"</code> - Required. Description of changes to audit</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Output:</strong> Shows records with semantic similarity to your changes. Advisory only - always exits 0. Helps identify potential conflicts with prior decisions.</p>
+
+                    <h3>Index</h3>
+                    <p>Index provenance records for semantic search:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Index all unindexed implemented records
+linespec provenance index
+
+# Dry run - show what would be indexed
+linespec provenance index --dry-run
+
+# Re-index all records (even if already indexed)
+linespec provenance index --force</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--dry-run</code> - Show what would be indexed without making API calls</li>
+                        <li><code>--force</code> - Re-index even if embedding already exists</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>When to use:</strong> After enabling embedding configuration for the first time, to backfill historical records, or after changing embedding models.</p>
 
                     <h3>Check</h3>
                     <p>Check commits for violations:</p>
@@ -568,6 +706,12 @@ linespec provenance complete --record prov-2026-a1b2c3d4
 # Force complete (skip check)
 linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                     </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record prov-YYYY-XXXXXXXX</code> - Required. The record to mark as implemented</li>
+                        <li><code>--force</code> - Skip LineSpec existence check</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
 
                     <h3>Install Hooks</h3>
                     <p>Install git hooks for automatic validation:</p>
@@ -617,6 +761,119 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                     </div>
                 </section>
 
+                <section id="semantic-search" class="docs-section">
+                    <h2>Semantic Search Configuration</h2>
+                    <p>Enable semantic search over provenance records using your choice of embedding provider:</p>
+                    
+                    <h3>Voyage AI (default)</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>provenance:
+  embedding:
+    provider: voyage                 # Embedding provider
+    index_model: voyage-4-large     # Model for indexing (2048 dims)
+    query_model: voyage-4-lite      # Model for queries (2048 dims)
+    api_key: ${VOYAGE_API_KEY}      # API key from environment
+    similarity_threshold: 0.50        # Minimum similarity (0.50-0.70 range)
+    index_on_complete: true         # Auto-index on complete</code></pre>
+                    </div>
+
+                    <h3>OpenAI</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>provenance:
+  embedding:
+    provider: openai                 # Embedding provider
+    index_model: text-embedding-3-small   # Model for indexing
+    query_model: text-embedding-3-small   # Model for queries
+    api_key: ${OPENAI_API_KEY}      # API key from environment
+    similarity_threshold: 0.50        # Minimum similarity
+    index_on_complete: true         # Auto-index on complete</code></pre>
+                    </div>
+
+                    <h3>Configuration Options</h3>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Option</th>
+                                <th>Type</th>
+                                <th>Default</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>provider</code></td>
+                                <td>string</td>
+                                <td>-</td>
+                                <td>Embedding provider: <code>voyage</code> or <code>openai</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>index_model</code></td>
+                                <td>string</td>
+                                <td>Provider-specific</td>
+                                <td>Model for document indexing</td>
+                            </tr>
+                            <tr>
+                                <td><code>query_model</code></td>
+                                <td>string</td>
+                                <td>Provider-specific</td>
+                                <td>Model for query embeddings</td>
+                            </tr>
+                            <tr>
+                                <td><code>api_key</code></td>
+                                <td>string</td>
+                                <td>-</td>
+                                <td>API key (use <code>${ENV_VAR}</code> format)</td>
+                            </tr>
+                            <tr>
+                                <td><code>similarity_threshold</code></td>
+                                <td>float</td>
+                                <td><code>0.50</code></td>
+                                <td>Minimum similarity for results</td>
+                            </tr>
+                            <tr>
+                                <td><code>index_on_complete</code></td>
+                                <td>bool</td>
+                                <td><code>true</code></td>
+                                <td>Auto-generate embeddings on complete</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="info-box">
+                        <h4>Voyage AI Models:</h4>
+                        <ul>
+                            <li><code>voyage-4-large</code> - High-quality model for document embeddings (input_type: "document")</li>
+                            <li><code>voyage-4-lite</code> - Efficient model for query embeddings (input_type: "query")</li>
+                            <li>Both output 2048-dimensional vectors in a shared embedding space</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-box">
+                        <h4>OpenAI Models:</h4>
+                        <ul>
+                            <li><code>text-embedding-3-small</code> - Fast, cost-effective embeddings (1536 dims)</li>
+                            <li><code>text-embedding-3-large</code> - Best performance embeddings (3072 dims)</li>
+                            <li><code>text-embedding-ada-002</code> - Legacy model (1536 dims)</li>
+                        </ul>
+                    </div>
+                </section>
+
                 <section id="git" class="docs-section">
                     <h2>Git Integration</h2>
                     
@@ -647,10 +904,164 @@ git commit -m "Fix auth and caching [prov-2026-a1b2c3d4] [prov-2026-deadbeef]"
 # Service-specific
 git commit -m "Update user service [prov-2026-a1b2c3d4-user-service]"</code></pre>
                     </div>
+
+                    <h3>Implemented Record Enforcement</h3>
+                    <p>Once a provenance record is marked as <code>implemented</code>, it becomes immutable. The commit-msg hook will reject any commits tagged with an implemented record ID:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># This will FAIL - prov-2026-a1b2c3d4 is already implemented
+git commit -m "Fix typo [prov-2026-a1b2c3d4]"
+# Error: prov-2026-a1b2c3d4 is already implemented - cannot commit with this ID. 
+#        Create a new record or supersede this one.
+
+# Instead, create a new record or supersede:
+linespec provenance create --title "Fix typo in auth" --supersedes prov-2026-a1b2c3d4
+git commit -m "Fix typo [prov-2026-deadbeef]"</code></pre>
+                    </div>
+                    
+                    <p>The only exception is the completion transition (when a record's own file changes from <code>status: open</code> to <code>status: implemented</code>), which is allowed.</p>
+
+                    <h3>Automated Embedding Indexing</h3>
+                    <p>When semantic search is enabled, a GitHub Action workflow automatically indexes newly completed provenance records when they are merged to the main branch. This ensures the embedding store stays up-to-date without manual intervention.</p>
+                    
+                    <p><strong>How it works:</strong></p>
+                    <ol>
+                        <li>When a record is marked <code>implemented</code> via <code>linespec provenance complete</code>, the embedding is generated locally (if <code>index_on_complete: true</code>)</li>
+                        <li>When the record is merged to main, the GitHub Action runs and indexes any unindexed records</li>
+                        <li>The action respects Voyage AI rate limits and handles batching automatically</li>
+                    </ol>
+                    
+                    <div class="info-box">
+                        <h4>Configuration for CI/CD:</h4>
+                        <p>For CI/CD environments where you want to skip local embedding generation (to avoid rate limits), set <code>index_on_complete: false</code> in <code>.linespec.yml</code>:</p>
+                    </div>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>provenance:
+  embedding:
+    provider: voyage
+    index_model: voyage-4-large
+    query_model: voyage-4-lite
+    api_key: ${VOYAGE_API_KEY}
+    similarity_threshold: 0.50
+    index_on_complete: false  # Skip local embedding, let GitHub Action handle it</code></pre>
+                    </div>
+                    
+                    <p><strong>Required Secret:</strong> Add <code>VOYAGE_API_KEY</code> as a repository secret in GitHub (Settings → Secrets and variables → Actions).</p>
+                </section>
+
+                <section id="sealed-sha" class="docs-section">
+                    <h2>Sealed at SHA and Stale Scope Warnings</h2>
+                    
+                    <h3>What is <code>sealed_at_sha</code>?</h3>
+                    <p>When a provenance record is marked as <code>implemented</code>, the CLI automatically captures the current HEAD git SHA and stores it in the <code>sealed_at_sha</code> field. This field is:</p>
+                    <ul>
+                        <li><strong>Immutable</strong> - Set once by the CLI, never modified after</li>
+                        <li><strong>CLI-only</strong> - Never set manually</li>
+                        <li><strong>Timestamp</strong> - Captures the exact moment a decision was "locked in"</li>
+                        <li><strong>Only on implemented records</strong> - Open/superseded/deprecated records don't have this field</li>
+                    </ul>
+                    <p>Example:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>id: prov-2026-001
+title: "Add user authentication"
+status: implemented
+created_at: "2026-03-12"
+author: "user@example.com"
+
+sealed_at_sha: "a3f92c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+#          ↑ Captured when `linespec provenance complete` was run</code></pre>
+                    </div>
+
+                    <h3>Stale Scope Warnings</h3>
+                    <p>The <code>sealed_at_sha</code> field enables <strong>stale scope warnings</strong>. When checking commits against provenance records:</p>
+                    <ol>
+                        <li>If a commit touches files in a record's <code>affected_scope</code></li>
+                        <li>The CLI runs <code>git diff &lt;sealed_at_sha&gt; HEAD</code> on those files</li>
+                        <li>If files <strong>haven't actually changed</strong> since the record was sealed, a warning is shown</li>
+                    </ol>
+                    
+                    <div class="info-box">
+                        <h4>Why this matters:</h4>
+                        <ul>
+                            <li>Reduces false positives from files that were incidentally in scope</li>
+                            <li>Distinguishes between meaningful changes and safe refactors</li>
+                            <li>Gives engineers context about whether a change needs review</li>
+                        </ul>
+                    </div>
+                    
+                    <p><strong>Example warning:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Warning</span>
+                        </div>
+                        <pre><code>⚠ Stale scope warnings in staged (non-blocking):
+
+  • prov-2026-001 lists pkg/utils/helpers.go in affected_scope, but 
+    file unchanged since record sealed at a3f92c1
+    (File listed in affected_scope but unchanged since record sealed)</code></pre>
+                    </div>
+                    
+                    <p><strong>Key characteristics:</strong></p>
+                    <ul>
+                        <li><strong>Non-blocking</strong> - These are warnings, not errors</li>
+                        <li><strong>Informational</strong> - Helps engineers make informed decisions</li>
+                        <li><strong>Configurable</strong> - Controlled by the <code>enforcement</code> setting</li>
+                    </ul>
+
+                    <h3>Viewing the Sealed SHA</h3>
+                    <p>The sealed SHA is displayed in the status output for implemented records:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance status --record prov-2026-001</code></pre>
+                    </div>
+                    <p>Output:</p>
+                    <div class="code-block">
+                        <pre><code>prov-2026-001  ·  implemented
+────────────────────────────────────────────────────────────
+
+Title:        Add user authentication
+Author:       user@example.com
+Created:      2026-03-12
+Sealed at:    a3f92c1        ← Shows the short SHA</code></pre>
+                    </div>
                 </section>
 
                 <section id="best-practices" class="docs-section">
                     <h2>Best Practices</h2>
+                    
+                    <h3>Writing Good Provenance Records</h3>
                     <ul>
                         <li><strong>Start with Intent</strong> - Clearly state what you want to achieve and why</li>
                         <li><strong>Be Specific with Constraints</strong> - Write verifiable rules</li>
@@ -658,6 +1069,86 @@ git commit -m "Update user service [prov-2026-a1b2c3d4-user-service]"</code></pr
                         <li><strong>Link Related Decisions</strong> - Use <code>supersedes</code>, <code>superseded_by</code>, and <code>related</code></li>
                         <li><strong>Tag Thoughtfully</strong> - Use consistent tags for filtering</li>
                     </ul>
+
+                    <h3>Scope Management</h3>
+                    <p><strong>Observed Mode</strong> (empty affected_scope):</p>
+                    <ul>
+                        <li>Allows any file changes</li>
+                        <li>Good for early development</li>
+                        <li>Auto-populated from git history</li>
+                    </ul>
+                    
+                    <p><strong>Allowlist Mode</strong> (non-empty affected_scope):</p>
+                    <ul>
+                        <li>Only allows changes to listed files</li>
+                        <li>Good for mature decisions</li>
+                        <li>Prevents scope creep</li>
+                    </ul>
+                    
+                    <p><strong>Transition:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># After some commits, lock the scope
+linespec provenance lock-scope --record prov-2026-001</code></pre>
+                    </div>
+
+                    <h3>Monorepo Strategy</h3>
+                    <p>For multiple services in one repo:</p>
+                    <ol>
+                        <li><strong>Root provenance/</strong> - Shared architectural decisions</li>
+                        <li><strong>Service directories</strong> - Service-specific decisions</li>
+                        <li><strong>Use ID suffixes</strong> - <code>prov-2026-a1b2c3d4-user-service</code></li>
+                    </ol>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># .linespec.yml
+provenance:
+  dir: provenance
+  shared_repos:
+    - services/user-service/provenance
+    - services/todo-api/provenance</code></pre>
+                    </div>
+
+                    <h3>Record Lifecycle</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># 1. Create (status: open)
+linespec provenance create --title "New feature"
+
+# 2. Develop (make commits, scope auto-populates)
+git commit -m "Implement feature [prov-2026-deadbeef]"
+
+# 3. Lock scope (when feature is complete)
+linespec provenance lock-scope --record prov-2026-deadbeef
+
+# 4. Complete (status: implemented)
+linespec provenance complete --record prov-2026-deadbeef
+
+# 5. (Optional) Supersede later
+linespec provenance create --title "Better approach" --supersedes prov-2026-deadbeef</code></pre>
+                    </div>
                 </section>
 
                 <section id="examples" class="docs-section">
@@ -702,6 +1193,84 @@ tags:
   - architecture
   - database
   - postgresql</code></pre>
+                    </div>
+
+                    <h3>Example 2: Service-Specific Decision</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>id: prov-2026-deadbeef-user-service
+title: "Implement JWT-based authentication"
+status: open
+created_at: "2026-03-16"
+author: "auth-team@example.com"
+
+intent: >
+  The user service will implement JWT-based authentication to support
+  stateless API access and microservice communication.
+
+constraints:
+  - JWT tokens must expire after 24 hours
+  - Refresh tokens must expire after 30 days
+  - Use RS256 algorithm with 2048-bit keys
+
+affected_scope:
+  - services/user-service/pkg/auth/**
+  - services/user-service/handlers/auth.go
+
+associated_specs:
+  - path: services/user-service/specs/auth/login_success.linespec
+    type: linespec
+  - path: services/user-service/specs/auth/login_failure.linespec
+    type: linespec
+
+tags:
+  - user-service
+  - authentication
+  - jwt</code></pre>
+                    </div>
+
+                    <h3>Example 3: Superseding an Old Decision</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>id: prov-2026-01234567
+title: "Replace Redis caching with in-memory LRU"
+status: implemented
+created_at: "2026-03-17"
+author: "perf-team@example.com"
+
+intent: >
+  After load testing, we found Redis adds unnecessary latency for our
+  use case. An in-memory LRU cache provides better performance with
+  simpler operations.
+
+constraints:
+  - Maximum cache size: 10,000 entries
+  - Eviction policy: LRU
+  - TTL: 5 minutes maximum
+
+affected_scope:
+  - pkg/cache/**
+  - cmd/api/main.go
+
+supersedes: prov-2026-a1b2c3d4
+tags:
+  - performance
+  - caching
+  - lru</code></pre>
                     </div>
                 </section>
 
