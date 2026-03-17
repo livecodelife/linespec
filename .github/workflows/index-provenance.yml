@@ -10,6 +10,9 @@ on:
 env:
   VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
 
+permissions:
+  contents: write
+
 jobs:
   index:
     runs-on: ubuntu-latest
@@ -33,7 +36,28 @@ jobs:
         run: |
           echo "Indexing provenance records..."
           ./linespec provenance index 2>&1 || true
-        
+      
+      - name: Commit and push updated embeddings
+        run: |
+          # Check if embeddings.bin exists and was modified
+          if [ ! -f .linespec/embeddings.bin ]; then
+            echo "⚠️ embeddings.bin does not exist, nothing to commit"
+            exit 0
+          fi
+          
+          # Check if the file has changes (staged or unstaged)
+          if git diff --quiet HEAD -- .linespec/embeddings.bin && git diff --cached --quiet -- .linespec/embeddings.bin; then
+            echo "✓ No changes to embeddings.bin"
+          else
+            echo "Committing updated embeddings.bin..."
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add .linespec/embeddings.bin
+            git commit -m "Update embeddings for newly completed provenance records [skip ci]"
+            git push
+            echo "✓ Pushed updated embeddings.bin"
+          fi
+      
       - name: Check for unindexed records
         run: |
           # Check if there are any unindexed records
