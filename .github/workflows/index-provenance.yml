@@ -1,0 +1,48 @@
+name: Index Provenance Embeddings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'provenance/**.yml'
+      - '.github/workflows/index-provenance.yml'
+
+env:
+  VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'livecodelife'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Build LineSpec
+        run: go build -o linespec ./cmd/linespec
+      
+      - name: Index new provenance records
+        run: |
+          echo "Indexing provenance records..."
+          ./linespec provenance index 2>&1 || true
+        
+      - name: Check for unindexed records
+        run: |
+          # Check if there are any unindexed records
+          output=$(./linespec provenance index --dry-run 2>&1)
+          if echo "$output" | grep -q "record(s) to index"; then
+            echo "⚠️ Warning: Some records were not indexed due to rate limits"
+            echo "$output"
+            # Don't fail the build, just warn
+            exit 0
+          else
+            echo "✓ All records indexed successfully"
+          fi

@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "session_start": {
+      "command": "linespec provenance search --query \"session start\" --limit 3",
+      "description": "Search for relevant provenance records at session start"
+    },
+    "pre_edit": {
+      "command": "linespec provenance context",
+      "description": "Check file constraints before editing"
+    },
+    "session_end": {
+      "command": "linespec provenance audit --description \"Review session changes for consistency with provenance history\"",
+      "description": "Audit changes for semantic consistency at session end"
+    }
+  },
+  "commands": {
+    "search_provenance": {
+      "command": "linespec provenance search",
+      "description": "Search provenance records by semantic similarity"
+    },
+    "audit_changes": {
+      "command": "linespec provenance audit",
+      "description": "Audit changes against provenance history"
+    },
+    "provenance_context": {
+      "command": "linespec provenance context",
+      "description": "Show provenance context for files"
+    }
+  }
+}

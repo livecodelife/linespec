@@ -47,3 +47,8 @@ linespec-report/
 # Temporary files
 *.tmp
 *.temp
+
+# Environment files
+.env
+*node_modules/
+*bun.lockb

@@ -123,6 +123,11 @@ linespec provenance lint            # Validate records
 linespec provenance status          # View status
 linespec provenance graph           # Render decision graph
 
+# Semantic search (requires embedding configuration)
+linespec provenance search          # Search by semantic similarity
+linespec provenance audit           # Audit changes against history
+linespec provenance index           # Index records for search
+
 # Git integration
 linespec provenance check           # Check commits for violations
 linespec provenance install-hooks   # Install git hooks
@@ -216,6 +221,15 @@ provenance:
   commit_tag_required: false         # Require IDs in commits
   auto_affected_scope: true           # Auto-populate from git
   shared_repos: []                    # Additional directories (monorepos)
+  
+  # Semantic search configuration (optional)
+  embedding:
+    provider: voyage                 # Embedding provider
+    index_model: voyage-4-large     # Model for indexing (2048 dims)
+    query_model: voyage-4-lite      # Model for queries (2048 dims)
+    api_key: ${VOYAGE_API_KEY}      # API key from environment
+    similarity_threshold: 0.50        # Minimum similarity for results
+    index_on_complete: true         # Auto-index on complete
 
 # LineSpec Testing configuration (Beta)
 service:

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
 	"gopkg.in/yaml.v3"
@@ -58,8 +59,14 @@ func runProvenance() {
 	// Get repo root
 	repoRoot, _ := os.Getwd()
 
+	// Create embedder client if configured
+	var embedder *embeddings.Client
+	if cfg.Embedding != nil {
+		embedder, _ = embeddings.NewClient(*cfg.Embedding)
+	}
+
 	// Create commands
-	cmds, err := provenance.NewCommands(cfg, repoRoot, os.Stdout, true)
+	cmds, err := provenance.NewCommandsWithEmbedder(cfg, repoRoot, os.Stdout, true, embedder)
 	if err != nil {
 		logger.Error("Failed to initialize provenance: %v", err)
 		os.Exit(1)
@@ -147,6 +154,34 @@ func runProvenance() {
 		if err := cmds.Context(opts); err != nil {
 			os.Exit(1)
 		}
+	case "search":
+		opts := parseSearchOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Search(opts); err != nil {
+			logger.Error("Search failed: %v", err)
+			os.Exit(1)
+		}
+	case "audit":
+		opts := parseAuditOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Audit(opts); err != nil {
+			os.Exit(1)
+		}
+	case "index":
+		opts := parseIndexOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Index(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -190,6 +225,11 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CommitTagRequired = fullConfig.Provenance.CommitTagRequired
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
+
+			// Store embedding config for later use
+			if fullConfig.Provenance.Embedding != nil {
+				cfg.Embedding = fullConfig.Provenance.Embedding
+			}
 		}
 	}
 
@@ -222,6 +262,9 @@ Subcommands:
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
   context [options]          Show provenance context for files
+  search [options]           Search provenance records by semantic similarity
+  audit [options]            Audit recent changes against provenance history
+  index [options]            Index all implemented records for semantic search
   install-hooks              Install git hooks (pre-commit and commit-msg)
 
 Use "linespec provenance <subcommand> --help" for more information.`)
@@ -642,6 +685,124 @@ Options:
 			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") {
 				opts.Files = append(opts.Files, args[i])
 			}
+		}
+	}
+
+	return opts
+}
+
+func parseSearchOptions(args []string) provenance.SearchOptions {
+	opts := provenance.SearchOptions{
+		Limit: 5, // Default limit
+	}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--query":
+			if i+1 < len(args) {
+				opts.Query = args[i+1]
+				i++
+			}
+		case "--limit":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &opts.Limit)
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance search [options]
+
+Options:
+  --query "text"            Natural language search query
+  --limit N                 Maximum results to return (default: 5)
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance search --query "authentication system"
+  linespec provenance search --query "database schema changes" --limit 10`)
+			os.Exit(0)
+		default:
+			// If not a flag and query not set, treat as positional query
+			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") && opts.Query == "" {
+				opts.Query = args[i]
+			}
+		}
+	}
+
+	return opts
+}
+
+func parseAuditOptions(args []string) provenance.AuditOptions {
+	opts := provenance.AuditOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--description":
+			if i+1 < len(args) {
+				opts.Description = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance audit [options]
+
+Options:
+  --description "text"      Description of recent changes to audit
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance audit --description "Added password validation middleware"
+  linespec provenance audit --description "Refactored user service to use new database schema"`)
+			os.Exit(0)
+		default:
+			// If not a flag and description not set, treat as positional description
+			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") && opts.Description == "" {
+				opts.Description = args[i]
+			}
+		}
+	}
+
+	return opts
+}
+
+func parseIndexOptions(args []string) provenance.IndexOptions {
+	opts := provenance.IndexOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--dry-run":
+			opts.DryRun = true
+		case "--force":
+			opts.Force = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance index [options]
+
+Options:
+  --dry-run                 Show what would be indexed without doing it
+  --force                   Re-index even if embedding already exists
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance index              # Index all unindexed records
+  linespec provenance index --dry-run    # Preview what would be indexed
+  linespec provenance index --force      # Re-index all records`)
+			os.Exit(0)
 		}
 	}
 

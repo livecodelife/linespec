@@ -366,6 +366,7 @@ linespec provenance lock-scope --record prov-2026-a1b2c3d4 --dry-run
 
 # Lock scope (saves to file)
 linespec provenance lock-scope --record prov-2026-a1b2c3d4
+```
 
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to lock
@@ -382,6 +383,7 @@ linespec provenance complete --record prov-2026-a1b2c3d4
 
 # Force complete (skip LineSpec check)
 linespec provenance complete --record prov-2026-a1b2c3d4 --force
+```
 
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to mark as implemented
@@ -394,11 +396,85 @@ Mark record as deprecated:
 
 ```bash
 linespec provenance deprecate --record prov-2026-a1b2c3d4 --reason "Replaced by new auth system"
+```
 
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to deprecate
 - `--reason "..."` - Deprecation reason
 - `-c, --config path` - Use custom config
+
+### Search (Semantic)
+
+Search provenance records by semantic similarity:
+
+```bash
+# Search with natural language query
+linespec provenance search --query "authentication system"
+
+# Limit results
+linespec provenance search --query "database schema" --limit 10
+
+# Use custom config
+linespec provenance search --query "API changes" -c /path/to/.linespec.yml
+```
+
+**Options:**
+- `--query "text"` - Required. Natural language search query
+- `--limit N` - Maximum results to return (default: 5)
+- `-c, --config path` - Use custom config
+
+**Requirements:**
+- Requires embedding configuration in `.linespec.yml`
+- Records must be indexed using `linespec provenance index`
+
+### Audit (Semantic)
+
+Audit recent changes against provenance history:
+
+```bash
+# Audit with description
+linespec provenance audit --description "Added password validation"
+
+# Use custom config
+linespec provenance audit --description "Refactored user service" -c /path/to/.linespec.yml
+```
+
+**Options:**
+- `--description "text"` - Required. Description of changes to audit
+- `-c, --config path` - Use custom config
+
+**Output:**
+- Shows records with semantic similarity to your changes
+- Advisory only - always exits 0
+- Helps identify potential conflicts with prior decisions
+
+### Index
+
+Index provenance records for semantic search:
+
+```bash
+# Index all unindexed implemented records
+linespec provenance index
+
+# Dry run - show what would be indexed
+linespec provenance index --dry-run
+
+# Re-index all records (even if already indexed)
+linespec provenance index --force
+
+# Use custom config
+linespec provenance index -c /path/to/.linespec.yml
+```
+
+**Options:**
+- `--dry-run` - Show what would be indexed without making API calls
+- `--force` - Re-index even if embedding already exists
+- `-c, --config path` - Use custom config
+
+**When to use:**
+- After enabling embedding configuration for the first time
+- To backfill historical records
+- After changing embedding models or formats
 
 ### Install Hooks
 
@@ -443,6 +519,38 @@ provenance:
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
 | `shared_repos` | array | `[]` | Additional directories |
+
+### Semantic Search Configuration
+
+Enable semantic search over provenance records:
+
+```yaml
+provenance:
+  embedding:
+    provider: voyage                 # Embedding provider (voyage)
+    index_model: voyage-4-large     # Model for indexing (2048 dims)
+    query_model: voyage-4-lite      # Model for queries (2048 dims)
+    api_key: ${VOYAGE_API_KEY}      # API key from environment
+    similarity_threshold: 0.50        # Minimum similarity (0.50-0.70 range)
+    index_on_complete: true         # Auto-index on complete
+```
+
+**Configuration Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `provider` | string | - | Embedding provider (currently only "voyage") |
+| `index_model` | string | `voyage-4-large` | Model for document indexing |
+| `query_model` | string | `voyage-4-lite` | Model for query embeddings |
+| `api_key` | string | - | API key (use `${ENV_VAR}` format) |
+| `similarity_threshold` | float | `0.50` | Minimum similarity for results |
+| `index_on_complete` | bool | `true` | Auto-generate embeddings on complete |
+
+**Model Details:**
+- `voyage-4-large` - High-quality model for document embeddings (input_type: "document")
+- `voyage-4-lite` - Efficient model for query embeddings (input_type: "query")
+- Both output 2048-dimensional vectors in a shared embedding space
+- Cross-model similarity is valid due to Voyage's training process
 
 ---
 
@@ -570,6 +678,42 @@ Add to your CI pipeline:
     linespec provenance lint --enforcement strict
     linespec provenance check --range HEAD~10..HEAD
 ```
+
+### Automated Embedding Indexing
+
+When semantic search is enabled, a GitHub Action workflow automatically indexes newly completed provenance records when they are merged to the main branch. This ensures the embedding store stays up-to-date without manual intervention.
+
+**How it works:**
+1. When a record is marked `implemented` via `linespec provenance complete`, the embedding is generated locally (if `index_on_complete: true`)
+2. When the record is merged to main, the GitHub Action runs and indexes any unindexed records
+3. The action respects Voyage AI rate limits and handles batching automatically
+
+**Configuration for CI/CD:**
+
+For CI/CD environments where you want to skip local embedding generation (to avoid rate limits), set `index_on_complete: false` in `.linespec.yml`:
+
+```yaml
+provenance:
+  embedding:
+    provider: voyage
+    index_model: voyage-4-large
+    query_model: voyage-4-lite
+    api_key: ${VOYAGE_API_KEY}
+    similarity_threshold: 0.50
+    index_on_complete: false  # Skip local embedding, let GitHub Action handle it
+```
+
+**Required Secret:**
+
+Add `VOYAGE_API_KEY` as a repository secret in GitHub:
+1. Go to Settings → Secrets and variables → Actions
+2. Click "New repository secret"
+3. Name: `VOYAGE_API_KEY`
+4. Value: Your Voyage AI API key
+
+**Workflow file:** `.github/workflows/index-provenance.yml`
+
+The workflow triggers on pushes to main that modify provenance records and automatically indexes them.
 
 ---
 

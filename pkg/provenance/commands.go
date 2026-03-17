@@ -6,6 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/embeddings"
 )
 
 // Commands provides all provenance CLI commands
@@ -17,6 +20,7 @@ type Commands struct {
 	Formatter *Formatter
 	Config    *ProvenanceConfig
 	RepoRoot  string
+	Embedder  *embeddings.Client
 }
 
 // ProvenanceConfig holds provenance-related configuration
@@ -26,10 +30,16 @@ type ProvenanceConfig struct {
 	SharedRepos       []string
 	CommitTagRequired bool
 	AutoAffectedScope bool
+	Embedding         *config.EmbeddingConfig
 }
 
 // NewCommands creates a new commands instance
 func NewCommands(config *ProvenanceConfig, repoRoot string, output *os.File, color bool) (*Commands, error) {
+	return NewCommandsWithEmbedder(config, repoRoot, output, color, nil)
+}
+
+// NewCommandsWithEmbedder creates a new commands instance with optional embedding client
+func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *os.File, color bool, embedder *embeddings.Client) (*Commands, error) {
 	// Default values
 	if config.Dir == "" {
 		config.Dir = "provenance"
@@ -69,6 +79,7 @@ func NewCommands(config *ProvenanceConfig, repoRoot string, output *os.File, col
 		Formatter: formatter,
 		Config:    config,
 		RepoRoot:  repoRoot,
+		Embedder:  embedder,
 	}, nil
 }
 
@@ -582,6 +593,26 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 	}
 
 	c.Formatter.FormatCompleteSuccess(record)
+
+	// Generate and store embedding for the implemented record
+	if c.Embedder != nil && c.Embedder.IsConfigured() && c.Embedder.IndexOnComplete() {
+		text := embeddings.ExtractTextFromRecord(record.Title, record.Intent, record.Constraints)
+		vector, err := c.Embedder.GenerateDocument(text)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to generate embedding for %s: %v\n", record.ID, err)
+		} else {
+			store := embeddings.NewStore(c.RepoRoot)
+			store.SetDimension(c.Embedder.Dimension())
+			err := store.Write(embeddings.RecordEmbedding{
+				RecordID: record.ID,
+				Vector:   vector,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to store embedding for %s: %v\n", record.ID, err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -871,4 +902,322 @@ func (c *Commands) sortContextRecords(records map[string]*ContextRecord) []*Cont
 
 	// Combine: open first, then implemented, then others
 	return append(append(open, implemented...), others...)
+}
+
+// SearchOptions holds options for the search command
+type SearchOptions struct {
+	Query      string // Natural language query
+	Limit      int    // Maximum number of results
+	ConfigFile string // Path to custom .linespec.yml file
+}
+
+// ProvenanceSearchResult represents a single search result with record details
+type ProvenanceSearchResult struct {
+	Record     *Record
+	Similarity float64
+}
+
+// Search performs semantic search over provenance records
+func (c *Commands) Search(opts SearchOptions) error {
+	// Check if embedder is configured
+	if c.Embedder == nil || !c.Embedder.IsConfigured() {
+		fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "provenance:")
+		fmt.Fprintln(os.Stderr, "  embedding:")
+		fmt.Fprintln(os.Stderr, "    provider: voyage")
+		fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
+		fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
+		fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
+		fmt.Fprintln(os.Stderr, "")
+		return fmt.Errorf("embedding not configured")
+	}
+
+	// Generate embedding for query
+	queryVector, err := c.Embedder.GenerateQuery(opts.Query)
+	if err != nil {
+		return fmt.Errorf("failed to generate query embedding: %w", err)
+	}
+
+	// Search the store
+	store := embeddings.NewStore(c.RepoRoot)
+	store.SetDimension(c.Embedder.Dimension())
+
+	results, err := store.Find(queryVector, opts.Limit)
+	if err != nil {
+		return fmt.Errorf("search failed: %w", err)
+	}
+
+	// Filter results by similarity threshold
+	threshold := c.Embedder.SimilarityThreshold()
+	var filteredResults []embeddings.SearchResult
+	for _, r := range results {
+		if r.Similarity >= threshold {
+			filteredResults = append(filteredResults, r)
+		}
+	}
+
+	if len(filteredResults) == 0 {
+		fmt.Fprintln(os.Stdout, "No semantically similar records found.")
+		fmt.Fprintf(os.Stdout, "(Similarity threshold: %.2f)\n", threshold)
+		fmt.Fprintln(os.Stdout, "")
+		fmt.Fprintln(os.Stdout, "Note: Search results are based on semantic similarity to implemented")
+		fmt.Fprintln(os.Stdout, "records. This is an advisory result, not a scope constraint check.")
+		return nil
+	}
+
+	// Build search results with record details
+	var searchResults []ProvenanceSearchResult
+	for _, r := range filteredResults {
+		if record, exists := c.Loader.GetRecord(r.RecordID); exists {
+			searchResults = append(searchResults, ProvenanceSearchResult{
+				Record:     record,
+				Similarity: r.Similarity,
+			})
+		}
+	}
+
+	// Display results
+	fmt.Fprintf(os.Stdout, "\n[ADVISORY] Semantic Search Results for: %q\n", opts.Query)
+	fmt.Fprintf(os.Stdout, "(Similarity threshold: %.2f)\n", threshold)
+	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Found records with semantic similarity to your query.")
+	fmt.Fprintln(os.Stdout, "These are advisory results based on meaning, not scope constraints.")
+	fmt.Fprintln(os.Stdout, "")
+
+	for i, r := range searchResults {
+		similarity := r.Similarity * 100
+		fmt.Fprintf(os.Stdout, "%d. %s (%.1f%% similar)\n", i+1, r.Record.ID, similarity)
+		fmt.Fprintf(os.Stdout, "   Title: %s\n", r.Record.Title)
+		fmt.Fprintf(os.Stdout, "   Status: %s\n", r.Record.Status)
+		fmt.Fprintln(os.Stdout, "")
+	}
+
+	fmt.Fprintln(os.Stdout, strings.Repeat("-", 60))
+	fmt.Fprintln(os.Stdout, "Use 'linespec provenance context <files>' for scope-based lookup.")
+	fmt.Fprintln(os.Stdout, "")
+
+	return nil
+}
+
+// AuditOptions holds options for the audit command
+type AuditOptions struct {
+	Description string // Description of recent changes
+	ConfigFile  string // Path to custom .linespec.yml file
+}
+
+// Audit performs semantic audit comparing changes against provenance history
+func (c *Commands) Audit(opts AuditOptions) error {
+	// Check if embedder is configured
+	if c.Embedder == nil || !c.Embedder.IsConfigured() {
+		fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "provenance:")
+		fmt.Fprintln(os.Stderr, "  embedding:")
+		fmt.Fprintln(os.Stderr, "    provider: voyage")
+		fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
+		fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
+		fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stdout, "✓ Audit advisory (no embedding configured)")
+		return nil // Exit 0 as per constraint
+	}
+
+	// Generate embedding for description
+	descVector, err := c.Embedder.GenerateQuery(opts.Description)
+	if err != nil {
+		// Graceful degradation - print advisory and exit 0
+		fmt.Fprintf(os.Stderr, "Warning: Failed to generate embedding: %v\n", err)
+		fmt.Fprintln(os.Stdout, "✓ Audit advisory completed with warnings")
+		return nil
+	}
+
+	// Search for similar records
+	store := embeddings.NewStore(c.RepoRoot)
+	store.SetDimension(c.Embedder.Dimension())
+
+	results, err := store.Find(descVector, 5)
+	if err != nil {
+		// Graceful degradation
+		fmt.Fprintf(os.Stderr, "Warning: Search failed: %v\n", err)
+		fmt.Fprintln(os.Stdout, "✓ Audit advisory completed with warnings")
+		return nil
+	}
+
+	// Filter results by similarity threshold
+	threshold := c.Embedder.SimilarityThreshold()
+	var filteredResults []embeddings.SearchResult
+	for _, r := range results {
+		if r.Similarity >= threshold {
+			filteredResults = append(filteredResults, r)
+		}
+	}
+
+	if len(filteredResults) == 0 {
+		fmt.Fprintln(os.Stdout, "✓ Audit advisory: No similar records found in provenance history.")
+		fmt.Fprintf(os.Stdout, "(Similarity threshold: %.2f)\n", threshold)
+		fmt.Fprintln(os.Stdout, "")
+		fmt.Fprintln(os.Stdout, "Your changes do not appear to conflict with any prior decisions.")
+		return nil
+	}
+
+	// Display results
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "[ADVISORY] Semantic Audit Results")
+	fmt.Fprintf(os.Stdout, "(Similarity threshold: %.2f)\n", threshold)
+	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Recent changes compared against provenance history.")
+	fmt.Fprintln(os.Stdout, "These are advisory findings based on semantic similarity.")
+	fmt.Fprintln(os.Stdout, "They do not represent scope violations or blocking issues.")
+	fmt.Fprintln(os.Stdout, "")
+
+	foundRelevant := false
+	for _, r := range filteredResults {
+		foundRelevant = true
+		if record, exists := c.Loader.GetRecord(r.RecordID); exists {
+			similarity := r.Similarity * 100
+			fmt.Fprintf(os.Stdout, "• %s (%.1f%% similar)\n", record.ID, similarity)
+			fmt.Fprintf(os.Stdout, "  Title: %s\n", record.Title)
+			fmt.Fprintf(os.Stdout, "  Status: %s\n", record.Status)
+			if len(record.Constraints) > 0 {
+				fmt.Fprintln(os.Stdout, "  Key constraints:")
+				for _, c := range record.Constraints[:minInt(3, len(record.Constraints))] {
+					fmt.Fprintf(os.Stdout, "    - %s\n", c)
+				}
+			}
+			fmt.Fprintln(os.Stdout, "")
+		}
+	}
+
+	if !foundRelevant {
+		fmt.Fprintln(os.Stdout, "No records above similarity threshold found.")
+		fmt.Fprintln(os.Stdout, "")
+		fmt.Fprintln(os.Stdout, "Your changes do not appear to conflict with prior decisions.")
+	}
+
+	fmt.Fprintln(os.Stdout, strings.Repeat("-", 60))
+	fmt.Fprintln(os.Stdout, "✓ Audit advisory completed (exit 0)")
+	fmt.Fprintln(os.Stdout, "")
+
+	return nil
+}
+
+// Helper function for min
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// IndexOptions holds options for the index command
+type IndexOptions struct {
+	DryRun     bool   // Show what would be indexed without doing it
+	Force      bool   // Re-index even if embedding exists
+	ConfigFile string // Path to custom .linespec.yml file
+}
+
+// Index generates embeddings for all implemented provenance records that don't have them
+func (c *Commands) Index(opts IndexOptions) error {
+	// Check if embedder is configured
+	if c.Embedder == nil || !c.Embedder.IsConfigured() {
+		fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "provenance:")
+		fmt.Fprintln(os.Stderr, "  embedding:")
+		fmt.Fprintln(os.Stderr, "    provider: voyage")
+		fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
+		fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
+		fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
+		fmt.Fprintln(os.Stderr, "")
+		return fmt.Errorf("embedding not configured")
+	}
+
+	// Initialize embedding store
+	store := embeddings.NewStore(c.RepoRoot)
+	store.SetDimension(c.Embedder.Dimension())
+
+	// Get all implemented records
+	var toIndex []*Record
+	for _, record := range c.Loader.Records {
+		if record.Status != StatusImplemented {
+			continue
+		}
+
+		// Check if already indexed (unless force)
+		if !opts.Force {
+			exists, err := store.Exists(record.ID)
+			if err != nil {
+				// If the store file doesn't exist yet, treat as not indexed
+				if !os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v\n", record.ID, err)
+					continue
+				}
+			}
+			if exists {
+				continue
+			}
+		}
+
+		toIndex = append(toIndex, record)
+	}
+
+	if len(toIndex) == 0 {
+		fmt.Fprintln(os.Stdout, "✓ All implemented records already have embeddings.")
+		return nil
+	}
+
+	fmt.Fprintf(os.Stdout, "\nFound %d record(s) to index\n", len(toIndex))
+	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
+	fmt.Fprintln(os.Stdout, "")
+
+	if opts.DryRun {
+		fmt.Fprintln(os.Stdout, "[DRY RUN] Would index the following records:")
+		for _, record := range toIndex {
+			fmt.Fprintf(os.Stdout, "  • %s - %s\n", record.ID, record.Title)
+		}
+		fmt.Fprintln(os.Stdout, "")
+		return nil
+	}
+
+	// Index each record
+	successCount := 0
+	failCount := 0
+	for i, record := range toIndex {
+		fmt.Fprintf(os.Stdout, "[%d/%d] Indexing %s...\n", i+1, len(toIndex), record.ID)
+
+		text := embeddings.ExtractTextFromRecord(record.Title, record.Intent, record.Constraints)
+		vector, err := c.Embedder.GenerateDocument(text)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ✗ Failed to generate embedding: %v\n", err)
+			failCount++
+			continue
+		}
+
+		err = store.Write(embeddings.RecordEmbedding{
+			RecordID: record.ID,
+			Vector:   vector,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ✗ Failed to store embedding: %v\n", err)
+			failCount++
+			continue
+		}
+
+		fmt.Fprintf(os.Stdout, "  ✓ Indexed successfully (%d dimensions)\n", len(vector))
+		successCount++
+	}
+
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
+	fmt.Fprintf(os.Stdout, "✓ Indexing complete: %d succeeded, %d failed\n", successCount, failCount)
+	fmt.Fprintln(os.Stdout, "")
+
+	if failCount > 0 {
+		return fmt.Errorf("indexing completed with %d failures", failCount)
+	}
+
+	return nil
 }

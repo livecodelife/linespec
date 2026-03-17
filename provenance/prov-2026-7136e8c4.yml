@@ -1,0 +1,117 @@
+id: prov-2026-7136e8c4
+title: "Semantic search and local embedding layer for provenance history"
+status: open
+created_at: "2026-03-16"
+author: calebcowen@gmail.com
+intent: >
+  Introduce a semantic search capability to the provenance subsystem that allows
+  engineers and AI agents to discover historically relevant records by meaning
+  rather than by file path or record ID. This addresses the organizational memory
+  problem: as the provenance corpus grows, deterministic scope-based lookup alone
+  is insufficient to surface records that are conceptually related to work being
+  started but do not yet have a declared file relationship.
+
+  The implementation consists of four components. First, a local embedding store
+  at .linespec/embeddings.bin that persists float32 vectors keyed to record IDs,
+  requiring no external database or running service. Second, a new
+  linespec provenance search command that accepts a natural language query,
+  generates an embedding via Voyage AI, and returns the most semantically
+  similar records from the store ranked by cosine similarity. Third, a new
+  linespec provenance audit command that compares a description of recent
+  changes against the embedding history to surface potential inconsistencies with
+  prior decisions at review time. Fourth, a linespec provenance index command
+  that bulk indexes all existing implemented records that do not yet have embeddings
+  in the local store, enabling backfilling of historical records.
+
+  Embedding generation is triggered automatically when linespec provenance complete
+  transitions a record to implemented status, writing the finalized record's vector
+  into the permanent store using voyage-4-large with input_type: "document". Queries
+  use voyage-4-lite with input_type: "query". Both models output 2048-dimensional
+  vectors in a shared embedding space, making them directly comparable via cosine
+  similarity. The richer 2048-dimensional space and model-specific optimization
+  improves clustering of semantically related records. Open records are never written
+  to the permanent store; their embeddings are generated transiently on demand during search.
+
+  A Claude Code hooks configuration committed at .claude/settings.json wires the
+  search and context commands into the agent session lifecycle, ensuring provenance
+  history is consulted at session start, file constraints are checked at pre-edit
+  time, and semantic consistency is reviewed at session end.
+  
+constraints:
+  - Embedding generation MUST be the only network-dependent operation. All storage,
+    search, and retrieval operations MUST be performed locally against
+    .linespec/embeddings.bin with no external service dependency beyond the
+    configured Voyage AI API.
+  - "The embedding configuration MUST support dual models: index_model (voyage-4-large)
+    for high-quality document embeddings at complete time with input_type: document,
+    and query_model (voyage-4-lite) for efficient query embeddings at search/audit time
+    with input_type: query. Both models output 2048-dimensional vectors in a shared
+    embedding space that are directly comparable via cosine similarity."
+  - "The permanent embedding index MUST only be written during linespec provenance
+    complete or linespec provenance index commands. No other command or lifecycle
+    event may write to the permanent store. Open records MUST be embedded transiently
+    on demand and never persisted."
+  - Search results MUST be clearly labeled as semantic similarity findings, not
+    as scope or constraint matches. The output format MUST structurally distinguish
+    advisory search results from deterministic enforcement findings so that agents
+    cannot confuse the two.
+  - The audit command output MUST be advisory only and MUST exit 0 regardless
+    of findings. It MUST NOT be placed in any blocking or enforcement path.
+  - The Voyage AI API key MUST be configurable in .linespec.yml and MUST be read
+    from an environment variable reference, never stored as a literal value in
+    the config file.
+  - "A configurable similarity_threshold MUST be supported (default 0.50) to filter
+    search results. The threshold should be set based on observed similarity scores
+    for relevant matches (typically 0.55-0.65 range)."
+  - Similarity search MUST use brute-force cosine similarity over the full
+    .linespec/embeddings.bin file. No vector database, search index, or SQLite
+    extension may be introduced as a dependency.
+  - "The text submitted for embedding MUST be constructed from the full title
+    (labeled as 'Decision'), the complete intent field (labeled as 'Intent'), and all
+    constraints as complete sentences (labeled as 'Constraints'). File path patterns,
+    record IDs, status values, and file paths MUST be excluded from the embedding
+    input as they reflect syntax rather than meaning."
+  - The Claude Code hooks configuration at .claude/settings.json MUST be
+    committable to the repository so that all engineers and agents working in the
+    repo inherit the integration without individual setup.
+  - If the embedding API is not configured, all commands that depend on it MUST
+    degrade gracefully and inform the user how to configure it. They MUST NOT
+    cause errors in commands that do not depend on it.
+  - "The index_on_complete flag MUST be configurable (default: true) to allow
+    disabling automatic embedding generation on completion."
+
+affected_scope: 
+  - pkg/embeddings/**
+  - pkg/config/types.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - .github/workflows/index-provenance.yml
+  - .linespec.yml
+  - .claude/settings.json
+  - README.md
+  - AGENTS.md
+  - PROVENANCE_RECORDS.md
+  - .gitignore
+
+forbidden_scope:
+  - pkg/provenance/linter.go
+
+supersedes: null
+superseded_by: null
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/store_test.go
+    type: go_test
+  - path: pkg/embeddings/client_test.go
+    type: go_test
+  - path: pkg/provenance/provenance_test.go
+    type: go_test
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - semantic-search
+  - ai-integration
+  - claude-code
+  - voyage

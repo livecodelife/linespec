@@ -47,13 +47,24 @@ type LineSpecConfig struct {
 	BaseDir        string               `yaml:"-"`
 }
 
+// EmbeddingConfig defines the embedding API configuration
+type EmbeddingConfig struct {
+	Provider            string  `yaml:"provider"`             // voyage, openai, etc.
+	IndexModel          string  `yaml:"index_model"`          // e.g., voyage-4-large (for indexing documents at 2048 dims)
+	QueryModel          string  `yaml:"query_model"`          // e.g., voyage-4-lite (for queries at 2048 dims)
+	APIKey              string  `yaml:"api_key"`              // Can be "${ENV_VAR_NAME}" or literal
+	SimilarityThreshold float64 `yaml:"similarity_threshold"` // default: 0.50
+	IndexOnComplete     bool    `yaml:"index_on_complete"`    // default: true
+}
+
 // ProvenanceConfig defines provenance record settings
 type ProvenanceConfig struct {
-	Enforcement       string   `yaml:"enforcement"`         // none | warn | strict
-	Dir               string   `yaml:"dir"`                 // relative to repo root
-	SharedRepos       []string `yaml:"shared_repos"`        // paths or URLs to shared provenance repositories
-	CommitTagRequired bool     `yaml:"commit_tag_required"` // whether commits must reference a prov ID
-	AutoAffectedScope bool     `yaml:"auto_affected_scope"` // whether to auto-populate affected_scope from git diffs
+	Enforcement       string           `yaml:"enforcement"`         // none | warn | strict
+	Dir               string           `yaml:"dir"`                 // relative to repo root
+	SharedRepos       []string         `yaml:"shared_repos"`        // paths or URLs to shared provenance repositories
+	CommitTagRequired bool             `yaml:"commit_tag_required"` // whether commits must reference a prov ID
+	AutoAffectedScope bool             `yaml:"auto_affected_scope"` // whether to auto-populate affected_scope from git diffs
+	Embedding         *EmbeddingConfig `yaml:"embedding,omitempty"` // embedding API configuration
 }
 
 // DependencyConfig defines external service dependencies

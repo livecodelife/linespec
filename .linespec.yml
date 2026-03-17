@@ -4,3 +4,10 @@ provenance:
   shared_repos: []            # paths or URLs to shared provenance repositories
   commit_tag_required: true  # whether commits must reference a prov ID
   auto_affected_scope: true   # whether to auto-populate affected_scope from git diffs
+  embedding:                  # semantic search and audit configuration
+    provider: voyage           # embedding API provider (voyage)
+    index_model: voyage-4-large  # high-quality model for indexing (2048 dims)
+    query_model: voyage-4-lite   # efficient model for queries (2048 dims)
+    api_key: ${VOYAGE_API_KEY}      # API key from environment variable
+    similarity_threshold: 0.30     # minimum similarity for results (0.30-0.50 range with dual models)
+    index_on_complete: false         # generate embeddings when completing records

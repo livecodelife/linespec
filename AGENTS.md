@@ -198,11 +198,63 @@ provenance:
 | `lint` | Validate records; use --record, --enforcement, --format |
 | `status` | View status; use --record, --filter, --save-scope |
 | `graph` | Render graph; use --root, --filter, --format |
+| `search` | Semantic search; use --query, --limit (requires embedding config) |
+| `audit` | Audit changes; use --description (requires embedding config) |
+| `index` | Index records; use --dry-run, --force (requires embedding config) |
 | `check` | Check commits; use --commit, --range, --record, --staged, --message-file |
 | `lock-scope` | Lock to allowlist; use --record, --dry-run |
-| `complete` | Mark implemented; use --record, --force |
-| `deprecate` | Mark deprecated; use --record, --reason |
+| `complete` | Mark record as implemented; use --record, --force |
+| `deprecate` | Mark record as deprecated; use --record, --reason |
 | `install-hooks` | Install git hooks |
+
+### Semantic Search
+
+LineSpec supports semantic search over provenance records using Voyage AI embeddings. This allows natural language queries to find relevant historical decisions.
+
+**Configuration:**
+Add to `.linespec.yml`:
+```yaml
+provenance:
+  embedding:
+    provider: voyage
+    index_model: voyage-4-large     # High-quality model for indexing
+    query_model: voyage-4-lite      # Efficient model for queries
+    api_key: ${VOYAGE_API_KEY}
+    similarity_threshold: 0.50
+    index_on_complete: true
+```
+
+**Commands:**
+```bash
+# Search for relevant records
+linespec provenance search --query "git hooks" --limit 5
+
+# Audit recent changes against history
+linespec provenance audit --description "Added authentication middleware"
+
+# Bulk index all implemented records
+linespec provenance index
+
+# Re-index with force (even if already indexed)
+linespec provenance index --force
+
+# Preview what would be indexed
+linespec provenance index --dry-run
+```
+
+**How it works:**
+- Records are embedded using `voyage-4-large` with `input_type: "document"` at complete time
+- Queries are embedded using `voyage-4-lite` with `input_type: "query"`
+- Both models output 2048-dimensional vectors in a shared embedding space
+- Similarity scores typically range 0.50-0.70 for relevant matches
+- Threshold of 0.50 effectively captures semantically related records
+
+**Embedding input format:**
+```
+Decision: [full title]
+Intent: [complete intent field]
+Constraints: [constraint 1]. [constraint 2]. [constraint 3].
+```
 
 **[Complete reference → PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)**
 
