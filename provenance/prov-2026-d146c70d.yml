@@ -1,0 +1,54 @@
+id: prov-2026-d146c70d
+title: Release v1.3.0
+status: open
+created_at: "2026-03-17"
+author: calebcowen@gmail.com
+intent: >
+  Release version 1.3.0 of LineSpec with new stable features for the provenance system.
+  
+  This release includes:
+  - Semantic search and embedding layer (prov-2026-7136e8c4) - Natural language
+    search capability for provenance records using Voyage AI embeddings. Enables
+    engineers and AI agents to discover historically relevant records by meaning
+    rather than file path or ID.
+  - Crypto random hex IDs (prov-2026-84ab4e56) - New ID format using 8 cryptographically
+    random hex characters instead of sequential numbers, eliminating conflicts
+    when multiple engineers create records concurrently.
+  
+  Version updates across all documentation and source files.
+
+constraints:
+  - The version string in main_stable.go MUST be updated to v1.3.0
+  - The version string in main_beta.go MUST be updated to v1.3.0-beta
+  - The README.md version strings MUST be updated to v1.3.0
+  - The CHANGELOG.md MUST be updated with v1.3.0 release notes
+  - The PROVENANCE_RECORDS.md install instructions MUST be updated to v1.3.0
+  - The LINESPEC.md install instructions MUST be updated to v1.3.0
+  - All modified files MUST be committed with the provenance record ID
+  - The git tag v1.3.0 MUST be created and pushed
+  - The git tag v1.3.0-beta MUST be created and pushed
+
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - README.md
+  - CHANGELOG.md
+  - PROVENANCE_RECORDS.md
+  - LINESPEC.md
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+
+related:
+  - prov-2026-7136e8c4
+  - prov-2026-84ab4e56
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: markdown
+associated_traces: []
+monitors: []
+tags:
+    - release

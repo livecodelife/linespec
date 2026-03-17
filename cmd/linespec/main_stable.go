@@ -31,7 +31,7 @@ func main() {
 }
 
 func printUsage() {
-	logger.Info(`LineSpec v1.2.0 - Provenance Records
+	logger.Info(`LineSpec v1.3.0 - Provenance Records
 
 Usage: linespec <command> [options]
 

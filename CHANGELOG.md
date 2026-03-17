@@ -5,6 +5,36 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-17
+
+### Added
+
+- **Semantic search and embedding layer** ([prov-2026-7136e8c4](./provenance/prov-2026-7136e8c4.yml)) - Natural language search capability for provenance records using Voyage AI embeddings. Enables engineers and AI agents to discover historically relevant records by meaning rather than by file path or record ID.
+  - New `linespec provenance search` command - Accepts natural language queries and returns semantically similar records ranked by cosine similarity
+  - New `linespec provenance audit` command - Compares descriptions of recent changes against embedding history to surface potential inconsistencies
+  - New `linespec provenance index` command - Bulk indexes all implemented records for semantic search
+  - Local embedding store at `.linespec/embeddings.bin` - No external database required
+  - Dual model support - Uses `voyage-4-large` for indexing and `voyage-4-lite` for queries (both 2048-dimensional)
+  - Automatic embedding generation on `linespec provenance complete`
+  - Configurable via `.linespec.yml` with environment variable API key
+
+- **Crypto random hex IDs** ([prov-2026-84ab4e56](./provenance/prov-2026-84ab4e56.yml)) - New provenance record ID format using 8 cryptographically random hex characters instead of sequential numbers.
+  - Eliminates ID conflicts when multiple engineers create records concurrently
+  - Format: `prov-YYYY-XXXXXXXX` (e.g., `prov-2026-a1b2c3d4`)
+  - 4+ billion possible combinations per year
+  - Fully backward compatible with existing sequential IDs
+  - Supports monorepo suffixes: `prov-YYYY-XXXXXXXX-service-name`
+
+### Changed
+
+- **Documentation** - Updated all documentation to reflect new features and version
+
+### Related Provenance Records
+
+- [prov-2026-7136e8c4](./provenance/prov-2026-7136e8c4.yml) - Semantic search and local embedding layer for provenance history
+- [prov-2026-84ab4e56](./provenance/prov-2026-84ab4e56.yml) - Switch provenance record IDs from sequential numbers to crypto random hex
+- [prov-2026-d146c70d](./provenance/prov-2026-d146c70d.yml) - This release
+
 ## [1.2.0] - 2026-03-14
 
 ### Added (Beta)
