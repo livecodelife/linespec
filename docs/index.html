@@ -35,11 +35,20 @@
                 <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
                 <a href="#install" class="btn btn-primary">Get Started</a>
             </div>
-            <button class="mobile-menu-btn" aria-label="Toggle menu">
+            <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Toggle menu">
                 <span></span>
                 <span></span>
                 <span></span>
             </button>
+        </div>
+        <div class="mobile-menu" id="mobile-menu">
+            <a href="#features" class="mobile-nav-link">Features</a>
+            <a href="#provenance" class="mobile-nav-link">Provenance</a>
+            <a href="#semantic-search-feature" class="mobile-nav-link">AI Search</a>
+            <a href="#testing" class="mobile-nav-link">Testing</a>
+            <a href="docs.html" class="mobile-nav-link">Docs</a>
+            <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener" class="mobile-nav-link">GitHub</a>
+            <a href="#install" class="mobile-nav-link">Get Started</a>
         </div>
     </nav>
 
@@ -432,8 +441,10 @@ NOISE
                 <div class="install-method">
                     <h4>Homebrew (Recommended)</h4>
                     <div class="install-code">
-                        <pre><code>brew tap livecodelife/linespec
+                        <div class="install-code-inner">
+                            <pre><code>brew tap livecodelife/linespec
 brew install linespec</code></pre>
+                        </div>
                         <button class="copy-btn" aria-label="Copy command">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -445,7 +456,9 @@ brew install linespec</code></pre>
                 <div class="install-method">
                     <h4>Go Install</h4>
                     <div class="install-code">
-                        <pre><code>go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code></pre>
+                        <div class="install-code-inner">
+                            <pre><code>go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code></pre>
+                        </div>
                         <button class="copy-btn" aria-label="Copy command">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -457,7 +470,9 @@ brew install linespec</code></pre>
                 <div class="install-method">
                     <h4>Beta Build (All Features)</h4>
                     <div class="install-code">
-                        <pre><code>go build -tags beta -o linespec ./cmd/linespec</code></pre>
+                        <div class="install-code-inner">
+                            <pre><code>go build -tags beta -o linespec ./cmd/linespec</code></pre>
+                        </div>
                         <button class="copy-btn" aria-label="Copy command">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -564,6 +579,7 @@ brew install linespec</code></pre>
         </div>
     </footer>
 
+    <script src="assets/js/components.js"></script>
     <script src="assets/js/main.js"></script>
 </body>
 </html>

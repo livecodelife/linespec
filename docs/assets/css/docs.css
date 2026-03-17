@@ -6,7 +6,6 @@
 /* Docs Page Layout */
 .docs-page {
     background: var(--color-bg);
-    min-width: 1000px;
 }
 
 .docs-navbar {
@@ -134,7 +133,6 @@
     padding: var(--spacing-xl);
     max-width: none;
     width: calc(100% - 280px);
-    min-width: 600px;
     display: block;
     box-sizing: border-box;
 }
@@ -332,9 +330,25 @@
 }
 
 .code-block pre {
-    padding: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
     overflow-x: auto;
     margin: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-accent) var(--color-surface-base);
+}
+
+.code-block pre::-webkit-scrollbar {
+    height: 6px;
+}
+
+.code-block pre::-webkit-scrollbar-track {
+    background: var(--color-surface-base);
+    border-radius: 3px;
+}
+
+.code-block pre::-webkit-scrollbar-thumb {
+    background: var(--color-accent);
+    border-radius: 3px;
 }
 
 .code-block code {
@@ -343,8 +357,12 @@
     line-height: 1.7;
     color: var(--color-text);
     background: none;
-    padding: 0;
+    padding: 0 var(--spacing-sm);
     display: block;
+    white-space: pre;
+    word-break: normal;
+    word-wrap: normal;
+    min-width: min-content;
 }
 
 /* Tables */
@@ -591,24 +609,82 @@
     font-weight: 500;
 }
 
+/* Mobile Sidebar Toggle */
+.sidebar-toggle {
+    display: none;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-surface-base);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: var(--spacing-md);
+    transition: all 150ms ease;
+}
+
+.sidebar-toggle:hover {
+    background: var(--color-surface-raised);
+}
+
+.sidebar-toggle svg {
+    flex-shrink: 0;
+}
+
+/* Sidebar Overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 250ms ease;
+    z-index: 90;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* Responsive Design for Docs */
 @media (max-width: 1024px) {
+    .sidebar-toggle {
+        display: inline-flex;
+    }
+    
     .docs-container {
-        grid-template-columns: 1fr;
+        display: block;
     }
     
     .sidebar {
-        position: relative;
+        position: fixed;
         top: 0;
-        width: 100%;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid var(--color-border);
-        padding: var(--spacing-md);
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 250ms ease;
+        z-index: 100;
+        padding-top: 64px;
+    }
+    
+    .sidebar.mobile-open {
+        transform: translateX(0);
     }
     
     .docs-content {
         margin-left: 0;
+        width: 100%;
+        min-width: 0;
+        padding: var(--spacing-md);
+        padding-top: calc(64px + var(--spacing-md));
     }
     
     .docs-cards {
@@ -634,11 +710,62 @@
     }
     
     .docs-table {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
     }
     
     .docs-table th,
     .docs-table td {
         padding: 0.5rem;
+    }
+    
+    /* Make tables horizontally scrollable */
+    .docs-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    
+    .comparison-table {
+        overflow-x: auto;
+    }
+    
+    .comparison-table table {
+        min-width: 500px;
+    }
+    
+    /* Ensure code blocks don't break layout */
+    .code-block,
+    .code-example {
+        max-width: 100vw;
+    }
+    
+    .code-block pre,
+    .code-example pre {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .docs-section h2 {
+        font-size: 1.5rem;
+    }
+    
+    .docs-section h3 {
+        font-size: 1.25rem;
+    }
+    
+    .docs-header h1 {
+        font-size: 2rem;
+    }
+    
+    .docs-lead {
+        font-size: 1rem;
+    }
+    
+    .docs-toc {
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .diagram {
+        overflow-x: auto;
     }
 }
