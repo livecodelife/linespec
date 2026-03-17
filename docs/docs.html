@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - LineSpec</title>
+    <meta name="description" content="Complete documentation for LineSpec including Provenance Records and DSL reference.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/docs.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="docs-page">
+    <nav class="navbar docs-navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="url(#gradient)"/>
+                    <path d="M8 12h16M8 16h12M8 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#6366f1"/>
+                            <stop offset="1" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>LineSpec</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html#features">Features</a>
+                <a href="index.html" class="active">Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>Documentation</h3>
+                <input type="search" id="docs-search" placeholder="Search docs..." class="search-input">
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <h4>Getting Started</h4>
+                    <ul>
+                        <li><a href="index.html" class="active">Overview</a></li>
+                        <li><a href="provenance.html">Provenance Guide</a></li>
+                        <li><a href="linespec.html">Testing Guide</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>Provenance Records</h4>
+                    <ul>
+                        <li><a href="provenance.html#quick-start">Quick Start</a></li>
+                        <li><a href="provenance.html#concepts">Core Concepts</a></li>
+                        <li><a href="provenance.html#schema">Schema Reference</a></li>
+                        <li><a href="provenance.html#cli">CLI Commands</a></li>
+                        <li><a href="provenance.html#config">Configuration</a></li>
+                        <li><a href="provenance.html#git">Git Integration</a></li>
+                        <li><a href="provenance.html#best-practices">Best Practices</a></li>
+                        <li><a href="provenance.html#examples">Examples</a></li>
+                        <li><a href="provenance.html#troubleshooting">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>LineSpec Testing <span class="beta-tag">Beta</span></h4>
+                    <ul>
+                        <li><a href="linespec.html">Introduction</a></li>
+                        <li><a href="linespec.html#principles">Design Principles</a></li>
+                        <li><a href="linespec.html#grammar">DSL Grammar</a></li>
+                        <li><a href="linespec.html#receive">RECEIVE</a></li>
+                        <li><a href="linespec.html#expect">EXPECT</a></li>
+                        <li><a href="linespec.html#expect-not">EXPECT_NOT</a></li>
+                        <li><a href="linespec.html#respond">RESPOND</a></li>
+                        <li><a href="linespec.html#verify">VERIFY</a></li>
+                        <li><a href="linespec.html#examples">Examples</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="docs-content">
+            <article class="docs-article">
+                <header class="docs-header">
+                    <h1>LineSpec Documentation</h1>
+                    <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Complete guides and references for using LineSpec to manage architectural decisions and integration testing.</p>
+                </header>
+
+                <div class="docs-cards">
+                    <a href="provenance.html" class="docs-card">
+                        <div class="docs-card-icon purple">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                        </div>
+                        <h3>Provenance Records</h3>
+                        <p>Structured YAML artifacts that capture architectural decisions, intent, constraints, and scope.</p>
+                        <span class="card-link">Read documentation →</span>
+                    </a>
+
+                    <a href="provenance.html#schema" class="docs-card">
+                        <div class="docs-card-icon blue">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                            </svg>
+                        </div>
+                        <h3>Schema Reference</h3>
+                        <p>Complete field definitions, types, and validation rules for Provenance Records.</p>
+                        <span class="card-link">View schema →</span>
+                    </a>
+
+                    <a href="linespec.html" class="docs-card">
+                        <div class="docs-card-icon orange">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"/>
+                                <polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                        </div>
+                        <h3>LineSpec Testing <span class="beta-inline">Beta</span></h3>
+                        <p>DSL-based integration testing framework for containerized services.</p>
+                        <span class="card-link">Learn the DSL →</span>
+                    </a>
+                </div>
+
+                <section class="docs-section">
+                    <h2>What is LineSpec?</h2>
+                    <p>LineSpec is a tool for managing <strong>Provenance Records</strong> — structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.</p>
+                    
+                    <p>The default installation includes only the stable <strong>Provenance Records</strong> functionality. <strong>LineSpec Testing</strong> features are available as a beta opt-in.</p>
+
+                    <div class="comparison-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Status</th>
+                                    <th>Installation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Provenance Records</strong></td>
+                                    <td><span class="badge-stable">Stable</span></td>
+                                    <td><code>brew install linespec</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>LineSpec Testing</strong></td>
+                                    <td><span class="badge-beta">Beta</span></td>
+                                    <td><code>brew install linespec-beta</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="docs-section">
+                    <h2>Documentation Structure</h2>
+                    <div class="structure-grid">
+                        <div class="structure-item">
+                            <h4>Provenance Records</h4>
+                            <ul>
+                                <li><a href="provenance.html">Introduction</a> - What are Provenance Records?</li>
+                                <li><a href="provenance.html#quick-start">Quick Start</a> - Get up and running</li>
+                                <li><a href="provenance.html#concepts">Core Concepts</a> - ID format, status lifecycle</li>
+                                <li><a href="provenance.html#schema">Schema Reference</a> - Complete field reference</li>
+                                <li><a href="provenance.html#cli">CLI Commands</a> - All available commands</li>
+                                <li><a href="provenance.html#config">Configuration</a> - .linespec.yml options</li>
+                                <li><a href="provenance.html#git">Git Integration</a> - Hooks and validation</li>
+                                <li><a href="provenance.html#examples">Examples</a> - Real-world examples</li>
+                            </ul>
+                        </div>
+                        <div class="structure-item">
+                            <h4>Schema Reference</h4>
+                            <ul>
+                                <li><a href="provenance.html#schema">Field Summary</a> - All fields at a glance</li>
+                                <li><a href="provenance.html#schema">Required Fields</a> - id, title, status, etc.</li>
+                                <li><a href="provenance.html#schema">Optional Fields</a> - constraints, scope, tags</li>
+                                <li><a href="provenance.html#schema">Validation Rules</a> - Lint rules and enforcement</li>
+                            </ul>
+                        </div>
+                        <div class="structure-item">
+                            <h4>LineSpec Testing <span class="beta-tag">Beta</span></h4>
+                            <ul>
+                                <li><a href="linespec.html">Introduction</a> - DSL overview</li>
+                                <li><a href="linespec.html#grammar">Grammar</a> - Statement structure</li>
+                                <li><a href="linespec.html#expect">EXPECT</a> - Dependencies</li>
+                                <li><a href="linespec.html#verify">VERIFY</a> - SQL validation</li>
+                                <li><a href="linespec.html#examples">Examples</a> - Complete test specs</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+            </article>
+        </main>
+    </div>
+
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/docs.js"></script>
+</body>
+</html>

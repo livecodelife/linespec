@@ -1,0 +1,34 @@
+id: prov-2026-054aadca
+title: Create GitHub Pages documentation site
+status: open
+created_at: "2026-03-17"
+author: calebcowen@gmail.com
+intent: >
+  Create a comprehensive documentation website hosted on GitHub Pages.
+  The site includes a marketing landing page, full documentation for
+  Provenance Records, and DSL reference for LineSpec Testing. Features
+  responsive design, dark theme, code examples with copy buttons, and
+  smooth navigation between sections.
+
+constraints:
+  - Must be hosted on GitHub Pages from the docs/ directory
+  - Must include complete documentation for both Provenance and Testing
+  - Must have responsive design for desktop and mobile
+  - Must maintain all existing markdown documentation
+
+affected_scope:
+  - docs/**
+  - docs/assets/**
+  - docs/_config.yml
+
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+    - documentation
+    - github-pages

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LineSpec - Structured decisions. Deterministic testing.</title>
+    <meta name="description" content="LineSpec provides Provenance Records for documenting architectural decisions and DSL-based integration testing for containerized services.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="url(#gradient)"/>
+                    <path d="M8 12h16M8 16h12M8 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#6366f1"/>
+                            <stop offset="1" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>LineSpec</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#provenance">Provenance</a>
+                <a href="#testing">Testing</a>
+                <a href="docs.html">Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
+                <a href="#install" class="btn btn-primary">Get Started</a>
+            </div>
+            <button class="mobile-menu-btn" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="badge">v1.3.0 Now Available</div>
+                <h1>Structured decisions.<br><span class="gradient">Deterministic testing.</span></h1>
+                <p class="hero-description">
+                    LineSpec captures the <strong>why</strong> behind your code with Provenance Records, 
+                    and tests the <strong>how</strong> with a DSL that intercepts protocols at the wire level.
+                </p>
+                <div class="hero-actions">
+                    <a href="docs.html" class="btn btn-primary btn-large">Read the Docs</a>
+                    <a href="#features" class="btn btn-secondary btn-large">Learn More</a>
+                </div>
+                <div class="install-commands">
+                    <div class="command-tabs">
+                        <button class="tab active" data-tab="brew">Homebrew</button>
+                        <button class="tab" data-tab="go">Go Install</button>
+                    </div>
+                    <div class="command-content">
+                        <div class="command-panel active" id="brew">
+                            <code>brew tap livecodelife/linespec && brew install linespec</code>
+                            <button class="copy-btn" aria-label="Copy command">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="command-panel" id="go">
+                            <code>go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code>
+                            <button class="copy-btn" aria-label="Copy command">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="hero-bg"></div>
+    </header>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Two powerful tools.<br>One unified workflow.</h2>
+            <div class="features-grid">
+                <div class="feature-card featured">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </div>
+                    <h3>Provenance Records</h3>
+                    <span class="badge-stable">Stable</span>
+                    <p>Structured YAML artifacts that capture architectural intent, constraints, and scope. Query your decision history. Enforce boundaries at commit time.</p>
+                    <ul class="feature-list">
+                        <li>Git-integrated with pre-commit hooks</li>
+                        <li>Graph visualization of decisions</li>
+                        <li>Scope enforcement (allowlist mode)</li>
+                        <li>Semantic search with embeddings</li>
+                    </ul>
+                    <a href="provenance.html" class="feature-link">Learn more →</a>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon beta-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </div>
+                    <h3>LineSpec Testing</h3>
+                    <span class="badge-beta">Beta</span>
+                    <p>DSL-based integration testing that intercepts database and HTTP traffic at the protocol level. Language-agnostic. Deterministic.</p>
+                    <ul class="feature-list">
+                        <li>Protocol-level interception</li>
+                        <li>MySQL, PostgreSQL, HTTP, Kafka</li>
+                        <li>Language-agnostic tests</li>
+                        <li>Containerized service testing</li>
+                    </ul>
+                    <a href="linespec.html" class="feature-link">Learn more →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="provenance" class="provenance-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Provenance Records</span>
+                <h2>Document decisions.<br>Query your history.</h2>
+                <p class="section-subtitle">Structured YAML artifacts that capture the why, not just the what.</p>
+            </div>
+            
+            <div class="code-showcase">
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="code-filename">provenance/prov-2026-a1b2c3d4.yml</span>
+                        <span class="code-lang">YAML</span>
+                    </div>
+                    <pre><code>id: prov-2026-a1b2c3d4
+title: "Use PostgreSQL for primary data store"
+status: open
+created_at: "2026-03-15"
+author: "dev@example.com"
+
+intent: >
+  After evaluating options, we choose PostgreSQL for our
+  primary data store due to better JSON support and 
+  concurrent write handling.
+
+constraints:
+  - All new tables must use PostgreSQL
+  - Use connection pooling (min 10, max 100)
+
+affected_scope:
+  - pkg/db/**
+  - migrations/**
+
+tags:
+  - architecture
+  - database</code></pre>
+                </div>
+                
+                <div class="showcase-features">
+                    <div class="showcase-feature">
+                        <div class="showcase-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <h4>Structured Intent</h4>
+                        <p>Capture not just what changed, but why. Every record documents the reasoning behind architectural decisions.</p>
+                    </div>
+                    <div class="showcase-feature">
+                        <div class="showcase-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h4>Scope Enforcement</h4>
+                        <p>Define affected and forbidden scopes. Pre-commit hooks validate that changes stay within boundaries.</p>
+                    </div>
+                    <div class="showcase-feature">
+                        <div class="showcase-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                            </svg>
+                        </div>
+                        <h4>Decision Graph</h4>
+                        <p>Visualize relationships between decisions. Track what supersedes what. Query your architectural history.</p>
+                    </div>
+                    <div class="showcase-feature">
+                        <div class="showcase-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="M21 21l-4.35-4.35"/>
+                            </svg>
+                        </div>
+                        <h4>Semantic Search</h4>
+                        <p>Find related decisions with natural language queries. Uses embeddings to surface semantically similar records.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cli-showcase">
+                <h3>Command Line Interface</h3>
+                <div class="cli-grid">
+                    <div class="cli-card">
+                        <code>linespec provenance create</code>
+                        <p>Create a new record with auto-generated ID</p>
+                    </div>
+                    <div class="cli-card">
+                        <code>linespec provenance lint</code>
+                        <p>Validate all records for schema compliance</p>
+                    </div>
+                    <div class="cli-card">
+                        <code>linespec provenance graph</code>
+                        <p>Render the decision graph</p>
+                    </div>
+                    <div class="cli-card">
+                        <code>linespec provenance search</code>
+                        <p>Semantic search across records</p>
+                    </div>
+                    <div class="cli-card">
+                        <code>linespec provenance complete</code>
+                        <p>Mark a record as implemented</p>
+                    </div>
+                    <div class="cli-card">
+                        <code>linespec provenance install-hooks</code>
+                        <p>Set up git integration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testing" class="testing-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge beta">LineSpec Testing</span>
+                <h2>Test at the protocol level.<br>No mocks. No magic.</h2>
+                <p class="section-subtitle">DSL-based integration testing that intercepts traffic deterministically.</p>
+            </div>
+
+            <div class="testing-intro">
+                <div class="testing-badge-row">
+                    <span class="badge-beta-large">Beta Feature</span>
+                    <span class="beta-note">Build with <code>-tags beta</code> to enable</span>
+                </div>
+                <p class="beta-description">
+                    LineSpec Testing is a DSL-based integration testing framework for containerized services. 
+                    It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic 
+                    and framework-independent.
+                </p>
+            </div>
+
+            <div class="code-showcase">
+                <div class="code-example wide">
+                    <div class="code-header">
+                        <span class="code-filename">tests/create_user.linespec</span>
+                        <span class="code-lang">LineSpec DSL</span>
+                    </div>
+                    <pre><code>TEST create-user
+
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+HEADERS
+  Authorization: Bearer token123
+
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_db_record.yaml}}
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
+
+RESPOND HTTP:201
+WITH {{payloads/user_create_resp.yaml}}
+NOISE
+  body.id
+  body.created_at</code></pre>
+                </div>
+            </div>
+
+            <div class="testing-features">
+                <div class="testing-feature">
+                    <h4>Protocol Proxies</h4>
+                    <p>Intercepts MySQL, PostgreSQL, HTTP, and Kafka traffic at the wire level. No code changes required.</p>
+                    <code class="inline-code">linespec proxy mysql :3307 localhost:3306</code>
+                </div>
+                <div class="testing-feature">
+                    <h4>Deterministic Execution</h4>
+                    <p>No inference or heuristics. Every test runs the same way every time. Predictable results.</p>
+                </div>
+                <div class="testing-feature">
+                    <h4>Language Agnostic</h4>
+                    <p>Tests are written in the LineSpec DSL, not your implementation language. Works with any backend.</p>
+                </div>
+                <div class="testing-feature">
+                    <h4>Verification DSL</h4>
+                    <p>Built-in operators for asserting query structure. Verify security constraints directly.</p>
+                    <code class="inline-code">VERIFY query MATCHES /\bcolumn_name\b/</code>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="install" class="install-section">
+        <div class="container">
+            <div class="section-header centered">
+                <h2>Get started in seconds</h2>
+                <p class="section-subtitle">Install LineSpec and create your first provenance record.</p>
+            </div>
+
+            <div class="install-methods">
+                <div class="install-method">
+                    <h4>Homebrew (Recommended)</h4>
+                    <div class="install-code">
+                        <pre><code>brew tap livecodelife/linespec
+brew install linespec</code></pre>
+                        <button class="copy-btn" aria-label="Copy command">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="install-method">
+                    <h4>Go Install</h4>
+                    <div class="install-code">
+                        <pre><code>go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code></pre>
+                        <button class="copy-btn" aria-label="Copy command">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="install-method">
+                    <h4>Beta Build (All Features)</h4>
+                    <div class="install-code">
+                        <pre><code>go build -tags beta -o linespec ./cmd/linespec</code></pre>
+                        <button class="copy-btn" aria-label="Copy command">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quickstart">
+                <h3>Quick Start</h3>
+                <div class="quickstart-steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Install LineSpec</h4>
+                            <p>Use Homebrew or Go install to get the CLI</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Create a record</h4>
+                            <code>linespec provenance create --title "Your decision"</code>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Validate</h4>
+                            <code>linespec provenance lint</code>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>Install git hooks</h4>
+                            <code>linespec provenance install-hooks</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to bring structure to your decisions?</h2>
+            <p>Join teams using LineSpec to document architectural decisions and enforce scope boundaries.</p>
+            <div class="cta-actions">
+                <a href="docs.html" class="btn btn-primary btn-large">Read the Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener" class="btn btn-secondary btn-large">
+                    View on GitHub
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <a href="index.html" class="logo">
+                        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="32" height="32" rx="6" fill="url(#gradient-footer)"/>
+                            <path d="M8 12h16M8 16h12M8 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                            <defs>
+                                <linearGradient id="gradient-footer" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                                    <stop stop-color="#6366f1"/>
+                                    <stop offset="1" stop-color="#8b5cf6"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <span>LineSpec</span>
+                    </a>
+                    <p>Structured decisions. Deterministic testing.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#features">Features</a>
+                        <a href="provenance.html">Provenance Records</a>
+                        <a href="linespec.html">LineSpec Testing</a>
+                        <a href="https://github.com/livecodelife/linespec/releases" target="_blank">Changelog</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <a href="docs.html">Documentation</a>
+                        <a href="provenance.html">Provenance Guide</a>
+                        <a href="linespec.html">DSL Reference</a>
+                        <a href="https://github.com/livecodelife/linespec/tree/main/examples" target="_blank">Examples</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/livecodelife/linespec" target="_blank">GitHub</a>
+                        <a href="https://github.com/livecodelife/linespec/issues" target="_blank">Issues</a>
+                        <a href="https://github.com/livecodelife/linespec/discussions" target="_blank">Discussions</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>MIT License · © 2026 LineSpec Contributors</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/main.js"></script>
+</body>
+</html>

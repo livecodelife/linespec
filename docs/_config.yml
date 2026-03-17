@@ -1,0 +1,44 @@
+# GitHub Pages Configuration for LineSpec
+# This enables GitHub Pages to serve the documentation site
+
+# Site settings
+title: LineSpec
+description: Structured decisions. Deterministic testing.
+url: https://livecodelife.github.io
+baseurl: /linespec
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+
+# Exclude files from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .sass-cache
+  - .jekyll-cache
+  - .jekyll-metadata
+  - README.md
+  - LICENSE
+  - "*.go"
+  - go.mod
+  - go.sum
+  - cmd/
+  - pkg/
+  - examples/
+  - internal/
+  - provenance/
+  - .git/
+  - .github/
+
+# Include the docs directory
+include:
+  - docs
+
+# Set the source directory for GitHub Pages
+source: docs
+
+# Plugins (if needed in the future)
+plugins: []

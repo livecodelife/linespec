@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LineSpec DSL Reference - LineSpec Documentation</title>
+    <meta name="description" content="Complete DSL reference for LineSpec Testing - protocol-level integration testing.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/docs.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="docs-page">
+    <nav class="navbar docs-navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="url(#gradient)"/>
+                    <path d="M8 12h16M8 16h12M8 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#6366f1"/>
+                            <stop offset="1" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>LineSpec</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html#features">Features</a>
+                <a href="index.html" class="active">Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>Documentation</h3>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <h4>Getting Started</h4>
+                    <ul>
+                        <li><a href="docs.html">Overview</a></li>
+                        <li><a href="provenance.html">Provenance Guide</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>Provenance Records</h4>
+                    <ul>
+                        <li><a href="provenance.html#quick-start">Quick Start</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>LineSpec Testing <span class="beta-tag">Beta</span></h4>
+                    <ul>
+                        <li><a href="#principles" class="active">Design Principles</a></li>
+                        <li><a href="#grammar">DSL Grammar</a></li>
+                        <li><a href="#receive">RECEIVE</a></li>
+                        <li><a href="#expect">EXPECT</a></li>
+                        <li><a href="#expect-not">EXPECT_NOT</a></li>
+                        <li><a href="#respond">RESPOND</a></li>
+                        <li><a href="#verify">VERIFY</a></li>
+                        <li><a href="#examples">Examples</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="docs-content">
+            <article class="docs-article">
+                <header class="docs-header">
+                    <div class="docs-badge beta">Beta</div>
+                    <h1>LineSpec DSL Reference</h1>
+                    <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Deterministic domain-specific language for integration testing. Intercepts database and HTTP traffic at the protocol level for language-agnostic, deterministic test execution.</p>
+                    
+                    <div class="install-commands compact">
+                        <div class="command-tabs">
+                            <button class="tab active" data-tab="brew-beta">Homebrew</button>
+                            <button class="tab" data-tab="go-beta">Go Install</button>
+                        </div>
+                        <div class="command-content">
+                            <div class="command-panel active" id="brew-beta">
+                                <code>brew install linespec-beta</code>
+                                <button class="copy-btn" aria-label="Copy command">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="command-panel" id="go-beta">
+                                <code>go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code>
+                                <button class="copy-btn" aria-label="Copy command">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="docs-toc">
+                    <h3>Table of Contents</h3>
+                    <ul>
+                        <li><a href="#principles">Design Principles</a></li>
+                        <li><a href="#grammar">DSL Grammar</a></li>
+                        <li><a href="#receive">RECEIVE Statement</a></li>
+                        <li><a href="#expect">EXPECT Statement</a></li>
+                        <li><a href="#expect-not">EXPECT_NOT Statement</a></li>
+                        <li><a href="#respond">RESPOND Statement</a></li>
+                        <li><a href="#verify">VERIFY Clause</a></li>
+                        <li><a href="#examples">Complete Examples</a></li>
+                    </ul>
+                </div>
+
+                <section id="principles" class="docs-section">
+                    <h2>Core Design Principles</h2>
+                    <ol>
+                        <li><strong>Deterministic parsing</strong> — no NLP, no guessing.</li>
+                        <li><strong>Single entrypoint and single exit</strong> per spec.</li>
+                        <li><strong>Clear separation</strong> between:
+                            <ul>
+                                <li>Trigger (RECEIVE)</li>
+                                <li>External dependencies (EXPECT)</li>
+                                <li>System response (RESPOND)</li>
+                            </ul>
+                        </li>
+                        <li><strong>All payload shapes defined externally</strong> in YAML or JSON files.</li>
+                    </ol>
+                </section>
+
+                <section id="grammar" class="docs-section">
+                    <h2>DSL Grammar Overview</h2>
+                    <p>A LineSpec file MUST follow this structure:</p>
+                    <ol>
+                        <li>Exactly one <code>RECEIVE</code> statement</li>
+                        <li>Zero or more <code>EXPECT</code> statements</li>
+                        <li>Zero or more <code>EXPECT_NOT</code> statements</li>
+                        <li>Exactly one <code>RESPOND</code> statement</li>
+                    </ol>
+                    
+                    <p>Statements MUST appear in this order:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>RECEIVE
+EXPECT (0..n)
+EXPECT_NOT (0..n)
+RESPOND</code></pre>
+                    </div>
+                    <p>No statements may appear after <code>RESPOND</code>.</p>
+
+                    <h3>File Extension</h3>
+                    <p>Recommended extension: <code>.linespec</code></p>
+                    <p>Example: <code>create_todo_success.linespec</code></p>
+
+                    <h3>Test Name</h3>
+                    <p>Optional test name declaration:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>TEST <test_name></code></pre>
+                    </div>
+                    <p>If omitted, the filename (without extension) is used as the test name.</p>
+                </section>
+
+                <section id="receive" class="docs-section">
+                    <h2>RECEIVE Statement</h2>
+                    <p>Defines the trigger request into the System Under Test (SUT).</p>
+                    
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>RECEIVE HTTP:<METHOD> <URL>
+[WITH {{<body_file>}}]
+[HEADERS
+  <header_name>: <header_value>
+  ...]</code></pre>
+                    </div>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>RECEIVE HTTP:POST /api/v1/todos
+WITH {{todo.yaml}}
+
+RECEIVE HTTP:GET /api/v1/users/42
+HEADERS
+  Authorization: Bearer token_abc123xyz</code></pre>
+                    </div>
+
+                    <h3>Rules</h3>
+                    <ul>
+                        <li>Exactly one RECEIVE per file</li>
+                        <li>MUST appear before any EXPECT or EXPECT_NOT</li>
+                        <li>HTTP method is required</li>
+                        <li>URL is required (full URL including protocol and host)</li>
+                        <li>WITH is optional for HTTP requests without a body</li>
+                        <li>Body must reference an external YAML or JSON file</li>
+                        <li>HEADERS is optional and supports multiple header lines with indentation</li>
+                        <li>WITH must come before HEADERS if both are present</li>
+                    </ul>
+                </section>
+
+                <section id="expect" class="docs-section">
+                    <h2>EXPECT Statement</h2>
+                    <p>Defines an external dependency interaction that MUST occur during execution.</p>
+
+                    <h3>General Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT <CHANNEL> <resource>
+[USING_SQL """
+<raw-sql-query>
+"""]
+[WITH {{<request_file>}}]
+[RETURNS {{<response_file>}}]
+[RETURNS EMPTY]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]</code></pre>
+                    </div>
+
+                    <h3>EXPECT HTTP</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT HTTP:<METHOD> <URL>
+[HEADERS
+  <header_name>: <header_value>
+  ...]
+RETURNS {{<response_body>}}</code></pre>
+                    </div>
+                    <p><strong>Rules:</strong></p>
+                    <ul>
+                        <li>RETURNS is required for HTTP expectations</li>
+                        <li>HEADERS is optional; headers are matched against the actual request</li>
+                        <li>The proxy intercepts calls to the hostname and returns the mocked response</li>
+                        <li>Tests fail if the HTTP mock is defined but not invoked</li>
+                    </ul>
+
+                    <h3>EXPECT READ:MYSQL</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT READ:MYSQL <table_name>
+[USING_SQL """
+<SQL SELECT statement>
+"""]
+RETURNS {{<response_file>}}
+
+# Or for empty results:
+EXPECT READ:MYSQL <table_name>
+[USING_SQL """
+<SQL SELECT statement that returns no rows>
+"""]
+RETURNS EMPTY</code></pre>
+                    </div>
+
+                    <h3>EXPECT WRITE:MYSQL</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT WRITE:MYSQL <table_name>
+[USING_SQL """
+<SQL INSERT/UPDATE/DELETE statement>
+"""]
+[WITH {{<input_payload>}}]
+[NO TRANSACTION]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]</code></pre>
+                    </div>
+
+                    <h3>EXPECT READ:POSTGRESQL / EXPECT WRITE:POSTGRESQL</h3>
+                    <p>Same syntax as MySQL variants. The proxy supports both MySQL and PostgreSQL protocols.</p>
+                </section>
+
+                <section id="verify" class="docs-section">
+                    <h2>VERIFY Clause</h2>
+                    <p>The <code>VERIFY</code> clause validates the actual SQL query executed by the application at runtime. It can be attached to any MySQL or PostgreSQL EXPECT statement.</p>
+                    
+                    <p><strong>Use cases include:</strong></p>
+                    <ul>
+                        <li><strong>Security:</strong> Ensuring passwords are hashed before storage</li>
+                        <li><strong>Compliance:</strong> Verifying sensitive data is not logged in plain text</li>
+                        <li><strong>Correctness:</strong> Confirming proper SQL structure</li>
+                        <li><strong>Injection prevention:</strong> Validating query patterns match expected templates</li>
+                    </ul>
+
+                    <h3>Operators</h3>
+                    <ul>
+                        <li><code>CONTAINS</code> — Query must include the specified string (substring match)</li>
+                        <li><code>NOT_CONTAINS</code> — Query must NOT include the specified string (substring match)</li>
+                        <li><code>MATCHES</code> — Query must match the specified regex pattern (full Go regexp support)</li>
+                    </ul>
+
+                    <div class="info-box">
+                        <h4>Best Practices</h4>
+                        <p>Use <code>MATCHES</code> with word boundaries (<code>\b</code>) for precise column name matching:</p>
+                        <div class="code-block">
+                            <pre><code># GOOD: Uses word boundaries to match exact column name
+VERIFY query MATCHES /\bpassword_digest\b/
+
+# BAD: Would also match 'password_digest' in 'old_password_digest_column'
+VERIFY query CONTAINS 'password_digest'</code></pre>
+                        </div>
+                    </div>
+
+                    <h3>Example — Password Hashing</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST create-user-with-hashing
+RECEIVE HTTP:POST /api/v1/users
+WITH {{user_create_request.yaml}}
+
+# Ensure password is hashed before storage
+EXPECT WRITE:MYSQL users
+WITH {{user_with_hashed_password.yaml}}
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
+
+RESPOND HTTP:201</code></pre>
+                    </div>
+                </section>
+
+                <section id="expect-not" class="docs-section">
+                    <h2>EXPECT_NOT Statement</h2>
+                    <p>Defines an external dependency interaction that must NOT occur during execution. Useful for testing query optimization and ensuring certain operations are avoided.</p>
+                    
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT_NOT <CHANNEL> <resource>
+[USING_SQL """
+<raw-sql-query>
+"""]</code></pre>
+                    </div>
+
+                    <h3>Example — Testing Efficient Queries</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST efficient-user-lookup
+RECEIVE HTTP:GET /api/v1/users/123
+
+# Assert that we DON'T do a full table scan
+EXPECT_NOT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users
+"""
+
+# Should use indexed lookup instead
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users WHERE id = 123 LIMIT 1
+"""
+RETURNS {{user_response.yaml}}
+
+RESPOND HTTP:200
+WITH {{user_response.yaml}}</code></pre>
+                    </div>
+
+                    <h3>Rules</h3>
+                    <ul>
+                        <li>Exactly one of READ_MYSQL or WRITE_MYSQL</li>
+                        <li>USING_SQL is optional; if provided, matches that specific query</li>
+                        <li>If no USING_SQL, matches any read/write on the table</li>
+                        <li>Test fails if the forbidden operation is detected</li>
+                    </ul>
+                </section>
+
+                <section id="respond" class="docs-section">
+                    <h2>RESPOND Statement</h2>
+                    <p>Defines the final response of the System Under Test.</p>
+                    
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>RESPOND HTTP:<numeric_status_code>
+[WITH {{<response_body>}}]
+[NOISE
+  body.<field_name>
+  body.<field_name>]</code></pre>
+                    </div>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>RESPOND HTTP:201
+WITH {{saved_todo.yaml}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at</code></pre>
+                    </div>
+
+                    <h3>Rules</h3>
+                    <ul>
+                        <li>Exactly one RESPOND per file</li>
+                        <li>MUST be the final statement</li>
+                        <li>Status MUST be numeric (e.g., 200, 201, 400, 500)</li>
+                        <li>WITH is optional for responses without a body</li>
+                        <li>NOISE must appear after WITH if both are present</li>
+                    </ul>
+
+                    <h3>NOISE (optional)</h3>
+                    <p>Field paths to exclude from comparison:</p>
+                    <ul>
+                        <li><code>NOISE</code> must appear after <code>RESPOND</code> (and after <code>WITH</code> if present)</li>
+                        <li>Each indented line names one field path to exclude from comparison</li>
+                        <li>Field paths use dot notation matching the JSON response body (e.g. <code>body.created_at</code>)</li>
+                        <li><code>NOISE</code> is optional; omit it when no fields need filtering</li>
+                    </ul>
+                </section>
+
+                <section id="examples" class="docs-section">
+                    <h2>Complete Examples</h2>
+                    
+                    <h3>Example 1: Create Todo Success</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST create_todo_success
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{todo.yaml}}
+HEADERS
+  Authorization: Bearer token_abc123xyz
+
+EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+HEADERS
+  Authorization: Bearer token_abc123xyz
+RETURNS {{user_info.yaml}}
+
+EXPECT WRITE:MYSQL todos
+WITH {{todo_insert.yaml}}
+
+EXPECT EVENT:todo-events
+WITH {{todo_created_event.yaml}}
+
+RESPOND HTTP:201
+WITH {{saved_todo.yaml}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at</code></pre>
+                    </div>
+
+                    <h3>Example 2: Create User with Validation</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST create-user-secure
+RECEIVE HTTP:POST http://localhost:3000/users
+WITH {{payloads/user_create_req.yaml}}
+HEADERS
+  Authorization: Bearer token
+
+EXPECT WRITE:MYSQL users
+WITH {{payloads/user_with_password_digest.yaml}}
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
+
+RESPOND HTTP:201
+WITH {{payloads/user_create_resp.yaml}}
+NOISE
+  body.id
+  body.created_at</code></pre>
+                    </div>
+                </section>
+
+                <section id="cli-usage" class="docs-section">
+                    <h2>CLI Usage</h2>
+                    <p>Execute a spec:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec test create_todo_success.linespec
+linespec test /path/to/linespecs/</code></pre>
+                    </div>
+                </section>
+
+                <section id="philosophy" class="docs-section">
+                    <h2>Philosophy</h2>
+                    <p>LineSpec is not a natural language tool. It is a strict behavioral specification language designed to:</p>
+                    <ul>
+                        <li>Be readable by humans</li>
+                        <li>Be trivial to parse</li>
+                        <li>Execute deterministically</li>
+                        <li>Support modern microservice testing workflows</li>
+                    </ul>
+                    <p><strong>No inference. No heuristics. No ambiguity.</strong></p>
+                </section>
+
+                <div class="docs-footer">
+                    <p><strong>Previous:</strong> <a href="provenance.html">Provenance Records</a></p>
+                </div>
+            </article>
+        </main>
+    </div>
+
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/docs.js"></script>
+</body>
+</html>

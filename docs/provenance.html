@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provenance Records - LineSpec Documentation</title>
+    <meta name="description" content="Complete documentation for LineSpec Provenance Records - structured YAML artifacts for architectural decisions.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/docs.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="docs-page">
+    <nav class="navbar docs-navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="url(#gradient)"/>
+                    <path d="M8 12h16M8 16h12M8 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#6366f1"/>
+                            <stop offset="1" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>LineSpec</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html#features">Features</a>
+                <a href="index.html" class="active">Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>Documentation</h3>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <h4>Getting Started</h4>
+                    <ul>
+                        <li><a href="docs.html">Overview</a></li>
+                        <li><a href="linespec.html">Testing Guide</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>Provenance Records</h4>
+                    <ul>
+                        <li><a href="#quick-start" class="active">Quick Start</a></li>
+                        <li><a href="#concepts">Core Concepts</a></li>
+                        <li><a href="#schema">Schema Reference</a></li>
+                        <li><a href="#cli">CLI Commands</a></li>
+                        <li><a href="#config">Configuration</a></li>
+                        <li><a href="#git">Git Integration</a></li>
+                        <li><a href="#best-practices">Best Practices</a></li>
+                        <li><a href="#examples">Examples</a></li>
+                        <li><a href="#troubleshooting">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-section">
+                    <h4>LineSpec Testing <span class="beta-tag">Beta</span></h4>
+                    <ul>
+                        <li><a href="linespec.html">Introduction</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="docs-content">
+            <article class="docs-article">
+                <header class="docs-header">
+                    <div class="docs-badge stable">Stable v1.0.0</div>
+                    <h1>Provenance Records</h1>
+                    <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a <code>provenance/</code> directory and form a queryable graph of architectural decisions.</p>
+                </header>
+
+                <div class="docs-toc">
+                    <h3>Table of Contents</h3>
+                    <ul>
+                        <li><a href="#quick-start">Quick Start</a></li>
+                        <li><a href="#concepts">Core Concepts</a></li>
+                        <li><a href="#schema">Schema Reference</a></li>
+                        <li><a href="#cli">CLI Commands</a></li>
+                        <li><a href="#config">Configuration</a></li>
+                        <li><a href="#git">Git Integration</a></li>
+                        <li><a href="#best-practices">Best Practices</a></li>
+                        <li><a href="#examples">Examples</a></li>
+                        <li><a href="#troubleshooting">Troubleshooting</a></li>
+                    </ul>
+                </div>
+
+                <section id="quick-start" class="docs-section">
+                    <h2>Quick Start</h2>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Install LineSpec
+brew tap livecodelife/linespec
+brew install linespec
+
+# Or use go install
+go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0
+
+# Create your first provenance record
+linespec provenance create --title "Add user authentication"
+
+# Validate all records
+linespec provenance lint
+
+# View the decision graph
+linespec provenance graph</code></pre>
+                    </div>
+                </section>
+
+                <section id="concepts" class="docs-section">
+                    <h2>Core Concepts</h2>
+                    
+                    <h3>What are Provenance Records?</h3>
+                    <p>Provenance Records are <strong>structured decision documents</strong> that capture:</p>
+                    <ul>
+                        <li><strong>Intent</strong> - What we want to achieve and why</li>
+                        <li><strong>Constraints</strong> - Rules that must be followed</li>
+                        <li><strong>Scope</strong> - What files are affected (or explicitly forbidden)</li>
+                        <li><strong>Relationships</strong> - How decisions connect (supersedes, related)</li>
+                        <li><strong>Status</strong> - Where the decision is in its lifecycle</li>
+                    </ul>
+                    <p>They provide a <strong>queryable history</strong> of architectural decisions that can be linted, graphed, and enforced at commit time.</p>
+
+                    <h3>ID Format</h3>
+                    <p>Records use the format: <code>prov-YYYY-XXXXXXXX</code> or <code>prov-YYYY-XXXXXXXX-service-name</code></p>
+                    <p>Where:</p>
+                    <ul>
+                        <li><code>YYYY</code> is the four-digit year</li>
+                        <li><code>XXXXXXXX</code> is 8 cryptographically random hex characters (lowercase)</li>
+                    </ul>
+                    <p>The year prefix limits the collision probability per year. With 8 hex characters, there are 2^32 (4,294,967,296) possible combinations per year, making collisions extremely unlikely even with concurrent record creation.</p>
+                    
+                    <div class="info-box">
+                        <h4>Examples:</h4>
+                        <ul>
+                            <li><code>prov-2026-a1b2c3d4</code> - Root-level decision</li>
+                            <li><code>prov-2026-deadbeef-user-service</code> - Service-specific decision</li>
+                        </ul>
+                        <p><strong>Backward Compatibility:</strong> The system still accepts the legacy sequential format <code>prov-YYYY-NNN</code> for existing records, but all new records use the crypto random format.</p>
+                    </div>
+
+                    <h3>Status Lifecycle</h3>
+                    <div class="diagram">
+                        <pre>┌─────────┐    ┌─────────────┐    ┌────────────┐
+│  open   │───▶│ implemented │───▶│ superseded │
+└─────────┘    └─────────────┘    └────────────┘
+                                     │
+                                     ▼
+                               ┌────────────┐
+                               │ deprecated │
+                               └────────────┘</pre>
+                    </div>
+                    <ul>
+                        <li><strong>open</strong> - Decision is being discussed/developed</li>
+                        <li><strong>implemented</strong> - Decision is complete and immutable</li>
+                        <li><strong>superseded</strong> - Replaced by a newer record (use <code>superseded_by</code>)</li>
+                        <li><strong>deprecated</strong> - No longer relevant</li>
+                    </ul>
+                </section>
+
+                <section id="schema" class="docs-section">
+                    <h2>Schema Reference</h2>
+                    
+                    <h3>Complete Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>id: prov-2026-001
+title: "Protocol-level proxy interception for language-agnostic test evaluation"
+status: implemented
+created_at: "2026-03-12"
+author: "caleb.cowen@gmail.com"
+
+sealed_at_sha: "a3f92c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+
+intent: >
+  LineSpec evaluates service behavior by intercepting traffic at the TCP/protocol
+  layer rather than through application-level mocking...
+
+constraints:
+  - Interception must occur at the network/protocol layer
+  - The system under test must not require modification
+  - Proxy implementations must be protocol-correct
+
+affected_scope:
+  - pkg/proxy/**
+  - pkg/registry/**
+  - cmd/linespec/main.go
+
+forbidden_scope:
+  - "re:.*_test\\.go$"
+
+supersedes: null
+superseded_by: null
+related:
+  - prov-2026-002
+
+associated_specs: []
+associated_traces: []
+monitors: []
+
+tags:
+  - architecture
+  - proxy
+  - core</code></pre>
+                    </div>
+
+                    <h3>Field Descriptions</h3>
+                    
+                    <h4>Required Fields</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>id</code></td>
+                                <td>string</td>
+                                <td>Unique identifier (prov-YYYY-XXXXXXXX or prov-YYYY-XXXXXXXX-service)</td>
+                            </tr>
+                            <tr>
+                                <td><code>title</code></td>
+                                <td>string</td>
+                                <td>Human-readable title</td>
+                            </tr>
+                            <tr>
+                                <td><code>status</code></td>
+                                <td>string</td>
+                                <td>One of: open, implemented, superseded, deprecated</td>
+                            </tr>
+                            <tr>
+                                <td><code>created_at</code></td>
+                                <td>string</td>
+                                <td>ISO 8601 date (YYYY-MM-DD)</td>
+                            </tr>
+                            <tr>
+                                <td><code>author</code></td>
+                                <td>string</td>
+                                <td>Email of the author</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Intent and Constraints</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>intent</code></td>
+                                <td>string</td>
+                                <td>What we want to achieve and why (folded scalar <code>&gt;</code>)</td>
+                            </tr>
+                            <tr>
+                                <td><code>constraints</code></td>
+                                <td>array</td>
+                                <td>List of rules that must be followed</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Scope</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>affected_scope</code></td>
+                                <td>array</td>
+                                <td>Files/paths this decision affects</td>
+                            </tr>
+                            <tr>
+                                <td><code>forbidden_scope</code></td>
+                                <td>array</td>
+                                <td>Files/paths explicitly excluded</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="info-box">
+                        <h4>Pattern Matching:</h4>
+                        <ul>
+                            <li><strong>Exact paths:</strong> <code>pkg/proxy/mysql/proxy.go</code></li>
+                            <li><strong>Glob patterns:</strong> <code>pkg/proxy/**/*.go</code></li>
+                            <li><strong>Regex patterns:</strong> <code>"re:.*_test\\.go$"</code></li>
+                        </ul>
+                    </div>
+
+                    <h4>Graph Relationships</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>supersedes</code></td>
+                                <td>string</td>
+                                <td>ID of older record this replaces</td>
+                            </tr>
+                            <tr>
+                                <td><code>superseded_by</code></td>
+                                <td>string</td>
+                                <td>ID of newer record that replaces this</td>
+                            </tr>
+                            <tr>
+                                <td><code>related</code></td>
+                                <td>array</td>
+                                <td>Related record IDs (no directional relationship)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Proof of Completion</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>sealed_at_sha</code></td>
+                                <td>string</td>
+                                <td>Git SHA captured when record marked implemented (CLI-only, immutable)</td>
+                            </tr>
+                            <tr>
+                                <td><code>associated_specs</code></td>
+                                <td>array</td>
+                                <td>Proof artifacts validating this decision. Each entry has <code>path</code> (required) and optional <code>type</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>associated_traces</code></td>
+                                <td>array</td>
+                                <td>Trace files or test output</td>
+                            </tr>
+                            <tr>
+                                <td><code>monitors</code></td>
+                                <td>array</td>
+                                <td>URLs or alerts for runtime monitoring</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Metadata</h4>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>tags</code></td>
+                                <td>array</td>
+                                <td>Arbitrary tags for filtering and organization</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section id="cli" class="docs-section">
+                    <h2>CLI Commands</h2>
+
+                    <h3>Create</h3>
+                    <p>Create a new provenance record:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Interactive (opens editor)
+linespec provenance create
+
+# With pre-populated fields
+linespec provenance create --title "Add caching layer" --tag architecture,performance
+
+# For a specific service
+linespec provenance create -i user-service --title "Add user auth"
+
+# Skip editor
+linespec provenance create --title "Quick fix" --no-edit</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--title "..."</code> - Pre-populate title</li>
+                        <li><code>--supersedes prov-YYYY-XXXXXXXX</code> - Link to older record</li>
+                        <li><code>--tag tag1,tag2</code> - Add tags</li>
+                        <li><code>--no-edit</code> - Write without opening editor</li>
+                        <li><code>-i, --id-suffix name</code> - Append service suffix</li>
+                        <li><code>-c, --config path</code> - Use custom .linespec.yml</li>
+                    </ul>
+
+                    <h3>Lint</h3>
+                    <p>Validate provenance records:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Lint all records
+linespec provenance lint
+
+# Lint specific record
+linespec provenance lint --record prov-2026-001
+
+# JSON output for CI
+linespec provenance lint --format json
+
+# Override enforcement level
+linespec provenance lint --enforcement strict</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record prov-YYYY-XXXXXXXX</code> - Lint single record</li>
+                        <li><code>--enforcement level</code> - none|warn|strict (default from config)</li>
+                        <li><code>--format format</code> - human|json</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Enforcement Levels:</strong></p>
+                    <ul>
+                        <li><strong>none</strong> - Don't enforce at all</li>
+                        <li><strong>warn</strong> - Show warnings but allow (default)</li>
+                        <li><strong>strict</strong> - Fail on any violation</li>
+                    </ul>
+
+                    <h3>Status</h3>
+                    <p>View record status:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Overview of all records
+linespec provenance status
+
+# Detailed view of one record
+linespec provenance status --record prov-2026-a1b2c3d4
+
+# Filter by status
+linespec provenance status --filter open
+linespec provenance status --filter implemented
+
+# Filter by tag
+linespec provenance status --filter tag:architecture
+
+# Save auto-populated scope
+linespec provenance status --record prov-2026-a1b2c3d4 --save-scope</code></pre>
+                    </div>
+
+                    <h3>Graph</h3>
+                    <p>Render provenance graph:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Full graph
+linespec provenance graph
+
+# Graph from specific record
+linespec provenance graph --root prov-2026-a1b2c3d4</code></pre>
+                    </div>
+
+                    <h3>Check</h3>
+                    <p>Check commits for violations:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Check current HEAD
+linespec provenance check
+
+# Check specific commit
+linespec provenance check --commit abc123
+
+# Check commit range
+linespec provenance check --range HEAD~5..HEAD
+
+# Check against specific record only
+linespec provenance check --record prov-2026-a1b2c3d4
+
+# Check staged files (used by commit-msg hook)
+linespec provenance check --staged --message-file .git/COMMIT_EDITMSG</code></pre>
+                    </div>
+
+                    <h3>Complete</h3>
+                    <p>Mark record as implemented:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Normal completion
+linespec provenance complete --record prov-2026-a1b2c3d4
+
+# Force complete (skip check)
+linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
+                    </div>
+
+                    <h3>Install Hooks</h3>
+                    <p>Install git hooks for automatic validation:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance install-hooks</code></pre>
+                    </div>
+                    <p>This creates both <code>pre-commit</code> and <code>commit-msg</code> hooks.</p>
+                </section>
+
+                <section id="config" class="docs-section">
+                    <h2>Configuration</h2>
+                    <p>Create a <code>.linespec.yml</code> file in your repository root:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>provenance:
+  # Directory containing provenance records (default: provenance)
+  dir: provenance
+  
+  # Enforcement level: none|warn|strict (default: warn)
+  enforcement: warn
+  
+  # Require provenance IDs in commit messages (default: false)
+  commit_tag_required: false
+  
+  # Auto-populate affected_scope from git commits (default: true)
+  auto_affected_scope: true
+  
+  # Additional directories to load records from (for monorepos)
+  shared_repos:
+    - examples/user-service/provenance
+    - examples/todo-api/provenance</code></pre>
+                    </div>
+                </section>
+
+                <section id="git" class="docs-section">
+                    <h2>Git Integration</h2>
+                    
+                    <h3>Two-Hook Strategy</h3>
+                    <p>The provenance system uses two git hooks that work together:</p>
+                    <ol>
+                        <li><strong>pre-commit hook</strong>: Runs first, lints modified provenance records for syntax/validity</li>
+                        <li><strong>commit-msg hook</strong>: Runs after you write your message, checks staged files against provenance scope</li>
+                    </ol>
+
+                    <h3>Commit Message Format</h3>
+                    <p>Reference provenance records in commit messages:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Single record
+git commit -m "Add user authentication [prov-2026-a1b2c3d4]"
+
+# Multiple records
+git commit -m "Fix auth and caching [prov-2026-a1b2c3d4] [prov-2026-deadbeef]"
+
+# Service-specific
+git commit -m "Update user service [prov-2026-a1b2c3d4-user-service]"</code></pre>
+                    </div>
+                </section>
+
+                <section id="best-practices" class="docs-section">
+                    <h2>Best Practices</h2>
+                    <ul>
+                        <li><strong>Start with Intent</strong> - Clearly state what you want to achieve and why</li>
+                        <li><strong>Be Specific with Constraints</strong> - Write verifiable rules</li>
+                        <li><strong>Use Appropriate Scope</strong> - Start in observed mode (empty affected_scope), then lock to allowlist</li>
+                        <li><strong>Link Related Decisions</strong> - Use <code>supersedes</code>, <code>superseded_by</code>, and <code>related</code></li>
+                        <li><strong>Tag Thoughtfully</strong> - Use consistent tags for filtering</li>
+                    </ul>
+                </section>
+
+                <section id="examples" class="docs-section">
+                    <h2>Examples</h2>
+                    
+                    <h3>Example 1: Simple Architecture Decision</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>id: prov-2026-a1b2c3d4
+title: "Use PostgreSQL for primary data store"
+status: implemented
+created_at: "2026-03-15"
+author: "dev@example.com"
+
+intent: >
+  After evaluating MySQL, PostgreSQL, and SQLite, we choose PostgreSQL
+  for our primary data store. It provides better JSON support, more
+  advanced indexing, and better handling of concurrent writes.
+
+constraints:
+  - All new tables must use PostgreSQL
+  - Existing MySQL tables will be migrated gradually
+  - Use connection pooling with minimum 10, maximum 100 connections
+
+affected_scope:
+  - pkg/db/**
+  - migrations/**
+  - config/database.yml
+
+forbidden_scope:
+  - "re:.*_test\\.go$"
+  - vendor/**
+
+tags:
+  - architecture
+  - database
+  - postgresql</code></pre>
+                    </div>
+                </section>
+
+                <section id="troubleshooting" class="docs-section">
+                    <h2>Troubleshooting</h2>
+                    
+                    <h3>Common Issues</h3>
+                    <ul>
+                        <li><strong>"Record not found"</strong> - Check that the record file exists in the provenance directory</li>
+                        <li><strong>"File outside scope"</strong> - The file you're modifying isn't in affected_scope</li>
+                        <li><strong>"Cycle detected in graph"</strong> - You have circular supersedes relationships</li>
+                        <li><strong>Linter is slow</strong> - Reduce the number of shared_repos</li>
+                    </ul>
+                    
+                    <h3>Getting Help</h3>
+                    <ul>
+                        <li>Open an issue: <a href="https://github.com/livecodelife/linespec/issues" target="_blank">https://github.com/livecodelife/linespec/issues</a></li>
+                        <li>Check existing provenance records in the <code>examples/</code></li>
+                        <li>Review the release plan: <code>RELEASE_PLAN.md</code></li>
+                    </ul>
+                </section>
+
+                <div class="docs-footer">
+                    <p><strong>Next:</strong> <a href="linespec.html">LineSpec Testing</a></p>
+                </div>
+            </article>
+        </main>
+    </div>
+
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/docs.js"></script>
+</body>
+</html>
