@@ -430,6 +430,22 @@
     padding: var(--spacing-md);
     margin: var(--spacing-md) 0 var(--spacing-lg);
     overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-accent) var(--color-surface-base);
+}
+
+.diagram::-webkit-scrollbar {
+    height: 6px;
+}
+
+.diagram::-webkit-scrollbar-track {
+    background: var(--color-surface-base);
+    border-radius: 3px;
+}
+
+.diagram::-webkit-scrollbar-thumb {
+    background: var(--color-accent);
+    border-radius: 3px;
 }
 
 .diagram pre {
@@ -523,6 +539,22 @@
 .comparison-table {
     margin: var(--spacing-lg) 0;
     overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-accent) var(--color-surface-base);
+}
+
+.comparison-table::-webkit-scrollbar {
+    height: 6px;
+}
+
+.comparison-table::-webkit-scrollbar-track {
+    background: var(--color-surface-base);
+    border-radius: 3px;
+}
+
+.comparison-table::-webkit-scrollbar-thumb {
+    background: var(--color-accent);
+    border-radius: 3px;
 }
 
 .comparison-table table {
@@ -723,6 +755,22 @@
         display: block;
         overflow-x: auto;
         white-space: nowrap;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent) var(--color-surface-base);
+    }
+    
+    .docs-table::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .docs-table::-webkit-scrollbar-track {
+        background: var(--color-surface-base);
+        border-radius: 3px;
+    }
+    
+    .docs-table::-webkit-scrollbar-thumb {
+        background: var(--color-accent);
+        border-radius: 3px;
     }
     
     .comparison-table {
@@ -743,6 +791,25 @@
     .code-example pre {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent) var(--color-surface-base);
+    }
+    
+    .code-block pre::-webkit-scrollbar,
+    .code-example pre::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .code-block pre::-webkit-scrollbar-track,
+    .code-example pre::-webkit-scrollbar-track {
+        background: var(--color-surface-base);
+        border-radius: 3px;
+    }
+    
+    .code-block pre::-webkit-scrollbar-thumb,
+    .code-example pre::-webkit-scrollbar-thumb {
+        background: var(--color-accent);
+        border-radius: 3px;
     }
     
     .docs-section h2 {
