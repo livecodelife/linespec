@@ -13,7 +13,8 @@ constraints:
     - The fix must not break existing behavior when -c flag is not used
     - The path resolution must work correctly for both absolute and relative config file paths
 affected_scope:
-    - cmd/linespec/main.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
