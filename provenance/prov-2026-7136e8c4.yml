@@ -1,6 +1,6 @@
 id: prov-2026-7136e8c4
 title: "Semantic search and local embedding layer for provenance history"
-status: open
+status: implemented
 created_at: "2026-03-16"
 author: calebcowen@gmail.com
 intent: >
@@ -99,7 +99,7 @@ forbidden_scope:
 supersedes: null
 superseded_by: null
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 89742bfaa10cd9c4ff20265411153b95f606bbf7
 associated_specs:
   - path: pkg/embeddings/store_test.go
     type: go_test
