@@ -1,0 +1,27 @@
+id: prov-2026-c5facf10
+title: GitHub Action embeddings index updates
+status: open
+created_at: "2026-03-17"
+author: calebcowen@gmail.com
+intent: >
+  The semantic search feature uses a local embedding store at .linespec/embeddings.bin.
+  When GitHub Actions runs the index workflow, it updates this binary file with new
+  embeddings for completed provenance records.
+  
+  This record governs automated updates to the embeddings index file.
+
+constraints:
+  - The .linespec/embeddings.bin file MAY be updated by GitHub Actions
+  - Updates MUST only add embeddings for newly completed records
+  - The file MUST NOT be manually edited
+
+affected_scope:
+  - .linespec/embeddings.bin
+  - .github/workflows/index-provenance.yml
+
+associated_specs:
+  - path: .github/workflows/index-provenance.yml
+    type: yaml
+associated_traces: []
+monitors: []
+tags: []
