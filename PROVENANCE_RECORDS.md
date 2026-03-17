@@ -522,12 +522,13 @@ provenance:
 
 ### Semantic Search Configuration
 
-Enable semantic search over provenance records:
+Enable semantic search over provenance records using your choice of embedding provider:
 
+**Voyage AI (default):**
 ```yaml
 provenance:
   embedding:
-    provider: voyage                 # Embedding provider (voyage)
+    provider: voyage                 # Embedding provider
     index_model: voyage-4-large     # Model for indexing (2048 dims)
     query_model: voyage-4-lite      # Model for queries (2048 dims)
     api_key: ${VOYAGE_API_KEY}      # API key from environment
@@ -535,22 +536,41 @@ provenance:
     index_on_complete: true         # Auto-index on complete
 ```
 
+**OpenAI:**
+```yaml
+provenance:
+  embedding:
+    provider: openai                 # Embedding provider
+    index_model: text-embedding-3-small   # Model for indexing
+    query_model: text-embedding-3-small   # Model for queries
+    api_key: ${OPENAI_API_KEY}      # API key from environment
+    similarity_threshold: 0.50        # Minimum similarity
+    index_on_complete: true         # Auto-index on complete
+```
+
 **Configuration Options:**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `provider` | string | - | Embedding provider (currently only "voyage") |
-| `index_model` | string | `voyage-4-large` | Model for document indexing |
-| `query_model` | string | `voyage-4-lite` | Model for query embeddings |
+| `provider` | string | - | Embedding provider: `voyage` or `openai` |
+| `index_model` | string | Provider-specific | Model for document indexing |
+| `query_model` | string | Provider-specific | Model for query embeddings |
 | `api_key` | string | - | API key (use `${ENV_VAR}` format) |
 | `similarity_threshold` | float | `0.50` | Minimum similarity for results |
 | `index_on_complete` | bool | `true` | Auto-generate embeddings on complete |
 
-**Model Details:**
+**Voyage AI Models:**
 - `voyage-4-large` - High-quality model for document embeddings (input_type: "document")
 - `voyage-4-lite` - Efficient model for query embeddings (input_type: "query")
 - Both output 2048-dimensional vectors in a shared embedding space
 - Cross-model similarity is valid due to Voyage's training process
+
+**OpenAI Models:**
+- `text-embedding-3-small` - Fast, cost-effective embeddings (1536 dims)
+- `text-embedding-3-large` - Best performance embeddings (3072 dims)
+- `text-embedding-ada-002` - Legacy model (1536 dims)
+
+**Note:** When using OpenAI, both document and query embeddings use the same model (no separate input_type handling).
 
 ---
 

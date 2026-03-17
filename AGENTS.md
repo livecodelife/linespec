@@ -209,10 +209,12 @@ provenance:
 
 ### Semantic Search
 
-LineSpec supports semantic search over provenance records using Voyage AI embeddings. This allows natural language queries to find relevant historical decisions.
+LineSpec supports semantic search over provenance records using your choice of embedding provider (Voyage AI or OpenAI). This allows natural language queries to find relevant historical decisions.
 
 **Configuration:**
 Add to `.linespec.yml`:
+
+**Voyage AI:**
 ```yaml
 provenance:
   embedding:
@@ -220,6 +222,17 @@ provenance:
     index_model: voyage-4-large     # High-quality model for indexing
     query_model: voyage-4-lite      # Efficient model for queries
     api_key: ${VOYAGE_API_KEY}
+    similarity_threshold: 0.50
+    index_on_complete: true
+```
+
+**OpenAI:**
+```yaml
+provenance:
+  embedding:
+    provider: openai
+    index_model: text-embedding-3-small   # Model for indexing and queries
+    api_key: ${OPENAI_API_KEY}
     similarity_threshold: 0.50
     index_on_complete: true
 ```
@@ -243,9 +256,8 @@ linespec provenance index --dry-run
 ```
 
 **How it works:**
-- Records are embedded using `voyage-4-large` with `input_type: "document"` at complete time
-- Queries are embedded using `voyage-4-lite` with `input_type: "query"`
-- Both models output 2048-dimensional vectors in a shared embedding space
+- Records are embedded at complete time using the configured provider and index_model
+- Queries are embedded using the query_model (same model for OpenAI)
 - Similarity scores typically range 0.50-0.70 for relevant matches
 - Threshold of 0.50 effectively captures semantically related records
 

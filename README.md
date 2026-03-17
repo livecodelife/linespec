@@ -222,11 +222,11 @@ provenance:
   auto_affected_scope: true           # Auto-populate from git
   shared_repos: []                    # Additional directories (monorepos)
   
-  # Semantic search configuration (optional)
+  # Semantic search configuration (optional - supports voyage or openai)
   embedding:
-    provider: voyage                 # Embedding provider
-    index_model: voyage-4-large     # Model for indexing (2048 dims)
-    query_model: voyage-4-lite      # Model for queries (2048 dims)
+    provider: voyage                 # Embedding provider: voyage or openai
+    index_model: voyage-4-large     # Model for indexing (2048 dims for voyage)
+    query_model: voyage-4-lite      # Model for queries (2048 dims for voyage)
     api_key: ${VOYAGE_API_KEY}      # API key from environment
     similarity_threshold: 0.50        # Minimum similarity for results
     index_on_complete: true         # Auto-index on complete
