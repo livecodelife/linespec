@@ -47,13 +47,35 @@ func TestProxyNewProxyWithDefaultDatabase(t *testing.T) {
 	// Ensure NewProxy always sets the default database name
 	proxy := NewProxy("localhost:3306", "localhost:3307", registry.NewMockRegistry())
 
-	// The proxy should have the default database name set
-	if proxy.databaseName == "" {
+	// The proxy should have the default database name set via GetDatabaseName()
+	if proxy.GetDatabaseName() == "" {
 		t.Error("NewProxy should set a default database name")
 	}
 
 	// Verify it's the expected default
-	if proxy.databaseName != "todo_api_development" {
-		t.Errorf("NewProxy default database = %q, expected todo_api_development", proxy.databaseName)
+	if proxy.GetDatabaseName() != "todo_api_development" {
+		t.Errorf("NewProxy default database = %q, expected todo_api_development", proxy.GetDatabaseName())
+	}
+}
+
+func TestProxyUsesDatabaseProxyConfig(t *testing.T) {
+	// Test that the proxy properly delegates to DatabaseProxyConfig
+	proxy := NewProxy("localhost:3306", "localhost:3307", registry.NewMockRegistry())
+
+	// Should start with default
+	if proxy.GetDatabaseName() != "todo_api_development" {
+		t.Errorf("Initial database name = %q", proxy.GetDatabaseName())
+	}
+
+	// Change to PostgreSQL-style name
+	proxy.SetDatabaseName("postgres")
+	if proxy.GetDatabaseName() != "postgres" {
+		t.Errorf("After SetDatabaseName('postgres') = %q", proxy.GetDatabaseName())
+	}
+
+	// Change to custom service name
+	proxy.SetDatabaseName("order_service")
+	if proxy.GetDatabaseName() != "order_service" {
+		t.Errorf("After SetDatabaseName('order_service') = %q", proxy.GetDatabaseName())
 	}
 }

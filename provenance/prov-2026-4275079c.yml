@@ -50,9 +50,11 @@ affected_scope:
   - pkg/config/framework_config_test.go
   - pkg/config/database_config_test.go
   - pkg/proxy/base/database_proxy.go
+  - pkg/proxy/base/database_proxy_test.go
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/mysql/proxy_dbname_test.go
   - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/proxy_dbname_test.go
   - pkg/runner/runner.go
   - examples/order-service/**
   - examples/order-linespecs/**
@@ -69,6 +71,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-028
+  - prov-2026-029
   - prov-2026-030
   - prov-2026-7136e8c4
 sealed_at_sha: ""
@@ -77,7 +80,11 @@ associated_specs:
     type: go-test
   - path: pkg/config/database_config_test.go
     type: go-test
+  - path: pkg/proxy/base/database_proxy_test.go
+    type: go-test
   - path: pkg/proxy/mysql/proxy_dbname_test.go
+    type: go-test
+  - path: pkg/proxy/postgresql/proxy_dbname_test.go
     type: go-test
 associated_traces: []
 monitors: []
