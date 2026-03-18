@@ -200,8 +200,8 @@ database:
 		t.Errorf("NetworkAlias = %q, expected real-db", config.ContainerNaming.NetworkAlias)
 	}
 
-	if config.ContainerNaming.MigrateContainer != "linespec-migrate-" {
-		t.Errorf("MigrateContainer = %q, expected linespec-migrate-", config.ContainerNaming.MigrateContainer)
+	if config.ContainerNaming.MigrateContainer != "linespec-migrate-{{ .ServiceName }}" {
+		t.Errorf("MigrateContainer = %q, expected linespec-migrate-{{ .ServiceName }}", config.ContainerNaming.MigrateContainer)
 	}
 
 	if config.ContainerNaming.ProjectMountPath != "/app/project" {

@@ -91,7 +91,6 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	keys := []string{
 		path,
 		"http://" + r.Host + path,
-		"http://user-service.local" + path, // Common alias
 	}
 
 	var mock *types.ExpectStatement

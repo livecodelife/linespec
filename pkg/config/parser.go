@@ -133,7 +133,16 @@ func applyDefaults(config *LineSpecConfig) {
 		config.ContainerNaming.NetworkAlias = "real-db"
 	}
 	if config.ContainerNaming.MigrateContainer == "" {
-		config.ContainerNaming.MigrateContainer = "linespec-migrate-"
+		config.ContainerNaming.MigrateContainer = "linespec-migrate-{{ .ServiceName }}"
+	}
+	if config.ContainerNaming.KafkaContainer == "" {
+		config.ContainerNaming.KafkaContainer = "linespec-shared-kafka"
+	}
+	if config.ContainerNaming.ProxyContainer == "" {
+		config.ContainerNaming.ProxyContainer = "proxy-{{ .Type }}-{{ .SpecName }}"
+	}
+	if config.ContainerNaming.AppContainer == "" {
+		config.ContainerNaming.AppContainer = "app-{{ .SpecName }}"
 	}
 	if config.ContainerNaming.ProjectMountPath == "" {
 		config.ContainerNaming.ProjectMountPath = "/app/project"
@@ -141,6 +150,19 @@ func applyDefaults(config *LineSpecConfig) {
 	if config.ContainerNaming.RegistryMountPath == "" {
 		config.ContainerNaming.RegistryMountPath = "/app/registry"
 	}
+
+	// Port configuration defaults
+	if config.PortConfig == nil {
+		config.PortConfig = &PortConfig{}
+	}
+	if config.PortConfig.MinPort == 0 {
+		config.PortConfig.MinPort = 10000
+	}
+	if config.PortConfig.MaxPort == 0 {
+		config.PortConfig.MaxPort = 65535
+	}
+	// DynamicPorts defaults to true
+	// FixedProxyPort defaults to 0 (dynamic allocation)
 }
 
 // validate checks that required configuration is present

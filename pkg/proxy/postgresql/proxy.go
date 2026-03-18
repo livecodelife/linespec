@@ -107,7 +107,7 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 	clientReader := bufio.NewReader(clientConn)
 
 	// Handle startup phase (SSL + authentication with client)
-	_, err := p.startup.HandleStartupWithReader(clientReader, clientConn)
+	params, err := p.startup.HandleStartupWithReader(clientReader, clientConn)
 	if err != nil {
 		logger.Error("PostgreSQL Proxy: Startup error: %v", err)
 		return
@@ -122,7 +122,7 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 	defer upstreamConn.Close()
 
 	// Perform transparent startup with upstream - just forward startup messages
-	if err := p.transparentStartup(clientConn, upstreamConn); err != nil {
+	if err := p.transparentStartup(clientConn, upstreamConn, params); err != nil {
 		logger.Error("PostgreSQL Proxy: Transparent startup failed: %v", err)
 		return
 	}
@@ -133,9 +133,20 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 
 // transparentStartup handles the initial startup by forwarding client messages to upstream
 // and upstream responses back to client, completely transparently
-func (p *Proxy) transparentStartup(clientConn, upstreamConn net.Conn) error {
+func (p *Proxy) transparentStartup(clientConn, upstreamConn net.Conn, params map[string]string) error {
+	// Extract user and database from params
+	user := params["user"]
+	database := params["database"]
+
+	if user == "" {
+		user = "postgres" // default user
+	}
+	if database == "" {
+		database = user // PostgreSQL default: database name matches username
+	}
+
 	// Send startup message to upstream
-	startupMsg := p.createStartupMessage("notification_user", "notification_service")
+	startupMsg := p.createStartupMessage(user, database)
 	if _, err := upstreamConn.Write(startupMsg); err != nil {
 		return fmt.Errorf("error sending startup to upstream: %w", err)
 	}

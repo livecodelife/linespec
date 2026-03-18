@@ -1,7 +1,10 @@
 package config
 
 // ServiceConfig defines the service under test
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // FrameworkConfig defines the interface for framework-specific configuration
 type FrameworkConfig interface {
@@ -195,6 +198,7 @@ type DatabaseConfig struct {
 }
 
 // ContainerNaming defines configurable container and network naming
+// Supports template variables: {{ .ServiceName }}, {{ .SpecName }}, {{ .Type }}
 type ContainerNaming struct {
 	DatabaseContainer string `yaml:"database_container"`  // Template for DB container name
 	NetworkAlias      string `yaml:"network_alias"`       // Network alias for database (e.g., "real-db")
@@ -205,6 +209,95 @@ type ContainerNaming struct {
 	MigrateContainer  string `yaml:"migrate_container"`   // Template for migration container name
 	ProjectMountPath  string `yaml:"project_mount_path"`  // Mount path for project (default: /app/project)
 	RegistryMountPath string `yaml:"registry_mount_path"` // Mount path for registry (default: /app/registry)
+}
+
+// PortConfig defines dynamic port allocation settings
+type PortConfig struct {
+	MinPort        int  `yaml:"min_port"`         // Minimum port number for dynamic allocation
+	MaxPort        int  `yaml:"max_port"`         // Maximum port number for dynamic allocation
+	DynamicPorts   bool `yaml:"dynamic_ports"`    // Enable dynamic port allocation (default: true)
+	FixedProxyPort int  `yaml:"fixed_proxy_port"` // Fixed port for proxy verification (0 = dynamic)
+}
+
+// ContainerNameParams holds parameters for container name template substitution
+type ContainerNameParams struct {
+	ServiceName string
+	SpecName    string
+	Type        string // "db", "http", "kafka", etc.
+}
+
+// GetDatabaseContainer returns the database container name with template substitution
+func (c *ContainerNaming) GetDatabaseContainer(params ContainerNameParams) string {
+	if c.DatabaseContainer == "" {
+		c.DatabaseContainer = "linespec-shared-db"
+	}
+	return substituteTemplate(c.DatabaseContainer, params)
+}
+
+// GetKafkaContainer returns the Kafka container name with template substitution
+func (c *ContainerNaming) GetKafkaContainer(params ContainerNameParams) string {
+	if c.KafkaContainer == "" {
+		c.KafkaContainer = "linespec-shared-kafka"
+	}
+	return substituteTemplate(c.KafkaContainer, params)
+}
+
+// GetProxyContainer returns the proxy container name with template substitution
+func (c *ContainerNaming) GetProxyContainer(params ContainerNameParams) string {
+	if c.ProxyContainer == "" {
+		c.ProxyContainer = "proxy-{{ .Type }}-{{ .SpecName }}"
+	}
+	return substituteTemplate(c.ProxyContainer, params)
+}
+
+// GetAppContainer returns the app container name with template substitution
+func (c *ContainerNaming) GetAppContainer(params ContainerNameParams) string {
+	if c.AppContainer == "" {
+		c.AppContainer = "app-{{ .SpecName }}"
+	}
+	return substituteTemplate(c.AppContainer, params)
+}
+
+// GetMigrateContainer returns the migration container name with template substitution
+func (c *ContainerNaming) GetMigrateContainer(params ContainerNameParams) string {
+	if c.MigrateContainer == "" {
+		c.MigrateContainer = "linespec-migrate-{{ .ServiceName }}"
+	}
+	return substituteTemplate(c.MigrateContainer, params)
+}
+
+// GetNetworkName returns the network name with template substitution
+func (c *ContainerNaming) GetNetworkName(params ContainerNameParams) string {
+	if c.NetworkName == "" {
+		c.NetworkName = "linespec-shared-net"
+	}
+	return substituteTemplate(c.NetworkName, params)
+}
+
+// GetProjectMountPath returns the project mount path
+func (c *ContainerNaming) GetProjectMountPath() string {
+	if c.ProjectMountPath == "" {
+		c.ProjectMountPath = "/app/project"
+	}
+	return c.ProjectMountPath
+}
+
+// GetRegistryMountPath returns the registry mount path
+func (c *ContainerNaming) GetRegistryMountPath() string {
+	if c.RegistryMountPath == "" {
+		c.RegistryMountPath = "/app/registry"
+	}
+	return c.RegistryMountPath
+}
+
+// substituteTemplate performs simple template substitution for container names
+// Supports: {{ .ServiceName }}, {{ .SpecName }}, {{ .Type }}
+func substituteTemplate(template string, params ContainerNameParams) string {
+	result := template
+	result = strings.ReplaceAll(result, "{{ .ServiceName }}", params.ServiceName)
+	result = strings.ReplaceAll(result, "{{ .SpecName }}", params.SpecName)
+	result = strings.ReplaceAll(result, "{{ .Type }}", params.Type)
+	return result
 }
 
 // InfrastructureConfig defines required infrastructure
@@ -223,6 +316,7 @@ type LineSpecConfig struct {
 	Dependencies    []DependencyConfig   `yaml:"dependencies,omitempty"`
 	Provenance      *ProvenanceConfig    `yaml:"provenance,omitempty"`
 	ContainerNaming *ContainerNaming     `yaml:"container_naming,omitempty"`
+	PortConfig      *PortConfig          `yaml:"ports,omitempty"`
 	Created         time.Time            `yaml:"-"`
 	BaseDir         string               `yaml:"-"`
 }
@@ -249,12 +343,13 @@ type ProvenanceConfig struct {
 
 // DependencyConfig defines external service dependencies
 type DependencyConfig struct {
-	Name    string            `yaml:"name"`
-	Type    string            `yaml:"type"` // http, database
-	Host    string            `yaml:"host"`
-	Port    int               `yaml:"port"`
-	Proxy   bool              `yaml:"proxy"` // Whether to mock this dependency
-	Headers map[string]string `yaml:"headers,omitempty"`
+	Name      string            `yaml:"name"`
+	Type      string            `yaml:"type"` // http, database
+	Host      string            `yaml:"host"`
+	Port      int               `yaml:"port"`
+	Proxy     bool              `yaml:"proxy"`      // Whether to mock this dependency
+	HostAlias string            `yaml:"host_alias"` // Custom hostname alias for the service
+	Headers   map[string]string `yaml:"headers,omitempty"`
 }
 
 // Default configurations for common frameworks
