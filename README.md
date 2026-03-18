@@ -236,15 +236,41 @@ service:
   name: my-service
   type: web
   port: 3000
+  framework: rails                    # rails, fastapi, django, express, or custom
+  start_command: bundle exec rails server  # Optional: override framework default
+  migration_command: bundle exec rake db:migrate  # Optional: custom migration command
+  warmup_endpoint: /health            # Optional: custom warmup endpoint
+  warmup_delay_ms: 100                # Optional: warmup delay in milliseconds
   
 database:
   type: mysql
   port: 3306
+  database: my-service_development    # Database name (default: {service}_development)
+  username: my-service_user           # Username (default: {service}_user)
+  password: my-service_password       # Password (default: {service}_password)
+  host: db                            # Host for external DBs
 
 infrastructure:
   database: true
   kafka: false
+
+# Container naming configuration (optional)
+container_naming:
+  database_container: linespec-shared-db
+  network_name: linespec-shared-net
+  network_alias: real-db
+  migrate_container: linespec-migrate-
 ```
+
+**Framework Support:**
+
+| Framework | Start Command | Migration Command | Needs Warmup |
+|-----------|---------------|-------------------|--------------|
+| `rails` | `bundle exec rails server` | `bundle exec rails db:migrate` | Yes |
+| `fastapi` | `uvicorn main:app` | None | No |
+| `django` | `python manage.py runserver` | `python manage.py migrate` | Yes |
+| `express` | `npm start` | None | No |
+| Custom | Via `start_command` | Via `migration_command` | Via `needs_warmup` |
 
 ---
 

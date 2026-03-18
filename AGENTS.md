@@ -357,17 +357,49 @@ service:
   name: todo-api
   type: web
   port: 3000
+  framework: rails                    # rails, fastapi, django, express, or custom
+  start_command: bundle exec rails server  # Optional: override framework default
+  migration_command: bundle exec rake db:migrate  # Optional: custom migration command
+  warmup_endpoint: /health            # Optional: custom warmup endpoint
+  warmup_delay_ms: 100                # Optional: warmup delay in milliseconds
   docker_compose: docker-compose.yml
 
 database:
   type: mysql|postgresql
   image: mysql:8.4
   port: 3306
+  database: todo_api_development      # Database name (default: {service}_development)
+  username: todo_user                 # Username (default: {service}_user)
+  password: todo_password             # Password (default: {service}_password)
+  host: db                            # Host for external DBs (default: db)
 
 infrastructure:
   database: true
   kafka: false
+
+# Optional: Container naming configuration
+container_naming:
+  database_container: linespec-shared-db     # DB container name
+  network_name: linespec-shared-net          # Docker network name
+  network_alias: real-db                     # Network alias for DB
+  migrate_container: linespec-migrate-       # Migration container prefix
+  project_mount_path: /app/project           # Project mount path
+  registry_mount_path: /app/registry         # Registry mount path
 ```
+
+**Framework Support:**
+
+LineSpec Testing now supports multiple frameworks with automatic startup commands:
+
+| Framework | Start Command | Migration Command | Needs Warmup |
+|-----------|---------------|-------------------|--------------|
+| `rails` | `bundle exec rails server` | `bundle exec rails db:migrate` | Yes |
+| `fastapi` | `uvicorn main:app` | None | No |
+| `django` | `python manage.py runserver` | `python manage.py migrate` | Yes |
+| `express` | `npm start` | None | No |
+| Custom | Via `start_command` | Via `migration_command` | Via `needs_warmup` |
+
+For custom frameworks or to override defaults, use the optional fields in the `service` section.
 
 **[Complete DSL reference → LINESPEC.md](./LINESPEC.md)**
 

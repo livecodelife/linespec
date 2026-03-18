@@ -45,6 +45,8 @@ affected_scope:
   - pkg/proxy/mysql/proxy_dbname_test.go
   - pkg/proxy/postgresql/proxy.go
   - pkg/runner/runner.go
+  - AGENTS.md
+  - README.md
 
 forbidden_scope:
   - pkg/proxy/http/*.go
