@@ -428,8 +428,16 @@ GOOS=linux GOARCH=amd64 go build -o linespec-linux-amd64 ./cmd/linespec
 ### Test Commands
 
 ```bash
-# Run all tests
-go test ./...
+# Run all unit tests
+make test
+# or: go test ./...
+
+# Run integration tests (requires Docker)
+make test-integration
+
+# Run specific database integration tests
+make test-integration-mysql
+make test-integration-postgres
 
 # Run specific package tests
 go test ./pkg/provenance/...
@@ -437,6 +445,9 @@ go test -v ./pkg/provenance/...
 
 # Run single test
 go test -run TestName ./pkg/provenance
+
+# Run integration tests (requires build tag)
+go test -tags integration ./pkg/proxy/mysql/...
 ```
 
 ### Code Style Guidelines

@@ -288,7 +288,10 @@ go build -o linespec ./cmd/linespec
 go build -tags beta -o linespec ./cmd/linespec
 
 # Run tests
-go test ./pkg/provenance/...
+go test ./...
+
+# Run integration tests (requires Docker)
+make test-integration
 
 # Run with beta features
 ./linespec test ./examples/
