@@ -1,0 +1,46 @@
+id: prov-2026-7ade6d68
+title: 'Bug Fix: Container Cleanup and Registry Contamination'
+status: open
+created_at: "2026-03-18"
+author: calebcowen@gmail.com
+intent: >
+  Fix container cleanup issues that caused registry contamination between test runs.
+  
+  During Phase 2 implementation, DEBUG code was added that disabled container cleanup
+  for troubleshooting. This left stale containers running between tests, which caused
+  the wrong proxy to be used and the wrong mock registry to be loaded.
+  
+  Additionally, discovered an existing bug where HTTP proxy cleanup referenced the wrong
+  container type parameter ("db" instead of "http"), which would prevent proper cleanup
+  even when enabled.
+  
+  Issues addressed:
+  1. Remove DEBUG cleanup code from runner.go
+  2. Fix HTTP proxy cleanup bug (wrong Type parameter)
+  3. Ensure all proxy containers are properly cleaned up after tests
+  4. Prevent registry file collisions between concurrent test runs
+constraints:
+  - MUST remove all DEBUG cleanup code added during Phase 2 troubleshooting
+  - MUST fix HTTP proxy cleanup to use Type "http" instead of "db"
+  - MUST ensure all test containers are cleaned up after test completion
+  - MUST verify the order-linespecs test passes without registry contamination
+  - MUST maintain backward compatibility with existing tests
+  - MUST NOT break any existing test functionality
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/runner/runner.go
+    type: go-source
+associated_traces: []
+monitors: []
+tags:
+  - bug-fix
+  - cleanup
+  - containers
+  - registry
+  - outside-phases

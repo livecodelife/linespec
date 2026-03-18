@@ -1,0 +1,80 @@
+id: prov-2026-3f32f886
+title: 'Phase 2: Infrastructure Decoupling - Container Naming, Service Discovery & Port Configuration'
+status: open
+created_at: "2026-03-18"
+author: calebcowen@gmail.com
+intent: >
+  Decouple infrastructure configuration from hardcoded values to enable multi-tenant
+  environments, multiple parallel test runs, and flexible service dependencies.
+  
+  Phase 2 covers three major infrastructure concerns:
+  
+  1. Session 3 - Container & Network Name Configuration:
+     - Replace hardcoded container names (linespec-shared-db, linespec-shared-kafka,
+       linespec-migrate-*, proxy-db-*, proxy-http-*, app-*) with configurable templates
+     - Remove hardcoded network name (linespec-shared-net)
+     - Make mount paths configurable (/app/project, /app/registry)
+     - Support custom prefixes/namespaces for multi-tenant environments
+  
+  2. Session 4 - Service Discovery & HTTP Proxy Decoupling:
+     - Remove hardcoded user-service.local alias (3+ locations)
+     - Make HTTP proxy conditional (only start when service has HTTP dependencies)
+     - Remove hardcoded USER_SERVICE_URL env var and path (/api/v1/users/auth)
+     - Support multiple HTTP service dependencies with different aliases
+     - Make HTTP proxy port configurable (not always 80)
+  
+  3. Session 5 - Protocol & Port Configuration:
+     - Replace hardcoded MySQL port (3306/tcp)
+     - Replace hardcoded PostgreSQL port (5432)
+     - Replace hardcoded Kafka ports (9092/tcp, 29092/tcp, 29093)
+     - Replace hardcoded proxy verification port (8081/tcp)
+     - Create PortAllocator service for dynamic port allocation
+     - Support external databases without port binding
+     - Make database ports configurable per-service
+constraints:
+  - MUST support configurable container name templates via .linespec.yml
+  - MUST allow custom prefixes/namespaces for multi-tenant environments
+  - MUST support multiple services running in parallel without name conflicts
+  - MUST make HTTP proxy conditional based on service dependencies
+  - MUST remove all hardcoded service aliases (user-service.local)
+  - MUST support multiple HTTP service dependencies simultaneously
+  - MUST implement dynamic port allocation with PortAllocator service
+  - MUST detect and avoid port conflicts automatically
+  - MUST support external databases without random port binding
+  - MUST maintain backward compatibility for existing configurations
+  - MUST NOT break existing test suites during transition
+  - MUST document all new configuration options in AGENTS.md
+affected_scope:
+  - pkg/runner/runner.go
+  - pkg/docker/orchestrator.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/config/types.go
+  - pkg/config/parser.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7ade6d68  # Bug fix for container cleanup
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/container_naming_test.go
+    type: go-test
+  - path: pkg/runner/port_allocator_test.go
+    type: go-test
+  - path: pkg/runner/port_allocator.go
+    type: go-source
+  - path: pkg/config/database_config_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - infrastructure
+  - configuration
+  - containers
+  - ports
+  - phase-2
+  - session-3
+  - session-4
+  - session-5
