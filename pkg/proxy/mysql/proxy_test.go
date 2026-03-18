@@ -1,3 +1,5 @@
+//go:build integration
+
 package mysql
 
 import (
@@ -14,24 +16,15 @@ import (
 )
 
 func TestProxy_Passthrough(t *testing.T) {
-	// This test requires a running MySQL container on localhost:3307 (as per user-service compose)
-	// Or we can skip if not available.
+	// This test requires a running MySQL container on localhost:3307
+	// Run with: make test-integration
+	// Or manually: docker run -d -p 3307:3306 -e MYSQL_ROOT_PASSWORD=rootpassword \
+	//   -e MYSQL_DATABASE=todo_api_development -e MYSQL_USER=todo_user \
+	//   -e MYSQL_PASSWORD=todo_password mysql:8.4
 	dbAddr := "localhost:3307"
 	dbUser := "todo_user"
 	dbPass := "todo_password"
 	dbName := "todo_api_development"
-
-	// Check if DB is available
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbAddr, dbName))
-	if err != nil {
-		t.Skip("MySQL not available on localhost:3307")
-		return
-	}
-	if err := db.Ping(); err != nil {
-		t.Skip("MySQL not reachable on localhost:3307")
-		return
-	}
-	db.Close()
 
 	reg := registry.NewMockRegistry()
 	proxyAddr := "localhost:3308"
@@ -75,20 +68,19 @@ func TestProxy_Passthrough(t *testing.T) {
 }
 
 func TestProxy_Mocking(t *testing.T) {
+	// Integration test: requires MySQL container running on localhost:3307
 	dbAddr := "localhost:3307"
 	dbUser := "todo_user"
 	dbPass := "todo_password"
 	dbName := "todo_api_development"
 
-	// Check if DB is available - skip if MySQL not running
+	// Verify DB is available - fail fast if not
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbAddr, dbName))
 	if err != nil {
-		t.Skip("MySQL not available on localhost:3307")
-		return
+		t.Fatalf("Failed to open MySQL connection: %v", err)
 	}
 	if err := db.Ping(); err != nil {
-		t.Skip("MySQL not reachable on localhost:3307")
-		return
+		t.Fatalf("MySQL not reachable on localhost:3307: %v", err)
 	}
 	db.Close()
 
@@ -139,20 +131,19 @@ func TestProxy_Mocking(t *testing.T) {
 }
 
 func TestProxy_MockingSelect(t *testing.T) {
+	// Integration test: requires MySQL container running on localhost:3307
 	dbAddr := "localhost:3307"
 	dbUser := "todo_user"
 	dbPass := "todo_password"
 	dbName := "todo_api_development"
 
-	// Check if DB is available - skip if MySQL not running
+	// Verify DB is available
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbAddr, dbName))
 	if err != nil {
-		t.Skip("MySQL not available on localhost:3307")
-		return
+		t.Fatalf("Failed to open MySQL connection: %v", err)
 	}
 	if err := db.Ping(); err != nil {
-		t.Skip("MySQL not reachable on localhost:3307")
-		return
+		t.Fatalf("MySQL not reachable on localhost:3307: %v", err)
 	}
 	db.Close()
 
