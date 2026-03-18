@@ -52,3 +52,7 @@ linespec-report/
 .env
 *node_modules/
 *bun.lockb
+
+
+examples/order-service/target/**
+examples/order-service/Cargo.lock
