@@ -1,6 +1,6 @@
 id: prov-2026-3f32f886
 title: 'Phase 2: Infrastructure Decoupling - Container Naming, Service Discovery & Port Configuration'
-status: open
+status: implemented
 created_at: "2026-03-18"
 author: calebcowen@gmail.com
 intent: >
@@ -57,7 +57,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-7ade6d68  # Bug fix for container cleanup
-sealed_at_sha: ""
+sealed_at_sha: 8d14be7ce670cfca547be3fcb058d3ee71ee1ba4
 associated_specs:
   - path: pkg/config/container_naming_test.go
     type: go-test
