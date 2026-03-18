@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -33,6 +34,19 @@ type Proxy struct {
 	result       *ResultHandler
 	debugLog     *os.File
 	dbConfig     *base.DatabaseProxyConfig // Configurable database name
+	schemaCache  map[string][]ColumnInfo   // table name -> column definitions
+}
+
+type ColumnInfo struct {
+	Field      string `json:"Field"`
+	Type       string `json:"Type"`
+	Collation  string `json:"Collation"`
+	Null       string `json:"Null"`
+	Key        string `json:"Key"`
+	Default    string `json:"Default"`
+	Extra      string `json:"Extra"`
+	Privileges string `json:"Privileges"`
+	Comment    string `json:"Comment"`
 }
 
 // NewProxy creates a new PostgreSQL proxy
@@ -54,6 +68,7 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		result:       NewResultHandler(),
 		debugLog:     debugLog,
 		dbConfig:     base.NewDatabaseProxyConfig("postgres"), // Default database name
+		schemaCache:  make(map[string][]ColumnInfo),
 	}
 }
 
@@ -65,6 +80,21 @@ func (p *Proxy) SetDatabaseName(name string) {
 // GetDatabaseName returns the current database name
 func (p *Proxy) GetDatabaseName() string {
 	return p.dbConfig.GetDatabaseName()
+}
+
+// LoadSchema loads schema from a JSON file
+func (p *Proxy) LoadSchema(schemaFile string) error {
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+
+	if err := json.Unmarshal(data, &p.schemaCache); err != nil {
+		return fmt.Errorf("failed to parse schema file: %w", err)
+	}
+
+	logger.Debug("Loaded schema for %d tables", len(p.schemaCache))
+	return nil
 }
 
 // Start starts the proxy server
@@ -807,18 +837,19 @@ func (p *Proxy) extractRowsFromPayload(payload interface{}) []map[string]interfa
 	return rows
 }
 
-// inferColumnsForTable infers column names for a table
+// inferColumnsForTable infers column names for a table from cached schema or returns defaults
 func (p *Proxy) inferColumnsForTable(table string) []string {
-	switch table {
-	case "notifications":
-		return []string{"id", "content", "recipient", "created_at", "updated_at"}
-	case "users":
-		return []string{"id", "name", "email", "created_at", "updated_at"}
-	case "todos":
-		return []string{"id", "title", "description", "completed", "user_id", "created_at", "updated_at"}
-	default:
-		return []string{"id", "name", "created_at", "updated_at"}
+	// Try to get columns from schema cache first
+	if columns, ok := p.schemaCache[table]; ok && len(columns) > 0 {
+		result := make([]string, len(columns))
+		for i, col := range columns {
+			result[i] = col.Field
+		}
+		return result
 	}
+
+	// Default fallback columns for unknown tables
+	return []string{"id", "created_at", "updated_at"}
 }
 
 // isWhitelisted checks if a query should bypass mocking

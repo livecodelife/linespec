@@ -442,7 +442,9 @@ func (p *Proxy) isWhitelisted(query string) bool {
 	if q == "SELECT 1" {
 		return true
 	}
-	if strings.Contains(q, "INFORMATION_SCHEMA") || strings.Contains(q, "SCHEMA_MIGRATIONS") || strings.Contains(q, "AR_INTERNAL_METADATA") {
+	// Allow INFORMATION_SCHEMA queries to pass through
+	// Migration tables are handled through normal table extraction
+	if strings.Contains(q, "INFORMATION_SCHEMA") {
 		return true
 	}
 	return false
@@ -455,7 +457,8 @@ func (p *Proxy) extractTable(query string) string {
 	q = strings.ReplaceAll(q, ",", " ")
 	q = strings.ReplaceAll(q, ";", " ")
 
-	knownTables := []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+	// Use configurable table list from schema cache if available
+	knownTables := p.getKnownTables()
 
 	for _, table := range knownTables {
 		re := regexp.MustCompile(`\b` + table + `\b`)
@@ -477,6 +480,21 @@ func (p *Proxy) extractTable(query string) string {
 		}
 	}
 	return "unknown"
+}
+
+// getKnownTables returns the list of known tables from schema cache or defaults
+func (p *Proxy) getKnownTables() []string {
+	// If we have tables in schema cache, use those
+	if len(p.schemaCache) > 0 {
+		tables := make([]string, 0, len(p.schemaCache))
+		for table := range p.schemaCache {
+			tables = append(tables, table)
+		}
+		return tables
+	}
+
+	// Default fallback tables for backward compatibility
+	return []string{"users", "todos"}
 }
 
 // extractShowFullFieldsTable extracts table name from SHOW FULL FIELDS FROM <table> query

@@ -1,10 +1,27 @@
 package config
 
-// ServiceConfig defines the service under test
 import (
 	"strings"
 	"time"
 )
+
+// SchemaDiscoveryConfig defines schema discovery settings
+type SchemaDiscoveryConfig struct {
+	Mode          string   `yaml:"mode"`           // auto, static, none
+	Tables        []string `yaml:"tables"`         // explicit list when mode is static
+	ExcludeTables []string `yaml:"exclude_tables"` // tables to ignore in auto mode
+	CacheFile     string   `yaml:"cache_file"`     // path to cache discovered schema
+}
+
+// PayloadConfig defines payload loading and parsing configuration
+type PayloadConfig struct {
+	Directory        string            `yaml:"directory"`         // payload directory name (default: payloads)
+	StatusField      string            `yaml:"status_field"`      // field path for HTTP status code (default: "status")
+	AuthExtraction   map[string]string `yaml:"auth_extraction"`   // custom auth extraction rules
+	SupportedFormats []string          `yaml:"supported_formats"` // list of supported formats
+}
+
+// ServiceConfig defines the service under test
 
 // FrameworkConfig defines the interface for framework-specific configuration
 type FrameworkConfig interface {
@@ -310,15 +327,17 @@ type InfrastructureConfig struct {
 
 // LineSpecConfig is the root configuration structure
 type LineSpecConfig struct {
-	Service         ServiceConfig        `yaml:"service"`
-	Database        *DatabaseConfig      `yaml:"database,omitempty"`
-	Infrastructure  InfrastructureConfig `yaml:"infrastructure"`
-	Dependencies    []DependencyConfig   `yaml:"dependencies,omitempty"`
-	Provenance      *ProvenanceConfig    `yaml:"provenance,omitempty"`
-	ContainerNaming *ContainerNaming     `yaml:"container_naming,omitempty"`
-	PortConfig      *PortConfig          `yaml:"ports,omitempty"`
-	Created         time.Time            `yaml:"-"`
-	BaseDir         string               `yaml:"-"`
+	Service         ServiceConfig          `yaml:"service"`
+	Database        *DatabaseConfig        `yaml:"database,omitempty"`
+	Infrastructure  InfrastructureConfig   `yaml:"infrastructure"`
+	Dependencies    []DependencyConfig     `yaml:"dependencies,omitempty"`
+	Provenance      *ProvenanceConfig      `yaml:"provenance,omitempty"`
+	ContainerNaming *ContainerNaming       `yaml:"container_naming,omitempty"`
+	PortConfig      *PortConfig            `yaml:"ports,omitempty"`
+	SchemaDiscovery *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
+	Payload         *PayloadConfig         `yaml:"payload,omitempty"`
+	Created         time.Time              `yaml:"-"`
+	BaseDir         string                 `yaml:"-"`
 }
 
 // EmbeddingConfig defines the embedding API configuration

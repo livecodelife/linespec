@@ -9,8 +9,13 @@ import (
 )
 
 // LoadConfig searches for .linespec.yml starting from the given directory
-// and walking up to parent directories
+// and walking up to parent directories. Supports LINESPEC_CONFIG env var override.
 func LoadConfig(startDir string) (*LineSpecConfig, error) {
+	// Check for LINESPEC_CONFIG environment variable first
+	if envConfig := os.Getenv("LINESPEC_CONFIG"); envConfig != "" {
+		return LoadConfigFile(envConfig)
+	}
+
 	currentDir, err := filepath.Abs(startDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
@@ -19,6 +24,12 @@ func LoadConfig(startDir string) (*LineSpecConfig, error) {
 	// Walk up directory tree looking for .linespec.yml
 	for {
 		configPath := filepath.Join(currentDir, ".linespec.yml")
+		if _, err := os.Stat(configPath); err == nil {
+			return LoadConfigFile(configPath)
+		}
+
+		// Check for .linespec.yaml as alternative
+		configPath = filepath.Join(currentDir, ".linespec.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			return LoadConfigFile(configPath)
 		}
@@ -163,6 +174,31 @@ func applyDefaults(config *LineSpecConfig) {
 	}
 	// DynamicPorts defaults to true
 	// FixedProxyPort defaults to 0 (dynamic allocation)
+
+	// Schema discovery configuration defaults
+	if config.SchemaDiscovery == nil {
+		config.SchemaDiscovery = &SchemaDiscoveryConfig{
+			Mode: "auto", // Default to auto-discovery
+		}
+	}
+	if config.SchemaDiscovery.Mode == "" {
+		config.SchemaDiscovery.Mode = "auto"
+	}
+
+	// Payload configuration defaults
+	if config.Payload == nil {
+		config.Payload = &PayloadConfig{}
+	}
+	if config.Payload.Directory == "" {
+		config.Payload.Directory = "payloads"
+	}
+	if config.Payload.StatusField == "" {
+		config.Payload.StatusField = "status"
+	}
+	// Default supported formats
+	if len(config.Payload.SupportedFormats) == 0 {
+		config.Payload.SupportedFormats = []string{"json", "yaml", "yml"}
+	}
 }
 
 // validate checks that required configuration is present
