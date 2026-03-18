@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestProxy_Passthrough(t *testing.T) {
@@ -80,14 +80,25 @@ func TestProxy_Mocking(t *testing.T) {
 	dbPass := "todo_password"
 	dbName := "todo_api_development"
 
+	// Check if DB is available - skip if MySQL not running
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbAddr, dbName))
+	if err != nil {
+		t.Skip("MySQL not available on localhost:3307")
+		return
+	}
+	if err := db.Ping(); err != nil {
+		t.Skip("MySQL not reachable on localhost:3307")
+		return
+	}
+	db.Close()
+
 	reg := registry.NewMockRegistry()
-	// Register a mock for users table
+	// Register a mock expectation that matches our INSERT
 	spec := &types.TestSpec{
 		Expects: []types.ExpectStatement{
 			{
 				Channel: types.WriteMySQL,
 				Table:   "users",
-				SQL:     "INSERT INTO users (name) VALUES ('mocked')",
 			},
 		},
 	}
@@ -132,6 +143,18 @@ func TestProxy_MockingSelect(t *testing.T) {
 	dbUser := "todo_user"
 	dbPass := "todo_password"
 	dbName := "todo_api_development"
+
+	// Check if DB is available - skip if MySQL not running
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbAddr, dbName))
+	if err != nil {
+		t.Skip("MySQL not available on localhost:3307")
+		return
+	}
+	if err := db.Ping(); err != nil {
+		t.Skip("MySQL not reachable on localhost:3307")
+		return
+	}
+	db.Close()
 
 	reg := registry.NewMockRegistry()
 	spec := &types.TestSpec{

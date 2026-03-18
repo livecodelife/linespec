@@ -52,6 +52,7 @@ affected_scope:
   - pkg/proxy/base/database_proxy.go
   - pkg/proxy/base/database_proxy_test.go
   - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/mysql/proxy_test.go
   - pkg/proxy/mysql/proxy_dbname_test.go
   - pkg/proxy/postgresql/proxy.go
   - pkg/proxy/postgresql/proxy_dbname_test.go
