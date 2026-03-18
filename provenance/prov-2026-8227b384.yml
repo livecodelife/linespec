@@ -1,10 +1,11 @@
 id: prov-2026-8227b384
 title: 'Phase 3: Schema Discovery, Config File Flexibility, and Payload Formats'
-status: open
+status: implemented
 created_at: "2026-03-18"
 author: calebcowen@gmail.com
 intent: >
   Implement Phase 3 of the LineSpec Improvement Plan, focusing on three key areas of flexibility:
+  sealed_at_sha: 27f2abc91b4c9486e7e5a1a9dd0b5904ad858acc
   
   1. Schema Discovery Abstraction (Session 6):
      - Remove hardcoded table names (users, todos, ar_internal_metadata, schema_migrations)
