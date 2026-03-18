@@ -2,11 +2,11 @@ TEST list_todos_success
 
 RECEIVE HTTP:GET /api/v1/todos
 HEADERS
-  Authorization: Bearer token_abc123xyz
+  Authorization: Bearer ${AUTH_TOKEN}
 
 EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
 HEADERS
-  Authorization: Bearer token_abc123xyz
+  Authorization: Bearer ${AUTH_TOKEN}
 RETURNS {{payloads/authenticated_user.yaml}}
 
 EXPECT READ:MYSQL todos

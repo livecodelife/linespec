@@ -547,6 +547,116 @@ NOISE
 
 ---
 
+# Environment Variable Interpolation
+
+LineSpec supports environment variable substitution using `${VAR_NAME}` syntax. This feature catches hardcoded secrets and ensures your application reads configuration from the environment.
+
+## Syntax
+
+```
+${VAR_NAME}
+```
+
+**Variable Name Rules:**
+- Must start with an uppercase letter (`A-Z`)
+- Can contain uppercase letters, digits, and underscores (`A-Z0-9_`)
+- Lowercase variables are treated as literal text (not interpolated)
+
+**Valid:** `${API_TOKEN}`, `${DB_HOST_1}`, `${API_VERSION}`  
+**Invalid (treated as literal):** `${api_token}` (lowercase), `${123_VAR}` (starts with digit), `${VAR-NAME}` (hyphen not allowed)
+
+## Where It Works
+
+Environment variables can be used in:
+
+| Location | Example |
+|----------|---------|
+| **HTTP URLs** | `http://api.${DOMAIN}.com/users` |
+| **HTTP Paths** | `/api/${API_VERSION}/todos` |
+| **HTTP Headers** | `Authorization: Bearer ${AUTH_TOKEN}` |
+| **SQL Queries** | `WHERE api_key = '${API_KEY}'` |
+| **Payload Files** | JSON/YAML files loaded via `WITH {{file.yaml}}` |
+
+## How It Works
+
+### Resolution Order
+
+1. **Check Environment:** If the variable is set in the environment, use that value
+2. **Generate Random:** If not set, generate a random value at test runtime
+3. **Inject into Container:** Generated values are automatically injected as environment variables into your test container
+
+### Random Value Format
+
+When a variable is not defined in the environment, LineSpec generates:
+
+```
+{lowercase_var_name}_{16_hex_chars}
+```
+
+Example: `api_token_a1b2c3d4e5f6g7h8`
+
+This ensures:
+- Your tests never accidentally match hardcoded secrets
+- The application must read from environment variables to get the correct value
+- Same variable used multiple times in a test gets the same generated value
+
+## Use Cases
+
+### Catching Hardcoded Secrets
+
+```linespec
+TEST authenticate-user
+RECEIVE HTTP:POST /api/v1/auth
+WITH {{auth_request.yaml}}
+HEADERS
+  Authorization: Bearer ${API_TOKEN}
+
+EXPECT HTTP:GET http://auth-service.local/validate
+HEADERS
+  Authorization: Bearer ${API_TOKEN}
+RETURNS {{auth_response.yaml}}
+
+RESPOND HTTP:200
+```
+
+If your application has a hardcoded API token instead of reading from `API_TOKEN`, the test will fail because the generated random value won't match.
+
+### Dynamic Configuration
+
+```linespec
+RECEIVE HTTP:GET /api/${API_VERSION}/users
+
+EXPECT READ:MYSQL users
+USING_SQL """SELECT * FROM users WHERE env = '${DEPLOY_ENV}'"""
+RETURNS {{users.yaml}}
+```
+
+### Payload File Interpolation
+
+Variables in payload files are also interpolated:
+
+**auth_request.yaml:**
+```yaml
+api_key: ${API_KEY}
+user_id: 123
+```
+
+**Response expectation:**
+```yaml
+# The actual API key value is substituted at test time
+api_key: api_key_a1b2c3d4e5f6g7h8
+status: active
+```
+
+## Limitations
+
+- **No default values:** `${VAR:-default}` syntax is not supported
+- **Strict naming:** Only uppercase with underscores
+- **No nested interpolation:** Cannot do `${${VAR}}`
+- **First-use defines:** The first resolution of a variable determines its value for the entire test
+
+---
+
 # CLI Usage
 
 Execute a spec:

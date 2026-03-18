@@ -10,6 +10,8 @@ HEADERS
   Authorization: Bearer invalid_token_123
 RETURNS {{payloads/auth_error_response.json}}
 
+EXPECT NOT WRITE:MYSQL todos
+
 RESPOND HTTP:401
 WITH {{payloads/auth_error_401.json}}
 NOISE

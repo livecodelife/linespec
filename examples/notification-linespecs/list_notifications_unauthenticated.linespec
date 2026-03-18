@@ -2,5 +2,7 @@ TEST list_notifications_unauthenticated
 
 RECEIVE HTTP:GET /api/v1/notifications
 
+EXPECT NOT WRITE:POSTGRESQL notifications
+
 RESPOND HTTP:401
 WITH {{payloads/unauthenticated_response.yaml}}
