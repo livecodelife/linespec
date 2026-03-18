@@ -53,7 +53,10 @@ forbidden_scope:
 
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-028
+  - prov-2026-030
+  - prov-2026-7136e8c4
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/framework_config_test.go
