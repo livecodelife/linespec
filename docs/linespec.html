@@ -76,6 +76,7 @@
                         <li><a href="#expect">EXPECT</a></li>
                         <li><a href="#expect-not">EXPECT_NOT</a></li>
                         <li><a href="#respond">RESPOND</a></li>
+                        <li><a href="#interpolation">Env Interpolation</a></li>
                         <li><a href="#verify">VERIFY</a></li>
                         <li><a href="#examples">Examples</a></li>
                     </ul>
@@ -125,6 +126,7 @@
                         <li><a href="#expect">EXPECT Statement</a></li>
                         <li><a href="#expect-not">EXPECT_NOT Statement</a></li>
                         <li><a href="#respond">RESPOND Statement</a></li>
+                        <li><a href="#interpolation">Env Interpolation</a></li>
                         <li><a href="#verify">VERIFY Clause</a></li>
                         <li><a href="#examples">Complete Examples</a></li>
                     </ul>
@@ -473,6 +475,135 @@ NOISE
                         <li>Each indented line names one field path to exclude from comparison</li>
                         <li>Field paths use dot notation matching the JSON response body (e.g. <code>body.created_at</code>)</li>
                         <li><code>NOISE</code> is optional; omit it when no fields need filtering</li>
+                    </ul>
+                </section>
+
+                <section id="interpolation" class="docs-section">
+                    <h2>Environment Variable Interpolation</h2>
+                    <p>LineSpec supports environment variable substitution using <code>${VAR_NAME}</code> syntax. This feature catches hardcoded secrets and ensures your application reads configuration from the environment.</p>
+
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>${VAR_NAME}</code></pre>
+                    </div>
+
+                    <p><strong>Variable Name Rules:</strong></p>
+                    <ul>
+                        <li>Must start with an uppercase letter (<code>A-Z</code>)</li>
+                        <li>Can contain uppercase letters, digits, and underscores (<code>A-Z0-9_</code>)</li>
+                        <li>Lowercase variables are treated as literal text (not interpolated)</li>
+                    </ul>
+
+                    <div class="info-box">
+                        <p><strong>Valid:</strong> <code>${API_TOKEN}</code>, <code>${DB_HOST_1}</code>, <code>${API_VERSION}</code></p>
+                        <p><strong>Invalid (treated as literal):</strong> <code>${api_token}</code> (lowercase), <code>${123_VAR}</code> (starts with digit), <code>${VAR-NAME}</code> (hyphen not allowed)</p>
+                    </div>
+
+                    <h3>Where It Works</h3>
+                    <p>Environment variables can be used in:</p>
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Example</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>HTTP URLs</td>
+                                <td><code>http://api.${DOMAIN}.com/users</code></td>
+                            </tr>
+                            <tr>
+                                <td>HTTP Paths</td>
+                                <td><code>/api/${API_VERSION}/todos</code></td>
+                            </tr>
+                            <tr>
+                                <td>HTTP Headers</td>
+                                <td><code>Authorization: Bearer ${AUTH_TOKEN}</code></td>
+                            </tr>
+                            <tr>
+                                <td>SQL Queries</td>
+                                <td><code>WHERE api_key = '${API_KEY}'</code></td>
+                            </tr>
+                            <tr>
+                                <td>Payload Files</td>
+                                <td>JSON/YAML files loaded via <code>WITH {{file.yaml}}</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>How It Works</h3>
+                    <ol>
+                        <li><strong>Check Environment:</strong> If the variable is set in the environment, use that value</li>
+                        <li><strong>Generate Random:</strong> If not set, generate a random value at test runtime</li>
+                        <li><strong>Inject into Container:</strong> Generated values are automatically injected as environment variables into your test container</li>
+                    </ol>
+
+                    <h4>Random Value Format</h4>
+                    <p>When a variable is not defined in the environment, LineSpec generates:</p>
+                    <div class="code-block">
+                        <pre><code>{lowercase_var_name}_{16_hex_chars}</code></pre>
+                    </div>
+                    <p>Example: <code>api_token_a1b2c3d4e5f6g7h8</code></p>
+                    <p>This ensures your tests never accidentally match hardcoded secrets - the application must read from environment variables to get the correct value.</p>
+
+                    <h3>Example — Catching Hardcoded Secrets</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST authenticate-user
+RECEIVE HTTP:POST /api/v1/auth
+WITH {{auth_request.yaml}}
+HEADERS
+  Authorization: Bearer ${API_TOKEN}
+
+EXPECT HTTP:GET http://auth-service.local/validate
+HEADERS
+  Authorization: Bearer ${API_TOKEN}
+RETURNS {{auth_response.yaml}}
+
+RESPOND HTTP:200</code></pre>
+                    </div>
+                    <p>If your application has a hardcoded API token instead of reading from <code>API_TOKEN</code>, the test will fail because the generated random value won't match.</p>
+
+                    <h3>Example — Dynamic Configuration</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>RECEIVE HTTP:GET /api/${API_VERSION}/users
+
+EXPECT READ:MYSQL users
+USING_SQL """SELECT * FROM users WHERE env = '${DEPLOY_ENV}'"""
+RETURNS {{users.yaml}}</code></pre>
+                    </div>
+
+                    <h3>Payload File Interpolation</h3>
+                    <p>Variables in payload files are also interpolated:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>auth_request.yaml</span>
+                        </div>
+                        <pre><code>api_key: ${API_KEY}
+user_id: 123</code></pre>
+                    </div>
+                    <p>The actual API key value is substituted at test time when the file is loaded.</p>
+
+                    <h3>Limitations</h3>
+                    <ul>
+                        <li><strong>No default values:</strong> <code>${VAR:-default}</code> syntax is not supported</li>
+                        <li><strong>Strict naming:</strong> Only uppercase with underscores</li>
+                        <li><strong>No nested interpolation:</strong> Cannot do <code>${${VAR}}</code></li>
+                        <li><strong>First-use defines:</strong> The first resolution of a variable determines its value for the entire test</li>
                     </ul>
                 </section>
 
