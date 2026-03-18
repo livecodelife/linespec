@@ -1,0 +1,72 @@
+id: prov-2026-4275079c
+title: 'Phase 1: Database Configuration and Framework Abstraction'
+status: open
+created_at: "2026-03-18"
+author: calebcowen@gmail.com
+intent: >
+  Phase 1 of the LineSpec Improvement Plan focuses on addressing critical hardcoded
+  values and framework coupling issues. This includes removing hardcoded database
+  names (todo_api_development), credentials (todo_user/todo_password), and
+  Rails-specific implementation details to make LineSpec framework-agnostic and
+  support diverse technology stacks.
+
+  Session 1: Database Configuration - Replace hardcoded database values with
+  configurable options read from .linespec.yml configuration files. Support
+  custom database names, usernames, passwords, and initialization scripts.
+
+  Session 2: Framework Abstraction - Create a FrameworkConfig interface with
+  adapters for different frameworks (Rails, FastAPI, Django, Express, etc.) to
+  handle framework-specific startup commands, migrations, and warmup logic
+  generically. Remove Rails-only assumptions from the codebase.
+
+  These changes are foundational and unblock subsequent infrastructure and
+  flexibility improvements in later phases.
+
+constraints:
+  - MUST read database credentials from DatabaseConfig instead of hardcoded values
+  - MUST support custom database names other than "todo_api_development"
+  - MUST support custom usernames and passwords instead of "todo_user"/"todo_password"
+  - MUST support custom initialization script filenames beyond "init.sql"
+  - MUST remove hardcoded Rails-specific commands from runner
+  - MUST create FrameworkConfig interface with GetStartCommand, GetMigrationCommand, NeedsWarmup, GetHealthEndpoint methods
+  - MUST support Rails, FastAPI, Django, Express, and generic frameworks
+  - MUST allow custom frameworks via explicit start_command in config
+  - MUST make framework warmup configurable (delay and endpoint)
+  - MUST support configurable migration commands per framework
+  - MUST NOT break existing Rails-based test suites
+  - MUST provide backward compatibility for existing .linespec.yml files
+
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/config/framework_config_test.go
+  - pkg/config/database_config_test.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/mysql/proxy_dbname_test.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/runner/runner.go
+
+forbidden_scope:
+  - pkg/proxy/http/*.go
+  - pkg/dsl/*.go
+  - pkg/provenance/*.go
+
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/framework_config_test.go
+    type: go-test
+  - path: pkg/config/database_config_test.go
+    type: go-test
+  - path: pkg/proxy/mysql/proxy_dbname_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - architecture
+  - database
+  - framework
+  - phase-1
+  - improvement-plan

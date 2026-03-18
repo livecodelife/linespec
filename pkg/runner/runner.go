@@ -28,13 +28,15 @@ import (
 )
 
 type TestSuite struct {
-	orch           *docker.DockerOrchestrator
-	networkName    string
-	dbHostPort     string
-	kafkaReady     bool
-	cwd            string
-	tempDir        string                            // Temp directory for shared files like schema cache
-	serviceConfigs map[string]*config.LineSpecConfig // Discovered service configurations
+	orch            *docker.DockerOrchestrator
+	networkName     string
+	dbHostPort      string
+	kafkaReady      bool
+	cwd             string
+	tempDir         string                            // Temp directory for shared files like schema cache
+	serviceConfigs  map[string]*config.LineSpecConfig // Discovered service configurations
+	defaultDBConfig *config.DatabaseConfig            // Default database configuration for shared infrastructure
+	containerNaming *config.ContainerNaming           // Container naming configuration
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -50,12 +52,21 @@ func NewTestSuite() (*TestSuite, error) {
 		return nil, fmt.Errorf("failed to create suite temp directory: %w", err)
 	}
 
+	// Initialize default container naming
+	containerNaming := &config.ContainerNaming{
+		DatabaseContainer: "linespec-shared-db",
+		NetworkName:       "linespec-shared-net",
+		NetworkAlias:      "real-db",
+		MigrateContainer:  "linespec-migrate-",
+	}
+
 	return &TestSuite{
-		orch:           orch,
-		networkName:    "linespec-shared-net",
-		cwd:            cwd,
-		tempDir:        tempDir,
-		serviceConfigs: make(map[string]*config.LineSpecConfig),
+		orch:            orch,
+		networkName:     containerNaming.NetworkName,
+		cwd:             cwd,
+		tempDir:         tempDir,
+		serviceConfigs:  make(map[string]*config.LineSpecConfig),
+		containerNaming: containerNaming,
 	}, nil
 }
 
@@ -197,27 +208,37 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 
 	var binds []string
 	if initSqlPath != "" {
-		binds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/init.sql", initSqlPath)}
+		// Support custom init script filenames
+		initScriptName := filepath.Base(initSqlPath)
+		binds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initSqlPath, initScriptName)}
 	}
+
+	// Get database configuration from first MySQL service or use defaults
+	dbConfig := s.getSharedDatabaseConfig()
 
 	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image: "mysql:8.4",
-		Env:   []string{"MYSQL_ROOT_PASSWORD=rootpassword", "MYSQL_DATABASE=todo_api_development", "MYSQL_USER=todo_user", "MYSQL_PASSWORD=todo_password"},
+		Env: []string{
+			fmt.Sprintf("MYSQL_ROOT_PASSWORD=rootpassword"),
+			fmt.Sprintf("MYSQL_DATABASE=%s", dbConfig.Database),
+			fmt.Sprintf("MYSQL_USER=%s", dbConfig.Username),
+			fmt.Sprintf("MYSQL_PASSWORD=%s", dbConfig.Password),
+		},
 	}, &container.HostConfig{
 		Binds: binds,
 		PortBindings: map[nat.Port][]nat.PortBinding{
 			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
 		},
 	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{"real-db"}}},
-	}, "linespec-shared-db")
+		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{s.containerNaming.NetworkAlias}}},
+	}, s.containerNaming.DatabaseContainer)
 	if err != nil {
 		return fmt.Errorf("failed to start MySQL: %w", err)
 	}
 
 	logger.Debug("Waiting for shared DB to be ready")
 	// Get host port for direct connection from host (with retry)
-	s.dbHostPort, err = s.waitForContainerPort(ctx, "linespec-shared-db", "3306/tcp", 30*time.Second)
+	s.dbHostPort, err = s.waitForContainerPort(ctx, s.containerNaming.DatabaseContainer, "3306/tcp", 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to get shared DB host port: %w", err)
 	}
@@ -228,7 +249,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	// Additional wait for MySQL to fully initialize and accept connections
 	// Use actual MySQL ping to verify readiness instead of fixed delays
 	logger.Debug("Verifying MySQL is ready")
-	if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, "todo_user", "todo_password", "todo_api_development", 30*time.Second); err != nil {
+	if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, dbConfig.Username, dbConfig.Password, dbConfig.Database, 30*time.Second); err != nil {
 		return fmt.Errorf("MySQL not accepting connections: %w", err)
 	}
 	logger.Debug("MySQL is ready")
@@ -240,27 +261,25 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		}
 	}
 
-	// Run Rails migrations for all discovered Rails services
-	logger.Debug("Running Rails migrations")
+	// Run migrations for all discovered services based on their framework
+	logger.Debug("Running migrations for discovered services")
 	for serviceName, cfg := range s.serviceConfigs {
-		if cfg.Service.Framework == "rails" {
-			serviceDir := cfg.BaseDir
-			if serviceDir == "" {
-				serviceDir = filepath.Join(s.cwd, serviceName)
-			}
-			if err := s.runMigrations(ctx, serviceName, serviceDir); err != nil {
-				logger.Debug("Failed to run migrations for %s: %v", serviceName, err)
-				// Continue with other services, don't fail completely
-			}
+		serviceDir := cfg.BaseDir
+		if serviceDir == "" {
+			serviceDir = filepath.Join(s.cwd, serviceName)
+		}
+		if err := s.runMigrationsForConfig(ctx, cfg, serviceName, serviceDir); err != nil {
+			logger.Debug("Failed to run migrations for %s: %v", serviceName, err)
+			// Continue with other services, don't fail completely
 		}
 	}
 	logger.Debug("Migrations complete")
 
 	// Fetch schema for all tables after migrations complete
 	// This is done once and shared across all tests
-	tables := []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+	tables := s.discoverTables(ctx, dbConfig)
 	schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
-		"todo_user", "todo_password", "todo_api_development")
+		dbConfig.Username, dbConfig.Password, dbConfig.Database)
 	if err != nil {
 		logger.Debug("Failed to fetch shared schema: %v", err)
 	} else {
@@ -327,10 +346,84 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	return nil
 }
 
+// getSharedDatabaseConfig returns database config for shared infrastructure
+// Uses the first discovered MySQL service's config, or defaults
+func (s *TestSuite) getSharedDatabaseConfig() *config.DatabaseConfig {
+	// Look for first MySQL service configuration
+	for _, cfg := range s.serviceConfigs {
+		if cfg.Database != nil && cfg.Database.Type == "mysql" {
+			return cfg.Database
+		}
+	}
+	// Return defaults if no MySQL service found
+	return &config.DatabaseConfig{
+		Database: "todo_api_development",
+		Username: "todo_user",
+		Password: "todo_password",
+		Host:     "real-db",
+		Port:     3306,
+	}
+}
+
+// discoverTables returns list of tables to fetch schema for
+// TODO: In Session 6, this will be replaced with auto-discovery
+func (s *TestSuite) discoverTables(ctx context.Context, dbConfig *config.DatabaseConfig) []string {
+	// Use hardcoded tables for backward compatibility
+	// Future enhancement: auto-discover from database
+	return []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+}
+
+// runMigrationsForConfig runs migrations for a service based on its framework config
+func (s *TestSuite) runMigrationsForConfig(ctx context.Context, cfg *config.LineSpecConfig, serviceName, serviceDir string) error {
+	framework := cfg.Service.Framework
+	if framework == "" {
+		logger.Debug("No framework specified for %s, skipping migrations", serviceName)
+		return nil
+	}
+
+	// Check if migrations are enabled for this service
+	if !cfg.Infrastructure.Database {
+		logger.Debug("Database not enabled for %s, skipping migrations", serviceName)
+		return nil
+	}
+
+	// Get framework configuration
+	needsWarmup := false
+	if cfg.Service.NeedsWarmup != nil {
+		needsWarmup = *cfg.Service.NeedsWarmup
+	}
+
+	fwConfig := config.GetFrameworkConfig(
+		framework,
+		cfg.Service.MigrationCommand,
+		cfg.Service.MigrationCommand,
+		needsWarmup,
+		cfg.Service.WarmupEndpoint,
+		cfg.Service.WarmupDelayMs,
+	)
+
+	// Get migration command
+	migrationCmd := fwConfig.GetMigrationCommand()
+	if migrationCmd == nil {
+		logger.Debug("No migration command defined for framework %s, service %s", framework, serviceName)
+		return nil
+	}
+
+	// Use custom migration command if specified
+	if cfg.Service.MigrationCommand != "" {
+		migrationCmd = []string{"sh", "-c", cfg.Service.MigrationCommand}
+	}
+
+	return s.runMigrations(ctx, serviceName, serviceDir, migrationCmd, cfg)
+}
+
 func (s *TestSuite) waitForDBInit(ctx context.Context) error {
 	// Poll until we can make an actual MySQL connection
 	// This confirms init.sql has completed and handles restart period
 	deadline := time.Now().Add(30 * time.Second)
+
+	// Get database configuration
+	dbConfig := s.getSharedDatabaseConfig()
 
 	// Suppress MySQL driver internal logging during polling
 	mysql.SetLogger(log.New(io.Discard, "", 0))
@@ -340,7 +433,7 @@ func (s *TestSuite) waitForDBInit(ctx context.Context) error {
 		if s.dbHostPort != "" {
 			// Try to make an actual MySQL connection
 			dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
-				"todo_user", "todo_password", "localhost", s.dbHostPort, "todo_api_development")
+				dbConfig.Username, dbConfig.Password, "localhost", s.dbHostPort, dbConfig.Database)
 			db, err := sql.Open("mysql", dsn)
 			if err == nil {
 				ctx2, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -366,41 +459,64 @@ func (s *TestSuite) ResetDatabase(ctx context.Context) error {
 		return nil
 	}
 
+	dbConfig := s.getSharedDatabaseConfig()
+
 	// For now, we'll just re-run init.sql by executing it via mysql client in the container
-	resetSQL := `
+	resetSQL := fmt.Sprintf(`
 SET FOREIGN_KEY_CHECKS = 0;
 SELECT CONCAT('TRUNCATE TABLE ', table_name, ';') 
 FROM information_schema.tables 
-WHERE table_schema = 'todo_api_development' AND table_type = 'BASE TABLE';
+WHERE table_schema = '%s' AND table_type = 'BASE TABLE';
 SET FOREIGN_KEY_CHECKS = 1;
-`
+`, dbConfig.Database)
 
 	_ = resetSQL // We'll implement this if needed, for now rely on clean test data
 
 	return nil
 }
 
-func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, serviceDir string) error {
-	// Start a temporary container to run migrations
-	containerName := "linespec-migrate-" + serviceName
+func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, serviceDir string, migrationCmd []string, cfg *config.LineSpecConfig) error {
+	containerName := s.containerNaming.MigrateContainer + serviceName
 
 	// Clean up any existing migration container
 	_ = s.orch.StopAndRemoveContainer(context.Background(), containerName)
 
-	appEnv := []string{
-		"DB_HOST=real-db",
-		"DB_PORT=3306",
-		"DB_USERNAME=todo_user",
-		"DB_PASSWORD=todo_password",
-		"RAILS_ENV=development",
-		"KAFKA_BROKERS=kafka:29092",
-		"KAFKA_TOPIC=todo-events",
+	// Get database configuration
+	dbConfig := cfg.Database
+	if dbConfig == nil {
+		dbConfig = s.getSharedDatabaseConfig()
+	}
+
+	// Build environment variables from config
+	appEnv := []string{}
+
+	if cfg.Infrastructure.Database && dbConfig != nil {
+		appEnv = append(appEnv,
+			fmt.Sprintf("DB_HOST=%s", s.containerNaming.NetworkAlias),
+			fmt.Sprintf("DB_PORT=%d", dbConfig.Port),
+			fmt.Sprintf("DB_USERNAME=%s", dbConfig.Username),
+			fmt.Sprintf("DB_PASSWORD=%s", dbConfig.Password),
+			fmt.Sprintf("RAILS_ENV=development"),
+		)
+	}
+
+	// Add Kafka environment variables if enabled
+	if cfg.Infrastructure.Kafka {
+		appEnv = append(appEnv,
+			"KAFKA_BROKERS=kafka:29092",
+			"KAFKA_TOPIC=todo-events",
+		)
+	}
+
+	// Add user-defined environment variables
+	for k, v := range cfg.Service.Environment {
+		appEnv = append(appEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 
 	_, err := s.orch.StartContainer(ctx, &container.Config{
 		Image: serviceName + ":latest",
 		Env:   appEnv,
-		Cmd:   []string{"bundle", "exec", "rails", "db:migrate"},
+		Cmd:   migrationCmd,
 	}, &container.HostConfig{
 		AutoRemove: true,
 	}, &network.NetworkingConfig{
@@ -434,7 +550,7 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 
 func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-kafka")
-	_ = s.orch.StopAndRemoveContainer(ctx, "linespec-shared-db")
+	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.DatabaseContainer)
 	_ = s.orch.RemoveNetwork(ctx, s.networkName)
 
 	// Note: We don't clean up tempDir here - it's needed for shared schema file
@@ -833,13 +949,21 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		// Use custom start command from config
 		startCmd = []string{"sh", "-c", serviceConfig.Service.StartCommand}
 	} else {
-		// Default commands based on framework
-		switch serviceConfig.Service.Framework {
-		case "rails":
-			startCmd = []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + appPort}
-		default:
-			startCmd = []string{"sh", "-c", "echo 'No start command specified'"}
+		// Get framework configuration and start command
+		needsWarmup := false
+		if serviceConfig.Service.NeedsWarmup != nil {
+			needsWarmup = *serviceConfig.Service.NeedsWarmup
 		}
+
+		fwConfig := config.GetFrameworkConfig(
+			serviceConfig.Service.Framework,
+			serviceConfig.Service.StartCommand,
+			serviceConfig.Service.MigrationCommand,
+			needsWarmup,
+			serviceConfig.Service.WarmupEndpoint,
+			serviceConfig.Service.WarmupDelayMs,
+		)
+		startCmd = fwConfig.GetStartCommand(appPort)
 	}
 
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
@@ -884,18 +1008,42 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	logger.Debug("App is healthy")
 
-	// Warmup for Rails apps to force schema/model loading
-	if serviceConfig.Service.Framework == "rails" {
-		logger.Debug("Warming up Rails app")
-		// Send a simple request to force Rails to load models
-		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, serviceConfig.Service.HealthEndpoint)
+	// Warmup for apps that need it
+	needsWarmup := false
+	if serviceConfig.Service.NeedsWarmup != nil {
+		needsWarmup = *serviceConfig.Service.NeedsWarmup
+	}
+
+	fwConfig := config.GetFrameworkConfig(
+		serviceConfig.Service.Framework,
+		serviceConfig.Service.StartCommand,
+		serviceConfig.Service.MigrationCommand,
+		needsWarmup,
+		serviceConfig.Service.WarmupEndpoint,
+		serviceConfig.Service.WarmupDelayMs,
+	)
+
+	if fwConfig.NeedsWarmup() {
+		logger.Debug("Warming up %s app", serviceConfig.Service.Framework)
+		warmupEndpoint := fwConfig.GetWarmupEndpoint()
+		if serviceConfig.Service.WarmupEndpoint != "" {
+			warmupEndpoint = serviceConfig.Service.WarmupEndpoint
+		}
+
+		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, warmupEndpoint)
 		resp, err := http.Get(warmupURL)
 		if err != nil {
 			logger.Debug("Warmup request failed: %v", err)
 		} else {
 			resp.Body.Close()
-			// Reduced from 2s to 100ms - health check already confirms Rails is ready
-			time.Sleep(100 * time.Millisecond)
+		}
+
+		warmupDelay := fwConfig.GetWarmupDelay()
+		if serviceConfig.Service.WarmupDelayMs > 0 {
+			warmupDelay = time.Duration(serviceConfig.Service.WarmupDelayMs) * time.Millisecond
+		}
+		if warmupDelay > 0 {
+			time.Sleep(warmupDelay)
 		}
 	}
 

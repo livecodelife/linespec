@@ -3,17 +3,182 @@ package config
 // ServiceConfig defines the service under test
 import "time"
 
+// FrameworkConfig defines the interface for framework-specific configuration
+type FrameworkConfig interface {
+	GetStartCommand(port string) []string
+	GetMigrationCommand() []string
+	NeedsWarmup() bool
+	GetWarmupEndpoint() string
+	GetWarmupDelay() time.Duration
+}
+
+// RailsFrameworkConfig implements FrameworkConfig for Ruby on Rails
+type RailsFrameworkConfig struct{}
+
+func (r *RailsFrameworkConfig) GetStartCommand(port string) []string {
+	return []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + port}
+}
+
+func (r *RailsFrameworkConfig) GetMigrationCommand() []string {
+	return []string{"bundle", "exec", "rails", "db:migrate"}
+}
+
+func (r *RailsFrameworkConfig) NeedsWarmup() bool {
+	return true
+}
+
+func (r *RailsFrameworkConfig) GetWarmupEndpoint() string {
+	return "/up"
+}
+
+func (r *RailsFrameworkConfig) GetWarmupDelay() time.Duration {
+	return 100 * time.Millisecond
+}
+
+// FastAPIFrameworkConfig implements FrameworkConfig for FastAPI
+type FastAPIFrameworkConfig struct{}
+
+func (f *FastAPIFrameworkConfig) GetStartCommand(port string) []string {
+	return []string{"python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", port}
+}
+
+func (f *FastAPIFrameworkConfig) GetMigrationCommand() []string {
+	return nil // FastAPI typically uses Alembic which is framework-agnostic
+}
+
+func (f *FastAPIFrameworkConfig) NeedsWarmup() bool {
+	return false
+}
+
+func (f *FastAPIFrameworkConfig) GetWarmupEndpoint() string {
+	return "/health"
+}
+
+func (f *FastAPIFrameworkConfig) GetWarmupDelay() time.Duration {
+	return 0
+}
+
+// DjangoFrameworkConfig implements FrameworkConfig for Django
+type DjangoFrameworkConfig struct{}
+
+func (d *DjangoFrameworkConfig) GetStartCommand(port string) []string {
+	return []string{"python", "manage.py", "runserver", "0.0.0.0:" + port}
+}
+
+func (d *DjangoFrameworkConfig) GetMigrationCommand() []string {
+	return []string{"python", "manage.py", "migrate"}
+}
+
+func (d *DjangoFrameworkConfig) NeedsWarmup() bool {
+	return true
+}
+
+func (d *DjangoFrameworkConfig) GetWarmupEndpoint() string {
+	return "/health"
+}
+
+func (d *DjangoFrameworkConfig) GetWarmupDelay() time.Duration {
+	return 100 * time.Millisecond
+}
+
+// ExpressFrameworkConfig implements FrameworkConfig for Node.js/Express
+type ExpressFrameworkConfig struct{}
+
+func (e *ExpressFrameworkConfig) GetStartCommand(port string) []string {
+	return []string{"npm", "start"}
+}
+
+func (e *ExpressFrameworkConfig) GetMigrationCommand() []string {
+	return nil // Express doesn't have built-in migrations
+}
+
+func (e *ExpressFrameworkConfig) NeedsWarmup() bool {
+	return false
+}
+
+func (e *ExpressFrameworkConfig) GetWarmupEndpoint() string {
+	return "/health"
+}
+
+func (e *ExpressFrameworkConfig) GetWarmupDelay() time.Duration {
+	return 0
+}
+
+// GenericFrameworkConfig implements FrameworkConfig for custom/unknown frameworks
+type GenericFrameworkConfig struct {
+	CustomStartCommand  string
+	CustomMigrationCmd  string
+	NeedsWarmupFlag     bool
+	WarmupEndpointValue string
+	WarmupDelayMs       int
+}
+
+func (g *GenericFrameworkConfig) GetStartCommand(port string) []string {
+	if g.CustomStartCommand != "" {
+		return []string{"sh", "-c", g.CustomStartCommand}
+	}
+	return []string{"sh", "-c", "echo 'No start command specified'"}
+}
+
+func (g *GenericFrameworkConfig) GetMigrationCommand() []string {
+	if g.CustomMigrationCmd != "" {
+		return []string{"sh", "-c", g.CustomMigrationCmd}
+	}
+	return nil
+}
+
+func (g *GenericFrameworkConfig) NeedsWarmup() bool {
+	return g.NeedsWarmupFlag
+}
+
+func (g *GenericFrameworkConfig) GetWarmupEndpoint() string {
+	if g.WarmupEndpointValue != "" {
+		return g.WarmupEndpointValue
+	}
+	return "/"
+}
+
+func (g *GenericFrameworkConfig) GetWarmupDelay() time.Duration {
+	return time.Duration(g.WarmupDelayMs) * time.Millisecond
+}
+
+// GetFrameworkConfig returns the appropriate FrameworkConfig for a framework name
+func GetFrameworkConfig(framework string, customStartCmd, customMigrationCmd string, needsWarmup bool, warmupEndpoint string, warmupDelayMs int) FrameworkConfig {
+	switch framework {
+	case "rails":
+		return &RailsFrameworkConfig{}
+	case "fastapi":
+		return &FastAPIFrameworkConfig{}
+	case "django":
+		return &DjangoFrameworkConfig{}
+	case "express":
+		return &ExpressFrameworkConfig{}
+	default:
+		return &GenericFrameworkConfig{
+			CustomStartCommand:  customStartCmd,
+			CustomMigrationCmd:  customMigrationCmd,
+			NeedsWarmupFlag:     needsWarmup,
+			WarmupEndpointValue: warmupEndpoint,
+			WarmupDelayMs:       warmupDelayMs,
+		}
+	}
+}
+
 type ServiceConfig struct {
-	Name           string            `yaml:"name"`
-	ServiceDir     string            `yaml:"service_dir"` // Directory containing service code (e.g., "user-service")
-	Type           string            `yaml:"type"`        // web, worker, consumer
-	Framework      string            `yaml:"framework"`
-	Port           int               `yaml:"port"`
-	HealthEndpoint string            `yaml:"health_endpoint"`
-	DockerCompose  string            `yaml:"docker_compose"`
-	BuildContext   string            `yaml:"build_context"`
-	StartCommand   string            `yaml:"start_command"`
-	Environment    map[string]string `yaml:"environment"`
+	Name             string            `yaml:"name"`
+	ServiceDir       string            `yaml:"service_dir"` // Directory containing service code (e.g., "user-service")
+	Type             string            `yaml:"type"`        // web, worker, consumer
+	Framework        string            `yaml:"framework"`
+	Port             int               `yaml:"port"`
+	HealthEndpoint   string            `yaml:"health_endpoint"`
+	DockerCompose    string            `yaml:"docker_compose"`
+	BuildContext     string            `yaml:"build_context"`
+	StartCommand     string            `yaml:"start_command"`
+	MigrationCommand string            `yaml:"migration_command"`      // Custom migration command (overrides framework default)
+	WarmupEndpoint   string            `yaml:"warmup_endpoint"`        // Custom warmup endpoint (overrides framework default)
+	WarmupDelayMs    int               `yaml:"warmup_delay_ms"`        // Custom warmup delay in milliseconds
+	NeedsWarmup      *bool             `yaml:"needs_warmup,omitempty"` // Whether framework needs warmup (overrides framework default)
+	Environment      map[string]string `yaml:"environment"`
 }
 
 // DatabaseConfig defines database requirements
@@ -26,6 +191,20 @@ type DatabaseConfig struct {
 	Database   string `yaml:"database"`
 	Username   string `yaml:"username"`
 	Password   string `yaml:"password"`
+	Host       string `yaml:"host"` // Host for external databases (when not using container)
+}
+
+// ContainerNaming defines configurable container and network naming
+type ContainerNaming struct {
+	DatabaseContainer string `yaml:"database_container"`  // Template for DB container name
+	NetworkAlias      string `yaml:"network_alias"`       // Network alias for database (e.g., "real-db")
+	KafkaContainer    string `yaml:"kafka_container"`     // Template for Kafka container name
+	ProxyContainer    string `yaml:"proxy_container"`     // Template for proxy container name
+	AppContainer      string `yaml:"app_container"`       // Template for app container name
+	NetworkName       string `yaml:"network_name"`        // Template for network name
+	MigrateContainer  string `yaml:"migrate_container"`   // Template for migration container name
+	ProjectMountPath  string `yaml:"project_mount_path"`  // Mount path for project (default: /app/project)
+	RegistryMountPath string `yaml:"registry_mount_path"` // Mount path for registry (default: /app/registry)
 }
 
 // InfrastructureConfig defines required infrastructure
@@ -38,13 +217,14 @@ type InfrastructureConfig struct {
 
 // LineSpecConfig is the root configuration structure
 type LineSpecConfig struct {
-	Service        ServiceConfig        `yaml:"service"`
-	Database       *DatabaseConfig      `yaml:"database,omitempty"`
-	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
-	Dependencies   []DependencyConfig   `yaml:"dependencies,omitempty"`
-	Provenance     *ProvenanceConfig    `yaml:"provenance,omitempty"`
-	Created        time.Time            `yaml:"-"`
-	BaseDir        string               `yaml:"-"`
+	Service         ServiceConfig        `yaml:"service"`
+	Database        *DatabaseConfig      `yaml:"database,omitempty"`
+	Infrastructure  InfrastructureConfig `yaml:"infrastructure"`
+	Dependencies    []DependencyConfig   `yaml:"dependencies,omitempty"`
+	Provenance      *ProvenanceConfig    `yaml:"provenance,omitempty"`
+	ContainerNaming *ContainerNaming     `yaml:"container_naming,omitempty"`
+	Created         time.Time            `yaml:"-"`
+	BaseDir         string               `yaml:"-"`
 }
 
 // EmbeddingConfig defines the embedding API configuration

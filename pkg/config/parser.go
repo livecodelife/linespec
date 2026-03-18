@@ -101,6 +101,45 @@ func applyDefaults(config *LineSpecConfig) {
 				}
 			}
 		}
+		// Database name defaults to service name + _development for Rails apps
+		if config.Database.Database == "" {
+			config.Database.Database = config.Service.Name + "_development"
+		}
+		// Username defaults to service name + _user for Rails apps
+		if config.Database.Username == "" {
+			config.Database.Username = config.Service.Name + "_user"
+		}
+		// Password defaults to service name + _password for Rails apps
+		if config.Database.Password == "" {
+			config.Database.Password = config.Service.Name + "_password"
+		}
+		// Host defaults to "db" for internal container communication
+		if config.Database.Host == "" {
+			config.Database.Host = "db"
+		}
+	}
+
+	// Container naming defaults
+	if config.ContainerNaming == nil {
+		config.ContainerNaming = &ContainerNaming{}
+	}
+	if config.ContainerNaming.DatabaseContainer == "" {
+		config.ContainerNaming.DatabaseContainer = "linespec-shared-db"
+	}
+	if config.ContainerNaming.NetworkName == "" {
+		config.ContainerNaming.NetworkName = "linespec-shared-net"
+	}
+	if config.ContainerNaming.NetworkAlias == "" {
+		config.ContainerNaming.NetworkAlias = "real-db"
+	}
+	if config.ContainerNaming.MigrateContainer == "" {
+		config.ContainerNaming.MigrateContainer = "linespec-migrate-"
+	}
+	if config.ContainerNaming.ProjectMountPath == "" {
+		config.ContainerNaming.ProjectMountPath = "/app/project"
+	}
+	if config.ContainerNaming.RegistryMountPath == "" {
+		config.ContainerNaming.RegistryMountPath = "/app/registry"
 	}
 }
 
