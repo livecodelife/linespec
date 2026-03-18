@@ -15,6 +15,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/proxy/base"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
 	"github.com/livecodelife/linespec/pkg/verify"
@@ -25,10 +26,10 @@ type Proxy struct {
 	upstreamAddr     string
 	registry         *registry.MockRegistry
 	loader           *dsl.PayloadLoader
-	schemaCache      map[string][]ColumnInfo // table name -> column definitions
-	transparentMode  bool                    // When true, pass through all queries
-	transparentUntil time.Time               // Time until which to stay in transparent mode
-	databaseName     string                  // Configurable database name
+	schemaCache      map[string][]ColumnInfo   // table name -> column definitions
+	transparentMode  bool                      // When true, pass through all queries
+	transparentUntil time.Time                 // Time until which to stay in transparent mode
+	dbConfig         *base.DatabaseProxyConfig // Configurable database name
 }
 
 type ColumnInfo struct {
@@ -51,18 +52,18 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		loader:          &dsl.PayloadLoader{},
 		schemaCache:     make(map[string][]ColumnInfo),
 		transparentMode: false,
-		databaseName:    "todo_api_development", // Default for backward compatibility
+		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"), // Default for backward compatibility
 	}
 }
 
 // SetDatabaseName sets the database name for schema responses
 func (p *Proxy) SetDatabaseName(name string) {
-	p.databaseName = name
+	p.dbConfig.SetDatabaseName(name)
 }
 
 // GetDatabaseName returns the current database name
 func (p *Proxy) GetDatabaseName() string {
-	return p.databaseName
+	return p.dbConfig.GetDatabaseName()
 }
 
 // EnableTransparentMode enables transparent passthrough mode for a specified duration
@@ -330,7 +331,7 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 				}
 			}
 		}
-		colDef := p.makeColumnDef(p.databaseName, tableName, col, tp, flags)
+		colDef := p.makeColumnDef(p.dbConfig.GetDatabaseName(), tableName, col, tp, flags)
 		if err := p.writePacket(conn, seq, colDef); err != nil {
 			return err
 		}
@@ -392,7 +393,7 @@ func (p *Proxy) sendEmptyResultSet(conn net.Conn, tableName string) error {
 	if err := p.writePacket(conn, 1, []byte{1}); err != nil {
 		return err
 	}
-	colDef := p.makeColumnDef(p.databaseName, tableName, "id", mysql.MYSQL_TYPE_LONGLONG, 3)
+	colDef := p.makeColumnDef(p.dbConfig.GetDatabaseName(), tableName, "id", mysql.MYSQL_TYPE_LONGLONG, 3)
 	if err := p.writePacket(conn, 2, colDef); err != nil {
 		return err
 	}
@@ -524,7 +525,7 @@ func (p *Proxy) sendSchemaResponse(conn net.Conn, columns []ColumnInfo) error {
 	// Column definition packets (seq=2 to seq=10)
 	seq := uint8(2)
 	for _, colName := range columnNames {
-		colDef := p.makeColumnDef(p.databaseName, "", colName, mysql.MYSQL_TYPE_VAR_STRING, 0)
+		colDef := p.makeColumnDef(p.dbConfig.GetDatabaseName(), "", colName, mysql.MYSQL_TYPE_VAR_STRING, 0)
 		if err := p.writePacket(conn, seq, colDef); err != nil {
 			return err
 		}

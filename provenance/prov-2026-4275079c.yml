@@ -13,11 +13,17 @@ intent: >
   Session 1: Database Configuration - Replace hardcoded database values with
   configurable options read from .linespec.yml configuration files. Support
   custom database names, usernames, passwords, and initialization scripts.
+  Create a common DatabaseProxyConfig abstraction that works for all database
+  types (MySQL, PostgreSQL, MongoDB, etc.).
 
   Session 2: Framework Abstraction - Create a FrameworkConfig interface with
   adapters for different frameworks (Rails, FastAPI, Django, Express, etc.) to
   handle framework-specific startup commands, migrations, and warmup logic
   generically. Remove Rails-only assumptions from the codebase.
+
+  Session 3: Service Naming - Update Docker image naming to use service.Name
+  from .linespec.yml configuration instead of directory name, supporting
+  decoupled test directories and service names.
 
   These changes are foundational and unblock subsequent infrastructure and
   flexibility improvements in later phases.
@@ -28,7 +34,9 @@ constraints:
   - MUST support custom usernames and passwords instead of "todo_user"/"todo_password"
   - MUST support custom initialization script filenames beyond "init.sql"
   - MUST remove hardcoded Rails-specific commands from runner
-  - MUST create FrameworkConfig interface with GetStartCommand, GetMigrationCommand, NeedsWarmup, GetHealthEndpoint methods
+  - MUST create DatabaseProxyConfig abstraction for configurable database names across all database types (MySQL, PostgreSQL, MongoDB, etc.)
+  - MUST support Docker image naming based on service.Name from configuration
+  - MUST update all database proxies (MySQL, PostgreSQL) to use common DatabaseProxyConfig abstraction
   - MUST support Rails, FastAPI, Django, Express, and generic frameworks
   - MUST allow custom frameworks via explicit start_command in config
   - MUST make framework warmup configurable (delay and endpoint)
@@ -41,12 +49,16 @@ affected_scope:
   - pkg/config/parser.go
   - pkg/config/framework_config_test.go
   - pkg/config/database_config_test.go
+  - pkg/proxy/base/database_proxy.go
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/mysql/proxy_dbname_test.go
   - pkg/proxy/postgresql/proxy.go
   - pkg/runner/runner.go
+  - examples/order-service/**
+  - examples/order-linespecs/**
   - AGENTS.md
   - README.md
+  - IMPROVEMENT_PLAN.md
 
 forbidden_scope:
   - pkg/proxy/http/*.go

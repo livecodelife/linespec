@@ -1,0 +1,13 @@
+TEST create_order_success
+
+RECEIVE HTTP:POST /orders
+WITH {{payloads/create_order_request.json}}
+
+EXPECT WRITE:POSTGRESQL orders
+WITH {{payloads/create_order_request.json}}
+
+RESPOND HTTP:201
+WITH {{payloads/create_order_response.json}}
+NOISE
+  body.id
+  body.created_at

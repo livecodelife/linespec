@@ -1,0 +1,33 @@
+service:
+  name: order-service
+  type: web
+  framework: custom
+  port: 3000
+  health_endpoint: /health
+  docker_compose: ../order-service/docker-compose.yml
+  build_context: ../order-service
+  start_command: ./order-service
+  environment:
+    DATABASE_URL: postgresql://order_user:order_password@db:5432/order_service
+    PORT: "3000"
+
+database:
+  type: postgresql
+  image: postgres:16-alpine
+  port: 5432
+  container: db
+  init_script: ../order-service/init.sql
+  database: order_service
+  username: order_user
+  password: order_password
+
+infrastructure:
+  database: true
+  kafka: false
+  external_db: false
+
+provenance:
+  dir: provenance/
+  enforcement: warn
+  commit_tag_required: true
+  auto_affected_scope: true

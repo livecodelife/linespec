@@ -616,6 +616,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if serviceConfig.Service.ServiceDir != "" {
 		serviceDir = serviceConfig.Service.ServiceDir
 	}
+
+	// Use service.Name for Docker image name if available, otherwise fall back to serviceDir
+	serviceName := serviceConfig.Service.Name
+	if serviceName == "" {
+		serviceName = serviceDir
+	}
+
 	appPort := fmt.Sprintf("%d", serviceConfig.Service.Port)
 
 	// 2. Save Registry to File for Proxy Containers
@@ -967,7 +974,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-		Image: serviceDir + ":latest",
+		Image: serviceName + ":latest",
 		Env:   appEnv,
 		Cmd:   startCmd,
 	}, &container.HostConfig{

@@ -15,6 +15,7 @@ import (
 
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/proxy/base"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
 	"github.com/livecodelife/linespec/pkg/verify"
@@ -31,6 +32,7 @@ type Proxy struct {
 	startup      *StartupHandler
 	result       *ResultHandler
 	debugLog     *os.File
+	dbConfig     *base.DatabaseProxyConfig // Configurable database name
 }
 
 // NewProxy creates a new PostgreSQL proxy
@@ -51,7 +53,18 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		startup:      NewStartupHandler(),
 		result:       NewResultHandler(),
 		debugLog:     debugLog,
+		dbConfig:     base.NewDatabaseProxyConfig("postgres"), // Default database name
 	}
+}
+
+// SetDatabaseName sets the database name for schema responses
+func (p *Proxy) SetDatabaseName(name string) {
+	p.dbConfig.SetDatabaseName(name)
+}
+
+// GetDatabaseName returns the current database name
+func (p *Proxy) GetDatabaseName() string {
+	return p.dbConfig.GetDatabaseName()
 }
 
 // Start starts the proxy server
