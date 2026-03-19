@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="400" height="400">
+  <rect width="40" height="40" rx="9" fill="#121918"/>
+  <!-- protocol trace -->
+  <polyline points="5,22 10,22 10,15 20,15 20,25 30,25 30,18 35,18"
+    fill="none" stroke="#6aaa8a" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- spec tick at x=10 (top of first rise) — vertical stem up + horizontal crossbar -->
+  <line x1="10" y1="11" x2="10" y2="15" stroke="#6aaa8a" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="7" y1="11" x2="13" y2="11" stroke="#6aaa8a" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- spec tick at x=20 (bottom of second segment) — vertical stem down + horizontal crossbar -->
+  <line x1="20" y1="25" x2="20" y2="29" stroke="#6aaa8a" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="17" y1="29" x2="23" y2="29" stroke="#6aaa8a" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
