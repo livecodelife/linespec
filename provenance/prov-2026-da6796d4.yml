@@ -1,0 +1,54 @@
+id: prov-2026-da6796d4
+title: Add SARIF output format to provenance linter
+status: open
+created_at: "2026-03-19"
+author: calebcowen@gmail.com
+intent: >
+  Add a --format sarif flag to the `linespec provenance lint` command that emits
+  lint results as a standards-compliant SARIF 2.1.0 JSON document instead of human-
+  readable terminal output. This enables provenance violations to appear as
+  first-class citizens in GitHub Code Scanning, VS Code's Problems panel, and
+  any other tooling that consumes the SARIF standard, without requiring custom
+  integration work.
+  
+  SARIF (Static Analysis Results Interchange Format) is an OASIS open standard
+  (ISO/IEC 5055) that defines a JSON schema for static analysis tool output.
+  The goal is to enable inline annotations in PRs and repository-level security/
+  quality dashboards.
+
+constraints:
+  - MUST emit valid SARIF 2.1.0 JSON document to stdout when --format sarif is specified
+  - MUST suppress non-JSON output to stdout (progress indicators, banners, summary lines)
+  - MUST assign stable rule IDs (PROV001-PROV019) to all lint rules for external tooling
+  - MUST include tool descriptor with complete rule catalog in every SARIF output
+  - MUST compute SHA-256 digests for all analyzed files in the artifacts array
+  - MUST use %SRCROOT% as uriBaseId with paths relative to repository root
+  - MUST map LineSpec severities to SARIF levels (error→error, warning→warning, hint→note)
+  - MUST maintain exit code behavior (non-zero on errors) regardless of output format
+  - MUST NOT change human-readable terminal output behavior when --format sarif is not used
+  - MUST include all 19 lint rules in the tool.driver.rules array regardless of findings
+
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/sarif.go
+  - pkg/provenance/sarif_test.go
+  - cmd/linespec/main_stable.go
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/sarif_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - output-format
+  - sarif
+  - linting
+  - github-integration
