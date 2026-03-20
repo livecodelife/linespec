@@ -1,0 +1,48 @@
+name: Provenance Lint SARIF
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  lint-sarif:
+    name: Lint Provenance Records (SARIF)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Build LineSpec
+        run: go build -o linespec ./cmd/linespec
+      
+      - name: Lint provenance records
+        run: ./linespec provenance lint --format sarif > provenance-results.sarif
+        continue-on-error: true
+      
+      - name: Upload provenance lint results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: provenance-results.sarif
+          category: linespec-provenance
+      
+      - name: Check for lint failures
+        run: |
+          # Run lint again without SARIF to check for actual errors
+          ./linespec provenance lint --enforcement strict
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
