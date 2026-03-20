@@ -1,6 +1,6 @@
 id: prov-2026-5801f304
 title: 'Phase 4: MySQL Proxy Support, Variable Interpolation, and Dynamic Table Extraction'
-status: open
+status: implemented
 created_at: "2026-03-19"
 author: calebcowen@gmail.com
 intent: >
@@ -72,7 +72,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6b5043e229fcf029f61d622d580c84b0ae49a370
 associated_specs:
   - path: pkg/proxy/postgresql/proxy_extract_table_test.go
     type: go-test
