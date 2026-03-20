@@ -1,6 +1,6 @@
 id: prov-2026-da6796d4
 title: Add SARIF output format to provenance linter
-status: open
+status: implemented
 created_at: "2026-03-19"
 author: calebcowen@gmail.com
 intent: >
@@ -44,7 +44,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cf0e4e3de02a1d0d21320883a0698f4d5428231d
 associated_specs:
   - path: pkg/provenance/sarif_test.go
     type: go-test
