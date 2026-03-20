@@ -136,6 +136,10 @@ linespec provenance install-hooks   # Install git hooks
 linespec provenance lock-scope      # Lock scope to allowlist
 linespec provenance complete        # Mark as implemented
 linespec provenance deprecate       # Mark as deprecated
+
+# Output formats
+linespec provenance lint --format json     # JSON output for CI
+linespec provenance lint --format sarif    # SARIF output for GitHub Code Scanning
 ```
 
 ### Key Features
@@ -146,6 +150,33 @@ linespec provenance deprecate       # Mark as deprecated
 - **Graph visualization** - Query and visualize decision relationships
 - **Monorepo support** - Service-specific records with ID suffixes
 - **CI/CD ready** - JSON output and strict enforcement modes
+- **SARIF output** - GitHub Code Scanning integration
+
+### SARIF Output for GitHub Code Scanning
+
+LineSpec can emit lint results in SARIF (Static Analysis Results Interchange Format) 2.1.0 format for integration with GitHub Code Scanning:
+
+```bash
+# Generate SARIF output
+linespec provenance lint --format sarif > provenance-results.sarif
+
+# Upload to GitHub Code Scanning (in your CI workflow)
+- name: Lint provenance records
+  run: linespec provenance lint --format sarif > provenance-results.sarif
+  continue-on-error: true
+
+- name: Upload to Code Scanning
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: provenance-results.sarif
+    category: linespec-provenance
+```
+
+The SARIF output includes:
+- **19 stable rule IDs** (PROV001-PROV019) for consistent alerting
+- **File hashes** for GitHub's deduplication
+- **%SRCROOT% base** for proper path resolution
+- **Severity mapping** (error→error, warning→warning, hint→note)
 
 ### Documentation
 

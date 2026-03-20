@@ -225,11 +225,33 @@ func (c *Commands) Lint(opts LintOptions) error {
 	}
 
 	// Output
-	if opts.Format == "json" {
+	switch opts.Format {
+	case "json":
 		return c.Formatter.FormatJSON(result.ToJSON())
-	}
+	case "sarif":
+		// Get list of analyzed files
+		analyzedFiles := GetAnalyzedFiles(result, c.Loader)
 
-	c.Formatter.FormatLint(result)
+		// Generate SARIF document
+		sarifDoc := result.ToSARIF(c.Loader, c.RepoRoot, analyzedFiles)
+
+		// Convert to JSON
+		jsonBytes, err := sarifDoc.ToJSON()
+		if err != nil {
+			return fmt.Errorf("failed to generate SARIF: %w", err)
+		}
+
+		// Write to stdout (no extra output for SARIF format)
+		fmt.Fprintln(c.Formatter.Output, string(jsonBytes))
+
+		// Exit with error if there are errors (same behavior as other formats)
+		if result.HasErrors() {
+			return fmt.Errorf("lint failed")
+		}
+		return nil
+	default:
+		c.Formatter.FormatLint(result)
+	}
 
 	if result.HasErrors() {
 		return fmt.Errorf("lint failed")

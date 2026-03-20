@@ -479,7 +479,7 @@ func printProvenanceUsage() {
 
 Subcommands:
   create [options]           Create a new provenance record
-  lint [options]             Validate provenance records
+  lint [options]             Validate provenance records (supports --format sarif)
   status [options]           Show record status
   graph [options]            Render provenance graph
   check [options]            Check commits for violations
@@ -573,7 +573,7 @@ func parseLintOptions(args []string) provenance.LintOptions {
 Options:
   --record prov-YYYY-NNN     Lint a single record
   --enforcement level        Override enforcement (none|warn|strict)
-  --format format            Output format (human|json)
+  --format format            Output format (human|json|sarif)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)

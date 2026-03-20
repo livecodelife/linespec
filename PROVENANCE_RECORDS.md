@@ -257,6 +257,9 @@ linespec provenance lint --record prov-2026-001
 # JSON output for CI
 linespec provenance lint --format json
 
+# SARIF output for GitHub Code Scanning
+linespec provenance lint --format sarif > provenance-results.sarif
+
 # Override enforcement level
 linespec provenance lint --enforcement strict
 ```
@@ -264,13 +267,22 @@ linespec provenance lint --enforcement strict
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Lint single record
 - `--enforcement level` - none|warn|strict (default from config)
-- `--format format` - human|json
+- `--format format` - human|json|sarif
 - `-c, --config path` - Use custom config
 
 **Enforcement Levels:**
 - **none** - Don't enforce at all
 - **warn** - Show warnings but allow (default)
 - **strict** - Fail on any violation
+
+**SARIF Output:**
+When using `--format sarif`, the command produces a valid SARIF 2.1.0 document that can be uploaded to GitHub Code Scanning:
+
+- Includes all 19 lint rules in the tool descriptor
+- Maps severity to SARIF levels (error→error, warning→warning, hint→note)
+- Uses %SRCROOT% as uriBaseId for path resolution
+- Includes SHA-256 hashes for file deduplication
+- Supports enforcement level variation (e.g., PROV010 is error under strict, warning under warn)
 
 ### Status
 
@@ -697,6 +709,43 @@ Add to your CI pipeline:
     go install github.com/livecodelife/linespec/cmd/linespec@latest
     linespec provenance lint --enforcement strict
     linespec provenance check --range HEAD~10..HEAD
+```
+
+### GitHub Code Scanning Integration (SARIF)
+
+Upload provenance lint results to GitHub Code Scanning for inline PR annotations and repository-level alerts:
+
+```yaml
+# GitHub Actions workflow
+- name: Lint provenance records
+  run: linespec provenance lint --format sarif > provenance-results.sarif
+  continue-on-error: true
+
+- name: Upload to Code Scanning
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: provenance-results.sarif
+    category: linespec-provenance
+```
+
+**Benefits:**
+- **Inline PR annotations** - Violations appear directly in the Files Changed view
+- **Repository dashboard** - Track all provenance alerts in one place
+- **Alert deduplication** - GitHub uses file hashes to avoid duplicate alerts
+- **Suppression** - Use GitHub's alert management UI to dismiss false positives
+
+**Rule IDs:**
+The SARIF output uses stable rule IDs (PROV001-PROV019) that persist across LineSpec versions:
+- PROV001: InvalidYaml
+- PROV002: MissingRequiredField
+- PROV003: UnknownStatus
+- ... (see full catalog in SARIF output)
+
+**Example PR annotation:**
+When a commit references an implemented record, GitHub will show an inline annotation:
+```
+⚠ PROV010: MissingAssociatedSpecs
+Record prov-2026-001 is open with no associated specs.
 ```
 
 ### Automated Embedding Indexing
