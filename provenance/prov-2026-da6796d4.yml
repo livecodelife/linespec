@@ -35,6 +35,9 @@ affected_scope:
   - pkg/provenance/sarif.go
   - pkg/provenance/sarif_test.go
   - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - PROVENANCE_RECORDS.md
+  - README.md
 
 forbidden_scope: []
 
