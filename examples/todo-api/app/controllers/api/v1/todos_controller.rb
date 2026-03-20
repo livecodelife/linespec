@@ -55,13 +55,16 @@ class Api::V1::TodosController < ApplicationController
   end
 
   def authenticate_user!
-    token = request.headers["Authorization"]&.gsub("Bearer ", "") || "token_abc123xyz"
+    auth_header = request.headers["Authorization"]
+    token = auth_header&.gsub("Bearer ", "") || "token_abc123xyz"
 
     begin
       user_service_url = ENV["USER_SERVICE_URL"] || "http://user-service.local/api/v1/users/auth"
       response = HTTParty.get(user_service_url,
-        body: { authorization: "Bearer #{token}" }.to_json,
-        headers: { "Content-Type" => "application/json" },
+        headers: {
+          "Content-Type" => "application/json",
+          "Authorization" => "Bearer #{token}"
+        },
         timeout: 5)
 
       if response.success?
@@ -75,7 +78,7 @@ class Api::V1::TodosController < ApplicationController
         render json: { error: "Unavailable", message: "Internal Server Error" }, status: :service_unavailable
         nil
       else
-        # Authentication failed - return 403
+        # Authentication failed - return 401
         render json: { error: "Unauthorized", message: "Invalid or expired token" }, status: 401
         nil
       end

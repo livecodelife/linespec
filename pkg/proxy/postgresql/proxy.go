@@ -63,11 +63,11 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		addr:         addr,
 		upstreamAddr: upstreamAddr,
 		registry:     reg,
-		loader:       &dsl.PayloadLoader{},
+		loader:       dsl.NewPayloadLoader(""),
 		startup:      NewStartupHandler(),
 		result:       NewResultHandler(),
 		debugLog:     debugLog,
-		dbConfig:     base.NewDatabaseProxyConfig("postgres"), // Default database name
+		dbConfig:     base.NewDatabaseProxyConfig("postgres"),
 		schemaCache:  make(map[string][]ColumnInfo),
 	}
 }
@@ -891,16 +891,22 @@ func (p *Proxy) extractTable(query string) string {
 	q = strings.ReplaceAll(q, "\"", " ")
 	q = strings.ReplaceAll(q, "'", " ")
 
-	// Common table names to check
-	knownTables := []string{"notifications", "users", "todos"}
+	// Get dynamic table list from registry (from EXPECT statements)
+	// This allows any table name from .linespec files to be recognized
+	knownTables := p.registry.GetTables()
+
+	// Check each registered table to see if it appears in the query
 	for _, table := range knownTables {
-		re := regexp.MustCompile(`\b` + table + `\b`)
+		// Escape special regex characters in table names
+		escapedTable := regexp.QuoteMeta(table)
+		re := regexp.MustCompile(`\b` + escapedTable + `\b`)
 		if re.MatchString(q) {
 			return table
 		}
 	}
 
-	// Try to extract from SQL keywords
+	// Fallback: Try to extract from SQL keywords (FROM, INTO, UPDATE)
+	// This handles tables that weren't explicitly registered in EXPECT statements
 	words := strings.Fields(q)
 	for i, word := range words {
 		if word == "from" || word == "into" || word == "update" {

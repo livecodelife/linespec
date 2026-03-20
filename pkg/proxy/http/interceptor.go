@@ -25,7 +25,7 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 	return &Interceptor{
 		addr:     addr,
 		registry: reg,
-		loader:   &dsl.PayloadLoader{},
+		loader:   dsl.NewPayloadLoader(""), // BaseDir will be set per-request from mock.BaseDir
 	}
 }
 
@@ -119,11 +119,12 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 				response := map[string]string{
 					"error": fmt.Sprintf("VERIFY failed: %v", err),
 				}
-				data, _ := json.Marshal(response)
-				w.Write(data)
+				if encodeErr := json.NewEncoder(w).Encode(response); encodeErr != nil {
+					logger.Error("Failed to encode error response: %v", encodeErr)
+				}
 				return
 			}
-			logger.Debug("All VERIFY rules passed for HTTP %s %s", method, path)
+			logger.Debug("VERIFY passed for HTTP %s %s", method, path)
 		}
 	}
 
@@ -146,7 +147,12 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		data, _ := json.Marshal(payload)
+		data, err := json.Marshal(payload)
+		if err != nil {
+			logger.Error("Failed to marshal payload: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		w.Write(data)

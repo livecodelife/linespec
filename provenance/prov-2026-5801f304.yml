@@ -1,0 +1,87 @@
+id: prov-2026-5801f304
+title: 'Phase 4: MySQL Proxy Support, Variable Interpolation, and Dynamic Table Extraction'
+status: open
+created_at: "2026-03-19"
+author: calebcowen@gmail.com
+intent: >
+  Phase 4 of the LineSpec Improvement Plan focuses on completing the proxy
+  infrastructure and improving test configurability. This phase delivers
+  MySQL proxy support for database interception, environment variable
+  interpolation in .linespec files, and removes hardcoded table names
+  from the proxy layer.
+
+  Key deliverables:
+  1. MySQL Proxy Support: Enable database write interception for MySQL
+     by adding per-service MySQL proxy containers (similar to PostgreSQL).
+     This allows EXPECT WRITE:MYSQL statements to be validated.
+
+  2. Environment Variable Interpolation: Support ${VAR_NAME} syntax in
+     .linespec files that resolves to values defined in .linespec.yml
+     service.environment section. This enables dynamic URLs and credentials
+     without hardcoding.
+
+  3. Dynamic Table Extraction: Remove hardcoded table lists from PostgreSQL
+     and MySQL proxies. Table names are now extracted dynamically from
+     EXPECT statement registrations via registry.GetTables().
+
+  4. Database Proxy Configuration: Add proxy: true|false flag to database
+     configuration with proper *bool pointer handling to distinguish
+     between unset and explicitly false.
+
+  5. HTTP Proxy Improvements: Fix PayloadLoader initialization to properly
+     parse YAML/JSON files instead of returning raw strings.
+
+  6. Test Suite Stabilization: Fix nil pointer dereferences, environment
+     variable precedence, and URL matching issues in example services.
+
+constraints:
+  - "MUST support MySQL proxy via proxy: true in database configuration"
+  - "MUST preserve explicit proxy: false settings using *bool type"
+  - "MUST resolve ${VAR_NAME} from .linespec.yml environment in .linespec files"
+  - "MUST use registry.GetTables() instead of hardcoded table lists in proxies"
+  - "MUST fix PayloadLoader initialization in all proxies (HTTP, MySQL, PostgreSQL)"
+  - "MUST add proper error handling for JSON encoding in HTTP proxy"
+  - "MUST remove duplicate PostgreSQL proxy startup log messages"
+  - "MUST simplify environment variable precedence logic using map-based approach"
+  - "MUST achieve 95%+ test pass rate (21/22 tests passing)"
+  - "MUST NOT break existing PostgreSQL proxy functionality"
+  - "MUST maintain backward compatibility with existing .linespec.yml files"
+
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/runner/runner.go
+  - pkg/proxy/postgresql/proxy_extract_table_test.go
+  - examples/todo-linespecs/.linespec.yml
+  - examples/todo-api/.linespec.yml
+  - examples/user-linespecs/.linespec.yml
+  - examples/user-service/.linespec.yml
+  - examples/notification-linespecs/.linespec.yml
+  - examples/todo-api/app/controllers/api/v1/todos_controller.rb
+  - examples/todo-linespecs/*.linespec
+  - examples/notification-linespecs/*.linespec
+
+forbidden_scope:
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/provenance/*.go
+
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/proxy_extract_table_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - phase-4
+  - proxy
+  - mysql
+  - postgresql
+  - configuration
+  - testing

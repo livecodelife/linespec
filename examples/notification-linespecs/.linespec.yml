@@ -12,7 +12,7 @@ service:
     KAFKA_BROKERS: kafka:29092
     KAFKA_TOPIC: todo-events
     KAFKA_GROUP_ID: notification-service-group
-    USER_SERVICE_URL: http://user-service.local:80/api/v1/users/auth
+    USER_SERVICE_URL: http://user-service/api/v1/users/auth
     DATABASE_URL: postgresql+asyncpg://notification_user:notification_password@db:5432/notification_service
 
 database:
@@ -24,6 +24,7 @@ database:
   database: notification_service
   username: notification_user
   password: notification_password
+  proxy: true
 
 infrastructure:
   database: true

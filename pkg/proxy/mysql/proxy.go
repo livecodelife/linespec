@@ -49,10 +49,10 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		addr:            addr,
 		upstreamAddr:    upstreamAddr,
 		registry:        reg,
-		loader:          &dsl.PayloadLoader{},
+		loader:          dsl.NewPayloadLoader(""),
 		schemaCache:     make(map[string][]ColumnInfo),
 		transparentMode: false,
-		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"), // Default for backward compatibility
+		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"),
 	}
 }
 
@@ -482,8 +482,14 @@ func (p *Proxy) extractTable(query string) string {
 	return "unknown"
 }
 
-// getKnownTables returns the list of known tables from schema cache or defaults
+// getKnownTables returns the list of known tables from registry, schema cache, or defaults
 func (p *Proxy) getKnownTables() []string {
+	// First, check if registry has any tables from EXPECT statements
+	registryTables := p.registry.GetTables()
+	if len(registryTables) > 0 {
+		return registryTables
+	}
+
 	// If we have tables in schema cache, use those
 	if len(p.schemaCache) > 0 {
 		tables := make([]string, 0, len(p.schemaCache))

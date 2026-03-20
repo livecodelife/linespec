@@ -128,6 +128,15 @@ func applyDefaults(config *LineSpecConfig) {
 		if config.Database.Host == "" {
 			config.Database.Host = "db"
 		}
+		// Proxy defaults to true for PostgreSQL (existing behavior), false for MySQL
+		// Only set default if proxy was not explicitly configured (nil means not set)
+		if config.Database.Proxy == nil {
+			defaultProxy := false
+			if config.Database.Type == "postgresql" {
+				defaultProxy = true
+			}
+			config.Database.Proxy = &defaultProxy
+		}
 	}
 
 	// Container naming defaults

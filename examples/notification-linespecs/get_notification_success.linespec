@@ -4,7 +4,7 @@ RECEIVE HTTP:GET /api/v1/notifications/1
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 
-EXPECT HTTP:GET ${USER_SERVICE_URL}/api/v1/users/auth
+EXPECT HTTP:GET ${USER_SERVICE_URL}
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 RETURNS {{payloads/authenticated_user.yaml}}

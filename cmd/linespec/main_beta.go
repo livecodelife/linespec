@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	debugpkg "runtime/debug"
 	"strings"
 	"time"
 
@@ -155,7 +156,8 @@ func runTest() {
 			defer func() {
 				if r := recover(); r != nil {
 					logger.StopSpinner(testStop)
-					logger.TestFailed(file, fmt.Errorf("PANIC: %v", r))
+					stack := debugpkg.Stack()
+					logger.TestFailed(file, fmt.Errorf("PANIC: %v\nStack trace:\n%s", r, stack))
 					failed++
 				}
 			}()
