@@ -208,63 +208,68 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed to create network: %w", err)
 	}
 
-	// Start shared MySQL
-	// Find init.sql from discovered services or fallback to common locations
-	initSqlPath := s.FindInitScript()
+	// Only start shared MySQL if there are MySQL services configured
+	if s.hasMySQLServices() {
+		// Start shared MySQL
+		// Find init.sql from discovered services or fallback to common locations
+		initSqlPath := s.FindInitScript()
 
-	var binds []string
-	if initSqlPath != "" {
-		// Support custom init script filenames
-		initScriptName := filepath.Base(initSqlPath)
-		binds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initSqlPath, initScriptName)}
-	}
-
-	// Get database configuration from first MySQL service or use defaults
-	dbConfig := s.getSharedDatabaseConfig()
-
-	_, err = s.orch.StartContainer(ctx, &container.Config{
-		Image: "mysql:8.4",
-		Env: []string{
-			fmt.Sprintf("MYSQL_ROOT_PASSWORD=rootpassword"),
-			fmt.Sprintf("MYSQL_DATABASE=%s", dbConfig.Database),
-			fmt.Sprintf("MYSQL_USER=%s", dbConfig.Username),
-			fmt.Sprintf("MYSQL_PASSWORD=%s", dbConfig.Password),
-		},
-	}, &container.HostConfig{
-		Binds: binds,
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
-		},
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{s.containerNaming.NetworkAlias}}},
-	}, s.containerNaming.DatabaseContainer)
-	if err != nil {
-		return fmt.Errorf("failed to start MySQL: %w", err)
-	}
-
-	logger.Debug("Waiting for shared DB to be ready")
-	// Get host port for direct connection from host (with retry)
-	s.dbHostPort, err = s.waitForContainerPort(ctx, s.containerNaming.DatabaseContainer, "3306/tcp", 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to get shared DB host port: %w", err)
-	}
-	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+s.dbHostPort, 60*time.Second); err != nil {
-		return fmt.Errorf("shared DB not ready: %w", err)
-	}
-
-	// Additional wait for MySQL to fully initialize and accept connections
-	// Use actual MySQL ping to verify readiness instead of fixed delays
-	logger.Debug("Verifying MySQL is ready")
-	if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, dbConfig.Username, dbConfig.Password, dbConfig.Database, 30*time.Second); err != nil {
-		return fmt.Errorf("MySQL not accepting connections: %w", err)
-	}
-	logger.Debug("MySQL is ready")
-
-	// Wait for init.sql to complete (if provided)
-	if initSqlPath != "" {
-		if err := s.waitForDBInit(ctx); err != nil {
-			return fmt.Errorf("failed waiting for DB init: %w", err)
+		var binds []string
+		if initSqlPath != "" {
+			// Support custom init script filenames
+			initScriptName := filepath.Base(initSqlPath)
+			binds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initSqlPath, initScriptName)}
 		}
+
+		// Get database configuration from first MySQL service or use defaults
+		dbConfig := s.getSharedDatabaseConfig()
+
+		_, err = s.orch.StartContainer(ctx, &container.Config{
+			Image: "mysql:8.4",
+			Env: []string{
+				fmt.Sprintf("MYSQL_ROOT_PASSWORD=rootpassword"),
+				fmt.Sprintf("MYSQL_DATABASE=%s", dbConfig.Database),
+				fmt.Sprintf("MYSQL_USER=%s", dbConfig.Username),
+				fmt.Sprintf("MYSQL_PASSWORD=%s", dbConfig.Password),
+			},
+		}, &container.HostConfig{
+			Binds: binds,
+			PortBindings: map[nat.Port][]nat.PortBinding{
+				"3306/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+			},
+		}, &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{s.containerNaming.NetworkAlias}}},
+		}, s.containerNaming.DatabaseContainer)
+		if err != nil {
+			return fmt.Errorf("failed to start MySQL: %w", err)
+		}
+
+		logger.Debug("Waiting for shared DB to be ready")
+		// Get host port for direct connection from host (with retry)
+		s.dbHostPort, err = s.waitForContainerPort(ctx, s.containerNaming.DatabaseContainer, "3306/tcp", 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("failed to get shared DB host port: %w", err)
+		}
+		if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+s.dbHostPort, 60*time.Second); err != nil {
+			return fmt.Errorf("shared DB not ready: %w", err)
+		}
+
+		// Additional wait for MySQL to fully initialize and accept connections
+		// Use actual MySQL ping to verify readiness instead of fixed delays
+		logger.Debug("Verifying MySQL is ready")
+		if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, dbConfig.Username, dbConfig.Password, dbConfig.Database, 30*time.Second); err != nil {
+			return fmt.Errorf("MySQL not accepting connections: %w", err)
+		}
+		logger.Debug("MySQL is ready")
+
+		// Wait for init.sql to complete (if provided)
+		if initSqlPath != "" {
+			if err := s.waitForDBInit(ctx); err != nil {
+				return fmt.Errorf("failed waiting for DB init: %w", err)
+			}
+		}
+	} else {
+		logger.Debug("No MySQL services found, skipping shared MySQL infrastructure")
 	}
 
 	// Run migrations for all discovered services based on their framework
@@ -281,21 +286,24 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 	logger.Debug("Migrations complete")
 
-	// Fetch schema for all tables after migrations complete
+	// Fetch schema for all tables after migrations complete (only for MySQL)
 	// This is done once and shared across all tests
-	tables := s.discoverTables(ctx, dbConfig)
-	schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
-		dbConfig.Username, dbConfig.Password, dbConfig.Database)
-	if err != nil {
-		logger.Debug("Failed to fetch shared schema: %v", err)
-	} else {
-		// Save to shared location in temp directory
-		schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
-		schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
-		if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-			logger.Debug("Failed to write shared schema file: %v", err)
+	if s.hasMySQLServices() {
+		dbConfig := s.getSharedDatabaseConfig()
+		tables := s.discoverTables(ctx, dbConfig)
+		schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
+			dbConfig.Username, dbConfig.Password, dbConfig.Database)
+		if err != nil {
+			logger.Debug("Failed to fetch shared schema: %v", err)
 		} else {
-			logger.Debug("Shared schema cached to %s", schemaFile)
+			// Save to shared location in temp directory
+			schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
+			schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
+			if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+				logger.Debug("Failed to write shared schema file: %v", err)
+			} else {
+				logger.Debug("Shared schema cached to %s", schemaFile)
+			}
 		}
 	}
 
@@ -369,6 +377,16 @@ func (s *TestSuite) getSharedDatabaseConfig() *config.DatabaseConfig {
 		Host:     "real-db",
 		Port:     3306,
 	}
+}
+
+// hasMySQLServices returns true if any discovered service uses MySQL
+func (s *TestSuite) hasMySQLServices() bool {
+	for _, cfg := range s.serviceConfigs {
+		if cfg.Database != nil && cfg.Database.Type == "mysql" {
+			return true
+		}
+	}
+	return false
 }
 
 // discoverTables returns list of tables to fetch schema for
@@ -645,13 +663,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// 3. Start Database and Proxy Containers (if database is enabled)
 	var dbContainerName string
+	logger.Debug("DEBUG: Infrastructure.Database=%v, DatabaseConfig is nil=%v", serviceConfig.Infrastructure.Database, serviceConfig.Database == nil)
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
 		dbType := serviceConfig.Database.Type
 		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
 		logger.Debug("Database type: %s, Proxy: %v", dbType, serviceConfig.Database.Proxy)
 
+		logger.Debug("DEBUG: Database infrastructure enabled, dbType='%s', port=%s", dbType, dbPort)
+		logger.Debug("DEBUG: Database config: Type=%s, Image=%s", serviceConfig.Database.Type, serviceConfig.Database.Image)
+
 		switch dbType {
 		case "postgresql":
+			logger.Debug("Starting PostgreSQL database and proxy")
 			// Start PostgreSQL container for this service
 			dbContainerName = "linespec-postgres-" + spec.Name
 			db := serviceConfig.Database
@@ -718,13 +741,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 				Image: "linespec:latest",
 				Cmd:   pgProxyCmd,
+				ExposedPorts: map[nat.Port]struct{}{
+					nat.Port(dbPort + "/tcp"): {},
+					nat.Port("8081/tcp"):      {}, // Verification sidecar port
+				},
 			}, &container.HostConfig{
 				Binds: []string{
 					r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
 					r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 				},
 				PortBindings: map[nat.Port][]nat.PortBinding{
-					"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: dbPort}},
+					nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port
 				},
 			}, &network.NetworkingConfig{
 				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
@@ -765,13 +793,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 					Image: "linespec:latest",
 					Cmd:   mysqlProxyCmd,
+					ExposedPorts: map[nat.Port]struct{}{
+						nat.Port("8081/tcp"): {}, // Verification sidecar port
+					},
 				}, &container.HostConfig{
 					Binds: []string{
 						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
 						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 					},
 					PortBindings: map[nat.Port][]nat.PortBinding{
-						"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+						nat.Port("8081/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port for verification
 					},
 				}, &network.NetworkingConfig{
 					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
@@ -780,7 +811,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					return fmt.Errorf("failed to start MySQL proxy: %w", err)
 				}
 
-				logger.Debug("MySQL proxy started with alias 'db' -> 'real-db'")
+				logger.Debug("MySQL proxy started")
 
 				defer func() {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -797,9 +828,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					}()
 				}
 			} else {
-				logger.Debug("MySQL proxy disabled (proxy: false), app will connect directly to real-db")
+				logger.Debug("MySQL proxy disabled (proxy: false or not set), app will connect directly to real-db")
 			}
+		default:
+			logger.Debug("DEBUG: Unknown dbType '%s', no proxy started", dbType)
 		}
+	} else {
+		logger.Debug("DEBUG: Database infrastructure disabled or no database config")
 	}
 
 	// HTTP Proxy - only start when there are proxied HTTP dependencies
@@ -873,8 +908,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
 		// Both MySQL and PostgreSQL now have proxies we can inspect
-		inspectDb, err := r.suite.orch.GetContainerInspect(ctx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-		if err == nil && inspectDb.NetworkSettings != nil {
+		inspectDb, inspectDbErr := r.suite.orch.GetContainerInspect(ctx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+		if inspectDbErr == nil && inspectDb.NetworkSettings != nil {
 			if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
 				dbVerifyPort = p[0].HostPort
 			}
@@ -882,8 +917,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	if httpProxyContainerName != "" {
-		inspectHttp, err := r.suite.orch.GetContainerInspect(ctx, httpProxyContainerName)
-		if err == nil && inspectHttp.NetworkSettings != nil {
+		inspectHttp, inspectHttpErr := r.suite.orch.GetContainerInspect(ctx, httpProxyContainerName)
+		if inspectHttpErr == nil && inspectHttp.NetworkSettings != nil {
 			if p, ok := inspectHttp.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
 				httpVerifyPort = p[0].HostPort
 			}
@@ -1042,10 +1077,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, appContainerName)
 	}()
 
-	inspectApp, _ := r.suite.orch.GetContainerInspect(ctx, appContainerName)
+	inspectApp, inspectErr := r.suite.orch.GetContainerInspect(ctx, appContainerName)
 	hostPort := ""
-	if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
-		hostPort = p[0].HostPort
+	if inspectErr == nil && inspectApp.NetworkSettings != nil {
+		if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
+			hostPort = p[0].HostPort
+		}
 	}
 	logger.Debug("App started on host port: %s", hostPort)
 

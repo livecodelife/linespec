@@ -32,6 +32,13 @@ func (r *MockRegistry) ResetHits() {
 	r.hits = make(map[*types.ExpectStatement]int)
 }
 
+// IncrementHit increments the hit count for a specific mock (thread-safe)
+func (r *MockRegistry) IncrementHit(mock *types.ExpectStatement) {
+	r.Lock()
+	defer r.Unlock()
+	r.hits[mock]++
+}
+
 func (r *MockRegistry) Register(spec *types.TestSpec) {
 	r.Lock()
 	defer r.Unlock()
@@ -331,14 +338,14 @@ func (r *MockRegistry) GetHits() map[string]int {
 		// For WRITE: Channel-Table only (SQL is auto-generated at runtime)
 		var key string
 		switch mock.Channel {
-			case types.HTTP:
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-			case types.ReadMySQL, types.ReadPostgreSQL:
-				// READ operations: include SQL to distinguish different queries
-				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
-			default:
+		case types.HTTP:
+			key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+		case types.ReadMySQL, types.ReadPostgreSQL:
+			// READ operations: include SQL to distinguish different queries
+			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+		default:
 			// WRITE and other operations: use Channel-Table only
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+			key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
 		}
 		res[key] = count
 	}
@@ -353,12 +360,12 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 			// Use same key format as GetHits
 			var key string
 			switch mock.Channel {
-				case types.HTTP:
-					key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-				case types.ReadMySQL, types.ReadPostgreSQL:
-					key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
-				default:
-					key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+			case types.HTTP:
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+			case types.ReadMySQL, types.ReadPostgreSQL:
+				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+			default:
+				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
 			}
 			if count, ok := hostHits[key]; ok {
 				r.hits[mock] += count

@@ -6,6 +6,7 @@ use axum::{
     Router,
 };
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -22,7 +23,7 @@ struct AppState {
 struct Order {
     id: Uuid,
     customer_name: String,
-    total_amount: f64,
+    total_amount: Decimal,
     status: String,
     created_at: DateTime<Utc>,
 }
@@ -30,14 +31,14 @@ struct Order {
 #[derive(Debug, Deserialize)]
 struct CreateOrderRequest {
     customer_name: String,
-    total_amount: f64,
+    total_amount: Decimal,
 }
 
 #[derive(Debug, Serialize)]
 struct CreateOrderResponse {
     id: Uuid,
     customer_name: String,
-    total_amount: f64,
+    total_amount: Decimal,
     status: String,
     created_at: DateTime<Utc>,
 }
