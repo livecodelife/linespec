@@ -11,6 +11,7 @@ constraints:
 affected_scope:
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/mysql/query_attributes.go
+  - pkg/proxy/mysql/query_attributes_test.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

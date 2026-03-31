@@ -174,11 +174,13 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 			cmd := payload[0]
 			if cmd == 0x03 { // COM_QUERY
 				queryBytes := payload[1:]
-				// When CLIENT_QUERY_ATTRIBUTES is negotiated, COM_QUERY has a 2-byte prefix:
-				//   lenenc num_params (0x00 when no attributes) + lenenc num_param_sets (0x01)
-				// Strip those bytes so the query string is clean.
-				if clientCapabilities&clientQueryAttributes != 0 && len(queryBytes) >= 2 && queryBytes[0] == 0x00 {
-					queryBytes = queryBytes[2:]
+				if clientCapabilities&clientQueryAttributes != 0 {
+					stripped, err := stripQueryAttributes(queryBytes)
+					if err != nil {
+						logger.Debug("Failed to strip query attributes, using raw bytes: %v", err)
+					} else {
+						queryBytes = stripped
+					}
 				}
 				query := string(queryBytes)
 
