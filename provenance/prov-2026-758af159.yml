@@ -1,6 +1,6 @@
 id: prov-2026-758af159
 title: Enforce EXPECT_NOT negative expectations (P1-A)
-status: open
+status: implemented
 created_at: "2026-03-31"
 author: calebcowen@gmail.com
 intent: "Fix EXPECT_NOT enforcement: negative expectations are currently parsed and registered but FindMock/FindHTTPMock/PeekMock do not skip them, allowing them to be matched as interceptors. Add CheckNegativeMocks/CheckNegativeHTTPMocks functions so proxies can track when requests match negative expectations without serving them as mock responses. VerifyAll already checks the Negative flag correctly."
@@ -19,7 +19,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: abfe2cfeb053cf6dce8ed3d32605753828aa0b02
 associated_specs:
   - path: pkg/registry/registry_test.go
 associated_traces: []
