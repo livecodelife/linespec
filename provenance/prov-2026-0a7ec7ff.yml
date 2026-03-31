@@ -1,6 +1,6 @@
 id: prov-2026-0a7ec7ff
 title: Fix PostgreSQL startup force-ready on timeout (P1-C)
-status: open
+status: implemented
 created_at: "2026-03-31"
 author: calebcowen@gmail.com
 intent: >
@@ -36,7 +36,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a0167aa055fb5ca93d7de6fdc29075f76f8d92f7
 associated_specs:
   - path: pkg/proxy/postgresql/proxy_startup_test.go
 associated_traces: []
