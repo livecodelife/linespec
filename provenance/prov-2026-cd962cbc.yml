@@ -1,0 +1,35 @@
+id: prov-2026-cd962cbc
+title: Fix non-deterministic fuzzy registry matching (P1-B)
+status: open
+created_at: "2026-03-31"
+author: calebcowen@gmail.com
+intent: >
+  Fix the non-deterministic fallback matching in MockRegistry (P1-B from
+  IMPROVEMENT_PLAN.md). When FindMock/PeekMock cannot find a mock by direct
+  key lookup, they fall back to iterating r.mocks (a Go map) to scan all
+  mocks for an SQL match. Go map iteration order is randomized per run, so
+  with multiple mocks under different keys, which mock fires is undefined.
+  Fix by adding an orderedMocks slice to MockRegistry that preserves DSL
+  declaration order. The fallback paths iterate this slice instead of the map,
+  making first-declared match wins the deterministic contract.
+constraints:
+  - Must not change the primary keyed lookup path (map stays for O(1) lookups)
+  - Must not change serialization format of SaveToFile (proxies consume this)
+  - All existing registry tests must continue to pass
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+forbidden_scope:
+  - pkg/proxy/**
+  - pkg/runner/**
+  - pkg/dsl/**
+  - cmd/**
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/registry_test.go
+associated_traces: []
+monitors: []
+tags: []
