@@ -50,6 +50,7 @@ affected_scope:
   - pkg/registry/registry.go
   - examples/order-linespecs/**
   - pkg/proxy/postgresql/command_complete_test.go
+  - linespec-beta
 
 forbidden_scope: []
 
