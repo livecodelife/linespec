@@ -1,0 +1,73 @@
+id: prov-2026-4bf54660
+title: Fix PostgreSQL proxy startup architecture and create shared connection manager
+status: open
+created_at: "2026-03-19"
+author: calebcowen@gmail.com
+intent: |
+  Fix the PostgreSQL proxy's broken startup architecture that causes connection failures
+  during integration tests. The current implementation sends fake authentication responses
+  to the client before connecting to upstream, then tries to forward real responses,
+  causing protocol conflicts.
+
+  Additionally, refactor both MySQL and PostgreSQL proxies to share common connection
+  management logic through a base connection manager, reducing code duplication and
+  making future database proxy implementations easier.
+
+  This work includes:
+  1. Fixing CommandComplete tag generation for INSERT/UPDATE/DELETE operations
+  2. Fixing NoData handling for WRITE operations without RETURNING clause
+  3. Making table extraction dynamic based on DSL/linespec files (not hardcoded)
+  4. Creating shared connection manager in pkg/proxy/base/connection.go
+  5. Refactoring both proxies to use the shared connection manager
+  6. Refactoring PostgreSQL proxy to single-threaded message processing (like MySQL)
+     to eliminate race conditions between goroutines competing for the buffered reader
+
+  - PostgreSQL proxy connects upstream FIRST before any client communication
+  - Uses pure bidirectional io.Copy for transparent relay during startup
+  - Both directions are properly coordinated with channel-based synchronization
+  - Service successfully connects: "Connected to database successfully"
+  - Queries are being executed through the proxy
+
+constraints:
+  - MUST fix the PostgreSQL proxy startup to connect upstream FIRST before any client communication
+  - MUST use pure transparent io.Copy relay during startup (no message inspection)
+  - MUST properly coordinate bidirectional relay with channel synchronization
+  - MUST wait for both relay directions to complete before closing connections
+  - MUST maintain MySQL proxy functionality while refactoring to use shared code
+  - MUST generate correct PostgreSQL CommandComplete tags (INSERT 0 N, UPDATE N, DELETE N, SELECT N)
+  - MUST handle WRITE operations without RETURNING clause correctly (no NoData message)
+  - MUST use dynamic table extraction from registry (not hardcoded table lists)
+  - MUST NOT break existing MySQL proxy tests
+  - MUST pass all unit tests after refactoring
+  - MUST pass order-linespecs/create_order_success.linespec test
+  - MUST pass all other database-dependent linespec tests
+
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/startup.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/base/*.go
+  - pkg/registry/registry.go
+  - examples/order-linespecs/**
+  - pkg/proxy/postgresql/command_complete_test.go
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/order-linespecs/create_order_success.linespec
+    type: linespec
+
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - postgresql
+  - proxy
+  - architecture
+  - testing
+  - integration
+  - refactoring
