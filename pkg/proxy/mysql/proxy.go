@@ -207,6 +207,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					_, _ = upstreamConn.Write(payload)
 				} else {
 					tableName := p.extractTable(query)
+					p.registry.CheckNegativeMocks(tableName, query)
 					mock, found := p.registry.FindMock(tableName, query)
 					if found {
 						// Store the actual query in the mock for proper hit tracking

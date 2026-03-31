@@ -133,3 +133,146 @@ func TestMockRegistry_SQLMatching(t *testing.T) {
 		t.Errorf("Expected table prefix normalized SQL match to work")
 	}
 }
+
+func TestMockRegistry_NegativeMockNotReturnedByFindMock(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "negative_test",
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.WriteMySQL,
+				Table:   "users",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	_, found := reg.FindMock("users", "INSERT INTO users (name) VALUES ('John')")
+	if found {
+		t.Fatal("FindMock must not return negative mocks as interceptors")
+	}
+}
+
+func TestMockRegistry_NegativeMockNotReturnedByPeekMock(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "negative_peek_test",
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.ReadMySQL,
+				Table:   "users",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	_, found := reg.PeekMock("users", "SELECT * FROM users WHERE id = 1")
+	if found {
+		t.Fatal("PeekMock must not return negative mocks as interceptors")
+	}
+}
+
+func TestMockRegistry_NegativeMockNotReturnedByFindHTTPMock(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "negative_http_test",
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.HTTP,
+				URL:     "/api/users",
+				Method:  "GET",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	_, found := reg.FindHTTPMock("/api/users", "GET")
+	if found {
+		t.Fatal("FindHTTPMock must not return negative mocks as interceptors")
+	}
+}
+
+func TestMockRegistry_CheckNegativeMocksIncrementsHits(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "negative_check_test",
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.WriteMySQL,
+				Table:   "users",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	reg.CheckNegativeMocks("users", "INSERT INTO users (name) VALUES ('John')")
+
+	err := reg.VerifyAll()
+	if err == nil {
+		t.Fatal("VerifyAll should fail when a negative expectation is violated")
+	}
+}
+
+func TestMockRegistry_NegativeExpectationPassesWhenNotCalled(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "negative_pass_test",
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.WriteMySQL,
+				Table:   "users",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Don't call CheckNegativeMocks — the negative expectation should pass
+	err := reg.VerifyAll()
+	if err != nil {
+		t.Fatalf("VerifyAll should pass when negative expectation is not violated, got: %v", err)
+	}
+}
+
+func TestMockRegistry_MixedPositiveAndNegative(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "mixed_test",
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.WriteMySQL,
+				Table:   "todos",
+			},
+		},
+		ExpectsNot: []types.ExpectStatement{
+			{
+				Channel: types.WriteMySQL,
+				Table:   "users",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// FindMock should only return the positive mock
+	mock, found := reg.FindMock("todos", "INSERT INTO todos (title) VALUES ('test')")
+	if !found {
+		t.Fatal("FindMock should find the positive mock for 'todos'")
+	}
+	if mock.Table != "todos" {
+		t.Fatalf("Expected positive mock for 'todos', got %q", mock.Table)
+	}
+
+	_, found = reg.FindMock("users", "INSERT INTO users (name) VALUES ('John')")
+	if found {
+		t.Fatal("FindMock must not return the negative mock for 'users'")
+	}
+
+	// Simulate the service calling the forbidden endpoint — negative hit recorded
+	reg.CheckNegativeMocks("users", "INSERT INTO users (name) VALUES ('John')")
+
+	// Positive mock was never hit, so VerifyAll should fail on the positive expectation first
+	// but negative is also violated — either way it should fail
+	err := reg.VerifyAll()
+	if err == nil {
+		t.Fatal("VerifyAll should fail when negative expectation is violated")
+	}
+}

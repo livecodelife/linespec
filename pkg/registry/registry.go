@@ -110,6 +110,9 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
+				if mock.Negative {
+					continue
+				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
 					if r.hits[mock] == 0 {
 						return mock, true
@@ -123,6 +126,9 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 	// 1. Exact SQL Match
 	if query != "" {
 		for _, mock := range mocks {
+			if mock.Negative {
+				continue
+			}
 			if r.hits[mock] > 0 {
 				continue
 			}
@@ -136,6 +142,9 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match
 	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
 		if r.hits[mock] > 0 {
 			continue
 		}
@@ -169,6 +178,9 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
+				if mock.Negative {
+					continue
+				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
 					if r.hits[mock] == 0 {
 						r.hits[mock]++
@@ -183,6 +195,9 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 	// 1. Exact SQL Match
 	if query != "" {
 		for _, mock := range mocks {
+			if mock.Negative {
+				continue
+			}
 			if r.hits[mock] > 0 {
 				continue
 			}
@@ -197,6 +212,9 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match
 	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
 		if r.hits[mock] > 0 {
 			continue
 		}
@@ -234,6 +252,9 @@ func (r *MockRegistry) FindHTTPMock(url string, method string) (*types.ExpectSta
 	}
 
 	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
 		if r.hits[mock] > 0 {
 			continue
 		}
@@ -257,6 +278,9 @@ func (r *MockRegistry) FindHTTPMockWithHeaders(url string, method string, header
 	}
 
 	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
 		if r.hits[mock] > 0 {
 			continue
 		}
@@ -309,6 +333,69 @@ func (r *MockRegistry) VerifyAll() error {
 		}
 	}
 	return nil
+}
+
+// CheckNegativeMocks checks incoming DB/Kafka requests against negative expectations
+// and increments their hit counters if matched. Called by proxies alongside FindMock
+// so that EXPECT_NOT violations are detected at verification time.
+func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
+	r.Lock()
+	defer r.Unlock()
+
+	if mocks, ok := r.mocks[key]; ok {
+		for _, mock := range mocks {
+			if !mock.Negative {
+				continue
+			}
+			if query != "" && mock.SQL != "" {
+				if r.matchSQL(mock.SQL, query) {
+					r.hits[mock]++
+				}
+			} else if query != "" {
+				q := strings.TrimSpace(strings.ToUpper(query))
+				if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
+					r.hits[mock]++
+				} else if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
+					r.hits[mock]++
+				}
+			} else {
+				r.hits[mock]++
+			}
+		}
+	}
+
+	// Fallback: scan orderedMocks for SQL matches when key is not found
+	if query != "" {
+		if _, ok := r.mocks[key]; !ok {
+			for _, mock := range r.orderedMocks {
+				if !mock.Negative {
+					continue
+				}
+				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+					r.hits[mock]++
+				}
+			}
+		}
+	}
+}
+
+// CheckNegativeHTTPMocks checks incoming HTTP requests against negative expectations
+// and increments their hit counters if matched. Called by the HTTP proxy alongside
+// FindHTTPMock so that EXPECT_NOT violations are detected at verification time.
+func (r *MockRegistry) CheckNegativeHTTPMocks(url string, method string) {
+	r.Lock()
+	defer r.Unlock()
+
+	if mocks, ok := r.mocks[url]; ok {
+		for _, mock := range mocks {
+			if !mock.Negative {
+				continue
+			}
+			if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
+				r.hits[mock]++
+			}
+		}
+	}
 }
 
 func (r *MockRegistry) SaveToFile(path string) error {

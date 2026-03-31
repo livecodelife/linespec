@@ -85,6 +85,9 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		"http://" + r.Host + path,
 	}
 
+	for _, key := range keys {
+		i.registry.CheckNegativeHTTPMocks(key, method)
+	}
 	var mock *types.ExpectStatement
 	var found bool
 	for _, key := range keys {
