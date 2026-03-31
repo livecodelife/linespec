@@ -1,6 +1,6 @@
 id: prov-2026-976c7d8a
 title: Fix MySQL CLIENT_QUERY_ATTRIBUTES parsing (P1-D)
-status: open
+status: implemented
 created_at: "2026-03-31"
 author: calebcowen@gmail.com
 intent: "Fix the MySQL proxy's COM_QUERY handler to properly parse and strip MySQL 8.0.31+ CLIENT_QUERY_ATTRIBUTES framing bytes using correct length-encoded integer parsing, preventing silent query corruption when attributes are present or when queries legitimately start with a null byte."
@@ -16,7 +16,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ce501736419183044ffe39fe6131ec1da7400595
 associated_specs:
   - path: pkg/proxy/mysql/query_attributes_test.go
 associated_traces: []
