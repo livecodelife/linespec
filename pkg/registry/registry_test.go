@@ -40,6 +40,59 @@ func TestMockRegistry_RegisterAndFind(t *testing.T) {
 	}
 }
 
+func TestMockRegistry_DeterministicFallbackOrder(t *testing.T) {
+	// Run many iterations to catch non-determinism from Go map randomization.
+	// With 3+ keys and the old map-iteration fallback, the wrong mock would be
+	// returned on most runs. With orderedMocks, "alpha" is always returned.
+	for attempt := 0; attempt < 50; attempt++ {
+		reg := NewMockRegistry()
+
+		spec := &types.TestSpec{
+			Name: "deterministic_test",
+			Expects: []types.ExpectStatement{
+				{
+					Channel:     types.ReadMySQL,
+					Table:       "alpha",
+					SQL:         "SELECT * FROM users WHERE id = 1",
+					ReturnsFile: "alpha_response.json",
+				},
+				{
+					Channel:     types.ReadMySQL,
+					Table:       "beta",
+					SQL:         "SELECT * FROM users WHERE id = 1",
+					ReturnsFile: "beta_response.json",
+				},
+				{
+					Channel:     types.ReadMySQL,
+					Table:       "gamma",
+					SQL:         "SELECT * FROM users WHERE id = 1",
+					ReturnsFile: "gamma_response.json",
+				},
+			},
+		}
+		reg.Register(spec)
+
+		// PeekMock with a key that doesn't exist — triggers the fallback path
+		mock, found := reg.PeekMock("nonexistent", "SELECT * FROM users WHERE id = 1")
+		if !found {
+			t.Fatalf("attempt %d: expected fallback match in PeekMock", attempt)
+		}
+		if mock.Table != "alpha" {
+			t.Fatalf("attempt %d: PeekMock fallback returned %q, want %q (first declared)", attempt, mock.Table, "alpha")
+		}
+
+		// FindMock with the same nonexistent key
+		reg.ResetHits()
+		mock, found = reg.FindMock("nonexistent", "SELECT * FROM users WHERE id = 1")
+		if !found {
+			t.Fatalf("attempt %d: expected fallback match in FindMock", attempt)
+		}
+		if mock.Table != "alpha" {
+			t.Fatalf("attempt %d: FindMock fallback returned %q, want %q (first declared)", attempt, mock.Table, "alpha")
+		}
+	}
+}
+
 func TestMockRegistry_SQLMatching(t *testing.T) {
 	reg := NewMockRegistry()
 

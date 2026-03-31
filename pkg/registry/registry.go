@@ -14,14 +14,16 @@ import (
 
 type MockRegistry struct {
 	sync.RWMutex
-	mocks map[string][]*types.ExpectStatement // Map table name or topic to list of mocks
-	hits  map[*types.ExpectStatement]int      // Track how many times each mock was hit
+	mocks        map[string][]*types.ExpectStatement // Map table name or topic to list of mocks
+	orderedMocks []*types.ExpectStatement            // All mocks in registration order (for deterministic fallback)
+	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
 }
 
 func NewMockRegistry() *MockRegistry {
 	return &MockRegistry{
-		mocks: make(map[string][]*types.ExpectStatement),
-		hits:  make(map[*types.ExpectStatement]int),
+		mocks:        make(map[string][]*types.ExpectStatement),
+		orderedMocks: make([]*types.ExpectStatement, 0),
+		hits:         make(map[*types.ExpectStatement]int),
 	}
 }
 
@@ -47,6 +49,7 @@ func (r *MockRegistry) Register(spec *types.TestSpec) {
 		spec.Expects[i].BaseDir = spec.BaseDir
 		key := r.getExpectKey(spec.Expects[i])
 		r.mocks[key] = append(r.mocks[key], &spec.Expects[i])
+		r.orderedMocks = append(r.orderedMocks, &spec.Expects[i])
 	}
 
 	for i := range spec.ExpectsNot {
@@ -54,6 +57,7 @@ func (r *MockRegistry) Register(spec *types.TestSpec) {
 		spec.ExpectsNot[i].Negative = true
 		key := r.getExpectKey(spec.ExpectsNot[i])
 		r.mocks[key] = append(r.mocks[key], &spec.ExpectsNot[i])
+		r.orderedMocks = append(r.orderedMocks, &spec.ExpectsNot[i])
 	}
 }
 
@@ -101,14 +105,14 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 
 	mocks, ok := r.mocks[key]
 	if !ok {
-		// Fallback: Check all mocks for SQL match
+		// Fallback: scan all mocks in registration order for an SQL match.
+		// Uses orderedMocks (a slice) instead of the map to guarantee
+		// deterministic results — first declared match wins.
 		if query != "" {
-			for _, mocksList := range r.mocks {
-				for _, mock := range mocksList {
-					if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-						if r.hits[mock] == 0 {
-							return mock, true
-						}
+			for _, mock := range r.orderedMocks {
+				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+					if r.hits[mock] == 0 {
+						return mock, true
 					}
 				}
 			}
@@ -160,15 +164,15 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 
 	mocks, ok := r.mocks[key]
 	if !ok {
-		// Fallback: Check all mocks for SQL match
+		// Fallback: scan all mocks in registration order for an SQL match.
+		// Uses orderedMocks (a slice) instead of the map to guarantee
+		// deterministic results — first declared match wins.
 		if query != "" {
-			for _, mocksList := range r.mocks {
-				for _, mock := range mocksList {
-					if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-						if r.hits[mock] == 0 {
-							r.hits[mock]++
-							return mock, true
-						}
+			for _, mock := range r.orderedMocks {
+				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+					if r.hits[mock] == 0 {
+						r.hits[mock]++
+						return mock, true
 					}
 				}
 			}
@@ -324,7 +328,14 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, &r.mocks)
+	if err := json.Unmarshal(data, &r.mocks); err != nil {
+		return err
+	}
+	r.orderedMocks = make([]*types.ExpectStatement, 0)
+	for _, mocksList := range r.mocks {
+		r.orderedMocks = append(r.orderedMocks, mocksList...)
+	}
+	return nil
 }
 
 func (r *MockRegistry) GetHits() map[string]int {
