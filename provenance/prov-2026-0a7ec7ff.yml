@@ -1,0 +1,47 @@
+id: prov-2026-0a7ec7ff
+title: Fix PostgreSQL startup force-ready on timeout (P1-C)
+status: open
+created_at: "2026-03-31"
+author: calebcowen@gmail.com
+intent: >
+  Fix P1-C from IMPROVEMENT_PLAN.md: in proxyWithStatefulRelay, a
+  time.AfterFunc(10s) silently sets startupComplete=true if ReadyForQuery
+  never arrives from the upstream database. This masks failures — a database
+  that never becomes ready causes the proxy to proceed with the connection in
+  an undefined protocol state rather than surfacing an error. Additionally,
+  startupComplete is a plain bool shared across three goroutines (main loop,
+  upstream relay goroutine, timer callback) without synchronization, creating
+  a data race. Fix by replacing the bool and AfterFunc with a channel-based
+  signal: close a startupReady channel when ReadyForQuery is detected, and use
+  a select to wait with a hard deadline. On timeout or upstream failure, return
+  a descriptive error instead of forcing ready. Make proxyWithStatefulRelay
+  return error so handleConnection can propagate failures.
+constraints:
+  - "Must not change Phase 2 behavior (handleClientMessagesWithInterception is untouched)"
+  - "Must not change the transparent byte-relay architecture during startup (no message-level parsing)"
+  - "On timeout, the connection must be closed and a descriptive error logged — not silently recovered"
+  - "The fix must pass go test -race with no data race detected"
+  - "All existing postgresql proxy tests must continue to pass"
+affected_scope:
+  - "pkg/proxy/postgresql/proxy.go"
+  - "pkg/proxy/postgresql/proxy_startup_test.go"
+forbidden_scope:
+  - "pkg/registry/**"
+  - "pkg/runner/**"
+  - "pkg/dsl/**"
+  - "pkg/proxy/mysql/**"
+  - "pkg/proxy/http/**"
+  - "pkg/proxy/kafka/**"
+  - "cmd/**"
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/proxy_startup_test.go
+associated_traces: []
+monitors: []
+tags:
+  - correctness
+  - postgresql
+  - proxy
