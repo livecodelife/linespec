@@ -211,7 +211,8 @@ type DatabaseConfig struct {
 	Database   string `yaml:"database"`
 	Username   string `yaml:"username"`
 	Password   string `yaml:"password"`
-	Host       string `yaml:"host"` // Host for external databases (when not using container)
+	Host       string `yaml:"host"`            // Host for external databases (when not using container)
+	Proxy      *bool  `yaml:"proxy,omitempty"` // Whether to use a proxy for this database (enables interception)
 }
 
 // ContainerNaming defines configurable container and network naming

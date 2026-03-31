@@ -18,6 +18,7 @@ database:
   database: todo_api_development
   username: todo_user
   password: todo_password
+  proxy: true
 
 infrastructure:
   database: true

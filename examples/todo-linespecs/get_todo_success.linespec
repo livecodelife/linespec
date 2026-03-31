@@ -4,7 +4,7 @@ RECEIVE HTTP:GET /api/v1/todos/1
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 
-EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+EXPECT HTTP:GET ${USER_SERVICE_URL}
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 RETURNS {{payloads/authenticated_user.yaml}}

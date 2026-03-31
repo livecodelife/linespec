@@ -5,7 +5,7 @@ WITH {{payloads/create_todo_request.yaml}}
 HEADERS
   Authorization: Bearer invalid_token_123
 
-EXPECT HTTP:GET http://user-service.local/api/v1/users/auth
+EXPECT HTTP:GET ${USER_SERVICE_URL}
 HEADERS
   Authorization: Bearer invalid_token_123
 RETURNS {{payloads/auth_error_response.json}}
