@@ -21,6 +21,12 @@ import (
 	"github.com/livecodelife/linespec/pkg/verify"
 )
 
+const (
+	clientDeprecateEOF              uint32 = 0x01000000
+	clientOptionalResultsetMetadata uint32 = 0x02000000
+	clientQueryAttributes           uint32 = 0x08000000
+)
+
 type Proxy struct {
 	addr             string
 	upstreamAddr     string
@@ -52,7 +58,7 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		loader:          dsl.NewPayloadLoader(""),
 		schemaCache:     make(map[string][]ColumnInfo),
 		transparentMode: false,
-		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"),
+		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"), // Default for backward compatibility
 	}
 }
 
@@ -143,12 +149,10 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 	defer upstreamConn.Close()
 
 	// 1. Server -> Client Pipe (Always Transparent)
-	go func() {
-		_, _ = io.Copy(clientConn, upstreamConn)
-		clientConn.Close()
-	}()
+	go func() { _, _ = io.Copy(clientConn, upstreamConn); clientConn.Close() }()
 
 	// 2. Client -> Server Loop (Intercept Commands)
+	var clientCapabilities uint32
 	for {
 		header := make([]byte, 4)
 		if _, err := io.ReadFull(clientConn, header); err != nil {
@@ -161,10 +165,22 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 			return
 		}
 
+		// Extract client capabilities from auth response packet (seq=1)
+		if seq == 1 && len(payload) >= 4 {
+			clientCapabilities = uint32(payload[0]) | uint32(payload[1])<<8 | uint32(payload[2])<<16 | uint32(payload[3])<<24
+		}
+
 		if seq == 0 && length > 0 {
 			cmd := payload[0]
 			if cmd == 0x03 { // COM_QUERY
-				query := string(payload[1:])
+				queryBytes := payload[1:]
+				// When CLIENT_QUERY_ATTRIBUTES is negotiated, COM_QUERY has a 2-byte prefix:
+				//   lenenc num_params (0x00 when no attributes) + lenenc num_param_sets (0x01)
+				// Strip those bytes so the query string is clean.
+				if clientCapabilities&clientQueryAttributes != 0 && len(queryBytes) >= 2 && queryBytes[0] == 0x00 {
+					queryBytes = queryBytes[2:]
+				}
+				query := string(queryBytes)
 
 				// Log all queries for debugging
 				logger.Debug("Query received: %.80s", query)
@@ -208,7 +224,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 							logger.Debug("All VERIFY rules passed for table %s", tableName)
 						}
 						logger.Debug("Mocking query for table %s: %s", tableName, query)
-						p.sendMockResponse(clientConn, mock)
+						_ = p.sendMockResponse(clientConn, mock, clientCapabilities)
 					} else {
 						_, _ = upstreamConn.Write(header)
 						_, _ = upstreamConn.Write(payload)
@@ -229,16 +245,14 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 	}
 }
 
-func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement) {
+func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement, clientCapabilities uint32) error {
 	if mock.Channel == types.WriteMySQL {
-		_ = p.sendMockOK(conn)
-		return
+		return p.sendMockOK(conn)
 	}
 
 	if mock.Channel == types.ReadMySQL {
 		if mock.ReturnsEmpty {
-			_ = p.sendEmptyResultSet(conn, mock.Table)
-			return
+			return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
 		}
 
 		if mock.ReturnsFile != "" {
@@ -246,21 +260,21 @@ func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement) {
 			payload, err := p.loader.Load(mock.ReturnsFile)
 			if err != nil {
 				logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
-				_ = p.sendEmptyResultSet(conn, mock.Table)
-				return
+				return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
 			}
-			_ = p.sendPayloadResultSet(conn, payload, mock.Table)
-			return
+			return p.sendPayloadResultSet(conn, payload, mock.Table, clientCapabilities)
 		}
 
-		_ = p.sendEmptyResultSet(conn, mock.Table)
-		return
+		return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
 	}
 
-	_ = p.sendMockOK(conn)
+	return p.sendMockOK(conn)
 }
 
-func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableName string) error {
+func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableName string, clientCapabilities uint32) error {
+	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
+	optionalMeta := clientCapabilities&clientOptionalResultsetMetadata != 0
+
 	var rows []map[string]interface{}
 
 	data, ok := payload.(map[string]interface{})
@@ -287,7 +301,7 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 	}
 
 	if len(rows) == 0 {
-		return p.sendEmptyResultSet(conn, tableName)
+		return p.sendEmptyResultSet(conn, tableName, clientCapabilities)
 	}
 
 	firstRow := rows[0]
@@ -313,7 +327,13 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 	}
 	columns = finalColumns
 
-	if err := p.writePacket(conn, 1, []byte{byte(len(columns))}); err != nil {
+	// Column count packet: if CLIENT_OPTIONAL_RESULTSET_METADATA is set,
+	// prefix with metadata_follows=0x01 to indicate column definitions follow.
+	colCountPayload := []byte{byte(len(columns))}
+	if optionalMeta {
+		colCountPayload = append([]byte{0x01}, colCountPayload...)
+	}
+	if err := p.writePacket(conn, 1, colCountPayload); err != nil {
 		return err
 	}
 
@@ -338,10 +358,13 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 		seq++
 	}
 
-	if err := p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
-		return err
+	// Without CLIENT_DEPRECATE_EOF: send EOF after column definitions.
+	if !deprecateEOF {
+		if err := p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
+			return err
+		}
+		seq++
 	}
-	seq++
 
 	for _, row := range rows {
 		var rowData []byte
@@ -360,6 +383,11 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 		seq++
 	}
 
+	// With CLIENT_DEPRECATE_EOF: send OK packet instead of final EOF.
+	if deprecateEOF {
+		okPayload := []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}
+		return p.writePacket(conn, seq, okPayload)
+	}
 	return p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0})
 }
 
@@ -389,7 +417,9 @@ func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
 	return p.writePacket(conn, 1, payload)
 }
 
-func (p *Proxy) sendEmptyResultSet(conn net.Conn, tableName string) error {
+func (p *Proxy) sendEmptyResultSet(conn net.Conn, tableName string, clientCapabilities uint32) error {
+	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
+
 	if err := p.writePacket(conn, 1, []byte{1}); err != nil {
 		return err
 	}
@@ -397,10 +427,19 @@ func (p *Proxy) sendEmptyResultSet(conn net.Conn, tableName string) error {
 	if err := p.writePacket(conn, 2, colDef); err != nil {
 		return err
 	}
-	if err := p.writePacket(conn, 3, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
-		return err
+
+	// Without CLIENT_DEPRECATE_EOF: send EOF after column definitions.
+	if !deprecateEOF {
+		if err := p.writePacket(conn, 3, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
+			return err
+		}
+		// Final EOF (no rows)
+		return p.writePacket(conn, 4, []byte{0xfe, 0, 0, 0x22, 0})
 	}
-	return p.writePacket(conn, 4, []byte{0xfe, 0, 0, 0x22, 0})
+
+	// With CLIENT_DEPRECATE_EOF: no intermediate EOF; send OK as final terminator.
+	okPayload := []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}
+	return p.writePacket(conn, 3, okPayload)
 }
 
 func (p *Proxy) writePacket(conn net.Conn, seq uint8, payload []byte) error {
@@ -482,14 +521,8 @@ func (p *Proxy) extractTable(query string) string {
 	return "unknown"
 }
 
-// getKnownTables returns the list of known tables from registry, schema cache, or defaults
+// getKnownTables returns the list of known tables from schema cache or defaults
 func (p *Proxy) getKnownTables() []string {
-	// First, check if registry has any tables from EXPECT statements
-	registryTables := p.registry.GetTables()
-	if len(registryTables) > 0 {
-		return registryTables
-	}
-
 	// If we have tables in schema cache, use those
 	if len(p.schemaCache) > 0 {
 		tables := make([]string, 0, len(p.schemaCache))

@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -281,6 +282,11 @@ func (p *Proxy) GetDatabaseName() string {
 	return p.dbConfig.GetDatabaseName()
 }
 
+// SetDatabaseName sets the database name for schema responses
+func (p *Proxy) SetDatabaseName(name string) {
+	p.dbConfig.SetDatabaseName(name)
+}
+
 // LoadSchema loads schema from a JSON file
 func (p *Proxy) LoadSchema(schemaFile string) error {
 	data, err := os.ReadFile(schemaFile)
@@ -431,6 +437,7 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
 
 	// During startup, read from client and forward to upstream
 	startupBuf := make([]byte, 4096)
+	var postStartupBuf []byte // bytes read after startupComplete was set (not yet forwarded)
 	for !startupComplete {
 		// Set a read timeout to prevent blocking forever
 		clientConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -451,11 +458,19 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
 		}
 
 		if n > 0 {
-			// Forward to upstream
-			if _, err := upstreamConn.Write(startupBuf[:n]); err != nil {
-				logger.Debug("PostgreSQL Proxy: Upstream write error during startup: %v", err)
-				p.logDebug("Upstream write error during startup: %v\n", err)
-				return
+			if startupComplete {
+				// startupComplete was set while this Read was in flight (race window).
+				// Don't forward to upstream — buffer for the interceptor so it can
+				// register the prepared statement name before Bind arrives.
+				p.logDebug("Buffering %d bytes received after startup complete\n", n)
+				postStartupBuf = append(postStartupBuf, startupBuf[:n]...)
+			} else {
+				// Forward to upstream
+				if _, err := upstreamConn.Write(startupBuf[:n]); err != nil {
+					logger.Debug("PostgreSQL Proxy: Upstream write error during startup: %v", err)
+					p.logDebug("Upstream write error during startup: %v\n", err)
+					return
+				}
 			}
 		}
 	}
@@ -473,8 +488,15 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
 		p.logDebug("Upstream->Client goroutine ended: %v\n", err)
 	}()
 
-	// Now handle client messages with framing
-	p.handleClientMessagesWithInterception(clientConn, upstreamConn, clientConn)
+	// Now handle client messages with framing.
+	// If bytes arrived during the startup race window, prepend them so the interceptor
+	// sees the Parse message before the subsequent Bind.
+	var clientReader io.Reader = clientConn
+	if len(postStartupBuf) > 0 {
+		p.logDebug("Replaying %d post-startup bytes through interceptor\n", len(postStartupBuf))
+		clientReader = io.MultiReader(bytes.NewReader(postStartupBuf), clientConn)
+	}
+	p.handleClientMessagesWithInterception(clientReader, upstreamConn, clientConn)
 }
 
 // handleClientMessagesWithInterception reads and processes client messages
@@ -575,6 +597,11 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// Use FindMock to increment hit count - this is the actual execution
 			if mock, found := p.registry.FindMock(tableName, query); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
+				// Store the actual query in mock.SQL so sendMockExecuteResponse can detect
+				// RETURNING clauses (e.g., INSERT ... RETURNING id) for synthetic result sets
+				if mock.SQL == "" {
+					mock.SQL = query
+				}
 				state.mockedPortals[portalName] = mock
 				// Send BindComplete ourselves, don't forward to upstream
 				if err := p.writeMessage(clientConn, MsgBindComplete, nil); err != nil {
@@ -1761,6 +1788,15 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 						}
 						p.logDebug("  -> ReadyForQuery sent after Close, returning\n")
 						return nil // Full cycle complete
+					case MsgBind:
+						// Two-phase protocol: Parse+Describe+Sync, then Bind+Execute+Sync
+						// asyncpg caches the prepared statement after the first phase,
+						// then executes via Bind in the second phase
+						p.logDebug("  -> Got Bind message after Parse+Sync (two-phase protocol)\n")
+						if err := p.writeMessage(clientConn, MsgBindComplete, nil); err != nil {
+							return fmt.Errorf("error sending BindComplete: %w", err)
+						}
+						goto afterBind
 					default:
 						p.logDebug("  -> Unexpected message type %c after Parse+Sync\n", nextMsg.Type)
 						return fmt.Errorf("expected Close or Sync after Parse+Sync, got %c", nextMsg.Type)
@@ -1870,18 +1906,31 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		}
 
 	afterExecute:
-		// Read and handle Sync message
-		p.logDebug("  -> Reading Sync message...\n")
-		syncMsg, err := ReadRegularMessageFromReader(clientReader)
-		if err != nil {
-			p.logDebug("  -> Error reading Sync: %v\n", err)
-			return fmt.Errorf("error reading Sync: %w", err)
-		}
-		if syncMsg.Type != MsgSync {
+		// Read Close(P) and/or Sync messages
+		// asyncpg sends: Execute + Close(P) + Sync for named portals
+		// Some drivers send just: Execute + Sync for unnamed portals
+		for {
+			p.logDebug("  -> Reading message after Execute...\n")
+			syncMsg, err := ReadRegularMessageFromReader(clientReader)
+			if err != nil {
+				p.logDebug("  -> Error reading message after Execute: %v\n", err)
+				return fmt.Errorf("error reading Sync: %w", err)
+			}
+			if syncMsg.Type == MsgSync {
+				p.logDebug("  -> Got Sync message, sending ReadyForQuery\n")
+				break
+			}
+			if syncMsg.Type == MsgClose {
+				// Close(P) - portal close, send CloseComplete and continue
+				p.logDebug("  -> Got Close message after Execute, sending CloseComplete\n")
+				if err := p.writeMessage(clientConn, MsgCloseComplete, nil); err != nil {
+					return fmt.Errorf("error sending CloseComplete: %w", err)
+				}
+				continue
+			}
 			p.logDebug("  -> Expected Sync, got %c\n", syncMsg.Type)
 			return fmt.Errorf("expected Sync message, got %c", syncMsg.Type)
 		}
-		p.logDebug("  -> Got Sync message, sending ReadyForQuery\n")
 
 		// Send ReadyForQuery
 		p.logDebug("  -> Sending ReadyForQuery (transaction state: I)\n")
