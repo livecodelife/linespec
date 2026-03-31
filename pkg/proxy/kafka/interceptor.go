@@ -107,6 +107,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 			topic, key, value, headers := i.extractProduceData(request[8:])
 			if topic != "" {
 				logger.Debug("Kafka Interceptor: Intercepted Produce to topic %s", topic)
+				i.registry.CheckNegativeMocks(topic, "")
 				mock, found := i.registry.FindMock(topic, "")
 				if found && mock != nil {
 					// Execute VERIFY rules if any
@@ -131,6 +132,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 			} else {
 				// Fallback: hit any EVENT mock if we couldn't parse the topic
 				logger.Debug("Kafka Interceptor: Intercepted Produce (could not parse topic)")
+				i.registry.CheckNegativeMocks("todo-events", "")
 				i.registry.FindMock("todo-events", "")
 			}
 			i.sendProduceResponse(conn, correlationID, topic)

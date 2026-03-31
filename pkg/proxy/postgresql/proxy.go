@@ -168,6 +168,7 @@ func (p *Proxy) handleQueryMessage(query string, msg []byte, clientConn, upstrea
 	tableName := p.extractTable(query)
 
 	// Check if we should mock this query
+	p.registry.CheckNegativeMocks(tableName, query)
 	if mock, found := p.registry.FindMock(tableName, query); found {
 		logger.Debug("PostgreSQL Proxy: Mocking simple query for table %s", tableName)
 
@@ -191,6 +192,7 @@ func (p *Proxy) handleParseMessage(query string, msg []byte, clientConn, upstrea
 	tableName := p.extractTable(query)
 
 	// Check if we should mock this query
+	p.registry.CheckNegativeMocks(tableName, query)
 	if mock, found := p.registry.FindMock(tableName, query); found {
 		logger.Debug("PostgreSQL Proxy: Mocking extended query for table %s", tableName)
 
@@ -595,6 +597,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// Check if this query is mocked
 			tableName := p.extractTable(query)
 			// Use FindMock to increment hit count - this is the actual execution
+			p.registry.CheckNegativeMocks(tableName, query)
 			if mock, found := p.registry.FindMock(tableName, query); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
 				// Store the actual query in mock.SQL so sendMockExecuteResponse can detect
@@ -663,6 +666,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// Simple query protocol - check if we should mock
 			query := string(payload)
 			tableName := p.extractTable(query)
+			p.registry.CheckNegativeMocks(tableName, query)
 			if mock, found := p.registry.FindMock(tableName, query); found {
 				p.logDebug("  -> Mocking simple query for table %s\n", tableName)
 				if err := p.sendMockResponse(clientConn, mock, MsgQuery, query); err != nil {
@@ -1234,6 +1238,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		query := string(msg.Payload)
 		tableName := p.extractTable(query)
 		logger.Debug("Simple query for table %s: %s", tableName, query[:min(50, len(query))])
+		p.registry.CheckNegativeMocks(tableName, query)
 		mock, found := p.registry.FindMock(tableName, query)
 
 		if !found {
@@ -1273,6 +1278,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		}
 
 		tableName := p.extractTable(query)
+		p.registry.CheckNegativeMocks(tableName, query)
 		mock, found := p.registry.FindMock(tableName, query)
 		if !found {
 			p.logDebug("  -> Mock not found for table %s, forwarding to upstream\n", tableName)
@@ -1640,6 +1646,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		query := string(msg.Payload)
 		tableName := p.extractTable(query)
 		logger.Debug("Simple query for table %s: %s", tableName, query[:min(50, len(query))])
+		p.registry.CheckNegativeMocks(tableName, query)
 		mock, found := p.registry.FindMock(tableName, query)
 
 		if !found {
