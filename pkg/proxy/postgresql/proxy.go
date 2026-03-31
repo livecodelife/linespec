@@ -2,7 +2,6 @@ package postgresql
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -367,7 +366,11 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 	// STEP 2: Two-phase proxy with query interception
 	logger.Debug("PostgreSQL Proxy: Starting two-phase proxy")
 	p.logDebug("Starting two-phase proxy\n")
-	p.proxyWithStatefulRelay(clientConn, upstreamConn)
+	if err := p.proxyWithStatefulRelay(clientConn, upstreamConn); err != nil {
+		logger.Error("PostgreSQL Proxy: Connection from %s failed during startup: %v", remoteAddr, err)
+		p.logDebug("Connection failed during startup: %v\n", err)
+		return
+	}
 	logger.Debug("PostgreSQL Proxy: Two-phase proxy complete")
 	p.logDebug("Two-phase proxy complete\n")
 }
@@ -375,29 +378,41 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 // proxyWithStatefulRelay implements the two-phase proxy:
 // Phase 1 (startup): Transparent bidirectional relay, watching for ReadyForQuery in server->client
 // Phase 2 (query): Client->upstream with message-framing and query interception
-func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
+//
+// Returns an error if the startup phase fails (timeout or upstream failure).
+// The caller is responsible for closing both connections.
+func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) error {
 	logger.Debug("PostgreSQL Proxy: Starting bidirectional relay with ReadyForQuery detection")
 	p.logDebug("Starting proxyWithStatefulRelay\n")
 
-	// Use a synchronous startup phase first, then switch to async interception
-	// This avoids the complexity of pipes and race conditions
+	const startupTimeout = 10 * time.Second
 
-	// Buffer for accumulated server data during startup
+	// startupReady is closed by the upstream goroutine when ReadyForQuery is detected.
+	// upstreamErr receives the error when the upstream connection fails during startup.
+	// Using channels eliminates the data race that existed with the previous plain bool.
+	startupReady := make(chan struct{})
+	upstreamErr := make(chan error, 1)
+	var readyOnce sync.Once
+
+	// Buffer for accumulated server data during startup (used only within upstream goroutine)
 	var startupBuffer []byte
-	startupComplete := false
 
-	// Channel for upstream goroutine completion
+	// upstreamDone is signalled when the upstream->client goroutine exits (both phases).
 	upstreamDone := make(chan error, 1)
 
-	// Start upstream->client goroutine immediately (needed for both phases)
+	// Start upstream->client goroutine immediately (needed for both phases).
 	go func() {
 		buf := make([]byte, 4096)
+		startupPhase := true
 		for {
 			n, err := upstreamConn.Read(buf)
 			if err != nil {
 				if err != io.EOF {
 					logger.Debug("PostgreSQL Proxy: Upstream read error: %v", err)
 					p.logDebug("Upstream read error: %v\n", err)
+				}
+				if startupPhase {
+					upstreamErr <- err
 				}
 				upstreamDone <- err
 				return
@@ -406,20 +421,24 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
 			if n > 0 {
 				data := buf[:n]
 
-				// During startup, buffer and check for ReadyForQuery
-				if !startupComplete {
+				// During startup, accumulate and scan for ReadyForQuery.
+				if startupPhase {
 					startupBuffer = append(startupBuffer, data...)
 					if containsReadyForQuery(startupBuffer) {
 						logger.Debug("PostgreSQL Proxy: ReadyForQuery detected, startup complete")
 						p.logDebug("ReadyForQuery detected, startup complete\n")
-						startupComplete = true
+						startupPhase = false
+						readyOnce.Do(func() { close(startupReady) })
 					}
 				}
 
-				// Forward to client
+				// Forward to client regardless of startup state.
 				if _, err := clientConn.Write(data); err != nil {
 					logger.Debug("PostgreSQL Proxy: Client write error: %v", err)
 					p.logDebug("Client write error: %v\n", err)
+					if startupPhase {
+						upstreamErr <- err
+					}
 					upstreamDone <- err
 					return
 				}
@@ -427,78 +446,92 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) {
 		}
 	}()
 
-	// Synchronous startup phase: forward client data and wait for ReadyForQuery
-	startupTimeout := time.AfterFunc(10*time.Second, func() {
-		if !startupComplete {
-			logger.Debug("PostgreSQL Proxy: Startup timeout, forcing ready state")
-			p.logDebug("Startup timeout, forcing ready state\n")
-			startupComplete = true
-		}
-	})
-	defer startupTimeout.Stop()
+	// clientForwardDone signals that the client->upstream forwarding goroutine has stopped.
+	clientForwardDone := make(chan struct{})
 
-	// During startup, read from client and forward to upstream
-	startupBuf := make([]byte, 4096)
-	var postStartupBuf []byte // bytes read after startupComplete was set (not yet forwarded)
-	for !startupComplete {
-		// Set a read timeout to prevent blocking forever
-		clientConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		n, err := clientConn.Read(startupBuf)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				// Timeout is ok, check if startup completed
-				continue
-			}
-			if err == io.EOF {
-				logger.Debug("PostgreSQL Proxy: Client closed connection during startup")
-				p.logDebug("Client closed connection during startup\n")
+	// Forward client->upstream during startup. Stops as soon as startupReady is closed.
+	go func() {
+		defer close(clientForwardDone)
+		buf := make([]byte, 4096)
+		for {
+			clientConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			n, err := clientConn.Read(buf)
+			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Check whether startup finished while we were waiting.
+					select {
+					case <-startupReady:
+						return
+					default:
+						continue
+					}
+				}
+				if err != io.EOF {
+					logger.Debug("PostgreSQL Proxy: Client read error during startup: %v", err)
+					p.logDebug("Client read error during startup: %v\n", err)
+				} else {
+					logger.Debug("PostgreSQL Proxy: Client closed connection during startup")
+					p.logDebug("Client closed connection during startup\n")
+				}
 				return
 			}
-			logger.Debug("PostgreSQL Proxy: Client read error during startup: %v", err)
-			p.logDebug("Client read error during startup: %v\n", err)
-			return
-		}
 
-		if n > 0 {
-			if startupComplete {
-				// startupComplete was set while this Read was in flight (race window).
-				// Don't forward to upstream — buffer for the interceptor so it can
-				// register the prepared statement name before Bind arrives.
-				p.logDebug("Buffering %d bytes received after startup complete\n", n)
-				postStartupBuf = append(postStartupBuf, startupBuf[:n]...)
-			} else {
-				// Forward to upstream
-				if _, err := upstreamConn.Write(startupBuf[:n]); err != nil {
+			if n > 0 {
+				// Check for startup completion before forwarding — if startup just
+				// finished, the bytes belong to Phase 2 and must not be sent raw.
+				select {
+				case <-startupReady:
+					// Startup completed while Read was in flight; discard these bytes.
+					// The framing interceptor in Phase 2 will read directly from clientConn.
+					p.logDebug("Startup completed mid-read; discarding %d bytes (Phase 2 will re-read)\n", n)
+					return
+				default:
+				}
+
+				if _, err := upstreamConn.Write(buf[:n]); err != nil {
 					logger.Debug("PostgreSQL Proxy: Upstream write error during startup: %v", err)
 					p.logDebug("Upstream write error during startup: %v\n", err)
 					return
 				}
 			}
 		}
+	}()
+
+	// Wait for startup outcome.
+	timer := time.NewTimer(startupTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-startupReady:
+		// Success — fall through to Phase 2.
+	case err := <-upstreamErr:
+		logger.Error("PostgreSQL Proxy: Upstream failed during startup: %v", err)
+		p.logDebug("Upstream failed during startup: %v\n", err)
+		return fmt.Errorf("upstream failed during startup: %w", err)
+	case <-timer.C:
+		logger.Error("PostgreSQL Proxy: Startup timed out after %s waiting for ReadyForQuery from %s", startupTimeout, p.upstreamAddr)
+		p.logDebug("Startup timed out after %s\n", startupTimeout)
+		return fmt.Errorf("startup timed out after %s: upstream %s never sent ReadyForQuery", startupTimeout, p.upstreamAddr)
 	}
 
-	// Clear read deadline now that startup is complete
+	// Wait for the client-forwarding goroutine to stop before Phase 2 reads from clientConn.
+	<-clientForwardDone
+
+	// Clear read deadline now that startup is complete.
 	clientConn.SetReadDeadline(time.Time{})
 
 	logger.Debug("PostgreSQL Proxy: Startup phase complete, switching to message framing")
 	p.logDebug("Startup phase complete, switching to message framing\n")
 
-	// Phase 2: Continue upstream->client in background, but now frame client messages
+	// Phase 2: upstream->client relay continues in background; we now frame client messages.
 	go func() {
 		err := <-upstreamDone
 		logger.Debug("PostgreSQL Proxy: Upstream->Client goroutine ended: %v", err)
 		p.logDebug("Upstream->Client goroutine ended: %v\n", err)
 	}()
 
-	// Now handle client messages with framing.
-	// If bytes arrived during the startup race window, prepend them so the interceptor
-	// sees the Parse message before the subsequent Bind.
-	var clientReader io.Reader = clientConn
-	if len(postStartupBuf) > 0 {
-		p.logDebug("Replaying %d post-startup bytes through interceptor\n", len(postStartupBuf))
-		clientReader = io.MultiReader(bytes.NewReader(postStartupBuf), clientConn)
-	}
-	p.handleClientMessagesWithInterception(clientReader, upstreamConn, clientConn)
+	p.handleClientMessagesWithInterception(clientConn, upstreamConn, clientConn)
+	return nil
 }
 
 // handleClientMessagesWithInterception reads and processes client messages
