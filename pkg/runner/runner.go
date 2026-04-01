@@ -22,6 +22,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/pkg/schema"
 	"github.com/livecodelife/linespec/pkg/types"
 
 	"github.com/go-sql-driver/mysql"
@@ -286,23 +287,27 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 	logger.Debug("Migrations complete")
 
-	// Fetch schema for all tables after migrations complete (only for MySQL)
-	// This is done once and shared across all tests
-	if s.hasMySQLServices() {
-		dbConfig := s.getSharedDatabaseConfig()
-		tables := s.discoverTables(ctx, dbConfig)
-		schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
-			dbConfig.Username, dbConfig.Password, dbConfig.Database)
+	// Fetch schema for all discovered tables after migrations complete.
+	// Only applies to the shared MySQL database; PostgreSQL is per-service and handled in RunSpec.
+	dbConfig := s.getSharedDatabaseConfig()
+	if dbConfig != nil && s.dbHostPort != "" {
+		schemaDiscovery := s.getSchemaDiscoveryConfig()
+		tables, err := s.discoverTables(ctx, dbConfig, schemaDiscovery)
 		if err != nil {
-			logger.Debug("Failed to fetch shared schema: %v", err)
+			logger.Debug("Failed to discover tables: %v", err)
 		} else {
-			// Save to shared location in temp directory
-			schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
-			schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
-			if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-				logger.Debug("Failed to write shared schema file: %v", err)
+			schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
+				dbConfig.Username, dbConfig.Password, dbConfig.Database)
+			if err != nil {
+				logger.Debug("Failed to fetch shared schema: %v", err)
 			} else {
-				logger.Debug("Shared schema cached to %s", schemaFile)
+				schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
+				schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
+				if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
+					logger.Debug("Failed to write shared schema file: %v", err)
+				} else {
+					logger.Debug("Shared schema cached to %s", schemaFile)
+				}
 			}
 		}
 	}
@@ -360,23 +365,15 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	return nil
 }
 
-// getSharedDatabaseConfig returns database config for shared infrastructure
-// Uses the first discovered MySQL service's config, or defaults
+// getSharedDatabaseConfig returns the database config for the shared MySQL infrastructure,
+// or nil if no MySQL service is configured.
 func (s *TestSuite) getSharedDatabaseConfig() *config.DatabaseConfig {
-	// Look for first MySQL service configuration
 	for _, cfg := range s.serviceConfigs {
 		if cfg.Database != nil && cfg.Database.Type == "mysql" {
 			return cfg.Database
 		}
 	}
-	// Return defaults if no MySQL service found
-	return &config.DatabaseConfig{
-		Database: "todo_api_development",
-		Username: "todo_user",
-		Password: "todo_password",
-		Host:     "real-db",
-		Port:     3306,
-	}
+	return nil
 }
 
 // hasMySQLServices returns true if any discovered service uses MySQL
@@ -389,12 +386,44 @@ func (s *TestSuite) hasMySQLServices() bool {
 	return false
 }
 
-// discoverTables returns list of tables to fetch schema for
-// TODO: In Session 6, this will be replaced with auto-discovery
-func (s *TestSuite) discoverTables(ctx context.Context, dbConfig *config.DatabaseConfig) []string {
-	// Use hardcoded tables for backward compatibility
-	// Future enhancement: auto-discover from database
-	return []string{"users", "todos", "ar_internal_metadata", "schema_migrations"}
+// getSchemaDiscoveryConfig returns the SchemaDiscoveryConfig from the first service that has one,
+// defaulting to auto mode.
+func (s *TestSuite) getSchemaDiscoveryConfig() *config.SchemaDiscoveryConfig {
+	for _, cfg := range s.serviceConfigs {
+		if cfg.SchemaDiscovery != nil {
+			return cfg.SchemaDiscovery
+		}
+	}
+	return &config.SchemaDiscoveryConfig{Mode: "auto"}
+}
+
+// discoverTables returns the list of tables to fetch schema for, respecting SchemaDiscoveryConfig.
+func (s *TestSuite) discoverTables(ctx context.Context, dbConfig *config.DatabaseConfig, schemaDiscovery *config.SchemaDiscoveryConfig) ([]string, error) {
+	if schemaDiscovery == nil || schemaDiscovery.Mode == "none" {
+		return []string{}, nil
+	}
+	if schemaDiscovery.Mode == "static" {
+		return schema.FilterExcluded(schemaDiscovery.Tables, schemaDiscovery.ExcludeTables), nil
+	}
+	// auto mode — query the live MySQL database
+	if dbConfig == nil || s.dbHostPort == "" {
+		return []string{}, nil
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		dbConfig.Username, dbConfig.Password, "localhost", s.dbHostPort, dbConfig.Database)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database for table discovery: %w", err)
+	}
+	defer db.Close()
+
+	discoverer := schema.NewAutoDiscoverer(db, "mysql", schemaDiscovery.ExcludeTables)
+	tables, err := discoverer.DiscoverTables()
+	if err != nil {
+		logger.Debug("Failed to auto-discover tables: %v", err)
+		return []string{}, nil
+	}
+	return tables, nil
 }
 
 // runMigrationsForConfig runs migrations for a service based on its framework config
@@ -484,6 +513,9 @@ func (s *TestSuite) ResetDatabase(ctx context.Context) error {
 	}
 
 	dbConfig := s.getSharedDatabaseConfig()
+	if dbConfig == nil {
+		return nil
+	}
 
 	// For now, we'll just re-run init.sql by executing it via mysql client in the container
 	resetSQL := fmt.Sprintf(`
