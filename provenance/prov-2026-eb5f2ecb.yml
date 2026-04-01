@@ -1,6 +1,6 @@
 id: prov-2026-eb5f2ecb
 title: Add Chi framework defaults to frameworkDefaults map
-status: open
+status: implemented
 created_at: "2026-04-01"
 author: calebcowen@gmail.com
 intent: >
@@ -16,7 +16,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 55413405177a903e9d6955be63e61512d7254233
 associated_specs:
   - path: examples/order-linespecs/create_order_success.linespec
 associated_traces: []
