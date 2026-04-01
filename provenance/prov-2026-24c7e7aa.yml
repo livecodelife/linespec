@@ -1,0 +1,37 @@
+id: prov-2026-24c7e7aa
+title: Remove Rails-flavored credential defaults, fix init script path, remove MySQL proxy hardcoded db name (P2-C, P2-D, P2-E)
+status: open
+created_at: "2026-04-01"
+author: calebcowen@gmail.com
+intent: |
+  Remove three language-coupling violations that make LineSpec unusable for non-Rails projects:
+  P2-C: Remove Rails-flavored database credential defaults (_development/_user/_password suffixes).
+  Require database, username, and password to be explicit in .linespec.yml with a clear error if missing.
+  P2-D: Fix FindInitScript to honor database.init_script from config instead of searching by filename.
+  Remove the examples/user-service/init.sql fallback path.
+  P2-E: Remove the hardcoded "todo_api_development" database name from the MySQL proxy.
+  The proxy must receive the database name via --db-name argument and fail on startup if not provided.
+constraints:
+  - All four example suites (user-linespecs, todo-linespecs, order-linespecs, notification-linespecs) must pass after changes
+  - Example .linespec.yml files already have explicit credentials and init_script fields — no changes needed there
+  - MySQL proxy CLI arg structure must remain backward-compatible for all non-db-name args
+affected_scope:
+  - pkg/config/parser.go
+  - pkg/config/database_config_test.go
+  - pkg/runner/runner.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/mysql/proxy_dbname_test.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/create_user_success.linespec
+  - path: examples/todo-linespecs/create_todo_success.linespec
+  - path: examples/order-linespecs/create_order_success.linespec
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+associated_traces: []
+monitors: []
+tags: []
