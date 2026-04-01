@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -107,17 +108,19 @@ func (n *NoOpDiscoverer) LoadCache(cacheFile string) error {
 	return nil
 }
 
-// CreateDiscoverer creates a discoverer based on mode and configuration
-func CreateDiscoverer(mode string, staticTables []string, dbType string, dbConfig map[string]string) (Discoverer, error) {
+// CreateDiscoverer creates a discoverer based on mode and configuration.
+// For "auto" mode, db must be an open database connection; the caller is responsible for closing it.
+func CreateDiscoverer(mode string, staticTables []string, excludeTables []string, dbType string, db *sql.DB) (Discoverer, error) {
 	switch strings.ToLower(mode) {
 	case "static":
 		return NewStaticDiscoverer(staticTables), nil
 	case "none":
 		return NewNoOpDiscoverer(), nil
 	case "auto":
-		// For auto mode, we would need database connection
-		// This will be implemented in database-specific packages
-		return NewStaticDiscoverer([]string{}), nil
+		if db == nil {
+			return NewNoOpDiscoverer(), nil
+		}
+		return NewAutoDiscoverer(db, dbType, excludeTables), nil
 	default:
 		return nil, fmt.Errorf("unknown schema discovery mode: %s", mode)
 	}

@@ -22,6 +22,9 @@ constraints:
   - MUST remove all Rails-specific defaults (ar_internal_metadata, schema_migrations, todo_api_development)
 affected_scope:
   - pkg/schema/discoverer.go
+  - pkg/schema/auto_discoverer.go
+  - pkg/schema/auto_discoverer_test.go
+  - pkg/schema/discoverer_test.go
   - pkg/runner/runner.go
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/postgresql/proxy.go

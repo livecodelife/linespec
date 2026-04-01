@@ -2366,8 +2366,7 @@ func (p *Proxy) getKnownTables() []string {
 		return tables
 	}
 
-	// Default fallback tables for backward compatibility
-	return []string{"users", "todos"}
+	return []string{}
 }
 
 // ReadRegularMessageFromReader reads a regular message from a buffered reader
