@@ -1,6 +1,6 @@
 id: prov-2026-ebfa7835
 title: 'Fix P2-G: infer HTTP proxy Content-Type from payload file extension'
-status: open
+status: implemented
 created_at: "2026-04-01"
 author: calebcowen@gmail.com
 intent: "Fix the HTTP proxy interceptor to infer Content-Type from payload file extension
@@ -29,7 +29,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ebb7a6fb113959fa34380ccd6cd15a290ada12f5
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
