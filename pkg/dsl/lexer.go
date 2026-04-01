@@ -20,7 +20,8 @@ const (
 	TokenReturns       TokenType = "RETURNS"
 	TokenVerify        TokenType = "VERIFY"
 	TokenNoise         TokenType = "NOISE"
-	TokenHeaders       TokenType = "HEADERS"
+	TokenHeaders         TokenType = "HEADERS"
+	TokenResponseHeaders TokenType = "RESPONSE_HEADERS"
 	TokenUsingSql      TokenType = "USING_SQL"
 	TokenNoTransaction TokenType = "NO_TRANSACTION"
 	TokenSqlBlock      TokenType = "SQL_BLOCK"
@@ -118,6 +119,12 @@ func LexFile(filePath string) ([]Token, error) {
 				indentedBuffer.Reset()
 				// Don't continue, process current line
 			}
+		}
+
+		if strings.ToUpper(trimmedLine) == "RESPONSE_HEADERS" {
+			inIndentedBlock = true
+			currentBlockType = TokenResponseHeaders
+			continue
 		}
 
 		if strings.ToUpper(trimmedLine) == "HEADERS" {

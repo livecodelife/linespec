@@ -38,9 +38,10 @@ type ExpectStatement struct {
 	ReturnsEmpty  bool   // For DB (RETURNS EMPTY)
 	NoTransaction bool   // For WRITE:MYSQL
 	Verify        []VerifyRule
-	Negative      bool              // If true, this should NOT be called
-	BaseDir       string            // To resolve payload files
-	Headers       map[string]string // For HTTP header matching
+	Negative        bool              // If true, this should NOT be called
+	BaseDir         string            // To resolve payload files
+	Headers         map[string]string // For HTTP request header matching
+	ResponseHeaders map[string]string // For HTTP response headers (overrides inferred Content-Type)
 }
 
 // ReceiveStatement defines the trigger request
@@ -57,6 +58,7 @@ type RespondStatement struct {
 	StatusCode int
 	WithFile   string
 	Noise      []string
+	Headers    map[string]string // Response headers for the trigger response
 }
 
 // TestSpec is the full AST for a .linespec file

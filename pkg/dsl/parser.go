@@ -128,6 +128,11 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		spec.Respond.Noise = strings.Split(strings.TrimSpace(noiseToken.Literal), "\n")
 	}
 
+	if p.peek().Type == TokenHeaders {
+		headersToken := p.consume()
+		spec.Respond.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
+	}
+
 	return spec, nil
 }
 
@@ -192,6 +197,11 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		} else {
 			expect.ReturnsFile = returnsToken.Literal
 		}
+	}
+
+	if p.peek().Type == TokenResponseHeaders {
+		headersToken := p.consume()
+		expect.ResponseHeaders = p.resolveHeaders(parseHeaders(headersToken.Literal))
 	}
 
 	for p.peek().Type == TokenVerify {

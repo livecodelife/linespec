@@ -105,6 +105,43 @@ func (l *PayloadLoader) SetParsers(parsers []PayloadParser) {
 	l.Parsers = parsers
 }
 
+// InferContentType returns the MIME type for a payload file based on its extension.
+func InferContentType(filePath string) string {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".json":
+		return "application/json"
+	case ".yaml", ".yml":
+		return "application/yaml"
+	case ".xml":
+		return "application/xml"
+	case ".html", ".htm":
+		return "text/html"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// LoadRaw reads a payload file and returns its raw bytes (with variable interpolation applied)
+// along with the inferred MIME content type. No parsing or re-marshaling is performed.
+func (l *PayloadLoader) LoadRaw(filePath string) ([]byte, string, error) {
+	fullPath := filepath.Join(l.BaseDir, filePath)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read payload file %s: %v", fullPath, err)
+	}
+
+	content := data
+	if l.Resolver != nil {
+		contentStr := string(data)
+		if interpolate.HasVariables(contentStr) {
+			resolved := l.Resolver.Resolve(contentStr)
+			content = []byte(resolved)
+		}
+	}
+
+	return content, InferContentType(filePath), nil
+}
+
 // Load loads and parses a payload file
 func (l *PayloadLoader) Load(filePath string) (interface{}, error) {
 	fullPath := filepath.Join(l.BaseDir, filePath)
