@@ -1,0 +1,38 @@
+id: prov-2026-9a74b241
+title: Implement auto table discovery replacing Rails hardcoded tables (P2-A)
+status: open
+created_at: "2026-03-31"
+author: calebcowen@gmail.com
+intent: |
+  Replace the hardcoded table list ["users", "todos", "ar_internal_metadata", "schema_migrations"]
+  in discoverTables() with real auto-discovery from the live database. The last two tables are
+  Rails ActiveRecord internal tables that do not exist in non-Rails projects, causing schema
+  injection for tables that are absent.
+
+  Implement AutoDiscoverer in pkg/schema/ that queries information_schema.tables (MySQL) or
+  pg_catalog.pg_tables (PostgreSQL). Wire the existing SchemaDiscoveryConfig (mode: auto/static/none,
+  exclude_tables) into the runner. Generalize fetchSchemaFromDatabase to support PostgreSQL (currently
+  MySQL-only). Remove hardcoded ["users", "todos"] fallbacks from both proxy getKnownTables().
+  Remove Rails-specific defaults from getSharedDatabaseConfig().
+constraints:
+  - MUST NOT break existing example applications (todo-api, user-service, order-service, notification-service)
+  - MUST respect SchemaDiscoveryConfig.Mode (auto/static/none) and ExcludeTables
+  - MUST support both MySQL and PostgreSQL discovery
+  - MUST NOT introduce new hardcoded table names or database defaults
+  - MUST remove all Rails-specific defaults (ar_internal_metadata, schema_migrations, todo_api_development)
+affected_scope:
+  - pkg/schema/discoverer.go
+  - pkg/runner/runner.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+  - path: examples/order-linespecs/create_order_success.linespec
+associated_traces: []
+monitors: []
+tags: []
