@@ -57,6 +57,10 @@ var frameworkDefaults = map[string]GenericFrameworkConfig{
 		CustomStartCommand:  "npm start",
 		WarmupEndpointValue: "/health",
 	},
+	"chi": {
+		CustomStartCommand:  "PORT=${PORT} go run .",
+		WarmupEndpointValue: "/health",
+	},
 }
 
 // GenericFrameworkConfig implements FrameworkConfig for custom/unknown frameworks
