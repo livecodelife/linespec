@@ -234,9 +234,23 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
+	// Extract --db-name flag from remaining args (used by mysql proxy)
+	var dbName string
+	var filteredArgs []string
+	for i := 5; i < len(os.Args); i++ {
+		if os.Args[i] == "--db-name" && i+1 < len(os.Args) {
+			dbName = os.Args[i+1]
+			i++ // skip value
+		} else if strings.HasPrefix(os.Args[i], "--db-name=") {
+			dbName = strings.TrimPrefix(os.Args[i], "--db-name=")
+		} else {
+			filteredArgs = append(filteredArgs, os.Args[i])
+		}
+	}
+
 	reg := registry.NewMockRegistry()
-	if len(os.Args) > 5 {
-		regFile := os.Args[5]
+	if len(filteredArgs) > 0 {
+		regFile := filteredArgs[0]
 		if err := reg.LoadFromFile(regFile); err != nil {
 			logger.Error("Failed to load registry: %v", err)
 			os.Exit(1)
@@ -268,10 +282,15 @@ func runProxy() {
 	var proxyErr error
 	switch pType {
 	case "mysql":
+		if dbName == "" {
+			logger.Error("MySQL proxy requires --db-name argument specifying the database name")
+			os.Exit(1)
+		}
 		p := mysql.NewProxy(addr, upstream, reg)
-		// Load schema file if provided (6th argument)
-		if len(os.Args) > 6 {
-			schemaFile := os.Args[6]
+		p.SetDatabaseName(dbName)
+		// Load schema file if provided (filteredArgs[1])
+		if len(filteredArgs) > 1 {
+			schemaFile := filteredArgs[1]
 			logger.Debug("Loading schema file: %s", schemaFile)
 			if _, err := os.Stat(schemaFile); err != nil {
 				logger.Debug("Schema file does not exist: %v", err)
@@ -282,11 +301,11 @@ func runProxy() {
 				}
 			}
 		} else {
-			logger.Debug("No schema file provided (len(os.Args) = %d)", len(os.Args))
+			logger.Debug("No schema file provided")
 		}
-		// Check for transparent mode duration (7th argument)
-		if len(os.Args) > 7 {
-			transparentDuration := os.Args[7]
+		// Check for transparent mode duration (filteredArgs[2])
+		if len(filteredArgs) > 2 {
+			transparentDuration := filteredArgs[2]
 			if duration, err := time.ParseDuration(transparentDuration); err == nil {
 				p.EnableTransparentMode(duration)
 			} else {

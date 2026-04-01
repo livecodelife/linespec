@@ -124,53 +124,26 @@ func (s *TestSuite) DiscoverServices() error {
 	return nil
 }
 
-// FindInitScript looks for init.sql in discovered MySQL services
+// FindInitScript returns the init SQL path for the first MySQL service that has
+// database.init_script explicitly configured in its .linespec.yml.
 func (s *TestSuite) FindInitScript() string {
-	// First, look for init.sql in services configured to use MySQL
 	for serviceName, cfg := range s.serviceConfigs {
-		// Skip PostgreSQL services
-		if cfg.Database != nil && cfg.Database.Type == "postgresql" {
-			logger.Debug("Skipping PostgreSQL service %s for init.sql", serviceName)
+		if cfg.Database == nil || cfg.Database.Type == "postgresql" {
 			continue
 		}
-
-		serviceDir := cfg.BaseDir
-		if serviceDir == "" {
-			// Construct from service name relative to cwd
-			serviceDir = filepath.Join(s.cwd, serviceName)
+		if cfg.Database.InitScript == "" {
+			continue
 		}
-
-		// Check for init.sql in service directory
-		initSqlPath := filepath.Join(serviceDir, "init.sql")
-		if _, err := os.Stat(initSqlPath); err == nil {
-			// Validate it's a MySQL-compatible script (basic check)
-			content, err := os.ReadFile(initSqlPath)
+		initScriptPath := filepath.Join(cfg.BaseDir, cfg.Database.InitScript)
+		if _, err := os.Stat(initScriptPath); err == nil {
+			content, err := os.ReadFile(initScriptPath)
 			if err == nil && !containsPostgresSyntax(string(content)) {
-				logger.Debug("Found MySQL-compatible init.sql in service %s: %s", serviceName, initSqlPath)
-				return initSqlPath
+				logger.Debug("Found MySQL init script from config in service %s: %s", serviceName, initScriptPath)
+				return initScriptPath
 			}
 		}
 	}
-
-	// Fallback: look for init.sql in common locations with MySQL services
-	fallbackPaths := []string{
-		filepath.Join(s.cwd, "init.sql"),
-		filepath.Join(s.cwd, "db", "init.sql"),
-		filepath.Join(s.cwd, "examples", "user-service", "init.sql"),
-	}
-
-	for _, path := range fallbackPaths {
-		if _, err := os.Stat(path); err == nil {
-			// Validate it's not PostgreSQL
-			content, err := os.ReadFile(path)
-			if err == nil && !containsPostgresSyntax(string(content)) {
-				logger.Debug("Found MySQL-compatible init.sql at fallback location: %s", path)
-				return path
-			}
-		}
-	}
-
-	logger.Debug("No MySQL-compatible init.sql found, database will start empty")
+	logger.Debug("No MySQL init script configured, database will start empty")
 	return ""
 }
 
@@ -559,8 +532,15 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 		appEnv = append(appEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Use cfg.Service.Name for the Docker image — matches the app container pattern in RunSpec.
+	// The serviceName key is the directory name (e.g. "user-linespecs"), which is not the image name.
+	imageName := cfg.Service.Name
+	if imageName == "" {
+		imageName = serviceName
+	}
+
 	_, err := s.orch.StartContainer(ctx, &container.Config{
-		Image: serviceName + ":latest",
+		Image: imageName + ":latest",
 		Env:   appEnv,
 		Cmd:   migrationCmd,
 	}, &container.HostConfig{
@@ -806,7 +786,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				logger.Debug("MySQL proxy enabled for this service")
 
 				// Build MySQL proxy command
-				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", serviceConfig.Database.Database}
 				if logger.IsDebug() {
 					mysqlProxyCmd = append(mysqlProxyCmd, "--debug")
 				}

@@ -3,11 +3,84 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
+func TestDatabaseConfigRequiresExplicitCredentials(t *testing.T) {
+	// Configs without explicit credentials must fail with a clear error
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{
+			name: "missing database name",
+			content: `
+service:
+  name: my-api
+  port: 3000
+infrastructure:
+  database: true
+database:
+  type: mysql
+  username: myuser
+  password: mypass
+`,
+			wantErr: "database.database is required",
+		},
+		{
+			name: "missing username",
+			content: `
+service:
+  name: my-api
+  port: 3000
+infrastructure:
+  database: true
+database:
+  type: mysql
+  database: mydb
+  password: mypass
+`,
+			wantErr: "database.username is required",
+		},
+		{
+			name: "missing password",
+			content: `
+service:
+  name: my-api
+  port: 3000
+infrastructure:
+  database: true
+database:
+  type: mysql
+  database: mydb
+  username: myuser
+`,
+			wantErr: "database.password is required",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			configPath := filepath.Join(tempDir, ".linespec.yml")
+			if err := os.WriteFile(configPath, []byte(tc.content), 0644); err != nil {
+				t.Fatalf("Failed to write test config: %v", err)
+			}
+			_, err := LoadConfigFile(configPath)
+			if err == nil {
+				t.Fatal("Expected error for missing credentials, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("Error = %q, want it to contain %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestDatabaseConfigDefaults(t *testing.T) {
-	// Create a temporary config file
+	// Create a temporary config file with explicit credentials
 	tempDir := t.TempDir()
 	configContent := `
 service:
@@ -18,56 +91,50 @@ infrastructure:
   database: true
 database:
   type: mysql
+  database: my_db
+  username: my_user
+  password: my_pass
 `
 	configPath := filepath.Join(tempDir, ".linespec.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	// Load and apply defaults
 	config, err := LoadConfigFile(configPath)
 	if err != nil {
 		t.Fatalf("LoadConfigFile() failed: %v", err)
 	}
 
-	// Verify database defaults were applied
 	if config.Database == nil {
 		t.Fatal("Database config should not be nil")
 	}
 
-	// Database name should default to service name + _development
-	if config.Database.Database != "my-api_development" {
-		t.Errorf("Database.Database = %q, expected my-api_development", config.Database.Database)
+	// Explicit credentials are preserved unchanged
+	if config.Database.Database != "my_db" {
+		t.Errorf("Database.Database = %q, expected my_db", config.Database.Database)
+	}
+	if config.Database.Username != "my_user" {
+		t.Errorf("Database.Username = %q, expected my_user", config.Database.Username)
+	}
+	if config.Database.Password != "my_pass" {
+		t.Errorf("Database.Password = %q, expected my_pass", config.Database.Password)
 	}
 
-	// Username should default to service name + _user
-	if config.Database.Username != "my-api_user" {
-		t.Errorf("Database.Username = %q, expected my-api_user", config.Database.Username)
-	}
-
-	// Password should default to service name + _password
-	if config.Database.Password != "my-api_password" {
-		t.Errorf("Database.Password = %q, expected my-api_password", config.Database.Password)
-	}
-
-	// Host should default to "db"
-	if config.Database.Host != "db" {
-		t.Errorf("Database.Host = %q, expected db", config.Database.Host)
-	}
-
-	// Image should default based on type
+	// Image and port are still inferred from type
 	if config.Database.Image != "mysql:8.4" {
 		t.Errorf("Database.Image = %q, expected mysql:8.4", config.Database.Image)
 	}
-
-	// Port should default based on type
 	if config.Database.Port != 3306 {
 		t.Errorf("Database.Port = %d, expected 3306", config.Database.Port)
+	}
+	// Host defaults to "db"
+	if config.Database.Host != "db" {
+		t.Errorf("Database.Host = %q, expected db", config.Database.Host)
 	}
 }
 
 func TestDatabaseConfigPostgreSQLDefaults(t *testing.T) {
-	// Create a temporary config file with PostgreSQL
+	// Explicit credentials are required; image and port are still inferred from type
 	tempDir := t.TempDir()
 	configContent := `
 service:
@@ -78,27 +145,26 @@ infrastructure:
   database: true
 database:
   type: postgresql
+  database: todo_db
+  username: todo_user
+  password: todo_pass
 `
 	configPath := filepath.Join(tempDir, ".linespec.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	// Load and apply defaults
 	config, err := LoadConfigFile(configPath)
 	if err != nil {
 		t.Fatalf("LoadConfigFile() failed: %v", err)
 	}
 
-	// Verify PostgreSQL defaults
-	if config.Database.Database != "todo-service_development" {
-		t.Errorf("Database.Database = %q, expected todo-service_development", config.Database.Database)
+	if config.Database.Database != "todo_db" {
+		t.Errorf("Database.Database = %q, expected todo_db", config.Database.Database)
 	}
-
 	if config.Database.Image != "postgres:16-alpine" {
 		t.Errorf("Database.Image = %q, expected postgres:16-alpine", config.Database.Image)
 	}
-
 	if config.Database.Port != 5432 {
 		t.Errorf("Database.Port = %d, expected 5432", config.Database.Port)
 	}
@@ -171,6 +237,9 @@ infrastructure:
   database: true
 database:
   type: mysql
+  database: my_db
+  username: my_user
+  password: my_pass
 `
 	configPath := filepath.Join(tempDir, ".linespec.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -224,6 +293,9 @@ infrastructure:
   database: true
 database:
   type: mysql
+  database: my_db
+  username: my_user
+  password: my_pass
 container_naming:
   database_container: my-custom-db
   network_name: my-custom-net
@@ -284,6 +356,11 @@ service:
   needs_warmup: true
 infrastructure:
   database: true
+database:
+  type: mysql
+  database: my_db
+  username: my_user
+  password: my_pass
 `
 	configPath := filepath.Join(tempDir, ".linespec.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
