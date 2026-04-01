@@ -1,150 +1,132 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestRailsFrameworkConfig(t *testing.T) {
-	config := &RailsFrameworkConfig{}
-
-	// Test GetStartCommand
-	startCmd := config.GetStartCommand("3000")
-	expected := []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p 3000"}
-	if len(startCmd) != len(expected) {
-		t.Errorf("GetStartCommand() returned %d args, expected %d", len(startCmd), len(expected))
-	}
-	for i := range expected {
-		if startCmd[i] != expected[i] {
-			t.Errorf("GetStartCommand()[%d] = %q, expected %q", i, startCmd[i], expected[i])
-		}
-	}
-
-	// Test GetMigrationCommand
-	migrationCmd := config.GetMigrationCommand()
-	expectedMigration := []string{"bundle", "exec", "rails", "db:migrate"}
-	if len(migrationCmd) != len(expectedMigration) {
-		t.Errorf("GetMigrationCommand() returned %d args, expected %d", len(migrationCmd), len(expectedMigration))
-	}
-	for i := range expectedMigration {
-		if migrationCmd[i] != expectedMigration[i] {
-			t.Errorf("GetMigrationCommand()[%d] = %q, expected %q", i, migrationCmd[i], expectedMigration[i])
-		}
+func TestFrameworkDefaults(t *testing.T) {
+	tests := []struct {
+		framework       string
+		startContains   string
+		expectMigration bool
+		expectWarmup    bool
+		expectEndpoint  string
+		expectDelay     time.Duration
+	}{
+		{"rails", "bundle exec rails", true, true, "/up", 100 * time.Millisecond},
+		{"fastapi", "uvicorn", false, false, "/health", 0},
+		{"django", "manage.py runserver", true, true, "/health", 100 * time.Millisecond},
+		{"express", "npm start", false, false, "/health", 0},
+		{"unknown", "", false, false, "/", 0},
 	}
 
-	// Test NeedsWarmup
-	if !config.NeedsWarmup() {
-		t.Error("RailsFrameworkConfig.NeedsWarmup() should return true")
-	}
+	for _, tt := range tests {
+		t.Run(tt.framework, func(t *testing.T) {
+			cfg := GetFrameworkConfig(tt.framework, "", "", nil, "", 0)
+			if cfg == nil {
+				t.Fatal("GetFrameworkConfig() returned nil")
+			}
 
-	// Test GetWarmupEndpoint
-	if endpoint := config.GetWarmupEndpoint(); endpoint != "/up" {
-		t.Errorf("GetWarmupEndpoint() = %q, expected /up", endpoint)
-	}
+			if warmup := cfg.NeedsWarmup(); warmup != tt.expectWarmup {
+				t.Errorf("NeedsWarmup() = %v, expected %v", warmup, tt.expectWarmup)
+			}
 
-	// Test GetWarmupDelay
-	if delay := config.GetWarmupDelay(); delay != 100*time.Millisecond {
-		t.Errorf("GetWarmupDelay() = %v, expected 100ms", delay)
+			if endpoint := cfg.GetWarmupEndpoint(); endpoint != tt.expectEndpoint {
+				t.Errorf("GetWarmupEndpoint() = %q, expected %q", endpoint, tt.expectEndpoint)
+			}
+
+			if delay := cfg.GetWarmupDelay(); delay != tt.expectDelay {
+				t.Errorf("GetWarmupDelay() = %v, expected %v", delay, tt.expectDelay)
+			}
+
+			hasMigration := cfg.GetMigrationCommand() != nil
+			if hasMigration != tt.expectMigration {
+				t.Errorf("GetMigrationCommand() != nil = %v, expected %v", hasMigration, tt.expectMigration)
+			}
+
+			if tt.startContains != "" {
+				startCmd := cfg.GetStartCommand("3000")
+				full := strings.Join(startCmd, " ")
+				if !strings.Contains(full, tt.startContains) {
+					t.Errorf("GetStartCommand() = %v, expected it to contain %q", startCmd, tt.startContains)
+				}
+			}
+		})
 	}
 }
 
-func TestFastAPIFrameworkConfig(t *testing.T) {
-	config := &FastAPIFrameworkConfig{}
-
-	// Test GetStartCommand
-	startCmd := config.GetStartCommand("8000")
-	expected := []string{"python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"}
-	if len(startCmd) != len(expected) {
-		t.Errorf("GetStartCommand() returned %d args, expected %d", len(startCmd), len(expected))
-	}
-	for i := range expected {
-		if startCmd[i] != expected[i] {
-			t.Errorf("GetStartCommand()[%d] = %q, expected %q", i, startCmd[i], expected[i])
-		}
-	}
-
-	// Test GetMigrationCommand (should be nil)
-	if migrationCmd := config.GetMigrationCommand(); migrationCmd != nil {
-		t.Errorf("GetMigrationCommand() should be nil for FastAPI, got %v", migrationCmd)
-	}
-
-	// Test NeedsWarmup
-	if config.NeedsWarmup() {
-		t.Error("FastAPIFrameworkConfig.NeedsWarmup() should return false")
-	}
-
-	// Test GetWarmupEndpoint
-	if endpoint := config.GetWarmupEndpoint(); endpoint != "/health" {
-		t.Errorf("GetWarmupEndpoint() = %q, expected /health", endpoint)
-	}
-
-	// Test GetWarmupDelay
-	if delay := config.GetWarmupDelay(); delay != 0 {
-		t.Errorf("GetWarmupDelay() = %v, expected 0", delay)
+func TestFrameworkDefaultsPortSubstitution(t *testing.T) {
+	// Verify ${PORT} is replaced in framework default start commands
+	for _, framework := range []string{"rails", "fastapi", "django"} {
+		t.Run(framework, func(t *testing.T) {
+			cfg := GetFrameworkConfig(framework, "", "", nil, "", 0)
+			startCmd := cfg.GetStartCommand("9999")
+			full := strings.Join(startCmd, " ")
+			if strings.Contains(full, "${PORT}") {
+				t.Errorf("GetStartCommand(9999) still contains literal ${PORT}: %v", startCmd)
+			}
+			if !strings.Contains(full, "9999") {
+				t.Errorf("GetStartCommand(9999) does not contain port 9999: %v", startCmd)
+			}
+		})
 	}
 }
 
-func TestDjangoFrameworkConfig(t *testing.T) {
-	config := &DjangoFrameworkConfig{}
-
-	// Test GetStartCommand
-	startCmd := config.GetStartCommand("8000")
-	expected := []string{"python", "manage.py", "runserver", "0.0.0.0:8000"}
-	if len(startCmd) != len(expected) {
-		t.Errorf("GetStartCommand() returned %d args, expected %d", len(startCmd), len(expected))
-	}
-	for i := range expected {
-		if startCmd[i] != expected[i] {
-			t.Errorf("GetStartCommand()[%d] = %q, expected %q", i, startCmd[i], expected[i])
-		}
-	}
-
-	// Test GetMigrationCommand
-	migrationCmd := config.GetMigrationCommand()
-	expectedMigration := []string{"python", "manage.py", "migrate"}
-	if len(migrationCmd) != len(expectedMigration) {
-		t.Errorf("GetMigrationCommand() returned %d args, expected %d", len(migrationCmd), len(expectedMigration))
-	}
-	for i := range expectedMigration {
-		if migrationCmd[i] != expectedMigration[i] {
-			t.Errorf("GetMigrationCommand()[%d] = %q, expected %q", i, migrationCmd[i], expectedMigration[i])
-		}
-	}
-
-	// Test NeedsWarmup
-	if !config.NeedsWarmup() {
-		t.Error("DjangoFrameworkConfig.NeedsWarmup() should return true")
-	}
-
-	// Test GetWarmupEndpoint
-	if endpoint := config.GetWarmupEndpoint(); endpoint != "/health" {
-		t.Errorf("GetWarmupEndpoint() = %q, expected /health", endpoint)
+func TestGetFrameworkConfigAllReturnGeneric(t *testing.T) {
+	// All framework names should return *GenericFrameworkConfig
+	frameworks := []string{"rails", "fastapi", "django", "express", "unknown", ""}
+	for _, fw := range frameworks {
+		t.Run(fw, func(t *testing.T) {
+			cfg := GetFrameworkConfig(fw, "", "", nil, "", 0)
+			if _, ok := cfg.(*GenericFrameworkConfig); !ok {
+				t.Errorf("GetFrameworkConfig(%q) returned %T, expected *GenericFrameworkConfig", fw, cfg)
+			}
+		})
 	}
 }
 
-func TestExpressFrameworkConfig(t *testing.T) {
-	config := &ExpressFrameworkConfig{}
+func TestGetFrameworkConfigOverridesApplyToAllFrameworks(t *testing.T) {
+	// Overrides must take precedence over framework defaults for all frameworks,
+	// including known ones like rails.
+	frameworks := []string{"rails", "fastapi", "django", "express", "custom-framework"}
+	for _, fw := range frameworks {
+		t.Run(fw, func(t *testing.T) {
+			needsWarmup := false
+			cfg := GetFrameworkConfig(fw, "custom-start", "custom-migrate", &needsWarmup, "/custom", 200)
 
-	// Test GetStartCommand
-	startCmd := config.GetStartCommand("3000")
-	expected := []string{"npm", "start"}
-	if len(startCmd) != len(expected) {
-		t.Errorf("GetStartCommand() returned %d args, expected %d", len(startCmd), len(expected))
+			if cfg.NeedsWarmup() {
+				t.Errorf("%s: NeedsWarmup() = true, expected false (override)", fw)
+			}
+			if endpoint := cfg.GetWarmupEndpoint(); endpoint != "/custom" {
+				t.Errorf("%s: GetWarmupEndpoint() = %q, expected /custom", fw, endpoint)
+			}
+			if delay := cfg.GetWarmupDelay(); delay != 200*time.Millisecond {
+				t.Errorf("%s: GetWarmupDelay() = %v, expected 200ms", fw, delay)
+			}
+			startCmd := cfg.GetStartCommand("3000")
+			if !strings.Contains(strings.Join(startCmd, " "), "custom-start") {
+				t.Errorf("%s: GetStartCommand() = %v, expected custom-start", fw, startCmd)
+			}
+			migrationCmd := cfg.GetMigrationCommand()
+			if migrationCmd == nil || !strings.Contains(strings.Join(migrationCmd, " "), "custom-migrate") {
+				t.Errorf("%s: GetMigrationCommand() = %v, expected custom-migrate", fw, migrationCmd)
+			}
+		})
 	}
-	for i := range expected {
-		if startCmd[i] != expected[i] {
-			t.Errorf("GetStartCommand()[%d] = %q, expected %q", i, startCmd[i], expected[i])
-		}
+}
+
+func TestGetFrameworkConfigNilNeedsWarmupUsesDefault(t *testing.T) {
+	// When needsWarmup is nil, the framework default should be used
+	railsCfg := GetFrameworkConfig("rails", "", "", nil, "", 0)
+	if !railsCfg.NeedsWarmup() {
+		t.Error("rails: NeedsWarmup() = false with nil override, expected true (framework default)")
 	}
 
-	// Test GetMigrationCommand (should be nil)
-	if migrationCmd := config.GetMigrationCommand(); migrationCmd != nil {
-		t.Errorf("GetMigrationCommand() should be nil for Express, got %v", migrationCmd)
-	}
-
-	// Test NeedsWarmup
-	if config.NeedsWarmup() {
-		t.Error("ExpressFrameworkConfig.NeedsWarmup() should return false")
+	fastAPICfg := GetFrameworkConfig("fastapi", "", "", nil, "", 0)
+	if fastAPICfg.NeedsWarmup() {
+		t.Error("fastapi: NeedsWarmup() = true with nil override, expected false (framework default)")
 	}
 }
 
@@ -193,110 +175,4 @@ func TestGenericFrameworkConfig(t *testing.T) {
 	if len(startCmd2) != 3 || startCmd2[2] != "echo 'No start command specified'" {
 		t.Errorf("Empty GetStartCommand() = %v, expected echo message", startCmd2)
 	}
-}
-
-func TestGetFrameworkConfig(t *testing.T) {
-	tests := []struct {
-		framework       string
-		expectedType    string
-		expectWarmup    bool
-		expectMigration bool
-	}{
-		{"rails", "*config.RailsFrameworkConfig", true, true},
-		{"fastapi", "*config.FastAPIFrameworkConfig", false, false},
-		{"django", "*config.DjangoFrameworkConfig", true, true},
-		{"express", "*config.ExpressFrameworkConfig", false, false},
-		{"unknown", "*config.GenericFrameworkConfig", false, false},
-		{"", "*config.GenericFrameworkConfig", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.framework, func(t *testing.T) {
-			config := GetFrameworkConfig(tt.framework, "", "", false, "", 0)
-			if config == nil {
-				t.Fatal("GetFrameworkConfig() returned nil")
-			}
-
-			// Check warmup
-			if warmup := config.NeedsWarmup(); warmup != tt.expectWarmup {
-				t.Errorf("NeedsWarmup() = %v, expected %v", warmup, tt.expectWarmup)
-			}
-
-			// Check migration command
-			hasMigration := config.GetMigrationCommand() != nil
-			if hasMigration != tt.expectMigration {
-				t.Errorf("GetMigrationCommand() != nil = %v, expected %v", hasMigration, tt.expectMigration)
-			}
-		})
-	}
-}
-
-func TestGetFrameworkConfigWithOverrides(t *testing.T) {
-	// Test overrides with generic framework (since known frameworks have fixed configs)
-	needsWarmup := true
-	config := GetFrameworkConfig("custom-framework", "custom-start", "custom-migrate", needsWarmup, "/custom", 200)
-
-	// For generic frameworks, overrides should be respected
-	if !config.NeedsWarmup() {
-		t.Error("NeedsWarmup() should be true with override")
-	}
-
-	if endpoint := config.GetWarmupEndpoint(); endpoint != "/custom" {
-		t.Errorf("GetWarmupEndpoint() = %q, expected /custom", endpoint)
-	}
-
-	if delay := config.GetWarmupDelay(); delay != 200*time.Millisecond {
-		t.Errorf("GetWarmupDelay() = %v, expected 200ms", delay)
-	}
-
-	// Test custom commands are used
-	startCmd := config.GetStartCommand("3000")
-	if len(startCmd) != 3 || startCmd[2] != "custom-start" {
-		t.Errorf("GetStartCommand() = %v, expected custom-start command", startCmd)
-	}
-
-	migrationCmd := config.GetMigrationCommand()
-	if len(migrationCmd) != 3 || migrationCmd[2] != "custom-migrate" {
-		t.Errorf("GetMigrationCommand() = %v, expected custom-migrate command", migrationCmd)
-	}
-}
-
-func TestGetFrameworkConfigRailsOverridesNotUsed(t *testing.T) {
-	// Test that Rails uses its own fixed values, not the overrides passed to GetFrameworkConfig
-	needsWarmup := false // Rails uses true by default
-	config := GetFrameworkConfig("rails", "custom-start", "custom-migrate", needsWarmup, "/custom", 200)
-
-	// Rails config uses its own fixed values
-	if !config.NeedsWarmup() {
-		t.Error("RailsFrameworkConfig.NeedsWarmup() should always return true regardless of override")
-	}
-
-	// Rails uses its own endpoint, not the custom one
-	if endpoint := config.GetWarmupEndpoint(); endpoint != "/up" {
-		t.Errorf("Rails GetWarmupEndpoint() = %q, expected /up (Rails fixed value)", endpoint)
-	}
-
-	// Rails uses its own delay, not the custom one
-	if delay := config.GetWarmupDelay(); delay != 100*time.Millisecond {
-		t.Errorf("Rails GetWarmupDelay() = %v, expected 100ms (Rails fixed value)", delay)
-	}
-
-	// Rails uses its own start command
-	startCmd := config.GetStartCommand("3000")
-	if len(startCmd) != 3 || !contains(startCmd[2], "bundle exec rails") {
-		t.Errorf("Rails GetStartCommand() = %v, expected bundle exec rails command", startCmd)
-	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || len(s) > len(substr) && containsSubstring(s, substr)
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

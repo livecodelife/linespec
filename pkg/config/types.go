@@ -32,96 +32,31 @@ type FrameworkConfig interface {
 	GetWarmupDelay() time.Duration
 }
 
-// RailsFrameworkConfig implements FrameworkConfig for Ruby on Rails
-type RailsFrameworkConfig struct{}
-
-func (r *RailsFrameworkConfig) GetStartCommand(port string) []string {
-	return []string{"bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p " + port}
-}
-
-func (r *RailsFrameworkConfig) GetMigrationCommand() []string {
-	return []string{"bundle", "exec", "rails", "db:migrate"}
-}
-
-func (r *RailsFrameworkConfig) NeedsWarmup() bool {
-	return true
-}
-
-func (r *RailsFrameworkConfig) GetWarmupEndpoint() string {
-	return "/up"
-}
-
-func (r *RailsFrameworkConfig) GetWarmupDelay() time.Duration {
-	return 100 * time.Millisecond
-}
-
-// FastAPIFrameworkConfig implements FrameworkConfig for FastAPI
-type FastAPIFrameworkConfig struct{}
-
-func (f *FastAPIFrameworkConfig) GetStartCommand(port string) []string {
-	return []string{"python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", port}
-}
-
-func (f *FastAPIFrameworkConfig) GetMigrationCommand() []string {
-	return nil // FastAPI typically uses Alembic which is framework-agnostic
-}
-
-func (f *FastAPIFrameworkConfig) NeedsWarmup() bool {
-	return false
-}
-
-func (f *FastAPIFrameworkConfig) GetWarmupEndpoint() string {
-	return "/health"
-}
-
-func (f *FastAPIFrameworkConfig) GetWarmupDelay() time.Duration {
-	return 0
-}
-
-// DjangoFrameworkConfig implements FrameworkConfig for Django
-type DjangoFrameworkConfig struct{}
-
-func (d *DjangoFrameworkConfig) GetStartCommand(port string) []string {
-	return []string{"python", "manage.py", "runserver", "0.0.0.0:" + port}
-}
-
-func (d *DjangoFrameworkConfig) GetMigrationCommand() []string {
-	return []string{"python", "manage.py", "migrate"}
-}
-
-func (d *DjangoFrameworkConfig) NeedsWarmup() bool {
-	return true
-}
-
-func (d *DjangoFrameworkConfig) GetWarmupEndpoint() string {
-	return "/health"
-}
-
-func (d *DjangoFrameworkConfig) GetWarmupDelay() time.Duration {
-	return 100 * time.Millisecond
-}
-
-// ExpressFrameworkConfig implements FrameworkConfig for Node.js/Express
-type ExpressFrameworkConfig struct{}
-
-func (e *ExpressFrameworkConfig) GetStartCommand(port string) []string {
-	return []string{"npm", "start"}
-}
-
-func (e *ExpressFrameworkConfig) GetMigrationCommand() []string {
-	return nil // Express doesn't have built-in migrations
-}
-
-func (e *ExpressFrameworkConfig) NeedsWarmup() bool {
-	return false
-}
-
-func (e *ExpressFrameworkConfig) GetWarmupEndpoint() string {
-	return "/health"
-}
-
-func (e *ExpressFrameworkConfig) GetWarmupDelay() time.Duration {
-	return 0
+// frameworkDefaults holds the default configuration for known frameworks.
+// These are used as starting values that can be overridden by .linespec.yml fields.
+var frameworkDefaults = map[string]GenericFrameworkConfig{
+	"rails": {
+		CustomStartCommand:  "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p ${PORT}",
+		CustomMigrationCmd:  "bundle exec rails db:migrate",
+		NeedsWarmupFlag:     true,
+		WarmupEndpointValue: "/up",
+		WarmupDelayMs:       100,
+	},
+	"fastapi": {
+		CustomStartCommand:  "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT}",
+		WarmupEndpointValue: "/health",
+	},
+	"django": {
+		CustomStartCommand:  "python manage.py runserver 0.0.0.0:${PORT}",
+		CustomMigrationCmd:  "python manage.py migrate",
+		NeedsWarmupFlag:     true,
+		WarmupEndpointValue: "/health",
+		WarmupDelayMs:       100,
+	},
+	"express": {
+		CustomStartCommand:  "npm start",
+		WarmupEndpointValue: "/health",
+	},
 }
 
 // GenericFrameworkConfig implements FrameworkConfig for custom/unknown frameworks
@@ -135,7 +70,8 @@ type GenericFrameworkConfig struct {
 
 func (g *GenericFrameworkConfig) GetStartCommand(port string) []string {
 	if g.CustomStartCommand != "" {
-		return []string{"sh", "-c", g.CustomStartCommand}
+		cmd := strings.ReplaceAll(g.CustomStartCommand, "${PORT}", port)
+		return []string{"sh", "-c", cmd}
 	}
 	return []string{"sh", "-c", "echo 'No start command specified'"}
 }
@@ -162,26 +98,30 @@ func (g *GenericFrameworkConfig) GetWarmupDelay() time.Duration {
 	return time.Duration(g.WarmupDelayMs) * time.Millisecond
 }
 
-// GetFrameworkConfig returns the appropriate FrameworkConfig for a framework name
-func GetFrameworkConfig(framework string, customStartCmd, customMigrationCmd string, needsWarmup bool, warmupEndpoint string, warmupDelayMs int) FrameworkConfig {
-	switch framework {
-	case "rails":
-		return &RailsFrameworkConfig{}
-	case "fastapi":
-		return &FastAPIFrameworkConfig{}
-	case "django":
-		return &DjangoFrameworkConfig{}
-	case "express":
-		return &ExpressFrameworkConfig{}
-	default:
-		return &GenericFrameworkConfig{
-			CustomStartCommand:  customStartCmd,
-			CustomMigrationCmd:  customMigrationCmd,
-			NeedsWarmupFlag:     needsWarmup,
-			WarmupEndpointValue: warmupEndpoint,
-			WarmupDelayMs:       warmupDelayMs,
-		}
+// GetFrameworkConfig returns a FrameworkConfig for the given framework name.
+// Known framework names (rails, fastapi, django, express) provide sensible defaults
+// that can be overridden by the non-zero override parameters from .linespec.yml.
+func GetFrameworkConfig(framework string, customStartCmd, customMigrationCmd string, needsWarmup *bool, warmupEndpoint string, warmupDelayMs int) FrameworkConfig {
+	cfg := GenericFrameworkConfig{}
+	if defaults, ok := frameworkDefaults[framework]; ok {
+		cfg = defaults
 	}
+	if customStartCmd != "" {
+		cfg.CustomStartCommand = customStartCmd
+	}
+	if customMigrationCmd != "" {
+		cfg.CustomMigrationCmd = customMigrationCmd
+	}
+	if needsWarmup != nil {
+		cfg.NeedsWarmupFlag = *needsWarmup
+	}
+	if warmupEndpoint != "" {
+		cfg.WarmupEndpointValue = warmupEndpoint
+	}
+	if warmupDelayMs > 0 {
+		cfg.WarmupDelayMs = warmupDelayMs
+	}
+	return &cfg
 }
 
 type ServiceConfig struct {
@@ -372,49 +312,33 @@ type DependencyConfig struct {
 	Headers   map[string]string `yaml:"headers,omitempty"`
 }
 
-// Default configurations for common frameworks
+// DefaultConfig returns baseline config defaults for a given framework name.
+// Health endpoints are derived from frameworkDefaults. Rails also gets database
+// defaults since it conventionally requires a relational database.
 func DefaultConfig(framework string) *LineSpecConfig {
-	switch framework {
-	case "rails":
-		return &LineSpecConfig{
-			Service: ServiceConfig{
-				Type:           "web",
-				Framework:      "rails",
-				HealthEndpoint: "/up",
-				DockerCompose:  "docker-compose.yml",
-			},
-			Database: &DatabaseConfig{
-				Type:  "mysql",
-				Image: "mysql:8.4",
-				Port:  3306,
-			},
-			Infrastructure: InfrastructureConfig{
-				Database: true,
-				Kafka:    false,
-			},
-		}
-	case "fastapi":
-		return &LineSpecConfig{
-			Service: ServiceConfig{
-				Type:           "web",
-				Framework:      "fastapi",
-				HealthEndpoint: "/health",
-				DockerCompose:  "docker-compose.yml",
-			},
-			Infrastructure: InfrastructureConfig{
-				Database: false,
-				Kafka:    false,
-			},
-		}
-	default:
-		return &LineSpecConfig{
-			Service: ServiceConfig{
-				Type:           "web",
-				Framework:      "unknown",
-				HealthEndpoint: "/",
-				DockerCompose:  "docker-compose.yml",
-			},
-			Infrastructure: InfrastructureConfig{},
-		}
+	healthEndpoint := "/"
+	if fw, ok := frameworkDefaults[framework]; ok && fw.WarmupEndpointValue != "" {
+		healthEndpoint = fw.WarmupEndpointValue
 	}
+
+	cfg := &LineSpecConfig{
+		Service: ServiceConfig{
+			Type:           "web",
+			Framework:      framework,
+			HealthEndpoint: healthEndpoint,
+			DockerCompose:  "docker-compose.yml",
+		},
+		Infrastructure: InfrastructureConfig{},
+	}
+
+	if framework == "rails" {
+		cfg.Database = &DatabaseConfig{
+			Type:  "mysql",
+			Image: "mysql:8.4",
+			Port:  3306,
+		}
+		cfg.Infrastructure.Database = true
+	}
+
+	return cfg
 }
