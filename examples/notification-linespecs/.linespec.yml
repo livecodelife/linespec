@@ -24,7 +24,6 @@ database:
   database: notification_service
   username: notification_user
   password: notification_password
-  proxy: true
 
 infrastructure:
   database: true

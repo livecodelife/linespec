@@ -734,54 +734,57 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}
 			logger.Debug("PostgreSQL is ready and accepting connections")
 
-			// Build PostgreSQL proxy command with debug flag if enabled
-			pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
-			if logger.IsDebug() {
-				pgProxyCmd = append(pgProxyCmd, "--debug")
-			}
+			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
+				// Build PostgreSQL proxy command with debug flag if enabled
+				pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+				if logger.IsDebug() {
+					pgProxyCmd = append(pgProxyCmd, "--debug")
+				}
 
-			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-				Image: "linespec:latest",
-				Cmd:   pgProxyCmd,
-				ExposedPorts: map[nat.Port]struct{}{
-					nat.Port(dbPort + "/tcp"): {},
-					nat.Port("8081/tcp"):      {}, // Verification sidecar port
-				},
-			}, &container.HostConfig{
-				Binds: []string{
-					r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
-					r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
-				},
-				PortBindings: map[nat.Port][]nat.PortBinding{
-					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: dbPort}},
-					nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port
-				},
-			}, &network.NetworkingConfig{
-				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
-			}, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-			if err != nil {
-				return fmt.Errorf("failed to start PostgreSQL proxy: %w", err)
-			}
+				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+					Image: "linespec:latest",
+					Cmd:   pgProxyCmd,
+					ExposedPorts: map[nat.Port]struct{}{
+						nat.Port(dbPort + "/tcp"): {},
+						nat.Port("8081/tcp"):      {}, // Verification sidecar port
+					},
+				}, &container.HostConfig{
+					Binds: []string{
+						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+					},
+					PortBindings: map[nat.Port][]nat.PortBinding{
+						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: dbPort}},
+						nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port
+					},
+				}, &network.NetworkingConfig{
+					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
+				}, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+				if err != nil {
+					return fmt.Errorf("failed to start PostgreSQL proxy: %w", err)
+				}
 
-			logger.Debug("PostgreSQL proxy started")
+				logger.Debug("PostgreSQL proxy started")
 
-			defer func() {
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-			}()
-
-			// Stream proxy logs for debugging (only in debug mode)
-			if logger.IsDebug() {
-				go func() {
-					logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
-					defer logCancel()
-					_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}), os.Stdout, os.Stderr)
+				defer func() {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
 				}()
+
+				// Stream proxy logs for debugging (only in debug mode)
+				if logger.IsDebug() {
+					go func() {
+						logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+						defer logCancel()
+						_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}), os.Stdout, os.Stderr)
+					}()
+				}
+			} else {
+				logger.Info("PostgreSQL proxy disabled (proxy: false), mock matching will not work for database interactions")
 			}
 
 		case "mysql":
-			// Only start MySQL proxy if explicitly enabled via proxy: true
 			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
 				logger.Debug("MySQL proxy enabled for this service")
 
@@ -830,7 +833,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					}()
 				}
 			} else {
-				logger.Debug("MySQL proxy disabled (proxy: false or not set), app will connect directly to real-db")
+				logger.Info("MySQL proxy disabled (proxy: false), mock matching will not work for database interactions")
 			}
 		default:
 			logger.Debug("DEBUG: Unknown dbType '%s', no proxy started", dbType)
@@ -973,7 +976,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			envMap["DB_PASSWORD"] = db.Password
 			envMap["RAILS_ENV"] = "development"
 		case "postgresql":
-			envMap["DATABASE_URL"] = fmt.Sprintf("postgresql://%s:%s@db:%d/%s", db.Username, db.Password, db.Port, db.Database)
+			dbHost := "db"
+			if db.Proxy == nil || !*db.Proxy {
+				dbHost = r.suite.containerNaming.NetworkAlias
+				logger.Debug("PostgreSQL proxy disabled: app will connect directly to '%s'", dbHost)
+			} else {
+				logger.Debug("PostgreSQL proxy enabled: app will connect to 'db' (proxy)")
+			}
+			envMap["DATABASE_URL"] = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", db.Username, db.Password, dbHost, db.Port, db.Database)
 		}
 	}
 
