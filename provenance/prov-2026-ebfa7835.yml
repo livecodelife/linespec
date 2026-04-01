@@ -1,0 +1,56 @@
+id: prov-2026-ebfa7835
+title: 'Fix P2-G: infer HTTP proxy Content-Type from payload file extension'
+status: open
+created_at: "2026-04-01"
+author: calebcowen@gmail.com
+intent: "Fix the HTTP proxy interceptor to infer Content-Type from payload file extension
+  instead of always returning application/json. Also fix the runner's trigger request
+  to use the correct content type. Add RESPONSE_HEADERS DSL support on EXPECT blocks
+  and HEADERS support on RESPOND blocks for explicit override. This is P2-G from
+  IMPROVEMENT_PLAN.md."
+constraints:
+  - Existing .linespec files with JSON payloads must continue to work identically
+  - No changes to the mock-matching logic or registry; only response serialization changes
+  - DSL changes must be backward-compatible (no new required keywords)
+affected_scope:
+  - pkg/dsl/payload.go
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/runner/runner.go
+forbidden_scope:
+  - pkg/proxy/postgresql/**
+  - pkg/proxy/mysql/**
+  - pkg/proxy/kafka/**
+  - pkg/registry/registry.go
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_not_found.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
