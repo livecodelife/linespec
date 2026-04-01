@@ -22,6 +22,9 @@ affected_scope:
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/mysql/proxy_dbname_test.go
   - cmd/linespec/main_beta.go
+  - pkg/proxy/postgresql/proxy.go
+  - examples/user-linespecs/.linespec.yml
+  - examples/todo-linespecs/.linespec.yml
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
