@@ -441,16 +441,11 @@ func (s *TestSuite) runMigrationsForConfig(ctx context.Context, cfg *config.Line
 	}
 
 	// Get framework configuration
-	needsWarmup := false
-	if cfg.Service.NeedsWarmup != nil {
-		needsWarmup = *cfg.Service.NeedsWarmup
-	}
-
 	fwConfig := config.GetFrameworkConfig(
 		framework,
+		cfg.Service.StartCommand,
 		cfg.Service.MigrationCommand,
-		cfg.Service.MigrationCommand,
-		needsWarmup,
+		cfg.Service.NeedsWarmup,
 		cfg.Service.WarmupEndpoint,
 		cfg.Service.WarmupDelayMs,
 	)
@@ -460,11 +455,6 @@ func (s *TestSuite) runMigrationsForConfig(ctx context.Context, cfg *config.Line
 	if migrationCmd == nil {
 		logger.Debug("No migration command defined for framework %s, service %s", framework, serviceName)
 		return nil
-	}
-
-	// Use custom migration command if specified
-	if cfg.Service.MigrationCommand != "" {
-		migrationCmd = []string{"sh", "-c", cfg.Service.MigrationCommand}
 	}
 
 	return s.runMigrations(ctx, serviceName, serviceDir, migrationCmd, cfg)
@@ -1070,16 +1060,11 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		startCmd = []string{"sh", "-c", serviceConfig.Service.StartCommand}
 	} else {
 		// Get framework configuration and start command
-		needsWarmup := false
-		if serviceConfig.Service.NeedsWarmup != nil {
-			needsWarmup = *serviceConfig.Service.NeedsWarmup
-		}
-
 		fwConfig := config.GetFrameworkConfig(
 			serviceConfig.Service.Framework,
 			serviceConfig.Service.StartCommand,
 			serviceConfig.Service.MigrationCommand,
-			needsWarmup,
+			serviceConfig.Service.NeedsWarmup,
 			serviceConfig.Service.WarmupEndpoint,
 			serviceConfig.Service.WarmupDelayMs,
 		)
@@ -1133,28 +1118,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	logger.Debug("App is healthy")
 
 	// Warmup for apps that need it
-	needsWarmup := false
-	if serviceConfig.Service.NeedsWarmup != nil {
-		needsWarmup = *serviceConfig.Service.NeedsWarmup
-	}
-
 	fwConfig := config.GetFrameworkConfig(
 		serviceConfig.Service.Framework,
 		serviceConfig.Service.StartCommand,
 		serviceConfig.Service.MigrationCommand,
-		needsWarmup,
+		serviceConfig.Service.NeedsWarmup,
 		serviceConfig.Service.WarmupEndpoint,
 		serviceConfig.Service.WarmupDelayMs,
 	)
 
 	if fwConfig.NeedsWarmup() {
 		logger.Debug("Warming up %s app", serviceConfig.Service.Framework)
-		warmupEndpoint := fwConfig.GetWarmupEndpoint()
-		if serviceConfig.Service.WarmupEndpoint != "" {
-			warmupEndpoint = serviceConfig.Service.WarmupEndpoint
-		}
-
-		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, warmupEndpoint)
+		warmupURL := fmt.Sprintf("http://localhost:%s%s", hostPort, fwConfig.GetWarmupEndpoint())
 		resp, err := http.Get(warmupURL)
 		if err != nil {
 			logger.Debug("Warmup request failed: %v", err)
@@ -1162,11 +1137,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			resp.Body.Close()
 		}
 
-		warmupDelay := fwConfig.GetWarmupDelay()
-		if serviceConfig.Service.WarmupDelayMs > 0 {
-			warmupDelay = time.Duration(serviceConfig.Service.WarmupDelayMs) * time.Millisecond
-		}
-		if warmupDelay > 0 {
+		if warmupDelay := fwConfig.GetWarmupDelay(); warmupDelay > 0 {
 			time.Sleep(warmupDelay)
 		}
 	}
