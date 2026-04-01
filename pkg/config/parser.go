@@ -116,13 +116,10 @@ func applyDefaults(config *LineSpecConfig) {
 		if config.Database.Host == "" {
 			config.Database.Host = "db"
 		}
-		// Proxy defaults to true for PostgreSQL (existing behavior), false for MySQL
-		// Only set default if proxy was not explicitly configured (nil means not set)
+		// Proxy defaults to true for all database types (enables mock interception)
+		// Use proxy: false in .linespec.yml to opt out; mock matching will not work without a proxy
 		if config.Database.Proxy == nil {
-			defaultProxy := false
-			if config.Database.Type == "postgresql" {
-				defaultProxy = true
-			}
+			defaultProxy := true
 			config.Database.Proxy = &defaultProxy
 		}
 	}
