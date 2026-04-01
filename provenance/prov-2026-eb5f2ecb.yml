@@ -1,0 +1,24 @@
+id: prov-2026-eb5f2ecb
+title: Add Chi framework defaults to frameworkDefaults map
+status: open
+created_at: "2026-04-01"
+author: calebcowen@gmail.com
+intent: >
+  Add Chi (Go HTTP router) to the frameworkDefaults map so that users can set
+  framework: chi in .linespec.yml without needing a custom start_command.
+  Defaults: PORT env var injection for port passing, /health endpoint, no
+  migration command, no warmup (Go services start fast).
+constraints:
+  - Must remain overridable by .linespec.yml fields per P2-B design
+affected_scope:
+  - pkg/config/types.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/order-linespecs/create_order_success.linespec
+associated_traces: []
+monitors: []
+tags: []
