@@ -117,8 +117,8 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := verify.VerifyHTTP(req, httpRules); err != nil {
 				logger.Error("VERIFY failed for HTTP %s %s: %v", method, path, err)
-				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
 				response := map[string]string{
 					"error": fmt.Sprintf("VERIFY failed: %v", err),
 				}
@@ -134,31 +134,39 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 3. Load payload if needed
 	if mock.ReturnsFile != "" {
 		i.loader.BaseDir = mock.BaseDir
-		payload, err := i.loader.Load(mock.ReturnsFile)
+
+		// Load raw bytes for serving (preserves original format)
+		rawData, inferredContentType, err := i.loader.LoadRaw(mock.ReturnsFile)
 		if err != nil {
 			logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		// Parse to extract status code from payload if present
 		status := http.StatusOK
-		if m, ok := payload.(map[string]interface{}); ok {
-			if s, ok := m["status"].(float64); ok {
-				status = int(s)
-			} else if s, ok := m["status"].(int); ok {
-				status = s
+		if payload, err := i.loader.Load(mock.ReturnsFile); err == nil {
+			if m, ok := payload.(map[string]interface{}); ok {
+				if s, ok := m["status"].(float64); ok {
+					status = int(s)
+				} else if s, ok := m["status"].(int); ok {
+					status = s
+				}
 			}
 		}
 
-		data, err := json.Marshal(payload)
-		if err != nil {
-			logger.Error("Failed to marshal payload: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+		// Set response headers; explicit ResponseHeaders override inferred Content-Type
+		contentType := inferredContentType
+		for k, v := range mock.ResponseHeaders {
+			if strings.ToLower(k) == "content-type" {
+				contentType = v
+			} else {
+				w.Header().Set(k, v)
+			}
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(status)
-		w.Write(data)
+		w.Write(rawData)
 		return
 	}
 

@@ -14,11 +14,13 @@ constraints:
   - DSL changes must be backward-compatible (no new required keywords)
 affected_scope:
   - pkg/dsl/payload.go
-  - pkg/types/types.go
+  - pkg/dsl/payload_test.go
   - pkg/dsl/lexer.go
   - pkg/dsl/parser.go
+  - pkg/dsl/dsl_test.go
+  - pkg/types/types.go
   - pkg/proxy/http/interceptor.go
-  - pkg/runner/runner.go
+  - pkg/proxy/http/interceptor_test.go
 forbidden_scope:
   - pkg/proxy/postgresql/**
   - pkg/proxy/mysql/**

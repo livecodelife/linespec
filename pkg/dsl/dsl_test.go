@@ -531,3 +531,90 @@ RESPOND HTTP:200`
 		t.Errorf("Expected Pattern to be 'INSERT', got '%s'", verifyRule.Pattern)
 	}
 }
+
+func TestParser_ResponseHeadersOnExpect(t *testing.T) {
+	content := `TEST response-headers
+RECEIVE HTTP:GET http://localhost:3000/items
+
+EXPECT HTTP:GET http://dependency.local/items
+RETURNS {{payloads/items.yaml}}
+RESPONSE_HEADERS
+  Content-Type: application/yaml
+  X-Custom: my-value
+
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "response_headers.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(spec.Expects) != 1 {
+		t.Fatalf("Expected 1 expect, got %d", len(spec.Expects))
+	}
+
+	expect := spec.Expects[0]
+	if expect.ReturnsFile != "payloads/items.yaml" {
+		t.Errorf("Expected ReturnsFile='payloads/items.yaml', got %q", expect.ReturnsFile)
+	}
+	if expect.ResponseHeaders == nil {
+		t.Fatal("Expected ResponseHeaders to be set")
+	}
+	if expect.ResponseHeaders["Content-Type"] != "application/yaml" {
+		t.Errorf("Expected Content-Type='application/yaml', got %q", expect.ResponseHeaders["Content-Type"])
+	}
+	if expect.ResponseHeaders["X-Custom"] != "my-value" {
+		t.Errorf("Expected X-Custom='my-value', got %q", expect.ResponseHeaders["X-Custom"])
+	}
+}
+
+func TestParser_HeadersOnRespond(t *testing.T) {
+	content := `TEST respond-headers
+RECEIVE HTTP:GET http://localhost:3000/items
+
+EXPECT WRITE:MYSQL items
+
+RESPOND HTTP:201
+WITH {{payloads/result.json}}
+HEADERS
+  X-Request-ID: abc123`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "respond_headers.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Respond.StatusCode != 201 {
+		t.Errorf("Expected status 201, got %d", spec.Respond.StatusCode)
+	}
+	if spec.Respond.Headers == nil {
+		t.Fatal("Expected Respond.Headers to be set")
+	}
+	if spec.Respond.Headers["X-Request-ID"] != "abc123" {
+		t.Errorf("Expected X-Request-ID='abc123', got %q", spec.Respond.Headers["X-Request-ID"])
+	}
+}

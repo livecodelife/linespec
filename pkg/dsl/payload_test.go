@@ -205,6 +205,92 @@ func TestPayloadLoaderLoadNonExistent(t *testing.T) {
 	}
 }
 
+func TestInferContentType(t *testing.T) {
+	cases := []struct {
+		file     string
+		expected string
+	}{
+		{"response.json", "application/json"},
+		{"response.yaml", "application/yaml"},
+		{"response.yml", "application/yaml"},
+		{"response.xml", "application/xml"},
+		{"response.html", "text/html"},
+		{"response.htm", "text/html"},
+		{"response.bin", "application/octet-stream"},
+		{"response", "application/octet-stream"},
+	}
+	for _, tc := range cases {
+		got := InferContentType(tc.file)
+		if got != tc.expected {
+			t.Errorf("InferContentType(%q) = %q, want %q", tc.file, got, tc.expected)
+		}
+	}
+}
+
+func TestPayloadLoader_LoadRaw(t *testing.T) {
+	tempDir := t.TempDir()
+
+	jsonContent := `{"key": "value"}`
+	yamlContent := "key: value\n"
+	xmlContent := `<root><key>value</key></root>`
+
+	if err := os.WriteFile(filepath.Join(tempDir, "test.json"), []byte(jsonContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "test.yaml"), []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "test.xml"), []byte(xmlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewPayloadLoader(tempDir)
+
+	// JSON: raw bytes match original, content type is application/json
+	raw, ct, err := loader.LoadRaw("test.json")
+	if err != nil {
+		t.Fatalf("LoadRaw JSON: %v", err)
+	}
+	if string(raw) != jsonContent {
+		t.Errorf("LoadRaw JSON: got %q, want %q", string(raw), jsonContent)
+	}
+	if ct != "application/json" {
+		t.Errorf("LoadRaw JSON content type: got %q, want application/json", ct)
+	}
+
+	// YAML: raw bytes are not re-marshaled to JSON
+	raw, ct, err = loader.LoadRaw("test.yaml")
+	if err != nil {
+		t.Fatalf("LoadRaw YAML: %v", err)
+	}
+	if string(raw) != yamlContent {
+		t.Errorf("LoadRaw YAML: got %q, want %q", string(raw), yamlContent)
+	}
+	if ct != "application/yaml" {
+		t.Errorf("LoadRaw YAML content type: got %q, want application/yaml", ct)
+	}
+
+	// XML: raw bytes preserved
+	raw, ct, err = loader.LoadRaw("test.xml")
+	if err != nil {
+		t.Fatalf("LoadRaw XML: %v", err)
+	}
+	if string(raw) != xmlContent {
+		t.Errorf("LoadRaw XML: got %q, want %q", string(raw), xmlContent)
+	}
+	if ct != "application/xml" {
+		t.Errorf("LoadRaw XML content type: got %q, want application/xml", ct)
+	}
+}
+
+func TestPayloadLoader_LoadRaw_NonExistent(t *testing.T) {
+	loader := NewPayloadLoader(t.TempDir())
+	_, _, err := loader.LoadRaw("nonexistent.json")
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
+
 func TestPayloadLoaderSetParsers(t *testing.T) {
 	loader := NewPayloadLoader(t.TempDir())
 
