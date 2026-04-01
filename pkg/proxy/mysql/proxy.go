@@ -58,7 +58,7 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		loader:          dsl.NewPayloadLoader(""),
 		schemaCache:     make(map[string][]ColumnInfo),
 		transparentMode: false,
-		dbConfig:        base.NewDatabaseProxyConfig("todo_api_development"), // Default for backward compatibility
+		dbConfig:        &base.DatabaseProxyConfig{}, // Must be set via SetDatabaseName before Start
 	}
 }
 
@@ -111,6 +111,9 @@ func (p *Proxy) LoadSchema(schemaFile string) error {
 }
 
 func (p *Proxy) Start(ctx context.Context) error {
+	if p.dbConfig.GetDatabaseName() == "" {
+		return fmt.Errorf("MySQL proxy requires a database name; pass --db-name argument")
+	}
 	ln, err := net.Listen("tcp", p.addr)
 	if err != nil {
 		return err

@@ -112,18 +112,6 @@ func applyDefaults(config *LineSpecConfig) {
 				}
 			}
 		}
-		// Database name defaults to service name + _development for Rails apps
-		if config.Database.Database == "" {
-			config.Database.Database = config.Service.Name + "_development"
-		}
-		// Username defaults to service name + _user for Rails apps
-		if config.Database.Username == "" {
-			config.Database.Username = config.Service.Name + "_user"
-		}
-		// Password defaults to service name + _password for Rails apps
-		if config.Database.Password == "" {
-			config.Database.Password = config.Service.Name + "_password"
-		}
 		// Host defaults to "db" for internal container communication
 		if config.Database.Host == "" {
 			config.Database.Host = "db"
@@ -224,6 +212,15 @@ func validate(config *LineSpecConfig) error {
 		}
 		if config.Database.Type == "" {
 			return fmt.Errorf("database.type is required")
+		}
+		if config.Database.Database == "" {
+			return fmt.Errorf("database.database is required; set it explicitly in .linespec.yml")
+		}
+		if config.Database.Username == "" {
+			return fmt.Errorf("database.username is required; set it explicitly in .linespec.yml")
+		}
+		if config.Database.Password == "" {
+			return fmt.Errorf("database.password is required; set it explicitly in .linespec.yml")
 		}
 	}
 	return nil

@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -449,6 +450,11 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) error 
 	// clientForwardDone signals that the client->upstream forwarding goroutine has stopped.
 	clientForwardDone := make(chan struct{})
 
+	// prePhaseTwoBuf holds any client bytes read after startup completed but before
+	// Phase 2 started. These must be replayed at the start of Phase 2 because they
+	// were already consumed from the TCP receive buffer.
+	var prePhaseTwoBuf []byte
+
 	// Forward client->upstream during startup. Stops as soon as startupReady is closed.
 	go func() {
 		defer close(clientForwardDone)
@@ -481,9 +487,11 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) error 
 				// finished, the bytes belong to Phase 2 and must not be sent raw.
 				select {
 				case <-startupReady:
-					// Startup completed while Read was in flight; discard these bytes.
-					// The framing interceptor in Phase 2 will read directly from clientConn.
-					p.logDebug("Startup completed mid-read; discarding %d bytes (Phase 2 will re-read)\n", n)
+					// Startup completed while Read was in flight; buffer these bytes
+					// so Phase 2 can replay them. They are already consumed from the
+					// TCP receive buffer and cannot be re-read from clientConn.
+					prePhaseTwoBuf = append(prePhaseTwoBuf, buf[:n]...)
+					p.logDebug("Startup completed mid-read; buffering %d bytes for Phase 2\n", n)
 					return
 				default:
 				}
@@ -530,7 +538,15 @@ func (p *Proxy) proxyWithStatefulRelay(clientConn, upstreamConn net.Conn) error 
 		p.logDebug("Upstream->Client goroutine ended: %v\n", err)
 	}()
 
-	p.handleClientMessagesWithInterception(clientConn, upstreamConn, clientConn)
+	// Build the Phase 2 reader: replay any bytes buffered mid-read during startup,
+	// then continue reading from the live connection.
+	var phase2Reader io.Reader = clientConn
+	if len(prePhaseTwoBuf) > 0 {
+		p.logDebug("Replaying %d pre-Phase-2 bytes through interceptor\n", len(prePhaseTwoBuf))
+		phase2Reader = io.MultiReader(bytes.NewReader(prePhaseTwoBuf), clientConn)
+	}
+
+	p.handleClientMessagesWithInterception(phase2Reader, upstreamConn, clientConn)
 	return nil
 }
 
