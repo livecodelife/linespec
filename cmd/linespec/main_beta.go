@@ -26,6 +26,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -501,6 +507,10 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CommitTagRequired = fullConfig.Provenance.CommitTagRequired
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
+
+			if fullConfig.Provenance.Embedding != nil {
+				cfg.Embedding = fullConfig.Provenance.Embedding
+			}
 		}
 	}
 
