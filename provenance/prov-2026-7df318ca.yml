@@ -1,6 +1,6 @@
 id: prov-2026-7df318ca
 title: Add lock-layer command and locked scope lint enforcement
-status: open
+status: implemented
 created_at: "2026-04-03"
 author: caleb.cowen@gmail.com
 intent: >
@@ -45,7 +45,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c2b1ba2c96320b2a6a8d32bbc3c0f6dc72db772c
 associated_specs:
   - path: pkg/provenance/lock_layer_test.go
     type: go-test
