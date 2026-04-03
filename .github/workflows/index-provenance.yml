@@ -38,6 +38,15 @@ jobs:
           echo "Indexing provenance records..."
           ./linespec provenance index 2>&1 || true
       
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: linespec
+      
       - name: Commit and push updated embeddings
         run: |
           # Check if embeddings.bin exists and was modified
@@ -67,7 +76,7 @@ jobs:
             echo "✓ Merged PR for updated embeddings.bin"
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.MERGE_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       
       - name: Check for unindexed records
         run: |
