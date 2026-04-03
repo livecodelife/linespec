@@ -5,6 +5,43 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-03
+
+### Added
+
+- **Lock-layer command** ([prov-2026-7df318ca](./provenance/prov-2026-7df318ca.yml)) - New `linespec provenance lock-layer` command that creates a provenance record in `implemented` status with `locked: true`, capturing the current HEAD SHA. The linter enforces that any `open` record whose `affected_scope` or `associated_specs` overlaps with a locked record's scope is a lint error unless the open record declares `supersedes` pointing at the locked record. This forces explicit acknowledgment when reopening a crystallized layer.
+
+- **SARIF output format** ([prov-2026-da6796d4](./provenance/prov-2026-da6796d4.yml)) - Added `--format sarif` flag to the `linespec provenance lint` command that emits lint results as a standards-compliant SARIF 2.1.0 JSON document. Enables provenance violations to appear as first-class citizens in GitHub Code Scanning, VS Code's Problems panel, and any other tooling that consumes the SARIF standard.
+
+- **GitHub Code Scanning workflow** - Added SARIF-based provenance lint workflow that uploads results to GitHub Code Scanning on every push.
+
+### Changed
+
+- **Beta build parity** - Beta build now includes all stable provenance commands plus embedder client setup for search/audit/index commands.
+
+- **Documentation site** - Added GitHub Pages documentation site with comprehensive guides for Provenance Records and LineSpec Testing.
+
+- **PostgreSQL proxy** - Major rewrite with improved query/response cycle handling, command complete message support, and table extraction capabilities.
+
+- **MySQL proxy** - Improved database name extraction and proxy handling.
+
+- **Configuration** - Added container naming flexibility, framework configuration options, and payload format enhancements.
+
+- **Runner** - Added port allocator, improved container orchestration, and schema discovery support.
+
+### Related Provenance Records
+
+- [prov-2026-7df318ca](./provenance/prov-2026-7df318ca.yml) - Add lock-layer command and locked scope lint enforcement
+- [prov-2026-da6796d4](./provenance/prov-2026-da6796d4.yml) - Add SARIF output format to provenance linter
+- [prov-2026-4bf54660](./provenance/prov-2026-4bf54660.yml) - Add linespec-beta to affected scope
+- [prov-2026-5801f304](./provenance/prov-2026-5801f304.yml) - Phase 3: Schema Discovery, Config File Flexibility, and Payload Formats
+- [prov-2026-3f32f886](./provenance/prov-2026-3f32f886.yml) - Phase 2: Infrastructure Decoupling
+- [prov-2026-4275079c](./provenance/prov-2026-4275079c.yml) - Phase 1: Database Configuration and Framework Abstraction
+- [prov-2026-8227b384](./provenance/prov-2026-8227b384.yml) - Phase 3 implementation
+- [prov-2026-054aadca](./provenance/prov-2026-054aadca.yml) - Documentation site
+- [prov-2026-7ade6d68](./provenance/prov-2026-7ade6d68.yml) - Bug fix
+- [prov-2026-c5facf10](./provenance/prov-2026-c5facf10.yml) - This release
+
 ## [1.3.0] - 2026-03-17
 
 ### Added

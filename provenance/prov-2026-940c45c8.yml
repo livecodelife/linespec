@@ -1,0 +1,31 @@
+id: prov-2026-940c45c8
+title: Prepare v1.4.0 release
+status: open
+created_at: "2026-04-03"
+author: calebcowen@gmail.com
+intent: >
+  Prepare the v1.4.0 release for both stable and beta versions. This release
+  includes the lock-layer command, SARIF output format, GitHub Code Scanning
+  integration, documentation site, and all improvements since v1.3.0.
+  Creates git tags v1.4.0 and v1.4.0-beta to trigger automated GoReleaser
+  workflow for GitHub releases and Homebrew updates.
+constraints:
+  - "Must create CHANGELOG entry listing all changes since v1.3.0"
+  - "Must create and push v1.4.0 tag for stable release"
+  - "Must create and push v1.4.0-beta tag for beta release"
+  - "Must set up branch protection requiring PR approval"
+affected_scope:
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: changelog
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - v1.4.0
