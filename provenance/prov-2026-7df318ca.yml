@@ -34,6 +34,7 @@ affected_scope:
   - pkg/provenance/commands.go
   - pkg/provenance/formatter.go
   - pkg/provenance/linter.go
+  - pkg/provenance/lock_layer_test.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
   - PROVENANCE_RECORDS.md

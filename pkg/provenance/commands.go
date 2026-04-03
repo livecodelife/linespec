@@ -95,27 +95,51 @@ type CreateOptions struct {
 
 // Create creates a new provenance record
 func (c *Commands) Create(opts CreateOptions) error {
-	// Get next available ID
+	record, err := c.createRecord(opts)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to create record: %v", err))
+		return err
+	}
+
+	superseded := ""
+	if opts.Supersedes != "" && opts.Supersedes != "null" {
+		target, _ := c.Loader.GetRecord(opts.Supersedes)
+		target.SupersededBy = record.ID
+		target.Status = StatusSuperseded
+
+		if err := c.Loader.SaveRecord(target); err != nil {
+			c.Formatter.FormatError(fmt.Sprintf("Failed to update superseded record: %v", err))
+			return err
+		}
+		superseded = opts.Supersedes
+	}
+
+	if !opts.NoEdit {
+		if err := c.openInEditor(record.FilePath); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Could not open editor: %v\n", err)
+		}
+	}
+
+	c.Formatter.FormatCreateSuccess(record, superseded)
+	return nil
+}
+
+// createRecord creates and saves a new provenance record, returning the record
+func (c *Commands) createRecord(opts CreateOptions) (*Record, error) {
 	existingIDs := c.Loader.GetAllIDs()
 	year := CurrentYear()
 	id, err := NextID(year, existingIDs)
 	if err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to generate ID: %v", err))
-		return err
+		return nil, err
 	}
-
-	// Append service suffix if provided
 	if opts.IDSuffix != "" {
 		id = fmt.Sprintf("%s-%s", id, opts.IDSuffix)
 	}
-
-	// Get author
 	author, err := c.Git.GetGitEmail()
 	if err != nil {
 		author = "unknown@example.com"
 	}
 
-	// Create record
 	record := &Record{
 		ID:               id,
 		Title:            opts.Title,
@@ -136,51 +160,21 @@ func (c *Commands) Create(opts CreateOptions) error {
 		FilePath:         filepath.Join(c.Config.Dir, id+".yml"),
 	}
 
-	// Validate supersedes if provided
 	if opts.Supersedes != "" && opts.Supersedes != "null" {
 		target, exists := c.Loader.GetRecord(opts.Supersedes)
 		if !exists {
-			c.Formatter.FormatError(fmt.Sprintf("Supersedes target %s does not exist", opts.Supersedes))
-			return fmt.Errorf("supersedes target does not exist")
+			return nil, fmt.Errorf("supersedes target does not exist")
 		}
-
-		// Check if target is already superseded
 		if target.SupersededBy != "" && target.SupersededBy != "null" {
-			c.Formatter.FormatError(fmt.Sprintf("Record %s is already superseded by %s", opts.Supersedes, target.SupersededBy))
-			return fmt.Errorf("target already superseded")
+			return nil, fmt.Errorf("target already superseded")
 		}
 	}
 
-	// Save record
 	if err := c.Loader.SaveRecord(record); err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
-		return err
+		return nil, err
 	}
 
-	// Update superseded record if applicable
-	superseded := ""
-	if opts.Supersedes != "" && opts.Supersedes != "null" {
-		target, _ := c.Loader.GetRecord(opts.Supersedes)
-		target.SupersededBy = record.ID
-		target.Status = StatusSuperseded
-
-		if err := c.Loader.SaveRecord(target); err != nil {
-			c.Formatter.FormatError(fmt.Sprintf("Failed to update superseded record: %v", err))
-			return err
-		}
-		superseded = opts.Supersedes
-	}
-
-	// Open in editor if not --no-edit
-	if !opts.NoEdit {
-		if err := c.openInEditor(record.FilePath); err != nil {
-			// Don't fail if editor fails, just warn
-			fmt.Fprintf(os.Stderr, "Warning: Could not open editor: %v\n", err)
-		}
-	}
-
-	c.Formatter.FormatCreateSuccess(record, superseded)
-	return nil
+	return record, nil
 }
 
 // openInEditor opens a file in the user's preferred editor
@@ -554,6 +548,56 @@ func (c *Commands) LockScope(opts LockScopeOptions) error {
 	return nil
 }
 
+// LockLayerOptions holds options for the lock-layer command
+type LockLayerOptions struct {
+	Title      string
+	NoEdit     bool
+	ConfigFile string // Path to custom .linespec.yml file
+}
+
+// LockLayer creates a locked layer record — an architectural declaration
+// that is immediately implemented and locked
+func (c *Commands) LockLayer(opts LockLayerOptions) error {
+	if opts.Title == "" {
+		c.Formatter.FormatError("--title is required")
+		return fmt.Errorf("--title is required")
+	}
+
+	// Step 1: Create record (reuses createRecord, no editor)
+	record, err := c.createRecord(CreateOptions{
+		Title:  opts.Title,
+		NoEdit: true,
+	})
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to create record: %v", err))
+		return err
+	}
+
+	// Step 2: Complete it (reuses Complete — seals SHA, sets implemented)
+	if err := c.Complete(CompleteOptions{RecordID: record.ID, Force: true}); err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to complete record: %v", err))
+		return err
+	}
+
+	// Step 3: Set locked and save
+	record, _ = c.Loader.GetRecord(record.ID)
+	record.Locked = true
+	if err := c.Loader.SaveRecord(record); err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
+		return err
+	}
+
+	// Step 4: Open editor if user didn't pass --no-edit
+	if !opts.NoEdit {
+		if err := c.openInEditor(record.FilePath); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Could not open editor: %v\n", err)
+		}
+	}
+
+	c.Formatter.FormatLockLayerSuccess(record)
+	return nil
+}
+
 // CompleteOptions holds options for the complete command
 type CompleteOptions struct {
 	RecordID   string
@@ -735,7 +779,6 @@ $LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE"
 if [ $? -ne 0 ]; then
     echo ""
     echo "Commit blocked due to provenance scope violations"
-    echo "Use 'git commit --no-verify' to bypass this check"
     exit 1
 fi
 `
@@ -751,8 +794,6 @@ fi
 	fmt.Fprintln(os.Stdout, "  commit-msg hook:")
 	fmt.Fprintln(os.Stdout, "    · Checks staged files against provenance scope")
 	fmt.Fprintln(os.Stdout, "    · Validates provenance IDs in commit message")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "  Use 'git commit --no-verify' to bypass when needed.")
 	fmt.Fprintln(os.Stdout)
 
 	return nil

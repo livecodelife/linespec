@@ -521,6 +521,16 @@ func (f *Formatter) FormatLockScopeSuccess(record *Record, lockedPaths []string)
 	fmt.Fprintf(f.Output, "  Future commits tagged to this record must stay within this scope.\n\n")
 }
 
+// FormatLockLayerSuccess formats the lock-layer command success output
+func (f *Formatter) FormatLockLayerSuccess(record *Record) {
+	fmt.Fprintf(f.Output, "\n%s Created locked layer %s\n",
+		f.colored("✓", colorGreen),
+		record.FilePath)
+	fmt.Fprintln(f.Output)
+	fmt.Fprintf(f.Output, "  Record created as implemented with locked: true.\n")
+	fmt.Fprintf(f.Output, "  Edit affected_scope and associated_specs to define the protected surface.\n\n")
+}
+
 // FormatCompleteSuccess formats the complete command success output
 func (f *Formatter) FormatCompleteSuccess(record *Record) {
 	fmt.Fprintf(f.Output, "\n%s %s marked as implemented\n\n",

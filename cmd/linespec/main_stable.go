@@ -127,6 +127,15 @@ func runProvenance() {
 		if err := cmds.LockScope(opts); err != nil {
 			os.Exit(1)
 		}
+	case "lock-layer":
+		opts := parseLockLayerOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.LockLayer(opts); err != nil {
+			os.Exit(1)
+		}
 	case "complete":
 		opts := parseCompleteOptions(args)
 		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
@@ -259,6 +268,7 @@ Subcommands:
   graph [options]            Render provenance graph
   check [options]            Check commits for violations (use --staged for pre-commit)
   lock-scope [options]       Lock scope to allowlist mode
+  lock-layer [options]       Create a locked layer record
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
   context [options]          Show provenance context for files
@@ -807,4 +817,43 @@ Example:
 	}
 
 	return opts
+}
+
+func parseLockLayerOptions(args []string) provenance.LockLayerOptions {
+	opts := provenance.LockLayerOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--title":
+			if i+1 < len(args) {
+				opts.Title = args[i+1]
+				i++
+			}
+		case "--no-edit":
+			opts.NoEdit = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			printLockLayerUsage()
+			os.Exit(0)
+		}
+	}
+	if opts.Title == "" {
+		logger.Error("--title is required")
+		printLockLayerUsage()
+		os.Exit(1)
+	}
+	return opts
+}
+
+func printLockLayerUsage() {
+	logger.Info(`Usage: linespec provenance lock-layer --title "..." [options]
+
+Options:
+  --title "..."              Required. Title for the locked layer record
+  --no-edit                  Write without opening editor
+  -c, --config path          Path to custom .linespec.yml file
+  --help                     Show this help message`)
 }
