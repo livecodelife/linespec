@@ -12,6 +12,7 @@ env:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   index:
@@ -52,11 +53,21 @@ jobs:
             echo "Committing updated embeddings.bin..."
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
+            git checkout -b update-embeddings-${{ github.sha }}
             git add .linespec/embeddings.bin
             git commit -m "Update embeddings for newly completed provenance records [skip ci]"
-            git push
-            echo "✓ Pushed updated embeddings.bin"
+            git push origin update-embeddings-${{ github.sha }}
+            PR_URL=$(gh pr create \
+              --title "Update embeddings for newly completed provenance records" \
+              --body "Automated embeddings update triggered by commit ${{ github.sha }}" \
+              --base main)
+            PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+            gh pr review "$PR_NUMBER" --approve
+            gh pr merge "$PR_NUMBER" --squash --delete-branch
+            echo "✓ Merged PR for updated embeddings.bin"
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Check for unindexed records
         run: |
