@@ -1,6 +1,6 @@
 id: prov-2026-940c45c8
 title: Prepare v1.4.0 release
-status: open
+status: implemented
 created_at: "2026-04-03"
 author: calebcowen@gmail.com
 intent: >
@@ -20,7 +20,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d79268bc16db7299d835721943753257a1dadd33
 associated_specs:
   - path: CHANGELOG.md
     type: changelog
