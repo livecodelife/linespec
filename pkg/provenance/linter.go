@@ -84,6 +84,9 @@ func (l *Linter) LintAll() *LintResult {
 	// Check for dead records
 	l.checkDeadRecords(result)
 
+	// Check for locked scope violations
+	l.checkLockedScope(result)
+
 	result.PassedCount = len(l.Loader.Records) - result.ErrorCount
 
 	return result
@@ -476,9 +479,94 @@ func patternsOverlap(a, b string) bool {
 		return true
 	}
 
-	// For now, we'll assume non-exact patterns might overlap
-	// A more sophisticated check would be needed for complex cases
+	// If both are patterns, check if they could match the same files
+	if isPattern(a) && isPattern(b) {
+		return globPatternsOverlap(a, b)
+	}
+
 	return false
+}
+
+// globPatternsOverlap checks if two glob/regex patterns could match the same file
+func globPatternsOverlap(a, b string) bool {
+	aRegex := patternToRegex(a)
+	bRegex := patternToRegex(b)
+
+	if aRegex == nil || bRegex == nil {
+		return false
+	}
+
+	// Generate sample paths from each pattern and check if the other matches
+	samples := generateSamplePaths(a)
+	for _, sample := range samples {
+		if bRegex.MatchString(sample) {
+			return true
+		}
+	}
+	samples = generateSamplePaths(b)
+	for _, sample := range samples {
+		if aRegex.MatchString(sample) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// patternToRegex converts a pattern to a compiled regex, or nil if invalid
+func patternToRegex(pattern string) *regexp.Regexp {
+	if len(pattern) > 3 && pattern[:3] == "re:" {
+		re, err := regexp.Compile(pattern[3:])
+		if err != nil {
+			return nil
+		}
+		return re
+	}
+	regex := GlobToRegex(pattern)
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		return nil
+	}
+	return re
+}
+
+// generateSamplePaths generates sample file paths that match a pattern
+func generateSamplePaths(pattern string) []string {
+	var samples []string
+
+	if len(pattern) > 3 && pattern[:3] == "re:" {
+		// For regex patterns, generate a few plausible paths
+		samples = append(samples, "test/file.go", "pkg/module/file.go", "src/test.go")
+		return samples
+	}
+
+	// For glob patterns, replace wildcards with plausible values
+	path := pattern
+	if strings.Contains(path, "**") {
+		path = strings.Replace(path, "**", "pkg/module", 1)
+	}
+	if strings.Contains(path, "*") {
+		path = strings.Replace(path, "*", "file", 1)
+	}
+	if strings.Contains(path, "?") {
+		path = strings.Replace(path, "?", "f", 1)
+	}
+	samples = append(samples, path)
+
+	// Also try with different replacements
+	path2 := pattern
+	if strings.Contains(path2, "**") {
+		path2 = strings.Replace(path2, "**", "src/sub", 1)
+	}
+	if strings.Contains(path2, "*") {
+		path2 = strings.Replace(path2, "*", "test", 1)
+	}
+	if strings.Contains(path2, "?") {
+		path2 = strings.Replace(path2, "?", "t", 1)
+	}
+	samples = append(samples, path2)
+
+	return samples
 }
 
 // isPattern returns true if the string is a glob or regex pattern
@@ -756,4 +844,65 @@ func (l *Linter) validateSealedAtSHA(record *Record, result *LintResult) {
 			Severity: SeverityWarning,
 		})
 	}
+}
+
+// checkLockedScope validates that open records don't overlap with locked records' surfaces
+func (l *Linter) checkLockedScope(result *LintResult) {
+	var lockedRecords []*Record
+	for _, r := range l.Loader.Records {
+		if r.Locked {
+			lockedRecords = append(lockedRecords, r)
+		}
+	}
+	if len(lockedRecords) == 0 {
+		return
+	}
+
+	for _, openRecord := range l.Loader.FilterByStatus(StatusOpen) {
+		var openSurfaces []string
+		openSurfaces = append(openSurfaces, openRecord.AffectedScope...)
+		for _, spec := range openRecord.AssociatedSpecs {
+			openSurfaces = append(openSurfaces, spec.Path)
+		}
+
+		for _, locked := range lockedRecords {
+			// Skip if open record supersedes this specific locked record
+			if openRecord.Supersedes == locked.ID {
+				continue
+			}
+
+			var lockedSurfaces []string
+			lockedSurfaces = append(lockedSurfaces, locked.AffectedScope...)
+			for _, spec := range locked.AssociatedSpecs {
+				lockedSurfaces = append(lockedSurfaces, spec.Path)
+			}
+
+			for _, openSurface := range openSurfaces {
+				for _, lockedSurface := range lockedSurfaces {
+					if patternsOverlap(openSurface, lockedSurface) {
+						field := "affected_scope"
+						if !containsString(openRecord.AffectedScope, openSurface) {
+							field = "associated_specs"
+						}
+						result.Add(Issue{
+							RecordID: openRecord.ID,
+							Field:    field,
+							Message:  fmt.Sprintf("Surface %q overlaps with locked record %s surface %q. Add supersedes: %s to reopen this layer.", openSurface, locked.ID, lockedSurface, locked.ID),
+							Severity: SeverityError,
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
+// containsString returns true if the slice contains the string
+func containsString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
@@ -23,6 +24,12 @@ import (
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/runner"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func main() {
@@ -325,8 +332,14 @@ func runProvenance() {
 	// Get repo root
 	repoRoot, _ := os.Getwd()
 
+	// Create embedder client if configured
+	var embedder *embeddings.Client
+	if cfg.Embedding != nil {
+		embedder, _ = embeddings.NewClient(*cfg.Embedding)
+	}
+
 	// Create commands
-	cmds, err := provenance.NewCommands(cfg, repoRoot, os.Stdout, true)
+	cmds, err := provenance.NewCommandsWithEmbedder(cfg, repoRoot, os.Stdout, true, embedder)
 	if err != nil {
 		logger.Error("Failed to initialize provenance: %v", err)
 		os.Exit(1)
@@ -387,6 +400,15 @@ func runProvenance() {
 		if err := cmds.LockScope(opts); err != nil {
 			os.Exit(1)
 		}
+	case "lock-layer":
+		opts := parseLockLayerOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.LockLayer(opts); err != nil {
+			os.Exit(1)
+		}
 	case "complete":
 		opts := parseCompleteOptions(args)
 		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
@@ -412,6 +434,34 @@ func runProvenance() {
 			os.Exit(1)
 		}
 		if err := cmds.Context(opts); err != nil {
+			os.Exit(1)
+		}
+	case "search":
+		opts := parseSearchOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Search(opts); err != nil {
+			logger.Error("Search failed: %v", err)
+			os.Exit(1)
+		}
+	case "audit":
+		opts := parseAuditOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Audit(opts); err != nil {
+			os.Exit(1)
+		}
+	case "index":
+		opts := parseIndexOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Index(opts); err != nil {
 			os.Exit(1)
 		}
 	case "install-hooks":
@@ -457,6 +507,10 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CommitTagRequired = fullConfig.Provenance.CommitTagRequired
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
+
+			if fullConfig.Provenance.Embedding != nil {
+				cfg.Embedding = fullConfig.Provenance.Embedding
+			}
 		}
 	}
 
@@ -486,9 +540,13 @@ Subcommands:
   graph [options]            Render provenance graph
   check [options]            Check commits for violations
   lock-scope [options]       Lock scope to allowlist mode
+  lock-layer [options]       Create a locked layer record
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
   context [options]          Show provenance context for files
+  search [options]           Search provenance records by semantic similarity
+  audit [options]            Audit recent changes against provenance history
+  index [options]            Index all implemented records for semantic search
   install-hooks              Install git hooks
 
 Use "linespec provenance <subcommand> --help" for more information.`)
@@ -914,4 +972,152 @@ Options:
 	}
 
 	return opts
+}
+
+func parseSearchOptions(args []string) provenance.SearchOptions {
+	opts := provenance.SearchOptions{
+		Limit: 5,
+	}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--query":
+			if i+1 < len(args) {
+				opts.Query = args[i+1]
+				i++
+			}
+		case "--limit":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &opts.Limit)
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance search [options]
+
+Options:
+  --query "text"            Natural language search query
+  --limit N                 Maximum results to return (default: 5)
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance search --query "authentication system"
+  linespec provenance search --query "database schema changes" --limit 10`)
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") && opts.Query == "" {
+				opts.Query = args[i]
+			}
+		}
+	}
+	return opts
+}
+
+func parseAuditOptions(args []string) provenance.AuditOptions {
+	opts := provenance.AuditOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--description":
+			if i+1 < len(args) {
+				opts.Description = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance audit [options]
+
+Options:
+  --description "text"      Description of recent changes to audit
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance audit --description "Added password validation middleware"
+  linespec provenance audit --description "Refactored user service to use new database schema"`)
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") && opts.Description == "" {
+				opts.Description = args[i]
+			}
+		}
+	}
+	return opts
+}
+
+func parseIndexOptions(args []string) provenance.IndexOptions {
+	opts := provenance.IndexOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--dry-run":
+			opts.DryRun = true
+		case "--force":
+			opts.Force = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance index [options]
+
+Options:
+  --dry-run                 Show what would be indexed without doing it
+  --force                   Re-index even if embedding already exists
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message
+
+Example:
+  linespec provenance index              # Index all unindexed records
+  linespec provenance index --dry-run    # Preview what would be indexed
+  linespec provenance index --force      # Re-index all records`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+func parseLockLayerOptions(args []string) provenance.LockLayerOptions {
+	opts := provenance.LockLayerOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--title":
+			if i+1 < len(args) {
+				opts.Title = args[i+1]
+				i++
+			}
+		case "--no-edit":
+			opts.NoEdit = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			printLockLayerUsage()
+			os.Exit(0)
+		}
+	}
+	if opts.Title == "" {
+		logger.Error("--title is required")
+		printLockLayerUsage()
+		os.Exit(1)
+	}
+	return opts
+}
+
+func printLockLayerUsage() {
+	logger.Info(`Usage: linespec provenance lock-layer --title "..." [options]
+
+Options:
+  --title "..."              Required. Title for the locked layer record
+  --no-edit                  Write without opening editor
+  --help                     Show this help message`)
 }

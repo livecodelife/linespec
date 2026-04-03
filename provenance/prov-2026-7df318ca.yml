@@ -1,0 +1,59 @@
+id: prov-2026-7df318ca
+title: Add lock-layer command and locked scope lint enforcement
+status: implemented
+created_at: "2026-04-03"
+author: caleb.cowen@gmail.com
+intent: >
+  Implement a lock-layer governance feature that allows declaring a portion of
+  the system as crystallized. The `linespec provenance lock-layer` command creates
+  a new provenance record immediately in `implemented` status with `locked: true`
+  set, capturing the current HEAD SHA. The linter enforces that any `open` record
+  whose `affected_scope` or `associated_specs` overlaps with a locked record's
+  `affected_scope` or `associated_specs` is a lint error unless the open record
+  declares `supersedes` pointing at the locked record. This forces explicit
+  acknowledgment when reopening a crystallized layer.
+
+  Also update documentation to cover the missing `context` command and ensure
+  the beta build has feature parity with stable (embedder client, search/audit/index
+  commands).
+
+constraints:
+  - "LockLayer must reuse Create and Complete methods (DRY, no duplicate record creation logic)"
+  - "LockLayer must pass --no-edit to Create, then open editor from LockLayer unless user passed --no-edit"
+  - "LockLayer requires --title flag"
+  - "checkLockedScope lint rule must check all 4 combinations: open affected_scope vs locked affected_scope, open affected_scope vs locked associated_specs, open associated_specs vs locked affected_scope, open associated_specs vs locked associated_specs"
+  - "checkLockedScope must report dynamic field name (affected_scope or associated_specs) based on which surface of the open record is the offender"
+  - "checkLockedScope must skip open records that supersedes the locked record"
+  - "checkLockedScope must only check locked records (locked: true), not all implemented records"
+  - "Beta build must have all stable provenance commands plus beta features"
+  - "Beta build must include embedder client setup for search/audit/index"
+  - "Documentation must cover lock-layer and context commands in both PROVENANCE_RECORDS.md and docs/provenance.html"
+
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/lock_layer_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - PROVENANCE_RECORDS.md
+  - docs/provenance.html
+
+forbidden_scope: []
+
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: c2b1ba2c96320b2a6a8d32bbc3c0f6dc72db772c
+associated_specs:
+  - path: pkg/provenance/lock_layer_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - lock-layer
+  - governance
+  - linting
+  - documentation
+  - beta-parity

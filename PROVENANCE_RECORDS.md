@@ -385,6 +385,36 @@ linespec provenance lock-scope --record prov-2026-a1b2c3d4
 - `--dry-run` - Print scope without writing
 - `-c, --config path` - Use custom config
 
+### Lock Layer
+
+Create a locked layer record — an architectural declaration that crystallizes
+a portion of the system. The record is created immediately in `implemented`
+status with `locked: true` and a `sealed_at_sha` captured from HEAD.
+
+```bash
+# Create a locked layer (opens editor)
+linespec provenance lock-layer --title "Core proxy layer"
+
+# Create without opening editor
+linespec provenance lock-layer --title "Core proxy layer" --no-edit
+```
+
+**Options:**
+- `--title "..."` - Required. Title for the locked layer record
+- `--no-edit` - Write without opening editor
+- `-c, --config path` - Use custom config
+
+**How it works:**
+The command creates a new provenance record that is immediately `implemented` and `locked: true`. After creation, edit the record to define `affected_scope` and `associated_specs` — these together define the protected surface.
+
+The linter checks both `affected_scope` and `associated_specs` from locked records against both fields of any `open` record. If any surface overlaps, it's a lint error unless the open record declares `supersedes` pointing at the locked record. This forces explicit acknowledgment when reopening a crystallized layer.
+
+**Unlocking a layer:**
+To modify files governed by a locked record, create a new record that supersedes it:
+```bash
+linespec provenance create --title "Update proxy layer" --supersedes prov-2026-a1b2c3d4
+```
+
 ### Complete
 
 Mark record as implemented:
@@ -414,6 +444,35 @@ linespec provenance deprecate --record prov-2026-a1b2c3d4 --reason "Replaced by 
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to deprecate
 - `--reason "..."` - Deprecation reason
 - `-c, --config path` - Use custom config
+
+### Context
+
+Show provenance context for specific files — which records govern them:
+
+```bash
+# Check which records govern specific files
+linespec provenance context pkg/proxy/postgresql/proxy.go
+
+# Check multiple files
+linespec provenance context pkg/proxy/postgresql/proxy.go pkg/registry/registry.go
+
+# Compact output
+linespec provenance context --format compact pkg/proxy/**/*.go
+
+# JSON output for tooling
+linespec provenance context --format json pkg/proxy/postgresql/proxy.go
+```
+
+**Options:**
+- `<files...>` - File paths to check (positional arguments)
+- `--files f1 f2 f3` - Explicit file list (alternative to positional args)
+- `--format format` - human|compact|json
+- `-c, --config path` - Use custom config
+
+**Output:**
+- Shows all records whose scope matches the given files
+- Follows `supersedes` chains to show ancestry
+- Detects conflicts when multiple open records govern the same file
 
 ### Search (Semantic)
 

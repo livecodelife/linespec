@@ -70,6 +70,9 @@ type Record struct {
 	// Tags
 	Tags []string `yaml:"tags"`
 
+	// Lock layer governance
+	Locked bool `yaml:"locked,omitempty"`
+
 	// File path (not stored in YAML, set during loading)
 	FilePath string `yaml:"-"`
 }
