@@ -17,6 +17,7 @@ type MockRegistry struct {
 	mocks        map[string][]*types.ExpectStatement // Map table name or topic to list of mocks
 	orderedMocks []*types.ExpectStatement            // All mocks in registration order (for deterministic fallback)
 	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
+	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
 }
 
 func NewMockRegistry() *MockRegistry {
@@ -24,7 +25,28 @@ func NewMockRegistry() *MockRegistry {
 		mocks:        make(map[string][]*types.ExpectStatement),
 		orderedMocks: make([]*types.ExpectStatement, 0),
 		hits:         make(map[*types.ExpectStatement]int),
+		seeds:        make(map[string][][]byte),
 	}
+}
+
+// SeedTopic adds a raw payload to be served to Kafka consumers on a given topic.
+func (r *MockRegistry) SeedTopic(topic string, value []byte) {
+	r.Lock()
+	defer r.Unlock()
+	r.seeds[topic] = append(r.seeds[topic], value)
+}
+
+// GetSeeds returns a copy of all seeded Kafka messages.
+func (r *MockRegistry) GetSeeds() map[string][][]byte {
+	r.RLock()
+	defer r.RUnlock()
+	out := make(map[string][][]byte, len(r.seeds))
+	for topic, msgs := range r.seeds {
+		cp := make([][]byte, len(msgs))
+		copy(cp, msgs)
+		out[topic] = cp
+	}
+	return out
 }
 
 // ResetHits resets the hit count for all mocks (useful for testing)
@@ -72,6 +94,25 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 		return expect.Topic
 	}
 	return "unknown"
+}
+
+// GetEventTopics returns all distinct Kafka topic names from EVENT channel mocks.
+func (r *MockRegistry) GetEventTopics() []string {
+	r.RLock()
+	defer r.RUnlock()
+	seen := make(map[string]struct{})
+	for _, mocks := range r.mocks {
+		for _, mock := range mocks {
+			if mock.Channel == types.Event && mock.Topic != "" {
+				seen[mock.Topic] = struct{}{}
+			}
+		}
+	}
+	topics := make([]string, 0, len(seen))
+	for t := range seen {
+		topics = append(topics, t)
+	}
+	return topics
 }
 
 // GetTables returns a list of unique table names registered in the registry
@@ -398,10 +439,15 @@ func (r *MockRegistry) CheckNegativeHTTPMocks(url string, method string) {
 	}
 }
 
+type registryFile struct {
+	Mocks map[string][]*types.ExpectStatement `json:"mocks"`
+	Seeds map[string][][]byte                 `json:"seeds,omitempty"`
+}
+
 func (r *MockRegistry) SaveToFile(path string) error {
 	r.RLock()
 	defer r.RUnlock()
-	data, err := json.Marshal(r.mocks)
+	data, err := json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds})
 	if err != nil {
 		return err
 	}
@@ -415,8 +461,21 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, &r.mocks); err != nil {
+	// Try new format first (with seeds).
+	var rf registryFile
+	if err := json.Unmarshal(data, &rf); err != nil {
 		return err
+	}
+	if rf.Mocks != nil {
+		r.mocks = rf.Mocks
+	} else {
+		// Legacy format: the file was a bare map[string][]*ExpectStatement.
+		if err := json.Unmarshal(data, &r.mocks); err != nil {
+			return err
+		}
+	}
+	if rf.Seeds != nil {
+		r.seeds = rf.Seeds
 	}
 	r.orderedMocks = make([]*types.ExpectStatement, 0)
 	for _, mocksList := range r.mocks {

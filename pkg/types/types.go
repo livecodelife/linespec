@@ -49,6 +49,7 @@ type ReceiveStatement struct {
 	Channel  ExpectChannel
 	Method   string
 	Path     string
+	Topic    string // For Kafka consumer triggers (RECEIVE KAFKA:topic-name)
 	WithFile string
 	Headers  map[string]string
 }

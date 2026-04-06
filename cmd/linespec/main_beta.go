@@ -234,15 +234,20 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
-	// Extract --db-name flag from remaining args (used by mysql proxy)
-	var dbName string
+	// Extract --db-name and --host flags from remaining args
+	var dbName, kafkaHost string
 	var filteredArgs []string
 	for i := 5; i < len(os.Args); i++ {
 		if os.Args[i] == "--db-name" && i+1 < len(os.Args) {
 			dbName = os.Args[i+1]
-			i++ // skip value
+			i++
 		} else if strings.HasPrefix(os.Args[i], "--db-name=") {
 			dbName = strings.TrimPrefix(os.Args[i], "--db-name=")
+		} else if os.Args[i] == "--host" && i+1 < len(os.Args) {
+			kafkaHost = os.Args[i+1]
+			i++
+		} else if strings.HasPrefix(os.Args[i], "--host=") {
+			kafkaHost = strings.TrimPrefix(os.Args[i], "--host=")
 		} else {
 			filteredArgs = append(filteredArgs, os.Args[i])
 		}
@@ -321,6 +326,9 @@ func runProxy() {
 		proxyErr = p.Start(ctx)
 	case "kafka":
 		p := kafka.NewInterceptor(addr, reg)
+		if kafkaHost != "" {
+			p.SetHost(kafkaHost)
+		}
 		proxyErr = p.Start(ctx)
 	default:
 		logger.Error("Unknown proxy type: %s", pType)

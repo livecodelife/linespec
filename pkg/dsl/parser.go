@@ -71,14 +71,18 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	}
 
 	reHttp := regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
-	m := reHttp.FindStringSubmatch(receiveToken.Literal)
-	if m == nil {
+	reKafka := regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
+
+	if mHttp := reHttp.FindStringSubmatch(receiveToken.Literal); mHttp != nil {
+		spec.Receive.Channel = types.HTTP
+		spec.Receive.Method = strings.ToUpper(mHttp[1])
+		spec.Receive.Path = p.resolve(mHttp[2])
+	} else if mKafka := reKafka.FindStringSubmatch(receiveToken.Literal); mKafka != nil {
+		spec.Receive.Channel = types.Event
+		spec.Receive.Topic = strings.TrimSpace(mKafka[1])
+	} else {
 		return nil, fmt.Errorf("Invalid RECEIVE format at line %d: %s", receiveToken.Line, receiveToken.Literal)
 	}
-
-	spec.Receive.Channel = types.HTTP
-	spec.Receive.Method = strings.ToUpper(m[1])
-	spec.Receive.Path = p.resolve(m[2])
 
 	if p.peek().Type == TokenWith {
 		spec.Receive.WithFile = p.consume().Literal
@@ -105,32 +109,34 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		spec.ExpectsNot = append(spec.ExpectsNot, *expectNot)
 	}
 
-	respondToken, err := p.expect(TokenRespond)
-	if err != nil {
-		return nil, err
-	}
+	// RESPOND is required for HTTP-triggered tests, optional for Kafka consumer tests.
+	if p.peek() != nil && p.peek().Type == TokenRespond {
+		respondToken := p.consume()
 
-	reStatus := regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
-	mStatus := reStatus.FindStringSubmatch(respondToken.Literal)
-	if mStatus == nil {
-		return nil, fmt.Errorf("Invalid RESPOND format at line %d: %s", respondToken.Line, respondToken.Literal)
-	}
+		reStatus := regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
+		mStatus := reStatus.FindStringSubmatch(respondToken.Literal)
+		if mStatus == nil {
+			return nil, fmt.Errorf("Invalid RESPOND format at line %d: %s", respondToken.Line, respondToken.Literal)
+		}
 
-	statusCode, _ := strconv.Atoi(mStatus[1])
-	spec.Respond.StatusCode = statusCode
+		statusCode, _ := strconv.Atoi(mStatus[1])
+		spec.Respond.StatusCode = statusCode
 
-	if p.peek().Type == TokenWith {
-		spec.Respond.WithFile = p.consume().Literal
-	}
+		if p.peek().Type == TokenWith {
+			spec.Respond.WithFile = p.consume().Literal
+		}
 
-	if p.peek().Type == TokenNoise {
-		noiseToken := p.consume()
-		spec.Respond.Noise = strings.Split(strings.TrimSpace(noiseToken.Literal), "\n")
-	}
+		if p.peek().Type == TokenNoise {
+			noiseToken := p.consume()
+			spec.Respond.Noise = strings.Split(strings.TrimSpace(noiseToken.Literal), "\n")
+		}
 
-	if p.peek().Type == TokenHeaders {
-		headersToken := p.consume()
-		spec.Respond.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
+		if p.peek().Type == TokenHeaders {
+			headersToken := p.consume()
+			spec.Respond.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
+		}
+	} else if spec.Receive.Channel == types.HTTP {
+		return nil, fmt.Errorf("RESPOND block is required for HTTP-triggered tests")
 	}
 
 	return spec, nil
