@@ -19,6 +19,7 @@ constraints:
 affected_scope:
   - .linespec/embeddings.bin
   - .github/workflows/index-provenance.yml
+superseded_by: prov-2026-da5fd142
 
 associated_specs:
   - path: .github/workflows/index-provenance.yml
