@@ -484,6 +484,111 @@ RESPOND HTTP:200`
 	}
 }
 
+func TestParser_ReceiveKafka(t *testing.T) {
+	content := `TEST process_todo_created_event
+
+RECEIVE KAFKA:todo-events
+WITH {{payloads/todo_created_event.yaml}}
+
+EXPECT WRITE:POSTGRESQL notifications
+WITH {{payloads/notification_insert.yaml}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "process_todo_created_event.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Receive.Channel != types.Event {
+		t.Errorf("Expected Receive.Channel EVENT, got %s", spec.Receive.Channel)
+	}
+	if spec.Receive.Topic != "todo-events" {
+		t.Errorf("Expected Receive.Topic 'todo-events', got %s", spec.Receive.Topic)
+	}
+	if spec.Receive.WithFile != "payloads/todo_created_event.yaml" {
+		t.Errorf("Expected Receive.WithFile, got %s", spec.Receive.WithFile)
+	}
+	// RESPOND is absent — StatusCode should be zero.
+	if spec.Respond.StatusCode != 0 {
+		t.Errorf("Expected zero StatusCode for consumer test, got %d", spec.Respond.StatusCode)
+	}
+	if len(spec.Expects) != 1 || spec.Expects[0].Channel != types.WritePostgreSQL {
+		t.Errorf("Expected 1 WRITE:POSTGRESQL expect, got %v", spec.Expects)
+	}
+}
+
+func TestParser_ReceiveKafkaEventAlias(t *testing.T) {
+	// Both KAFKA: and EVENT: prefixes should work.
+	content := `TEST event_alias_test
+
+RECEIVE EVENT:my-topic
+
+EXPECT WRITE:MYSQL results
+
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "event_alias_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Receive.Channel != types.Event {
+		t.Errorf("Expected Channel EVENT, got %s", spec.Receive.Channel)
+	}
+	if spec.Receive.Topic != "my-topic" {
+		t.Errorf("Expected topic 'my-topic', got %s", spec.Receive.Topic)
+	}
+}
+
+func TestParser_HTTPRequiresRespond(t *testing.T) {
+	// HTTP-triggered tests without a RESPOND block should fail.
+	content := `TEST missing_respond
+
+RECEIVE HTTP:GET http://localhost/api
+
+EXPECT WRITE:MYSQL items`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "missing_respond.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	_, err = parser.Parse(tmpFile)
+	if err == nil {
+		t.Error("Expected parse error for HTTP test missing RESPOND block")
+	}
+}
+
 func TestParser_VerifyRulePreservesTarget(t *testing.T) {
 	// Create a simple linespec to verify the Target field is preserved
 	content := `TEST preserve-target

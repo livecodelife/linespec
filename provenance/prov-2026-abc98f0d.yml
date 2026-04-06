@@ -20,13 +20,15 @@ constraints:
   - Registry VerifyAll must still enforce EVENT mocks when interceptor is active
 affected_scope:
   - pkg/proxy/kafka/interceptor.go
+  - pkg/proxy/kafka/interceptor_test.go
   - pkg/types/types.go
   - pkg/dsl/parser.go
-  - pkg/registry/registry.go
-  - pkg/runner/runner.go
-  - examples/notification-linespecs/process_todo_created_event.linespec
   - pkg/dsl/dsl_test.go
+  - pkg/registry/registry.go
   - pkg/registry/registry_test.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_beta.go
+  - examples/notification-linespecs/process_todo_created_event.linespec
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

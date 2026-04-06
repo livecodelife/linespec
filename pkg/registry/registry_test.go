@@ -1,6 +1,9 @@
 package registry
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/livecodelife/linespec/pkg/types"
@@ -274,5 +277,77 @@ func TestMockRegistry_MixedPositiveAndNegative(t *testing.T) {
 	err := reg.VerifyAll()
 	if err == nil {
 		t.Fatal("VerifyAll should fail when negative expectation is violated")
+	}
+}
+
+func TestMockRegistry_SeedTopicAndGetSeeds(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.SeedTopic("orders", []byte(`{"id":1}`))
+	reg.SeedTopic("orders", []byte(`{"id":2}`))
+	reg.SeedTopic("events", []byte(`{"type":"created"}`))
+
+	seeds := reg.GetSeeds()
+	if len(seeds["orders"]) != 2 {
+		t.Errorf("Expected 2 seeds for 'orders', got %d", len(seeds["orders"]))
+	}
+	if len(seeds["events"]) != 1 {
+		t.Errorf("Expected 1 seed for 'events', got %d", len(seeds["events"]))
+	}
+	if string(seeds["orders"][0]) != `{"id":1}` {
+		t.Errorf("Unexpected first seed value: %s", seeds["orders"][0])
+	}
+}
+
+func TestMockRegistry_SeedsPersistThroughFile(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.SeedTopic("todo-events", []byte(`{"title":"buy milk"}`))
+
+	// Also register a mock so the file has both sections.
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.WriteMySQL, Table: "todos"},
+		},
+	})
+
+	tmpFile := filepath.Join(t.TempDir(), "registry.json")
+	if err := reg.SaveToFile(tmpFile); err != nil {
+		t.Fatalf("SaveToFile failed: %v", err)
+	}
+
+	reg2 := NewMockRegistry()
+	if err := reg2.LoadFromFile(tmpFile); err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+
+	seeds := reg2.GetSeeds()
+	if len(seeds["todo-events"]) != 1 {
+		t.Errorf("Expected 1 seeded message for 'todo-events', got %d", len(seeds["todo-events"]))
+	}
+	if string(seeds["todo-events"][0]) != `{"title":"buy milk"}` {
+		t.Errorf("Unexpected seed value: %s", seeds["todo-events"][0])
+	}
+}
+
+func TestMockRegistry_LegacyFileFormat(t *testing.T) {
+	// Write a registry file in the old bare-map format (no "mocks"/"seeds" wrapper).
+	legacy := map[string][]*types.ExpectStatement{
+		"users": {
+			{Channel: types.WriteMySQL, Table: "users"},
+		},
+	}
+	data, _ := json.Marshal(legacy)
+	tmpFile := filepath.Join(t.TempDir(), "legacy.json")
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		t.Fatalf("Failed to write legacy file: %v", err)
+	}
+
+	reg := NewMockRegistry()
+	if err := reg.LoadFromFile(tmpFile); err != nil {
+		t.Fatalf("LoadFromFile failed for legacy format: %v", err)
+	}
+
+	mock, found := reg.FindMock("users", "INSERT INTO users")
+	if !found || mock == nil {
+		t.Error("Expected to find mock from legacy file")
 	}
 }

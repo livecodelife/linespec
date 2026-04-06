@@ -1,6 +1,6 @@
 TEST process_todo_created_event
 
-RECEIVE HTTP:POST /api/v1/notifications/events
+RECEIVE KAFKA:todo-events
 WITH {{payloads/todo_created_event.yaml}}
 
 EXPECT HTTP:GET http://user-service/api/v1/users/42
@@ -10,5 +10,3 @@ RETURNS {{payloads/user_42.yaml}}
 
 EXPECT WRITE:POSTGRESQL notifications
 WITH {{payloads/notification_insert.yaml}}
-
-RESPOND HTTP:200

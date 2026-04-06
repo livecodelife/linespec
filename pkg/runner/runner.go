@@ -629,6 +629,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	r.registry.Register(spec)
 
+	// For Kafka consumer tests, seed the trigger payload into the registry so the
+	// interceptor can serve it as a Fetch response.
+	if spec.Receive.Channel == types.Event && spec.Receive.WithFile != "" {
+		loader := dsl.NewPayloadLoaderWithResolver(spec.BaseDir, r.resolver)
+		seedPayload, err := loader.Load(spec.Receive.WithFile)
+		if err != nil {
+			return fmt.Errorf("failed to load Kafka seed payload: %w", err)
+		}
+		seedBytes, _ := json.Marshal(seedPayload)
+		r.registry.SeedTopic(spec.Receive.Topic, seedBytes)
+	}
+
 	// Create temp directory for this test run
 	tempDir, err := os.MkdirTemp("", "linespec-*")
 	if err != nil {
@@ -644,6 +656,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetAppContainer(params))
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"}))
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"}))
 	cleanupCancel()
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
@@ -933,6 +946,48 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
+	// Start Kafka interceptor for consumer-triggered tests.
+	// Uses a distinct alias ("kafka-proxy") so it doesn't conflict with the real Kafka
+	// container on the network. The app's KAFKA_BROKERS will point to this interceptor.
+	const kafkaProxyAlias = "kafka-proxy"
+	kafkaProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"})
+	if spec.Receive.Channel == types.Event {
+		kafkaProxyCmd := []string{
+			"proxy", "kafka", "0.0.0.0:9092", "unused",
+			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
+			"--host", kafkaProxyAlias,
+		}
+		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+			Image: "linespec:latest",
+			Cmd:   kafkaProxyCmd,
+		}, &container.HostConfig{
+			Binds: []string{
+				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+		}, &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{
+				r.suite.networkName: {Aliases: []string{kafkaProxyAlias}},
+			},
+		}, kafkaProxyContainerName)
+		if err != nil {
+			return fmt.Errorf("failed to start Kafka interceptor: %w", err)
+		}
+		logger.Debug("Kafka interceptor started with alias %s", kafkaProxyAlias)
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, kafkaProxyContainerName)
+		}()
+		if logger.IsDebug() {
+			go func() {
+				logCtx, logCancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer logCancel()
+				_ = r.suite.orch.StreamLogs(logCtx, kafkaProxyContainerName, os.Stdout, os.Stderr)
+			}()
+		}
+	}
+
 	// Wait for services to be ready on the network
 	logger.Debug("Waiting for proxies to be ready")
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
@@ -988,7 +1043,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	if serviceConfig.Infrastructure.Kafka {
-		envMap["KAFKA_BROKERS"] = "kafka:29092"
+		if spec.Receive.Channel == types.Event {
+			// Consumer test: route to the Kafka interceptor so Fetch requests are served.
+			envMap["KAFKA_BROKERS"] = kafkaProxyAlias + ":9092"
+		} else {
+			envMap["KAFKA_BROKERS"] = "kafka:29092"
+		}
 	}
 
 	// 3. Add auto-generated HTTP dependency URLs (if not in user config)
@@ -1132,41 +1192,49 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
-	// 6. Trigger Request
-	logger.Debug(fmt.Sprintf("Triggering request: %s %s", spec.Receive.Method, spec.Receive.Path))
-	resp, err := r.sendRequest(spec.Receive, spec.BaseDir, hostPort)
-	if err != nil {
-		logger.Debug("Trigger request failed: %v", err)
-		return err
-	}
-	defer resp.Body.Close()
-	logger.Debug("Received response: %d", resp.StatusCode)
-
-	// 7. Verify Response
-	if resp.StatusCode != spec.Respond.StatusCode {
-		logger.Debug("Test failed with status %d. Fetching app logs...", resp.StatusCode)
-		if logger.IsDebug() {
-			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer logCancel()
-			_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name}), os.Stdout, os.Stderr)
-		}
-		return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
-	}
-
-	if spec.Respond.WithFile != "" {
-		loader := dsl.NewPayloadLoaderWithResolver(spec.BaseDir, r.resolver)
-		expected, err := loader.Load(spec.Respond.WithFile)
+	// 6. Trigger (HTTP) or wait (Kafka consumer)
+	if spec.Receive.Channel == types.Event {
+		// The trigger is the seeded Kafka message already in the interceptor.
+		// Wait for the consumer app to poll and process it.
+		logger.Debug("Kafka consumer test: waiting 12s for the app to consume the seeded message...")
+		time.Sleep(12 * time.Second)
+	} else {
+		// HTTP-triggered test: send the request and verify the response.
+		logger.Debug("Triggering request: %s %s", spec.Receive.Method, spec.Receive.Path)
+		resp, err := r.sendRequest(spec.Receive, spec.BaseDir, hostPort)
 		if err != nil {
-			return fmt.Errorf("failed to load expected response payload: %v", err)
+			logger.Debug("Trigger request failed: %v", err)
+			return err
+		}
+		defer resp.Body.Close()
+		logger.Debug("Received response: %d", resp.StatusCode)
+
+		// 7. Verify Response
+		if resp.StatusCode != spec.Respond.StatusCode {
+			logger.Debug("Test failed with status %d. Fetching app logs...", resp.StatusCode)
+			if logger.IsDebug() {
+				logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer logCancel()
+				_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name}), os.Stdout, os.Stderr)
+			}
+			return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
 		}
 
-		actualRaw, _ := io.ReadAll(resp.Body)
-		var actual interface{}
-		_ = json.Unmarshal(actualRaw, &actual)
+		if spec.Respond.WithFile != "" {
+			loader := dsl.NewPayloadLoaderWithResolver(spec.BaseDir, r.resolver)
+			expected, err := loader.Load(spec.Respond.WithFile)
+			if err != nil {
+				return fmt.Errorf("failed to load expected response payload: %v", err)
+			}
 
-		if err := r.comparePayloads(expected, actual, spec.Respond.Noise); err != nil {
-			logger.Debug("Response body mismatch: %v", err)
-			return err
+			actualRaw, _ := io.ReadAll(resp.Body)
+			var actual interface{}
+			_ = json.Unmarshal(actualRaw, &actual)
+
+			if err := r.comparePayloads(expected, actual, spec.Respond.Noise); err != nil {
+				logger.Debug("Response body mismatch: %v", err)
+				return err
+			}
 		}
 	}
 
