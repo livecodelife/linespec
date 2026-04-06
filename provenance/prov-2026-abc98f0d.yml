@@ -1,6 +1,6 @@
 id: prov-2026-abc98f0d
 title: Implement P3-C Kafka consumer/fetch protocol interception
-status: open
+status: implemented
 created_at: "2026-04-06"
 author: calebcowen@gmail.com
 intent: |
@@ -33,7 +33,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8345f80a7f0374241ffbd39b3c32c2cb9258396c
 associated_specs:
   - path: examples/notification-linespecs/process_todo_created_event.linespec
 associated_traces: []
