@@ -25,6 +25,12 @@ const (
 	clientDeprecateEOF              uint32 = 0x01000000
 	clientOptionalResultsetMetadata uint32 = 0x02000000
 	clientQueryAttributes           uint32 = 0x08000000
+
+	comStmtPrepare      byte = 0x16
+	comStmtExecute      byte = 0x17
+	comStmtSendLongData byte = 0x18
+	comStmtClose        byte = 0x19
+	comStmtReset        byte = 0x1a
 )
 
 type Proxy struct {
@@ -155,6 +161,15 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 	go func() { _, _ = io.Copy(clientConn, upstreamConn); clientConn.Close() }()
 
 	// 2. Client -> Server Loop (Intercept Commands)
+	// Per-connection prepared statement state:
+	// - preparedStmts: maps synthetic stmt_id -> SQL for mocked prepared statements
+	// - nextStmtID: auto-incrementing ID counter for synthetic statements
+	// Synthetic stmt_ids are assigned by us (never forwarded to upstream). When the
+	// client sends COM_STMT_EXECUTE with a synthetic ID we send a mock response.
+	// Real stmt_ids (for non-mocked stmts forwarded to upstream) are never stored here.
+	preparedStmts := make(map[uint32]string)
+	var nextStmtID uint32 = 1
+
 	var clientCapabilities uint32
 	for {
 		header := make([]byte, 4)
@@ -240,6 +255,113 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 				_, _ = upstreamConn.Write(header)
 				_, _ = upstreamConn.Write(payload)
 				return
+			} else if cmd == comStmtPrepare {
+				// COM_STMT_PREPARE: check if this query has a mock.
+				// If yes, assign a synthetic stmt_id and send StmtPrepareOK without
+				// forwarding to upstream. If no mock, forward and let io.Copy relay
+				// the upstream's response (including its real stmt_id) to the client.
+				sql := string(payload[1:])
+				logger.Debug("COM_STMT_PREPARE received: %.80s", sql)
+				if p.isTransparent() || p.isWhitelisted(sql) {
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				} else {
+					tableName := p.extractTable(sql)
+					_, found := p.registry.PeekMock(tableName, sql)
+					if found {
+						stmtID := nextStmtID
+						nextStmtID++
+						preparedStmts[stmtID] = sql
+						logger.Debug("Intercepting COM_STMT_PREPARE for table %s, stmtID=%d", tableName, stmtID)
+						_ = p.sendStmtPrepareOK(clientConn, stmtID, sql, clientCapabilities)
+					} else {
+						logger.Debug("No mock for COM_STMT_PREPARE table %s, forwarding", tableName)
+						_, _ = upstreamConn.Write(header)
+						_, _ = upstreamConn.Write(payload)
+					}
+				}
+			} else if cmd == comStmtExecute {
+				// COM_STMT_EXECUTE: if stmtID is one of our synthetic ones, send a
+				// mock response. Otherwise forward to upstream.
+				if len(payload) < 5 {
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				} else {
+					stmtID := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
+					if sql, ok := preparedStmts[stmtID]; ok {
+						logger.Debug("COM_STMT_EXECUTE for synthetic stmtID=%d, sql=%.80s", stmtID, sql)
+						tableName := p.extractTable(sql)
+						p.registry.CheckNegativeMocks(tableName, sql)
+						mock, found := p.registry.FindMock(tableName, sql)
+						if found {
+							if mock.SQL == "" {
+								mock.SQL = sql
+							}
+							if len(mock.Verify) > 0 {
+								if err := verify.VerifySQL(sql, mock.Verify); err != nil {
+									logger.Error("VERIFY failed for prepared stmt table %s: %v", tableName, err)
+									p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
+									continue
+								}
+							}
+							logger.Debug("Mocking COM_STMT_EXECUTE for table %s", tableName)
+							_ = p.sendBinaryMockResponse(clientConn, mock, clientCapabilities)
+						} else {
+							// Synthetic stmt but mock disappeared (e.g. registry reset) — error out.
+							p.sendErrorResponse(clientConn, "LineSpec: mock not found for prepared statement")
+						}
+					} else {
+						// Not our stmt — forward to upstream.
+						_, _ = upstreamConn.Write(header)
+						_, _ = upstreamConn.Write(payload)
+					}
+				}
+			} else if cmd == comStmtSendLongData {
+				// COM_STMT_SEND_LONG_DATA: used to send large parameter values.
+				// For synthetic stmts we don't use parameter values, so just discard.
+				// For upstream stmts, forward normally.
+				if len(payload) >= 5 {
+					stmtID := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
+					if _, ok := preparedStmts[stmtID]; !ok {
+						_, _ = upstreamConn.Write(header)
+						_, _ = upstreamConn.Write(payload)
+					}
+					// Synthetic stmt: discard (no response per protocol)
+				} else {
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				}
+			} else if cmd == comStmtClose {
+				// COM_STMT_CLOSE: no response expected per MySQL protocol.
+				if len(payload) >= 5 {
+					stmtID := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
+					if _, ok := preparedStmts[stmtID]; ok {
+						delete(preparedStmts, stmtID)
+						logger.Debug("COM_STMT_CLOSE for synthetic stmtID=%d, removed from map", stmtID)
+						// Don't forward — upstream has no record of our synthetic stmt
+					} else {
+						_, _ = upstreamConn.Write(header)
+						_, _ = upstreamConn.Write(payload)
+					}
+				} else {
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				}
+			} else if cmd == comStmtReset {
+				// COM_STMT_RESET: resets long-data state of a prepared statement.
+				if len(payload) >= 5 {
+					stmtID := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
+					if _, ok := preparedStmts[stmtID]; ok {
+						// Acknowledge the reset for our synthetic stmt.
+						_ = p.sendMockOK(clientConn)
+					} else {
+						_, _ = upstreamConn.Write(header)
+						_, _ = upstreamConn.Write(payload)
+					}
+				} else {
+					_, _ = upstreamConn.Write(header)
+					_, _ = upstreamConn.Write(payload)
+				}
 			} else {
 				_, _ = upstreamConn.Write(header)
 				_, _ = upstreamConn.Write(payload)
@@ -421,6 +543,208 @@ func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
 	payload = append(payload, []byte(message)...)                  // Error message
 
 	return p.writePacket(conn, 1, payload)
+}
+
+// sendStmtPrepareOK sends a COM_STMT_PREPARE_OK response for a synthetic prepared statement.
+// num_params is derived by counting '?' placeholders in the SQL; num_columns is always 0
+// (the actual result columns are defined in the COM_STMT_EXECUTE response).
+func (p *Proxy) sendStmtPrepareOK(conn net.Conn, stmtID uint32, sql string, clientCapabilities uint32) error {
+	numParams := uint16(strings.Count(sql, "?"))
+
+	// Packet 1: PrepareOK
+	prepOK := []byte{
+		0x00,                                                                    // OK marker
+		byte(stmtID), byte(stmtID >> 8), byte(stmtID >> 16), byte(stmtID >> 24), // stmt_id (LE)
+		0, 0, // num_columns = 0
+		byte(numParams), byte(numParams >> 8), // num_params (LE)
+		0x00, // reserved
+		0, 0, // warning_count = 0
+	}
+	if err := p.writePacket(conn, 1, prepOK); err != nil {
+		return err
+	}
+
+	if numParams == 0 {
+		return nil
+	}
+
+	// Send a minimal ColumnDefinition for each parameter placeholder.
+	// Clients use num_params to allocate bind buffers; the actual types are
+	// sent by the client in COM_STMT_EXECUTE's new_params_bound section.
+	seq := uint8(2)
+	for i := uint16(0); i < numParams; i++ {
+		colDef := p.makeColumnDef("", "", "?", mysql.MYSQL_TYPE_VAR_STRING, 0)
+		if err := p.writePacket(conn, seq, colDef); err != nil {
+			return err
+		}
+		seq++
+	}
+	// EOF after param definitions (CLIENT_DEPRECATE_EOF does not affect COM_STMT_PREPARE EOFs)
+	return p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0})
+}
+
+// sendBinaryMockResponse sends the mock response for a COM_STMT_EXECUTE command.
+// The row format uses the MySQL binary result set protocol (0x00 header + null bitmap + values).
+func (p *Proxy) sendBinaryMockResponse(conn net.Conn, mock *types.ExpectStatement, clientCapabilities uint32) error {
+	if mock.Channel == types.WriteMySQL {
+		return p.sendMockOK(conn)
+	}
+
+	if mock.Channel == types.ReadMySQL {
+		if mock.ReturnsEmpty {
+			// Empty result sets use the same packet structure in text and binary protocols.
+			return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
+		}
+
+		if mock.ReturnsFile != "" {
+			p.loader.BaseDir = mock.BaseDir
+			payload, err := p.loader.Load(mock.ReturnsFile)
+			if err != nil {
+				logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
+				return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
+			}
+			return p.sendBinaryPayloadResultSet(conn, payload, mock.Table, clientCapabilities)
+		}
+
+		return p.sendEmptyResultSet(conn, mock.Table, clientCapabilities)
+	}
+
+	return p.sendMockOK(conn)
+}
+
+// sendBinaryPayloadResultSet sends a binary-protocol result set for COM_STMT_EXECUTE.
+// Column metadata packets are identical to text protocol; rows differ: each row starts with
+// 0x00 followed by a null bitmap, then MYSQL_TYPE_VAR_STRING values (length-encoded strings).
+func (p *Proxy) sendBinaryPayloadResultSet(conn net.Conn, payload interface{}, tableName string, clientCapabilities uint32) error {
+	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
+	optionalMeta := clientCapabilities&clientOptionalResultsetMetadata != 0
+
+	var rows []map[string]interface{}
+
+	data, ok := payload.(map[string]interface{})
+	if !ok {
+		list, ok := payload.([]interface{})
+		if ok {
+			for _, item := range list {
+				if m, ok := item.(map[string]interface{}); ok {
+					rows = append(rows, m)
+				}
+			}
+		}
+	} else {
+		rowsRaw, ok := data["rows"].([]interface{})
+		if ok {
+			for _, item := range rowsRaw {
+				if m, ok := item.(map[string]interface{}); ok {
+					rows = append(rows, m)
+				}
+			}
+		} else {
+			rows = append(rows, data)
+		}
+	}
+
+	if len(rows) == 0 {
+		return p.sendEmptyResultSet(conn, tableName, clientCapabilities)
+	}
+
+	firstRow := rows[0]
+	columns := []string{"id", "name", "email", "password", "token", "created_at", "updated_at"}
+	for k := range firstRow {
+		found := false
+		for _, c := range columns {
+			if k == c {
+				found = true
+				break
+			}
+		}
+		if !found {
+			columns = append(columns, k)
+		}
+	}
+
+	finalColumns := make([]string, 0, len(columns))
+	for _, col := range columns {
+		if _, ok := firstRow[col]; ok {
+			finalColumns = append(finalColumns, col)
+		}
+	}
+	columns = finalColumns
+
+	// Column count packet (identical to text protocol)
+	colCountPayload := []byte{byte(len(columns))}
+	if optionalMeta {
+		colCountPayload = append([]byte{0x01}, colCountPayload...)
+	}
+	if err := p.writePacket(conn, 1, colCountPayload); err != nil {
+		return err
+	}
+
+	seq := uint8(2)
+	for _, col := range columns {
+		tp := mysql.MYSQL_TYPE_VAR_STRING
+		flags := uint16(0)
+		if val, ok := firstRow[col]; ok {
+			switch val.(type) {
+			case int, int64, float64:
+				tp = mysql.MYSQL_TYPE_LONGLONG
+				if col == "id" {
+					flags = 3
+				}
+			}
+		}
+		colDef := p.makeColumnDef(p.dbConfig.GetDatabaseName(), tableName, col, tp, flags)
+		if err := p.writePacket(conn, seq, colDef); err != nil {
+			return err
+		}
+		seq++
+	}
+
+	// EOF after column definitions (same as text protocol)
+	if !deprecateEOF {
+		if err := p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0}); err != nil {
+			return err
+		}
+		seq++
+	}
+
+	// Binary rows: 0x00 header + null bitmap + length-encoded values
+	numCols := len(columns)
+	nullBitmapLen := (numCols + 7 + 2) / 8 // offset of 2 per MySQL binary protocol spec
+	for _, row := range rows {
+		// Build null bitmap (bit = 1 if column is NULL; bit index = col_index + 2)
+		nullBitmap := make([]byte, nullBitmapLen)
+		for i, col := range columns {
+			if row[col] == nil {
+				bitPos := i + 2
+				nullBitmap[bitPos/8] |= 1 << (uint(bitPos) % 8)
+			}
+		}
+
+		rowData := make([]byte, 0, 1+nullBitmapLen+numCols*16)
+		rowData = append(rowData, 0x00) // binary row header
+		rowData = append(rowData, nullBitmap...)
+
+		for _, col := range columns {
+			val := row[col]
+			if val == nil {
+				continue // represented in null bitmap
+			}
+			strVal := fmt.Sprintf("%v", val)
+			rowData = append(rowData, mysql.PutLengthEncodedString([]byte(strVal))...)
+		}
+
+		if err := p.writePacket(conn, seq, rowData); err != nil {
+			return err
+		}
+		seq++
+	}
+
+	// Final terminator (same as text protocol)
+	if deprecateEOF {
+		return p.writePacket(conn, seq, []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00})
+	}
+	return p.writePacket(conn, seq, []byte{0xfe, 0, 0, 0x22, 0})
 }
 
 func (p *Proxy) sendEmptyResultSet(conn net.Conn, tableName string, clientCapabilities uint32) error {
