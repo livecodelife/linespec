@@ -1,0 +1,45 @@
+id: prov-2026-edbd5218
+title: Implement MySQL prepared statement interception (P3-B)
+status: open
+created_at: "2026-04-06"
+author: calebcowen@gmail.com
+intent: |
+  Implement MySQL prepared statement interception in the MySQL proxy so that services
+  using COM_STMT_PREPARE (0x16) and COM_STMT_EXECUTE (0x17) — the dominant mode for
+  virtually all modern MySQL drivers and ORMs — are correctly mock-matched against the
+  LineSpec registry. Without this, prepared statements pass through to the real database
+  and mocks are never hit, causing tests to appear green while bypassing the mock layer.
+
+  Also verify and mark P3-A (PostgreSQL extended query protocol) as complete; the
+  implementation already exists in handleClientMessagesWithInterception but was not
+  reflected in the improvement plan.
+
+  Implementation approach for P3-B:
+  - Add per-connection state (preparedStmts map[uint32]string, nextStmtID) in handleConn
+  - COM_STMT_PREPARE: if mock exists (PeekMock), assign synthetic stmtID, send StmtPrepareOK;
+    otherwise forward to upstream (response via transparent io.Copy)
+  - COM_STMT_EXECUTE: if stmtID is synthetic, FindMock and send binary result set;
+    otherwise forward to upstream
+  - COM_STMT_CLOSE: if synthetic, delete from map, no response; otherwise forward
+  - New functions: sendStmtPrepareOK, sendBinaryMockResponse, sendBinaryPayloadResultSet,
+    sendBinaryEmptyResultSet (binary protocol rows differ from text: 0x00 header + null bitmap)
+constraints:
+  - Must not break existing COM_QUERY mock matching or any current example test suite
+  - Binary result set format required for COM_STMT_EXECUTE (MYSQL_TYPE_VAR_STRING rows)
+  - Synthetic stmt_ids must not collide with upstream real stmt_ids (upstream never sees synthetic stmts)
+  - Hit count must be incremented exactly once, at COM_STMT_EXECUTE time (not at COM_STMT_PREPARE)
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/mysql/proxy.go
+    type: go-source
+  - path: examples/todo-linespecs/get_todo_success.linespec
+  - path: examples/todo-linespecs/create_todo_success.linespec
+associated_traces: []
+monitors: []
+tags: []
