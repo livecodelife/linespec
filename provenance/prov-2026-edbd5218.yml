@@ -1,6 +1,6 @@
 id: prov-2026-edbd5218
 title: Implement MySQL prepared statement interception (P3-B)
-status: open
+status: implemented
 created_at: "2026-04-06"
 author: calebcowen@gmail.com
 intent: |
@@ -34,7 +34,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 3c7dbb10dfc0162178fca3e3fd7441de851ec4f2
 associated_specs:
   - path: pkg/proxy/mysql/proxy.go
     type: go-source
