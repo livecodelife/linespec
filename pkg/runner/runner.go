@@ -1011,6 +1011,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	const grpcProxyAlias = "grpc-proxy"
 	grpcProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"})
+	var grpcHostPort, grpcVerifyPort string
 	if hasGRPC || serviceConfig.Infrastructure.GRPC {
 		grpcProxyCmd := []string{
 			"proxy", "grpc", "0.0.0.0:50051", "unused",
@@ -1022,10 +1023,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: "linespec:latest",
 			Cmd:   grpcProxyCmd,
+			ExposedPorts: map[nat.Port]struct{}{
+				nat.Port("50051/tcp"): {},
+				nat.Port("8081/tcp"):  {},
+			},
 		}, &container.HostConfig{
 			Binds: []string{
 				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+			PortBindings: map[nat.Port][]nat.PortBinding{
+				nat.Port("50051/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+				nat.Port("8081/tcp"):  {{HostIP: "0.0.0.0", HostPort: "0"}},
 			},
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -1036,16 +1045,36 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			return fmt.Errorf("failed to start gRPC interceptor: %w", err)
 		}
 		logger.Debug("gRPC interceptor started with alias %s", grpcProxyAlias)
+		if logger.IsDebug() {
+			go func() {
+				logCtx, logCancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer logCancel()
+				_ = r.suite.orch.StreamLogs(logCtx, grpcProxyContainerName, os.Stdout, os.Stderr)
+			}()
+		}
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			if logger.IsDebug() {
+				logger.Debug("Fetching gRPC proxy logs before cleanup")
+				_ = r.suite.orch.StreamLogs(cleanupCtx, grpcProxyContainerName, os.Stdout, os.Stderr)
+			}
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, grpcProxyContainerName)
 		}()
+		if inspectGRPC, err := r.suite.orch.GetContainerInspect(ctx, grpcProxyContainerName); err == nil && inspectGRPC.NetworkSettings != nil {
+			if p, ok := inspectGRPC.NetworkSettings.Ports["50051/tcp"]; ok && len(p) > 0 {
+				grpcHostPort = p[0].HostPort
+			}
+			if p, ok := inspectGRPC.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+				grpcVerifyPort = p[0].HostPort
+			}
+		}
 	}
 
 	// Start Redis interceptor when infrastructure.redis is enabled.
 	const redisProxyAlias = "redis-proxy"
 	redisProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"})
+	var redisHostPort, redisVerifyPort string
 	if serviceConfig.Infrastructure.Redis {
 		redisProxyCmd := []string{
 			"proxy", "redis", "0.0.0.0:6379", "unused",
@@ -1057,10 +1086,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: "linespec:latest",
 			Cmd:   redisProxyCmd,
+			ExposedPorts: map[nat.Port]struct{}{
+				nat.Port("6379/tcp"): {},
+				nat.Port("8081/tcp"): {},
+			},
 		}, &container.HostConfig{
 			Binds: []string{
 				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+			PortBindings: map[nat.Port][]nat.PortBinding{
+				nat.Port("6379/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+				nat.Port("8081/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
 			},
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -1071,11 +1108,30 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			return fmt.Errorf("failed to start Redis interceptor: %w", err)
 		}
 		logger.Debug("Redis interceptor started with alias %s", redisProxyAlias)
+		if logger.IsDebug() {
+			go func() {
+				logCtx, logCancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer logCancel()
+				_ = r.suite.orch.StreamLogs(logCtx, redisProxyContainerName, os.Stdout, os.Stderr)
+			}()
+		}
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			if logger.IsDebug() {
+				logger.Debug("Fetching Redis proxy logs before cleanup")
+				_ = r.suite.orch.StreamLogs(cleanupCtx, redisProxyContainerName, os.Stdout, os.Stderr)
+			}
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, redisProxyContainerName)
 		}()
+		if inspectRedis, err := r.suite.orch.GetContainerInspect(ctx, redisProxyContainerName); err == nil && inspectRedis.NetworkSettings != nil {
+			if p, ok := inspectRedis.NetworkSettings.Ports["6379/tcp"]; ok && len(p) > 0 {
+				redisHostPort = p[0].HostPort
+			}
+			if p, ok := inspectRedis.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+				redisVerifyPort = p[0].HostPort
+			}
+		}
 	}
 
 	// Wait for services to be ready on the network
@@ -1088,6 +1144,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if httpVerifyPort != "" {
 		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+httpVerifyPort, 30*time.Second); err != nil {
 			return fmt.Errorf("HTTP proxy not ready: %w", err)
+		}
+	}
+	if grpcHostPort != "" {
+		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+grpcHostPort, 30*time.Second); err != nil {
+			return fmt.Errorf("gRPC proxy not ready: %w", err)
+		}
+	}
+	if redisHostPort != "" {
+		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+redisHostPort, 30*time.Second); err != nil {
+			return fmt.Errorf("Redis proxy not ready: %w", err)
 		}
 	}
 
@@ -1346,6 +1412,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	if httpVerifyPort != "" {
 		r.collectHits("localhost:" + httpVerifyPort)
+	}
+	if grpcVerifyPort != "" {
+		r.collectHits("localhost:" + grpcVerifyPort)
+	}
+	if redisVerifyPort != "" {
+		r.collectHits("localhost:" + redisVerifyPort)
 	}
 	// REMOVED: time.Sleep(500 * time.Millisecond)
 	// collectHits already waits for proxy responses with retry logic

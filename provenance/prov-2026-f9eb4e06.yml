@@ -26,6 +26,9 @@ affected_scope:
   - examples/notification-linespecs/list_notifications_cache_hit.linespec
   - examples/notification-linespecs/payloads/cached_user.json
   - examples/notification-linespecs/payloads/get_user_grpc_response.json
+  - examples/notification-linespecs/payloads/get_user_grpc_request.yaml
+  - pkg/runner/runner.go
+  - pkg/dsl/parser.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

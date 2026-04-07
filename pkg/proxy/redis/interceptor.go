@@ -187,10 +187,17 @@ func (i *Interceptor) handleCommand(cmd, key string, args []string) []byte {
 
 // encodePayload converts a JSON payload to a RESP2 response.
 // JSON strings -> bulk string, arrays -> RESP2 array, numbers -> integer, null -> nil.
+// JSON objects -> bulk string containing the raw JSON (preserves the value for clients
+// that do json.loads(redis.get(key))). Use HSET/HGETALL mocks for hash semantics.
 func encodePayload(data []byte) []byte {
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
 		// Not valid JSON — return raw bytes as a bulk string.
+		return encodeBulkString(string(data))
+	}
+	// JSON objects are stored as serialized strings in Redis string keys.
+	// Return the raw JSON bytes so clients can deserialize them.
+	if _, ok := v.(map[string]interface{}); ok {
 		return encodeBulkString(string(data))
 	}
 	return encodeValue(v)

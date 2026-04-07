@@ -239,6 +239,17 @@ func TestEncodePayload_Array(t *testing.T) {
 	}
 }
 
+func TestEncodePayload_Object(t *testing.T) {
+	// JSON objects must be returned as a bulk string containing the raw JSON,
+	// not as a RESP2 flat array. Services do json.loads(redis.get(key)).
+	data := []byte(`{"id":1,"name":"Alice"}`)
+	result := string(encodePayload(data))
+	expected := "$23\r\n{\"id\":1,\"name\":\"Alice\"}\r\n"
+	if result != expected {
+		t.Errorf("Expected bulk string for JSON object, got %q", result)
+	}
+}
+
 func TestEncodePayload_InvalidJSON(t *testing.T) {
 	data := []byte(`not json`)
 	result := string(encodePayload(data))

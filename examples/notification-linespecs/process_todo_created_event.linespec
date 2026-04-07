@@ -3,10 +3,9 @@ TEST process_todo_created_event
 RECEIVE KAFKA:todo-events
 WITH {{payloads/todo_created_event.yaml}}
 
-EXPECT HTTP:GET http://user-service/api/v1/users/42
-HEADERS
-  Authorization: Bearer service_token_xyz789
-RETURNS {{payloads/user_42.yaml}}
+EXPECT GRPC:users.UserService/GetUser
+WITH {{payloads/get_user_grpc_request.yaml}}
+RETURNS {{payloads/get_user_grpc_response.json}}
 
 EXPECT WRITE:POSTGRESQL notifications
 WITH {{payloads/notification_insert.yaml}}
