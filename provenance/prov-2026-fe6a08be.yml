@@ -1,6 +1,6 @@
 id: prov-2026-fe6a08be
 title: Fix P3-D Kafka produce message parsing magic offsets
-status: open
+status: implemented
 created_at: "2026-04-06"
 author: calebcowen@gmail.com
 intent: "Fix extractProduceData in the Kafka interceptor to properly parse Produce requests using the Kafka wire protocol instead of magic positional offsets. Add skipClientID call (missing unlike all other parsers), implement proper RecordBatch v2 varint/zigzag decoding, extract headers, handle MessageSet v0/v1 fallback, detect compressed batches, and remove the 1000-byte key cap. Add decodeZigzagVarint helper and comprehensive tests."
@@ -18,7 +18,7 @@ related:
   - prov-2026-030
   - prov-2026-abc98f0d
   - prov-2026-63f06580
-sealed_at_sha: ""
+sealed_at_sha: d0c6904fdbb6d3f333d36842b0c05cd94c07dc45
 associated_specs:
   - path: pkg/proxy/kafka/interceptor_test.go
     type: go-test
