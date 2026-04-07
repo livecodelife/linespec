@@ -1,6 +1,6 @@
 id: prov-2026-238350b1
 title: 'P4-A: Replace fixed sleeps with exponential-backoff readiness polling'
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 980605f7455dc7d921b665acb9329014a045c045
 associated_specs:
   - path: examples/user-linespecs/authenticate_user_success.linespec
     type: linespec
