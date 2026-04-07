@@ -1,6 +1,6 @@
 id: prov-2026-e00e9f98
 title: Fix MySQL integration tests broken by P2-E database name enforcement
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: >
@@ -17,7 +17,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-24c7e7aa
-sealed_at_sha: ""
+sealed_at_sha: ffb0e9c1f6a6926ade5a5c86bdc9e166fece6179
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
