@@ -1,6 +1,6 @@
 id: prov-2026-f9eb4e06
 title: Add Redis caching and gRPC client to notification-service example
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: "Demonstrate the gRPC and Redis proxy support added in P3-E by extending the notification-service example. Adds Redis auth-token caching (check cache before calling user-service HTTP) and a gRPC+JSON client for user lookup in the Kafka consumer. Also fixes a bug in the Redis interceptor's encodePayload where JSON objects were incorrectly serialized as RESP2 flat arrays instead of bulk strings."
@@ -34,7 +34,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-9f50db3c
-sealed_at_sha: ""
+sealed_at_sha: 050414a1d097d8bafefe94fd931c8f4e893950a5
 associated_specs:
   - path: pkg/proxy/redis/interceptor_test.go
     type: go-test
