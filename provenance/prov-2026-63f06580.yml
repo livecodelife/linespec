@@ -1,0 +1,59 @@
+id: prov-2026-63f06580
+title: 'Fix P3-C Kafka consumer protocol: JoinGroup follower, protocol name, ListOffsets,
+  YAML→JSON HTTP responses'
+status: open
+created_at: "2026-04-06"
+author: calebcowen@gmail.com
+intent: |
+  Bug fixes discovered during example-suite testing of the P3-C Kafka consumer
+  implementation. Five distinct issues prevented the consumer test from passing:
+
+  1. JoinGroup response made the consumer the group leader with 0-byte member_metadata,
+     causing aiokafka to crash decoding ConsumerProtocolSubscription from empty bytes.
+     Fixed by returning a fake leader ID so the consumer is always a follower.
+
+  2. JoinGroup response hardcoded protocol_name="range" but aiokafka 0.9.0 defaults
+     to RoundRobinPartitionAssignor (protocol "roundrobin"). Fixed by parsing the
+     actual protocol name from the JoinGroup request and echoing it back.
+
+  3. ListOffsets response returned offset=count (high watermark), causing consumers
+     with auto_offset_reset='latest' to seek past the seeded message. Fixed by
+     always returning offset 0 so consumers read from the start of seeded messages.
+
+  4. HTTP interceptor served YAML payload files as raw YAML bytes, but HTTP clients
+     (Python httpx, etc.) call response.json() expecting JSON. Fixed by re-encoding
+     YAML and JSON payloads as JSON before serving.
+
+  5. KAFKA_BROKERS env override was set at step 4 (infrastructure defaults, lowest
+     priority) but .linespec.yml service environment (step 2) overwrote it. Fixed by
+     moving the override to after step 2 so it always wins.
+
+  Also: --debug flag was not parsed in runProxy() so Kafka proxy containers never
+  enabled debug logging even when the runner passed --debug.
+constraints:
+  - Must not break existing user-linespecs, todo-linespecs, or order-linespecs
+  - YAML→JSON conversion must only apply to application/yaml content types (not XML)
+  - JoinGroup follower approach must still result in SyncGroup being handled correctly
+affected_scope:
+  - pkg/proxy/kafka/interceptor.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/http/interceptor_test.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-abc98f0d
+  - prov-2026-ebfa7835
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+  - path: pkg/proxy/kafka/interceptor_test.go
+    type: go-test
+  - path: pkg/proxy/http/interceptor_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags: []
