@@ -1,0 +1,35 @@
+id: prov-2026-9f50db3c
+title: Add gRPC and Redis protocol proxy support (P3-E)
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: "Implement gRPC (HTTP/2 + JSON) and Redis (RESP2) protocol interceptors so services that use these as dependencies can be tested using LineSpec. Adds new DSL channel types (GRPC:service/Method, READ:REDIS, WRITE:REDIS), new proxy processes, and runner integration to wire proxies into the Docker container network."
+constraints:
+  - "gRPC: support unary RPCs only; streaming is out of scope"
+  - "gRPC: use JSON encoding (application/grpc+json) only; binary protobuf payloads are out of scope"
+  - "gRPC: h2c (HTTP/2 cleartext) transport only; TLS is not needed for container-internal traffic"
+  - "Redis: implement RESP2 protocol only; RESP3 is not needed for mock responses"
+  - "Redis: hand-roll RESP2 parser to match the approach used for Kafka wire protocol"
+  - "All tests (make test, make test-quick, 4 example linespec suites) must pass"
+affected_scope:
+  - pkg/types/types.go
+  - pkg/config/types.go
+  - pkg/dsl/parser.go
+  - pkg/registry/registry.go
+  - pkg/verify/verify.go
+  - cmd/linespec/main_beta.go
+  - pkg/runner/runner.go
+  - go.mod
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/dsl/dsl_test.go
+    type: go-test
+  - path: pkg/registry/registry_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags: []
