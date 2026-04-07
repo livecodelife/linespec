@@ -1,0 +1,26 @@
+id: prov-2026-00cfa45c
+title: 'P4-B: Compile DSL verify-rule regex patterns once at package init'
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: "Eliminate repeated regex compilation in the DSL parser. The parseVerifyRule function
+  and parseExpectStatement function call regexp.MustCompile inline for each invocation,
+  producing identical *regexp.Regexp values every time. Move all pattern compilation to
+  package-level var declarations so each pattern is compiled exactly once at program startup."
+constraints:
+  - "No behavioral changes — only compilation timing changes"
+  - "All existing DSL parsing tests must continue to pass"
+  - "Do not change the regex patterns themselves"
+affected_scope:
+  - "pkg/dsl/parser.go"
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/authenticate_user_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
