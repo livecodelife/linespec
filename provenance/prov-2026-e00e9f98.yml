@@ -1,0 +1,26 @@
+id: prov-2026-e00e9f98
+title: Fix MySQL integration tests broken by P2-E database name enforcement
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: >
+  Fix three MySQL proxy integration tests (TestProxy_Passthrough, TestProxy_Mocking,
+  TestProxy_MockingSelect) that were broken by P2-E. P2-E required the MySQL proxy
+  to receive an explicit database name before Start() and fail if none is set. The
+  integration tests were not updated to call SetDatabaseName(), so the proxy exited
+  before binding and tests saw "connection refused" on the proxy port.
+constraints: []
+affected_scope:
+  - pkg/proxy/mysql/proxy_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-24c7e7aa
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []

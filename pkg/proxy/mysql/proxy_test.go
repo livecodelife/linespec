@@ -29,6 +29,7 @@ func TestProxy_Passthrough(t *testing.T) {
 	reg := registry.NewMockRegistry()
 	proxyAddr := "localhost:3308"
 	proxy := NewProxy(proxyAddr, dbAddr, reg)
+	proxy.SetDatabaseName(dbName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -98,6 +99,7 @@ func TestProxy_Mocking(t *testing.T) {
 
 	proxyAddr := "localhost:3309"
 	proxy := NewProxy(proxyAddr, dbAddr, reg)
+	proxy.SetDatabaseName(dbName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -161,6 +163,7 @@ func TestProxy_MockingSelect(t *testing.T) {
 
 	proxyAddr := "localhost:3310"
 	proxy := NewProxy(proxyAddr, dbAddr, reg)
+	proxy.SetDatabaseName(dbName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
