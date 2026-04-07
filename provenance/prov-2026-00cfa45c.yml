@@ -1,6 +1,6 @@
 id: prov-2026-00cfa45c
 title: 'P4-B: Compile DSL verify-rule regex patterns once at package init'
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: "Eliminate repeated regex compilation in the DSL parser. The parseVerifyRule function
@@ -17,7 +17,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 9174358269e09243262da95c5341ad2da1a2371c
 associated_specs:
   - path: examples/user-linespecs/authenticate_user_success.linespec
     type: linespec
