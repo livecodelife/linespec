@@ -61,6 +61,7 @@ func TestInterceptor_ContentTypeJSON(t *testing.T) {
 }
 
 func TestInterceptor_ContentTypeYAML(t *testing.T) {
+	// YAML payloads are re-encoded as JSON so HTTP clients always receive valid JSON.
 	interceptor, _ := setupInterceptorWithMock(t, "response.yaml", []byte("key: value\n"), nil)
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -71,11 +72,11 @@ func TestInterceptor_ContentTypeYAML(t *testing.T) {
 		t.Errorf("Expected 200, got %d", w.Code)
 	}
 	ct := w.Header().Get("Content-Type")
-	if ct != "application/yaml" {
-		t.Errorf("Expected Content-Type=application/yaml, got %q", ct)
+	if ct != "application/json" {
+		t.Errorf("Expected Content-Type=application/json (YAML re-encoded), got %q", ct)
 	}
-	if w.Body.String() != "key: value\n" {
-		t.Errorf("Expected raw YAML body, got %q", w.Body.String())
+	if w.Body.String() != `{"key":"value"}` {
+		t.Errorf("Expected JSON-encoded body, got %q", w.Body.String())
 	}
 }
 

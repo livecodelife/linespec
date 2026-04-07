@@ -234,7 +234,7 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
-	// Extract --db-name and --host flags from remaining args
+	// Extract --db-name, --host, and --debug flags from remaining args
 	var dbName, kafkaHost string
 	var filteredArgs []string
 	for i := 5; i < len(os.Args); i++ {
@@ -248,6 +248,8 @@ func runProxy() {
 			i++
 		} else if strings.HasPrefix(os.Args[i], "--host=") {
 			kafkaHost = strings.TrimPrefix(os.Args[i], "--host=")
+		} else if os.Args[i] == "--debug" || os.Args[i] == "-d" {
+			logger.SetLevel(logger.DebugLevel)
 		} else {
 			filteredArgs = append(filteredArgs, os.Args[i])
 		}

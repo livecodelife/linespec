@@ -135,7 +135,6 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	if mock.ReturnsFile != "" {
 		i.loader.BaseDir = mock.BaseDir
 
-		// Load raw bytes for serving (preserves original format)
 		rawData, inferredContentType, err := i.loader.LoadRaw(mock.ReturnsFile)
 		if err != nil {
 			logger.Error("Error loading payload %s: %v", mock.ReturnsFile, err)
@@ -143,20 +142,35 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Parse to extract status code from payload if present
-		status := http.StatusOK
-		if payload, err := i.loader.Load(mock.ReturnsFile); err == nil {
-			if m, ok := payload.(map[string]interface{}); ok {
-				if s, ok := m["status"].(float64); ok {
-					status = int(s)
-				} else if s, ok := m["status"].(int); ok {
-					status = s
+		// For JSON and YAML payloads, parse and re-encode as JSON so HTTP clients receive
+		// a proper JSON response regardless of the source file format.
+		responseBody := rawData
+		contentType := inferredContentType
+		if inferredContentType == "application/json" || inferredContentType == "application/yaml" {
+			payload, loadErr := i.loader.Load(mock.ReturnsFile)
+			if loadErr == nil {
+				if encoded, encErr := json.Marshal(payload); encErr == nil {
+					responseBody = encoded
+					contentType = "application/json"
 				}
 			}
 		}
 
-		// Set response headers; explicit ResponseHeaders override inferred Content-Type
-		contentType := inferredContentType
+		// Extract status code from parsed payload if present
+		status := http.StatusOK
+		if inferredContentType == "application/json" || inferredContentType == "application/yaml" {
+			if payload, loadErr := i.loader.Load(mock.ReturnsFile); loadErr == nil {
+				if m, ok := payload.(map[string]interface{}); ok {
+					if s, ok := m["status"].(float64); ok {
+						status = int(s)
+					} else if s, ok := m["status"].(int); ok {
+						status = s
+					}
+				}
+			}
+		}
+
+		// Explicit ResponseHeaders may override Content-Type
 		for k, v := range mock.ResponseHeaders {
 			if strings.ToLower(k) == "content-type" {
 				contentType = v
@@ -166,7 +180,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(status)
-		w.Write(rawData)
+		w.Write(responseBody)
 		return
 	}
 
