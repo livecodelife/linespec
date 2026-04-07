@@ -1,7 +1,7 @@
 id: prov-2026-63f06580
 title: 'Fix P3-C Kafka consumer protocol: JoinGroup follower, protocol name, ListOffsets,
   YAML→JSON HTTP responses'
-status: open
+status: implemented
 created_at: "2026-04-06"
 author: calebcowen@gmail.com
 intent: |
@@ -47,7 +47,7 @@ superseded_by: ""
 related:
   - prov-2026-abc98f0d
   - prov-2026-ebfa7835
-sealed_at_sha: ""
+sealed_at_sha: ba742e63fcb1d32560796b34244c781e24766ec9
 associated_specs:
   - path: examples/notification-linespecs/process_todo_created_event.linespec
     type: linespec
