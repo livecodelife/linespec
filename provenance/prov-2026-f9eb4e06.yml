@@ -1,0 +1,40 @@
+id: prov-2026-f9eb4e06
+title: Add Redis caching and gRPC client to notification-service example
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: "Demonstrate the gRPC and Redis proxy support added in P3-E by extending the notification-service example. Adds Redis auth-token caching (check cache before calling user-service HTTP) and a gRPC+JSON client for user lookup in the Kafka consumer. Also fixes a bug in the Redis interceptor's encodePayload where JSON objects were incorrectly serialized as RESP2 flat arrays instead of bulk strings."
+constraints:
+  - "Use conventional Python patterns (redis-py, httpx HTTP/2 for gRPC+JSON)"
+  - "Redis cache key pattern: auth:cache:<token> with 300s TTL"
+  - "gRPC client targets GRPC:users.UserService/GetUser with JSON body {user_id: N}"
+  - "All existing notification-service linespecs must continue to pass"
+  - "All make test and make test-quick unit tests must pass"
+affected_scope:
+  - pkg/proxy/redis/interceptor.go
+  - pkg/proxy/redis/interceptor_test.go
+  - examples/notification-service/app/auth.py
+  - examples/notification-service/app/cache.py
+  - examples/notification-service/app/grpc_client.py
+  - examples/notification-service/app/kafka_consumer.py
+  - examples/notification-service/requirements.txt
+  - examples/notification-linespecs/.linespec.yml
+  - examples/notification-linespecs/list_notifications_success.linespec
+  - examples/notification-linespecs/get_notification_success.linespec
+  - examples/notification-linespecs/get_notification_not_found.linespec
+  - examples/notification-linespecs/process_todo_created_event.linespec
+  - examples/notification-linespecs/list_notifications_cache_hit.linespec
+  - examples/notification-linespecs/payloads/cached_user.json
+  - examples/notification-linespecs/payloads/get_user_grpc_response.json
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9f50db3c
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/redis/interceptor_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags: []
