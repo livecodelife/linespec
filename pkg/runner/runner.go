@@ -957,6 +957,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
 			"--host", kafkaProxyAlias,
 		}
+		if logger.IsDebug() {
+			kafkaProxyCmd = append(kafkaProxyCmd, "--debug")
+		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: "linespec:latest",
 			Cmd:   kafkaProxyCmd,
@@ -1043,12 +1046,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	if serviceConfig.Infrastructure.Kafka {
-		if spec.Receive.Channel == types.Event {
-			// Consumer test: route to the Kafka interceptor so Fetch requests are served.
-			envMap["KAFKA_BROKERS"] = kafkaProxyAlias + ":9092"
-		} else {
-			envMap["KAFKA_BROKERS"] = "kafka:29092"
-		}
+		envMap["KAFKA_BROKERS"] = "kafka:29092"
 	}
 
 	// 3. Add auto-generated HTTP dependency URLs (if not in user config)
@@ -1070,6 +1068,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			v = strings.ReplaceAll(v, "{{proxy_http_ip}}", proxyHttpIP)
 		}
 		envMap[k] = v
+	}
+
+	// 1.5. Override KAFKA_BROKERS for consumer tests — must beat user-defined config since
+	// the interceptor must receive Fetch requests regardless of what the service config sets.
+	if serviceConfig.Infrastructure.Kafka && spec.Receive.Channel == types.Event {
+		envMap["KAFKA_BROKERS"] = kafkaProxyAlias + ":9092"
 	}
 
 	// 1. Add generated environment variables from resolver (highest priority)

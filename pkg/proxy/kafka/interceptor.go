@@ -138,8 +138,8 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 			i.sendListOffsetsResponse(conn, correlationID, topic)
 
 		case 3: // Metadata
-			logger.Debug("Kafka Interceptor: Metadata request")
-			i.sendMetadataResponse(conn, correlationID)
+			logger.Debug("Kafka Interceptor: Metadata request v%d", apiVersion)
+			i.sendMetadataResponse(conn, correlationID, apiVersion)
 
 		case 8: // OffsetCommit
 			topic := parseOffsetCommitTopic(request)
@@ -157,7 +157,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 
 		case 11: // JoinGroup
 			logger.Debug("Kafka Interceptor: JoinGroup")
-			i.sendJoinGroupResponse(conn, correlationID)
+			i.sendJoinGroupResponse(conn, correlationID, request, apiVersion)
 
 		case 12: // Heartbeat
 			logger.Debug("Kafka Interceptor: Heartbeat")
@@ -184,6 +184,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 
 // ── Fetch response ───────────────────────────────────────────────────────────
 
+// sendFetchResponse builds a Fetch v1 response (throttle_time_ms, no last_stable_offset).
 func (i *Interceptor) sendFetchResponse(conn net.Conn, correlationID []byte, topic string) {
 	i.mu.Lock()
 	msgs := i.seeds[topic]
@@ -191,17 +192,16 @@ func (i *Interceptor) sendFetchResponse(conn net.Conn, correlationID []byte, top
 
 	p := make([]byte, 0, 512)
 	p = append(p, correlationID...)
-	p = appendInt32(p, 0) // throttle_time_ms
+	p = appendInt32(p, 0) // throttle_time_ms (v1+)
 
 	// topics array
-	p = appendInt32(p, 1)          // 1 topic
-	p = appendString(p, topic)     // topic name
-	p = appendInt32(p, 1)          // 1 partition response
-	p = appendInt32(p, 0)          // partition = 0
-	p = appendInt16(p, 0)          // error_code = 0
+	p = appendInt32(p, 1)                // 1 topic
+	p = appendString(p, topic)           // topic name
+	p = appendInt32(p, 1)                // 1 partition response
+	p = appendInt32(p, 0)                // partition = 0
+	p = appendInt16(p, 0)                // error_code = 0
 	p = appendInt64(p, int64(len(msgs))) // high_watermark
-	p = appendInt64(p, int64(len(msgs))) // last_stable_offset (v4+)
-	p = appendInt32(p, 0)          // aborted_transactions array count = 0
+	// No last_stable_offset (v4+ only); no aborted_transactions (v4+ only)
 
 	if len(msgs) == 0 {
 		p = appendInt32(p, -1) // null records
@@ -305,18 +305,16 @@ func parseFetchTopic(request []byte, apiVersion uint16) string {
 // ── ListOffsets ──────────────────────────────────────────────────────────────
 
 func (i *Interceptor) sendListOffsetsResponse(conn net.Conn, correlationID []byte, topic string) {
-	i.mu.Lock()
-	count := int64(len(i.seeds[topic]))
-	i.mu.Unlock()
-
+	// Always return offset 0 so that auto_offset_reset='latest' consumers still
+	// start from the beginning of the seeded messages (the fake topic always starts at 0).
 	p := append([]byte(nil), correlationID...)
-	p = appendInt32(p, 1)      // topics count
+	p = appendInt32(p, 1)  // topics count
 	p = appendString(p, topic)
-	p = appendInt32(p, 1)      // partitions count
-	p = appendInt32(p, 0)      // partition
-	p = appendInt16(p, 0)      // error_code
-	p = appendInt64(p, -1)     // timestamp (earliest sentinel)
-	p = appendInt64(p, count)  // offset (number of messages available)
+	p = appendInt32(p, 1)  // partitions count
+	p = appendInt32(p, 0)  // partition
+	p = appendInt16(p, 0)  // error_code
+	p = appendInt64(p, -1) // timestamp (-1 = latest sentinel)
+	p = appendInt64(p, 0)  // offset 0: consumer starts at the beginning of seeded messages
 
 	i.writeResponse(conn, p)
 }
@@ -447,20 +445,91 @@ func (i *Interceptor) sendFindCoordinatorResponse(conn net.Conn, correlationID [
 
 const memberID = "linespec-consumer-1"
 
-func (i *Interceptor) sendJoinGroupResponse(conn net.Conn, correlationID []byte) {
+// sendJoinGroupResponse assigns the consumer as a follower (leader = "linespec-leader-0").
+// When the consumer is a follower it does NOT attempt to decode member_metadata for partition
+// assignment — it just sends SyncGroup immediately. This avoids a buffer-underrun crash in
+// aiokafka that occurs when the leader receives 0-byte ConsumerProtocolSubscription metadata.
+// The protocol name is parsed from the request so we echo back exactly what the consumer sent.
+func (i *Interceptor) sendJoinGroupResponse(conn net.Conn, correlationID, request []byte, apiVersion uint16) {
+	protocol := parseJoinGroupProtocol(request, apiVersion)
+	logger.Debug("Kafka Interceptor: JoinGroup protocol=%q", protocol)
+
 	p := append([]byte(nil), correlationID...)
-	p = appendInt16(p, 0)           // error_code = 0
-	p = appendInt32(p, 1)           // generation_id = 1
-	p = appendString(p, "range")    // protocol_name
-	p = appendString(p, memberID)   // leader
-	p = appendString(p, memberID)   // member_id (assigned to this consumer)
-	// members array: one entry (we are both the leader and the only member)
-	p = appendInt32(p, 1)           // members count
-	p = appendString(p, memberID)   // member_id
-	// member metadata: empty bytes
-	p = appendInt32(p, 0)           // metadata length = 0
+	p = appendInt16(p, 0)                    // error_code = 0
+	p = appendInt32(p, 1)                    // generation_id = 1
+	p = appendString(p, protocol)            // protocol_name (echoed from request)
+	p = appendString(p, "linespec-leader-0") // leader (fake ID → consumer is a follower)
+	p = appendString(p, memberID)            // member_id assigned to this consumer
+	p = appendInt32(p, 0)                    // members array: empty (follower view)
 
 	i.writeResponse(conn, p)
+}
+
+// parseJoinGroupProtocol extracts the first protocol name from a JoinGroup request.
+// JoinGroup v1 request body (after apiKey, apiVersion, correlationID, clientId):
+//   group_id STRING, session_timeout_ms INT32, rebalance_timeout_ms INT32 (v1+),
+//   member_id STRING, protocol_type STRING,
+//   group_protocols ARRAY of (name STRING, metadata BYTES)
+func parseJoinGroupProtocol(request []byte, apiVersion uint16) string {
+	// request[0:8] = apiKey(2)+apiVersion(2)+correlationID(4), request[8:] = clientId + body
+	data := skipClientID(request[8:])
+	if data == nil {
+		return "roundrobin"
+	}
+	// group_id STRING
+	data = skipString(data)
+	if data == nil {
+		return "roundrobin"
+	}
+	// session_timeout_ms INT32
+	if len(data) < 4 {
+		return "roundrobin"
+	}
+	data = data[4:]
+	// rebalance_timeout_ms INT32 (v1+)
+	if apiVersion >= 1 {
+		if len(data) < 4 {
+			return "roundrobin"
+		}
+		data = data[4:]
+	}
+	// member_id STRING
+	data = skipString(data)
+	if data == nil {
+		return "roundrobin"
+	}
+	// protocol_type STRING
+	data = skipString(data)
+	if data == nil {
+		return "roundrobin"
+	}
+	// group_protocols ARRAY count INT32
+	if len(data) < 6 {
+		return "roundrobin"
+	}
+	// skip count, read first protocol name
+	data = data[4:]
+	nameLen := int(int16(binary.BigEndian.Uint16(data[0:2])))
+	data = data[2:]
+	if nameLen <= 0 || len(data) < nameLen {
+		return "roundrobin"
+	}
+	return string(data[:nameLen])
+}
+
+// skipString skips a Kafka STRING (INT16 length + bytes) and returns the remainder.
+func skipString(data []byte) []byte {
+	if len(data) < 2 {
+		return nil
+	}
+	n := int(int16(binary.BigEndian.Uint16(data[0:2])))
+	if n < 0 {
+		return data[2:] // null string
+	}
+	if len(data) < 2+n {
+		return nil
+	}
+	return data[2+n:]
 }
 
 // ── SyncGroup ────────────────────────────────────────────────────────────────
@@ -527,18 +596,18 @@ func (i *Interceptor) sendApiVersionsResponse(conn net.Conn, correlationID []byt
 	p = appendInt16(p, 0) // error_code = 0
 
 	apis := []struct{ key, min, max uint16 }{
-		{0, 0, 5},  // Produce
-		{1, 0, 4},  // Fetch
-		{2, 0, 1},  // ListOffsets
-		{3, 0, 4},  // Metadata
-		{8, 0, 2},  // OffsetCommit
-		{9, 0, 3},  // OffsetFetch
-		{10, 0, 2}, // FindCoordinator
-		{11, 0, 3}, // JoinGroup
-		{12, 0, 2}, // Heartbeat
-		{13, 0, 2}, // LeaveGroup
-		{14, 0, 2}, // SyncGroup
-		{18, 0, 2}, // ApiVersions
+		{0, 0, 2},  // Produce
+		{1, 1, 1},  // Fetch: v1 only (throttle_time_ms, no last_stable_offset/aborted_txns)
+		{2, 0, 0},  // ListOffsets
+		{3, 0, 2},  // Metadata: v0-v2 (handled correctly by sendMetadataResponse)
+		{8, 0, 1},  // OffsetCommit
+		{9, 0, 1},  // OffsetFetch
+		{10, 0, 1}, // FindCoordinator
+		{11, 0, 1}, // JoinGroup
+		{12, 0, 1}, // Heartbeat
+		{13, 0, 1}, // LeaveGroup
+		{14, 0, 1}, // SyncGroup
+		{18, 0, 1}, // ApiVersions
 	}
 
 	p = appendInt32(p, int32(len(apis)))
@@ -553,37 +622,58 @@ func (i *Interceptor) sendApiVersionsResponse(conn net.Conn, correlationID []byt
 
 // ── Metadata ─────────────────────────────────────────────────────────────────
 
-func (i *Interceptor) sendMetadataResponse(conn net.Conn, correlationID []byte) {
+// sendMetadataResponse builds a Metadata response matching the requested apiVersion.
+//
+//	v0:  brokers(no rack) + topics(no is_internal), no throttle/controller/cluster fields
+//	v1:  + throttle_time_ms, rack per broker, controller_id, is_internal per topic
+//	v2+: + cluster_id (NULLABLE_STRING) between brokers and controller_id
+func (i *Interceptor) sendMetadataResponse(conn net.Conn, correlationID []byte, apiVersion uint16) {
 	topics := i.getKnownTopics()
 
 	p := make([]byte, 0, 512)
 	p = append(p, correlationID...)
-	p = appendInt32(p, 0) // throttle_time_ms
+
+	if apiVersion >= 1 {
+		p = appendInt32(p, 0) // throttle_time_ms (v1+)
+	}
 
 	// brokers array: one broker (self)
 	p = appendInt32(p, 1)
-	p = appendInt32(p, 1)        // node_id
-	p = appendString(p, i.host)  // host (matches container alias so clients reconnect to us)
-	p = appendInt32(p, 9092)     // port
-	p = appendInt16(p, -1)       // rack = null
+	p = appendInt32(p, 1)       // node_id
+	p = appendString(p, i.host) // host
+	p = appendInt32(p, 9092)    // port
+	if apiVersion >= 1 {
+		p = appendInt16(p, -1) // rack = null (NULLABLE_STRING, v1+)
+	}
+
+	if apiVersion >= 2 {
+		p = appendInt16(p, -1) // cluster_id = null (NULLABLE_STRING, v2+)
+	}
+
+	if apiVersion >= 1 {
+		p = appendInt32(p, 1) // controller_id = 1 (v1+)
+	}
 
 	// topics array
 	p = appendInt32(p, int32(len(topics)))
 	for _, topic := range topics {
-		p = appendInt16(p, 0)       // error_code
-		p = appendString(p, topic)
+		p = appendInt16(p, 0)      // error_code
+		p = appendString(p, topic) // topic name
+		if apiVersion >= 1 {
+			p = append(p, 0) // is_internal = false (BOOL, v1+)
+		}
 		// partitions: one partition (0)
-		p = appendInt32(p, 1)       // partitions count
-		p = appendInt16(p, 0)       // error_code
-		p = appendInt32(p, 0)       // partition_index
-		p = appendInt32(p, 1)       // leader_id
-		p = appendInt32(p, 1)       // replica_nodes count
-		p = appendInt32(p, 1)       // replica node = 1
-		p = appendInt32(p, 1)       // isr_nodes count
-		p = appendInt32(p, 1)       // isr node = 1
+		p = appendInt32(p, 1) // partitions count
+		p = appendInt16(p, 0) // error_code
+		p = appendInt32(p, 0) // partition_index
+		p = appendInt32(p, 1) // leader_id
+		p = appendInt32(p, 1) // replica_nodes count
+		p = appendInt32(p, 1) // replica node = 1
+		p = appendInt32(p, 1) // isr_nodes count
+		p = appendInt32(p, 1) // isr node = 1
 	}
 
-	logger.Debug("Kafka Interceptor: Metadata response for topics %v", topics)
+	logger.Debug("Kafka Interceptor: Metadata v%d response for topics %v", apiVersion, topics)
 	i.writeResponse(conn, p)
 }
 
