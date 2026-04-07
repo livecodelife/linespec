@@ -445,6 +445,7 @@ func (s *TestSuite) waitForDBInit(ctx context.Context) error {
 	mysql.SetLogger(log.New(io.Discard, "", 0))
 	defer mysql.SetLogger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
 
+	var attempt int
 	for time.Now().Before(deadline) {
 		if s.dbHostPort != "" {
 			// Try to make an actual MySQL connection
@@ -464,8 +465,9 @@ func (s *TestSuite) waitForDBInit(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for DB initialization")
 }
@@ -731,10 +733,6 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				defer cancel()
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
 			}()
-
-			// Debug: Wait for database to be ready with init script
-			logger.Debug("Waiting for PostgreSQL with init script to be fully ready...")
-			time.Sleep(10 * time.Second)
 
 			// Wait for PostgreSQL to be ready with actual connection check
 			logger.Debug("Waiting for PostgreSQL to be ready")
@@ -1648,18 +1646,33 @@ func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string
 	return schemaCache, nil
 }
 
+// expBackoff returns the next retry delay using exponential backoff, capped at max.
+// attempt starts at 0 and increments each retry.
+func expBackoff(attempt int, base, max time.Duration) time.Duration {
+	d := base
+	for i := 0; i < attempt; i++ {
+		d *= 2
+		if d >= max {
+			return max
+		}
+	}
+	return d
+}
+
 // waitForContainerPort polls until a container's port binding is available
 func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, port string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
+	var attempt int
 	for time.Now().Before(deadline) {
 		inspect, err := s.orch.GetContainerInspect(ctx, containerName)
 		if err != nil {
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
-			case <-time.After(100 * time.Millisecond):
-				continue
+			case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
 			}
+			attempt++
+			continue
 		}
 		if p, ok := inspect.NetworkSettings.Ports[nat.Port(port)]; ok && len(p) > 0 && p[0].HostPort != "" {
 			return p[0].HostPort, nil
@@ -1667,8 +1680,9 @@ func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, por
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return "", fmt.Errorf("timeout waiting for container %s port %s binding", containerName, port)
 }
@@ -1684,6 +1698,7 @@ func (s *TestSuite) waitForMySQL(ctx context.Context, host, port, user, password
 	mysql.SetLogger(log.New(io.Discard, "", 0))
 	defer mysql.SetLogger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
 
+	var attempt int
 	for time.Now().Before(deadline) {
 		db, err := sql.Open("mysql", dsn)
 		if err == nil {
@@ -1698,8 +1713,9 @@ func (s *TestSuite) waitForMySQL(ctx context.Context, host, port, user, password
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for MySQL at %s:%s", host, port)
 }
@@ -1710,6 +1726,7 @@ func (s *TestSuite) waitForPostgreSQL(ctx context.Context, host, port, user, pas
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		user, password, host, port, database)
 
+	var attempt int
 	for time.Now().Before(deadline) {
 		db, err := sql.Open("postgres", dsn)
 		if err == nil {
@@ -1724,8 +1741,9 @@ func (s *TestSuite) waitForPostgreSQL(ctx context.Context, host, port, user, pas
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for PostgreSQL at %s:%s", host, port)
 }
