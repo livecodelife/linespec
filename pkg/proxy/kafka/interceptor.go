@@ -730,33 +730,210 @@ func (i *Interceptor) sendGenericResponse(conn net.Conn, correlationID []byte) {
 
 // ── Produce parsing ───────────────────────────────────────────────────────────
 
+const maxKafkaFieldSize = 1 << 20 // 1 MiB cap for key/value/header fields
+
 func (i *Interceptor) extractProduceData(data []byte) (topic, key, value string, headers map[string]string) {
 	headers = make(map[string]string)
+
+	// Phase A: parse the Produce request envelope.
+	data = skipClientID(data)
+	if len(data) < 10 {
+		return
+	}
+	// Skip: acks(2) + timeout_ms(4) + topics_count(4) = 10 bytes
+	data = data[10:]
+
+	// Read topic name (STRING = INT16 length + bytes).
+	if len(data) < 2 {
+		return
+	}
+	topicLen := int(int16(binary.BigEndian.Uint16(data[0:2])))
+	if topicLen <= 0 || len(data) < 2+topicLen {
+		return
+	}
+	topic = string(data[2 : 2+topicLen])
+	data = data[2+topicLen:]
+
+	// Skip: partitions_count(4) + partition_id(4) = 8 bytes, then read record_set_size(4).
 	if len(data) < 12 {
 		return
 	}
-
-	topicLen := int(binary.BigEndian.Uint16(data[10:12]))
-	if topicLen <= 0 || topicLen >= 255 || len(data) < 12+topicLen {
+	recordSetSize := int(int32(binary.BigEndian.Uint32(data[8:12])))
+	data = data[12:]
+	if recordSetSize <= 0 || len(data) < recordSetSize {
 		return
 	}
-	topic = string(data[12 : 12+topicLen])
-	remaining := data[12+topicLen:]
+	recordSet := data[:recordSetSize]
 
-	if len(remaining) <= 20 {
+	// Phase B: detect message format version via magic byte.
+	// RecordBatch layout: baseOffset(8) + batchLength(4) + partitionLeaderEpoch(4) + magic(1) = 17 bytes
+	if len(recordSet) < 17 {
 		return
 	}
-	messageStart := 20
-	keyLen := int(binary.BigEndian.Uint32(remaining[messageStart : messageStart+4]))
-	if keyLen > 0 && keyLen < 1000 && len(remaining) > messageStart+4+keyLen {
-		key = string(remaining[messageStart+4 : messageStart+4+keyLen])
+	magic := recordSet[16]
+
+	switch magic {
+	case 2:
+		key, value = i.extractRecordBatchV2(recordSet, headers)
+	case 0, 1:
+		key, value = extractMessageSetV0V1(recordSet, magic)
+	default:
+		logger.Debug("Kafka Interceptor: unknown record magic byte %d, skipping extraction", magic)
 	}
-	valueStart := messageStart + 4 + keyLen + 4
-	if len(remaining) > valueStart+4 {
-		valueLen := int(binary.BigEndian.Uint32(remaining[valueStart : valueStart+4]))
-		if valueLen > 0 && valueLen < 100000 && len(remaining) > valueStart+4+valueLen {
-			value = string(remaining[valueStart+4 : valueStart+4+valueLen])
+	return
+}
+
+// extractRecordBatchV2 parses the first record from a RecordBatch (magic=2).
+// Populates headers in-place and returns key, value.
+func (i *Interceptor) extractRecordBatchV2(recordSet []byte, headers map[string]string) (key, value string) {
+	// Fixed header layout (offsets from start of recordSet):
+	//   baseOffset(8) + batchLength(4) + partitionLeaderEpoch(4) + magic(1) + crc(4)
+	//   + attributes(2) + lastOffsetDelta(4) + firstTimestamp(8) + maxTimestamp(8)
+	//   + producerId(8) + producerEpoch(2) + baseSequence(4) + recordsCount(4) = 61 bytes
+	if len(recordSet) < 61 {
+		return
+	}
+	// attributes is at: baseOffset(8) + batchLength(4) + partLeaderEpoch(4) + magic(1) + crc(4) = offset 21
+	attrs := int16(binary.BigEndian.Uint16(recordSet[21:23]))
+	compression := attrs & 0x07
+	if compression != 0 {
+		logger.Debug("Kafka Interceptor: compressed RecordBatch v2 (codec=%d), skipping key/value extraction", compression)
+		return
+	}
+
+	rec := recordSet[61:]
+
+	// Record: length(varint) + attributes(1) + timestampDelta(varint) + offsetDelta(varint)
+	//         + keyLength(varint) + key + valueLength(varint) + value
+	//         + headersCount(varint) + [headerKey + headerValue ...]
+	_, n := decodeZigzagVarint(rec) // record length
+	if n <= 0 || len(rec) < n {
+		return
+	}
+	rec = rec[n:]
+
+	if len(rec) < 1 {
+		return
+	}
+	rec = rec[1:] // attributes INT8
+
+	_, n = decodeZigzagVarint(rec) // timestampDelta
+	if n <= 0 {
+		return
+	}
+	rec = rec[n:]
+
+	_, n = decodeZigzagVarint(rec) // offsetDelta
+	if n <= 0 {
+		return
+	}
+	rec = rec[n:]
+
+	keyLen, n := decodeZigzagVarint(rec)
+	if n <= 0 {
+		return
+	}
+	rec = rec[n:]
+	if keyLen > 0 && keyLen <= maxKafkaFieldSize {
+		if len(rec) < int(keyLen) {
+			return
 		}
+		key = string(rec[:keyLen])
+		rec = rec[keyLen:]
+	} else if keyLen > 0 {
+		if len(rec) < int(keyLen) {
+			return
+		}
+		rec = rec[keyLen:] // skip oversized key
+	}
+	// keyLen == -1 means null key; rec is already positioned correctly
+
+	valLen, n := decodeZigzagVarint(rec)
+	if n <= 0 {
+		return
+	}
+	rec = rec[n:]
+	if valLen > 0 && valLen <= maxKafkaFieldSize {
+		if len(rec) < int(valLen) {
+			return
+		}
+		value = string(rec[:valLen])
+		rec = rec[valLen:]
+	} else if valLen > 0 {
+		if len(rec) < int(valLen) {
+			return
+		}
+		rec = rec[valLen:] // skip oversized value
+	}
+
+	headersCount, n := decodeZigzagVarint(rec)
+	if n <= 0 || headersCount <= 0 {
+		return
+	}
+	rec = rec[n:]
+	for range headersCount {
+		hkLen, n := decodeZigzagVarint(rec)
+		if n <= 0 || hkLen < 0 || len(rec) < n+int(hkLen) {
+			return
+		}
+		rec = rec[n:]
+		hk := string(rec[:hkLen])
+		rec = rec[hkLen:]
+
+		hvLen, n := decodeZigzagVarint(rec)
+		if n <= 0 || hvLen < 0 || len(rec) < n+int(hvLen) {
+			return
+		}
+		rec = rec[n:]
+		hv := string(rec[:hvLen])
+		rec = rec[hvLen:]
+		headers[hk] = hv
+	}
+	return
+}
+
+// extractMessageSetV0V1 parses the first message from a MessageSet (magic=0 or 1).
+func extractMessageSetV0V1(recordSet []byte, magic byte) (key, value string) {
+	// offset(8) + message_size(4) + crc(4) + magic(1) + attributes(1) = 18 bytes
+	if len(recordSet) < 18 {
+		return
+	}
+	attrs := recordSet[17]
+	compression := attrs & 0x07
+	if compression != 0 {
+		logger.Debug("Kafka Interceptor: compressed MessageSet v%d (codec=%d), skipping key/value extraction", magic, compression)
+		return
+	}
+	pos := 18
+	if magic == 1 {
+		pos += 8 // skip timestamp(8)
+	}
+	if len(recordSet) < pos+4 {
+		return
+	}
+	keyLen := int(int32(binary.BigEndian.Uint32(recordSet[pos : pos+4])))
+	pos += 4
+	if keyLen > 0 && keyLen <= maxKafkaFieldSize {
+		if len(recordSet) < pos+keyLen {
+			return
+		}
+		key = string(recordSet[pos : pos+keyLen])
+		pos += keyLen
+	} else if keyLen > 0 {
+		pos += keyLen // skip oversized key
+	}
+	// keyLen == -1 means null key
+
+	if len(recordSet) < pos+4 {
+		return
+	}
+	valLen := int(int32(binary.BigEndian.Uint32(recordSet[pos : pos+4])))
+	pos += 4
+	if valLen > 0 && valLen <= maxKafkaFieldSize {
+		if len(recordSet) < pos+valLen {
+			return
+		}
+		value = string(recordSet[pos : pos+valLen])
 	}
 	return
 }
@@ -819,6 +996,16 @@ func zigzagVarint(v int64) []byte {
 	var buf [10]byte
 	n := binary.PutUvarint(buf[:], uv)
 	return buf[:n]
+}
+
+// decodeZigzagVarint decodes a zigzag+uvarint encoded int64 from data.
+// Returns the decoded value and the number of bytes consumed (0 on failure).
+func decodeZigzagVarint(data []byte) (int64, int) {
+	uv, n := binary.Uvarint(data)
+	if n <= 0 {
+		return 0, 0
+	}
+	return int64((uv >> 1) ^ -(uv & 1)), n
 }
 
 func (i *Interceptor) writeResponse(conn net.Conn, payload []byte) {
