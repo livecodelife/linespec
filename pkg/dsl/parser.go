@@ -170,9 +170,16 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		return nil, err
 	}
 
-	// Apply variable substitution to URL for HTTP expectations
+	// Apply variable substitution to channel-specific fields
 	if expect.Channel == types.HTTP && expect.URL != "" {
 		expect.URL = p.resolve(expect.URL)
+	}
+	if expect.Channel == types.ReadRedis || expect.Channel == types.WriteRedis {
+		expect.RedisKey = p.resolve(expect.RedisKey)
+	}
+	if expect.Channel == types.GRPC {
+		expect.Service = p.resolve(expect.Service)
+		expect.RPCMethod = p.resolve(expect.RPCMethod)
 	}
 
 	// Handle HEADERS for HTTP expectations
@@ -234,6 +241,14 @@ func (p *Parser) parseExpectNot() (*types.ExpectStatement, error) {
 		return nil, err
 	}
 	expect.Negative = true
+
+	if expect.Channel == types.ReadRedis || expect.Channel == types.WriteRedis {
+		expect.RedisKey = p.resolve(expect.RedisKey)
+	}
+	if expect.Channel == types.GRPC {
+		expect.Service = p.resolve(expect.Service)
+		expect.RPCMethod = p.resolve(expect.RPCMethod)
+	}
 
 	if p.peek().Type == TokenWith {
 		expect.WithFile = p.consume().Literal

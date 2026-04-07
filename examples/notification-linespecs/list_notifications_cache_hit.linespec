@@ -1,22 +1,19 @@
-TEST list_notifications_success
+TEST list_notifications_cache_hit
 
 RECEIVE HTTP:GET /api/v1/notifications
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 
 EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
-RETURNS EMPTY
-
-EXPECT HTTP:GET ${USER_SERVICE_URL}
-HEADERS
-  Authorization: Bearer ${AUTH_TOKEN}
-RETURNS {{payloads/authenticated_user.yaml}}
+RETURNS {{payloads/cached_user.json}}
 
 EXPECT READ:POSTGRESQL notifications
 USING_SQL """
 SELECT notifications.id, notifications.content, notifications.recipient, notifications.created_at, notifications.updated_at FROM notifications WHERE notifications.recipient = $1::VARCHAR ORDER BY notifications.created_at DESC
 """
 RETURNS {{payloads/notifications_list.yaml}}
+
+EXPECT NOT HTTP:GET ${USER_SERVICE_URL}
 
 RESPOND HTTP:200
 WITH {{payloads/notifications_list_response.yaml}}
