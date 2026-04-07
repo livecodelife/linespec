@@ -1,0 +1,33 @@
+id: prov-2026-fe6a08be
+title: Fix P3-D Kafka produce message parsing magic offsets
+status: open
+created_at: "2026-04-06"
+author: calebcowen@gmail.com
+intent: "Fix extractProduceData in the Kafka interceptor to properly parse Produce requests using the Kafka wire protocol instead of magic positional offsets. Add skipClientID call (missing unlike all other parsers), implement proper RecordBatch v2 varint/zigzag decoding, extract headers, handle MessageSet v0/v1 fallback, detect compressed batches, and remove the 1000-byte key cap. Add decodeZigzagVarint helper and comprehensive tests."
+constraints:
+  - No external Kafka library dependencies — all parsing must be hand-rolled using encoding/binary
+  - Preserve existing function signature extractProduceData(data []byte) (topic, key, value string, headers map[string]string)
+  - For compressed batches detect and log warning but do not decompress — return topic only
+affected_scope:
+  - pkg/proxy/kafka/interceptor.go
+  - pkg/proxy/kafka/interceptor_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-030
+  - prov-2026-abc98f0d
+  - prov-2026-63f06580
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/kafka/interceptor_test.go
+    type: go-test
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
