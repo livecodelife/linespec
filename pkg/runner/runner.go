@@ -657,6 +657,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"}))
 	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"}))
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"}))
+	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"}))
 	cleanupCancel()
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
@@ -991,6 +993,91 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
+	// Start gRPC interceptor when the spec has any GRPC channel expectations.
+	hasGRPC := false
+	for _, e := range spec.Expects {
+		if e.Channel == types.GRPC {
+			hasGRPC = true
+			break
+		}
+	}
+	if !hasGRPC {
+		for _, e := range spec.ExpectsNot {
+			if e.Channel == types.GRPC {
+				hasGRPC = true
+				break
+			}
+		}
+	}
+	const grpcProxyAlias = "grpc-proxy"
+	grpcProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"})
+	if hasGRPC || serviceConfig.Infrastructure.GRPC {
+		grpcProxyCmd := []string{
+			"proxy", "grpc", "0.0.0.0:50051", "unused",
+			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
+		}
+		if logger.IsDebug() {
+			grpcProxyCmd = append(grpcProxyCmd, "--debug")
+		}
+		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+			Image: "linespec:latest",
+			Cmd:   grpcProxyCmd,
+		}, &container.HostConfig{
+			Binds: []string{
+				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+		}, &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{
+				r.suite.networkName: {Aliases: []string{grpcProxyAlias}},
+			},
+		}, grpcProxyContainerName)
+		if err != nil {
+			return fmt.Errorf("failed to start gRPC interceptor: %w", err)
+		}
+		logger.Debug("gRPC interceptor started with alias %s", grpcProxyAlias)
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, grpcProxyContainerName)
+		}()
+	}
+
+	// Start Redis interceptor when infrastructure.redis is enabled.
+	const redisProxyAlias = "redis-proxy"
+	redisProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"})
+	if serviceConfig.Infrastructure.Redis {
+		redisProxyCmd := []string{
+			"proxy", "redis", "0.0.0.0:6379", "unused",
+			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
+		}
+		if logger.IsDebug() {
+			redisProxyCmd = append(redisProxyCmd, "--debug")
+		}
+		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+			Image: "linespec:latest",
+			Cmd:   redisProxyCmd,
+		}, &container.HostConfig{
+			Binds: []string{
+				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+		}, &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{
+				r.suite.networkName: {Aliases: []string{redisProxyAlias}},
+			},
+		}, redisProxyContainerName)
+		if err != nil {
+			return fmt.Errorf("failed to start Redis interceptor: %w", err)
+		}
+		logger.Debug("Redis interceptor started with alias %s", redisProxyAlias)
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, redisProxyContainerName)
+		}()
+	}
+
 	// Wait for services to be ready on the network
 	logger.Debug("Waiting for proxies to be ready")
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
@@ -1047,6 +1134,17 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	if serviceConfig.Infrastructure.Kafka {
 		envMap["KAFKA_BROKERS"] = "kafka:29092"
+	}
+
+	if hasGRPC || serviceConfig.Infrastructure.GRPC {
+		envMap["GRPC_HOST"] = grpcProxyAlias
+		envMap["GRPC_PORT"] = "50051"
+	}
+
+	if serviceConfig.Infrastructure.Redis {
+		envMap["REDIS_URL"] = "redis://" + redisProxyAlias + ":6379"
+		envMap["REDIS_HOST"] = redisProxyAlias
+		envMap["REDIS_PORT"] = "6379"
 	}
 
 	// 3. Add auto-generated HTTP dependency URLs (if not in user config)

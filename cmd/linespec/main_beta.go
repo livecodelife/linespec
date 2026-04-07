@@ -17,10 +17,12 @@ import (
 	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
+	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
 	"github.com/livecodelife/linespec/pkg/proxy/kafka"
 	"github.com/livecodelife/linespec/pkg/proxy/mysql"
 	"github.com/livecodelife/linespec/pkg/proxy/postgresql"
+	redisproxy "github.com/livecodelife/linespec/pkg/proxy/redis"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/runner"
 	"gopkg.in/yaml.v3"
@@ -331,6 +333,12 @@ func runProxy() {
 		if kafkaHost != "" {
 			p.SetHost(kafkaHost)
 		}
+		proxyErr = p.Start(ctx)
+	case "grpc":
+		p := grpcproxy.NewInterceptor(addr, reg)
+		proxyErr = p.Start(ctx)
+	case "redis":
+		p := redisproxy.NewInterceptor(addr, reg)
 		proxyErr = p.Start(ctx)
 	default:
 		logger.Error("Unknown proxy type: %s", pType)

@@ -72,6 +72,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 
 	reHttp := regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
 	reKafka := regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
+	reGRPCReceive := regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
 
 	if mHttp := reHttp.FindStringSubmatch(receiveToken.Literal); mHttp != nil {
 		spec.Receive.Channel = types.HTTP
@@ -80,6 +81,10 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	} else if mKafka := reKafka.FindStringSubmatch(receiveToken.Literal); mKafka != nil {
 		spec.Receive.Channel = types.Event
 		spec.Receive.Topic = strings.TrimSpace(mKafka[1])
+	} else if mGRPC := reGRPCReceive.FindStringSubmatch(receiveToken.Literal); mGRPC != nil {
+		spec.Receive.Channel = types.GRPC
+		spec.Receive.Service = mGRPC[1]
+		spec.Receive.RPCMethod = mGRPC[2]
 	} else {
 		return nil, fmt.Errorf("Invalid RECEIVE format at line %d: %s", receiveToken.Line, receiveToken.Literal)
 	}
@@ -259,6 +264,16 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		}, nil
 	}
 
+	// gRPC: GRPC:package.Service/Method (no space, matched before SplitN)
+	reGRPC := regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
+	if m := reGRPC.FindStringSubmatch(value); m != nil {
+		return &types.ExpectStatement{
+			Channel:   types.GRPC,
+			Service:   m[1],
+			RPCMethod: m[2],
+		}, nil
+	}
+
 	parts := strings.SplitN(value, " ", 2)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("Invalid EXPECT channel format at line %d: %s", line, value)
@@ -308,6 +323,25 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		return &types.ExpectStatement{
 			Channel: types.ReadPostgreSQL,
 			Table:   rest,
+		}, nil
+	}
+
+	// Redis: READ:REDIS <command> <key> or WRITE:REDIS <command> <key>
+	if channelPart == "READ:REDIS" || channelPart == "WRITE:REDIS" {
+		channel := types.ReadRedis
+		if channelPart == "WRITE:REDIS" {
+			channel = types.WriteRedis
+		}
+		redisParts := strings.SplitN(rest, " ", 2)
+		cmd := strings.ToUpper(redisParts[0])
+		key := ""
+		if len(redisParts) > 1 {
+			key = redisParts[1]
+		}
+		return &types.ExpectStatement{
+			Channel:  channel,
+			Command:  cmd,
+			RedisKey: key,
 		}, nil
 	}
 
@@ -441,6 +475,54 @@ func parseVerifyRule(value string, line int) (*types.VerifyRule, error) {
 	reKafkaHeadersMatches := regexp.MustCompile(`(?i)^headers\.([\w-]+)\s+MATCHES\s/(.+?)/$`)
 	if m := reKafkaHeadersMatches.FindStringSubmatch(value); m != nil {
 		return &types.VerifyRule{Type: "MATCHES", Target: "headers." + m[1], Pattern: m[2]}, nil
+	}
+
+	// gRPC targets: request_body
+	reRequestBodyContains := regexp.MustCompile(`(?i)^request_body\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reRequestBodyContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "request_body", Pattern: m[1]}, nil
+	}
+
+	reRequestBodyNotContains := regexp.MustCompile(`(?i)^request_body\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reRequestBodyNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "request_body", Pattern: m[1]}, nil
+	}
+
+	reRequestBodyMatches := regexp.MustCompile(`(?i)^request_body\s+MATCHES\s/(.+?)/$`)
+	if m := reRequestBodyMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "request_body", Pattern: m[1]}, nil
+	}
+
+	// gRPC targets: metadata.NAME
+	reMetadataContains := regexp.MustCompile(`(?i)^metadata\.([\w-]+)\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reMetadataContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "metadata." + m[1], Pattern: m[2]}, nil
+	}
+
+	reMetadataNotContains := regexp.MustCompile(`(?i)^metadata\.([\w-]+)\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reMetadataNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "metadata." + m[1], Pattern: m[2]}, nil
+	}
+
+	reMetadataMatches := regexp.MustCompile(`(?i)^metadata\.([\w-]+)\s+MATCHES\s/(.+?)/$`)
+	if m := reMetadataMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "metadata." + m[1], Pattern: m[2]}, nil
+	}
+
+	// Redis targets: command
+	reCommandContains := regexp.MustCompile(`(?i)^command\s+CONTAINS\s+['"](.+?)['"]$`)
+	if m := reCommandContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "CONTAINS", Target: "command", Pattern: m[1]}, nil
+	}
+
+	reCommandNotContains := regexp.MustCompile(`(?i)^command\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
+	if m := reCommandNotContains.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "NOT_CONTAINS", Target: "command", Pattern: m[1]}, nil
+	}
+
+	reCommandMatches := regexp.MustCompile(`(?i)^command\s+MATCHES\s/(.+?)/$`)
+	if m := reCommandMatches.FindStringSubmatch(value); m != nil {
+		return &types.VerifyRule{Type: "MATCHES", Target: "command", Pattern: m[1]}, nil
 	}
 
 	return nil, fmt.Errorf("Invalid VERIFY format at line %d: %s", line, value)

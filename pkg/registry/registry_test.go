@@ -351,3 +351,155 @@ func TestMockRegistry_LegacyFileFormat(t *testing.T) {
 		t.Error("Expected to find mock from legacy file")
 	}
 }
+
+func TestMockRegistry_FindGRPCMock(t *testing.T) {
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "grpc_get_user",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:     types.GRPC,
+				Service:     "users.UserService",
+				RPCMethod:   "GetUser",
+				ReturnsFile: "payloads/user.json",
+			},
+			{
+				Channel:   types.GRPC,
+				Service:   "users.UserService",
+				RPCMethod: "ListUsers",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Find the GetUser mock
+	mock, found := reg.FindGRPCMock("users.UserService", "GetUser")
+	if !found {
+		t.Fatal("Expected to find GetUser mock")
+	}
+	if mock.Service != "users.UserService" {
+		t.Errorf("Expected service 'users.UserService', got %q", mock.Service)
+	}
+	if mock.RPCMethod != "GetUser" {
+		t.Errorf("Expected method 'GetUser', got %q", mock.RPCMethod)
+	}
+
+	// GetUser mock is consumed — second call should not find it
+	_, found = reg.FindGRPCMock("users.UserService", "GetUser")
+	if found {
+		t.Error("Mock should be consumed after first hit")
+	}
+
+	// ListUsers mock should still be findable
+	_, found = reg.FindGRPCMock("users.UserService", "ListUsers")
+	if !found {
+		t.Error("Expected to find ListUsers mock")
+	}
+
+	// Non-existent mock
+	_, found = reg.FindGRPCMock("users.UserService", "DeleteUser")
+	if found {
+		t.Error("Should not find DeleteUser mock")
+	}
+}
+
+func TestMockRegistry_FindRedisMock(t *testing.T) {
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "redis_ops",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:      types.ReadRedis,
+				Command:      "GET",
+				RedisKey:     "user:123",
+				ReturnsFile:  "payloads/user.json",
+			},
+			{
+				Channel:  types.WriteRedis,
+				Command:  "SET",
+				RedisKey: "session:abc",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Find the GET mock
+	mock, found := reg.FindRedisMock("GET", "user:123")
+	if !found {
+		t.Fatal("Expected to find GET user:123 mock")
+	}
+	if mock.Command != "GET" {
+		t.Errorf("Expected command 'GET', got %q", mock.Command)
+	}
+	if mock.RedisKey != "user:123" {
+		t.Errorf("Expected key 'user:123', got %q", mock.RedisKey)
+	}
+
+	// GET mock is consumed
+	_, found = reg.FindRedisMock("GET", "user:123")
+	if found {
+		t.Error("Mock should be consumed after first hit")
+	}
+
+	// SET mock should still be findable
+	_, found = reg.FindRedisMock("SET", "session:abc")
+	if !found {
+		t.Error("Expected to find SET session:abc mock")
+	}
+
+	// Non-existent mock
+	_, found = reg.FindRedisMock("DEL", "user:123")
+	if found {
+		t.Error("Should not find DEL user:123 mock")
+	}
+}
+
+func TestMockRegistry_GetHits_GRPC(t *testing.T) {
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "grpc_test",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:   types.GRPC,
+				Service:   "users.UserService",
+				RPCMethod: "GetUser",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	reg.FindGRPCMock("users.UserService", "GetUser")
+
+	hits := reg.GetHits()
+	key := "GRPC-users.UserService/GetUser"
+	if hits[key] != 1 {
+		t.Errorf("Expected hit count 1 for key %q, got %d", key, hits[key])
+	}
+}
+
+func TestMockRegistry_GetHits_Redis(t *testing.T) {
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "redis_test",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:  types.ReadRedis,
+				Command:  "GET",
+				RedisKey: "user:123",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	reg.FindRedisMock("GET", "user:123")
+
+	hits := reg.GetHits()
+	key := "READ_REDIS-GET:user:123"
+	if hits[key] != 1 {
+		t.Errorf("Expected hit count 1 for key %q, got %d", key, hits[key])
+	}
+}

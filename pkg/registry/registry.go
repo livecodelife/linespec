@@ -93,6 +93,12 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 	if expect.Topic != "" {
 		return expect.Topic
 	}
+	if expect.Service != "" && expect.RPCMethod != "" {
+		return expect.Service + "/" + expect.RPCMethod
+	}
+	if expect.Command != "" || expect.RedisKey != "" {
+		return expect.Command + ":" + expect.RedisKey
+	}
 	return "unknown"
 }
 
@@ -439,6 +445,94 @@ func (r *MockRegistry) CheckNegativeHTTPMocks(url string, method string) {
 	}
 }
 
+// FindGRPCMock finds a gRPC mock matching the service and method.
+func (r *MockRegistry) FindGRPCMock(service, method string) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	key := service + "/" + method
+	mocks, ok := r.mocks[key]
+	if !ok {
+		return nil, false
+	}
+
+	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.GRPC {
+			r.hits[mock]++
+			return mock, true
+		}
+	}
+	return nil, false
+}
+
+// CheckNegativeGRPCMocks checks incoming gRPC requests against negative expectations.
+func (r *MockRegistry) CheckNegativeGRPCMocks(service, method string) {
+	r.Lock()
+	defer r.Unlock()
+
+	key := service + "/" + method
+	if mocks, ok := r.mocks[key]; ok {
+		for _, mock := range mocks {
+			if !mock.Negative {
+				continue
+			}
+			if mock.Channel == types.GRPC {
+				r.hits[mock]++
+			}
+		}
+	}
+}
+
+// FindRedisMock finds a Redis mock matching the command and key.
+func (r *MockRegistry) FindRedisMock(command, key string) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	mockKey := command + ":" + key
+	mocks, ok := r.mocks[mockKey]
+	if !ok {
+		return nil, false
+	}
+
+	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.ReadRedis || mock.Channel == types.WriteRedis {
+			r.hits[mock]++
+			return mock, true
+		}
+	}
+	return nil, false
+}
+
+// CheckNegativeRedisMocks checks incoming Redis commands against negative expectations.
+func (r *MockRegistry) CheckNegativeRedisMocks(command, key string) {
+	r.Lock()
+	defer r.Unlock()
+
+	mockKey := command + ":" + key
+	if mocks, ok := r.mocks[mockKey]; ok {
+		for _, mock := range mocks {
+			if !mock.Negative {
+				continue
+			}
+			if mock.Channel == types.ReadRedis || mock.Channel == types.WriteRedis {
+				r.hits[mock]++
+			}
+		}
+	}
+}
+
 type registryFile struct {
 	Mocks map[string][]*types.ExpectStatement `json:"mocks"`
 	Seeds map[string][][]byte                 `json:"seeds,omitempty"`
@@ -500,6 +594,10 @@ func (r *MockRegistry) GetHits() map[string]int {
 		case types.ReadMySQL, types.ReadPostgreSQL:
 			// READ operations: include SQL to distinguish different queries
 			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+		case types.GRPC:
+			key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
+		case types.ReadRedis, types.WriteRedis:
+			key = fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
 		default:
 			// WRITE and other operations: use Channel-Table only
 			key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
@@ -521,6 +619,10 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
 			case types.ReadMySQL, types.ReadPostgreSQL:
 				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+			case types.GRPC:
+				key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
+			case types.ReadRedis, types.WriteRedis:
+				key = fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
 			default:
 				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
 			}
