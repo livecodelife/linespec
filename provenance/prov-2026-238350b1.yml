@@ -1,0 +1,36 @@
+id: prov-2026-238350b1
+title: 'P4-A: Replace fixed sleeps with exponential-backoff readiness polling'
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: >
+  Replace all unconditional time.Sleep calls in the test runner startup path with
+  actual readiness polling, and replace fixed-interval polling loops with exponential
+  backoff. The primary fix is removing a 10-second unconditional sleep before a
+  PostgreSQL readiness check that already provides the correct signal via SQL ping.
+  Secondary fixes apply exponential backoff (starting at 50ms, capped at 2s) to
+  five polling loops in runner.go and three in orchestrator.go. The 12-second Kafka
+  consumer sleep is deferred because the Kafka interceptor has no verify endpoint
+  to poll against.
+constraints:
+  - Do not remove the 12-second Kafka consumer sleep (no real health signal available)
+  - Do not change warmup delays (user-configured, intentional)
+  - Do not modify test-only sleep calls in proxy test files
+affected_scope:
+  - pkg/runner/runner.go
+  - pkg/docker/orchestrator.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/authenticate_user_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
