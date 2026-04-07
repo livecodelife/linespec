@@ -36,6 +36,13 @@ related: []
 sealed_at_sha: 8345f80a7f0374241ffbd39b3c32c2cb9258396c
 associated_specs:
   - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+  - path: pkg/proxy/kafka/interceptor_test.go
+    type: go-test
+  - path: pkg/dsl/dsl_test.go
+    type: go-test
+  - path: pkg/registry/registry_test.go
+    type: go-test
 associated_traces: []
 monitors: []
 tags: []

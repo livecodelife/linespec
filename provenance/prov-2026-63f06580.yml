@@ -40,6 +40,7 @@ affected_scope:
   - pkg/proxy/http/interceptor_test.go
   - pkg/runner/runner.go
   - cmd/linespec/main_beta.go
+  - provenance/prov-2026-abc98f0d.yml
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
