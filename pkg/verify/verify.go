@@ -158,6 +158,99 @@ func extractKafkaValue(msg *KafkaMessage, target string) (string, error) {
 	}
 }
 
+// GRPCRequest holds gRPC request data for verification
+type GRPCRequest struct {
+	Service  string
+	Method   string
+	Body     string            // JSON representation of the request message
+	Metadata map[string]string // gRPC metadata (like HTTP headers)
+}
+
+// VerifyGRPC checks a gRPC request against a set of verification rules
+func VerifyGRPC(req *GRPCRequest, rules []types.VerifyRule) error {
+	for _, rule := range rules {
+		value, err := extractGRPCValue(req, rule.Target)
+		if err != nil {
+			return &VerificationError{
+				Target:  rule.Target,
+				Rule:    rule,
+				Actual:  "",
+				Message: err.Error(),
+			}
+		}
+		if err := verifyRule(rule.Target, value, rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractGRPCValue extracts the target value from a gRPC request
+func extractGRPCValue(req *GRPCRequest, target string) (string, error) {
+	target = strings.ToLower(target)
+
+	switch target {
+	case "service":
+		return req.Service, nil
+	case "method":
+		return req.Method, nil
+	case "request_body":
+		return req.Body, nil
+	default:
+		if strings.HasPrefix(target, "metadata.") {
+			metaName := target[9:]
+			for key, value := range req.Metadata {
+				if strings.EqualFold(key, metaName) {
+					return value, nil
+				}
+			}
+			return "", nil
+		}
+		return "", fmt.Errorf("unknown gRPC target: %s", target)
+	}
+}
+
+// RedisCommand holds Redis command data for verification
+type RedisCommand struct {
+	Command string
+	Key     string
+	Value   string
+	Args    []string
+}
+
+// VerifyRedis checks a Redis command against a set of verification rules
+func VerifyRedis(cmd *RedisCommand, rules []types.VerifyRule) error {
+	for _, rule := range rules {
+		value, err := extractRedisValue(cmd, rule.Target)
+		if err != nil {
+			return &VerificationError{
+				Target:  rule.Target,
+				Rule:    rule,
+				Actual:  "",
+				Message: err.Error(),
+			}
+		}
+		if err := verifyRule(rule.Target, value, rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractRedisValue extracts the target value from a Redis command
+func extractRedisValue(cmd *RedisCommand, target string) (string, error) {
+	switch strings.ToLower(target) {
+	case "command":
+		return cmd.Command, nil
+	case "key":
+		return cmd.Key, nil
+	case "value":
+		return cmd.Value, nil
+	default:
+		return "", fmt.Errorf("unknown Redis target: %s", target)
+	}
+}
+
 // VerifyTarget checks a target value against a set of verification rules
 func VerifyTarget(targetName string, actual string, rules []types.VerifyRule) error {
 	for _, rule := range rules {
@@ -239,6 +332,14 @@ func ExtractVerifyRulesForTarget(rules []types.VerifyRule, targetType string) []
 			}
 		case "kafka":
 			if target == "key" || target == "value" || strings.HasPrefix(target, "headers.") {
+				filtered = append(filtered, rule)
+			}
+		case "grpc":
+			if target == "service" || target == "method" || target == "request_body" || strings.HasPrefix(target, "metadata.") {
+				filtered = append(filtered, rule)
+			}
+		case "redis":
+			if target == "command" || target == "key" || target == "value" {
 				filtered = append(filtered, rule)
 			}
 		}

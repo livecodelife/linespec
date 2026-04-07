@@ -15,8 +15,16 @@ affected_scope:
   - pkg/types/types.go
   - pkg/config/types.go
   - pkg/dsl/parser.go
+  - pkg/dsl/dsl_test.go
   - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
   - pkg/verify/verify.go
+  - pkg/verify/verify_grpc_test.go
+  - pkg/verify/verify_redis_test.go
+  - pkg/proxy/grpc/interceptor.go
+  - pkg/proxy/grpc/interceptor_test.go
+  - pkg/proxy/redis/interceptor.go
+  - pkg/proxy/redis/interceptor_test.go
   - cmd/linespec/main_beta.go
   - pkg/runner/runner.go
   - go.mod

@@ -685,6 +685,260 @@ RESPOND HTTP:200`
 	}
 }
 
+func TestParser_ExpectGRPC(t *testing.T) {
+	content := `TEST get-user-grpc
+RECEIVE HTTP:GET http://localhost:3000/health
+
+EXPECT GRPC:users.UserService/GetUser
+WITH {{payloads/get-user-request.json}}
+RETURNS {{payloads/get-user-response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/health.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "get_user_grpc.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(spec.Expects) != 1 {
+		t.Fatalf("Expected 1 EXPECT, got %d", len(spec.Expects))
+	}
+
+	expect := spec.Expects[0]
+	if expect.Channel != types.GRPC {
+		t.Errorf("Expected channel GRPC, got %s", expect.Channel)
+	}
+	if expect.Service != "users.UserService" {
+		t.Errorf("Expected service 'users.UserService', got %q", expect.Service)
+	}
+	if expect.RPCMethod != "GetUser" {
+		t.Errorf("Expected method 'GetUser', got %q", expect.RPCMethod)
+	}
+	if expect.WithFile != "payloads/get-user-request.json" {
+		t.Errorf("Unexpected WithFile: %q", expect.WithFile)
+	}
+	if expect.ReturnsFile != "payloads/get-user-response.json" {
+		t.Errorf("Unexpected ReturnsFile: %q", expect.ReturnsFile)
+	}
+}
+
+func TestParser_ExpectGRPC_DotPackage(t *testing.T) {
+	content := `TEST create-order-grpc
+RECEIVE HTTP:POST http://localhost:3000/orders
+
+EXPECT GRPC:com.example.orders.OrderService/CreateOrder
+
+RESPOND HTTP:201
+WITH {{payloads/order.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "create_order_grpc.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expect := spec.Expects[0]
+	if expect.Channel != types.GRPC {
+		t.Errorf("Expected GRPC channel, got %s", expect.Channel)
+	}
+	if expect.Service != "com.example.orders.OrderService" {
+		t.Errorf("Expected full package service, got %q", expect.Service)
+	}
+	if expect.RPCMethod != "CreateOrder" {
+		t.Errorf("Expected method 'CreateOrder', got %q", expect.RPCMethod)
+	}
+}
+
+func TestParser_ExpectReadRedis(t *testing.T) {
+	content := `TEST get-cached-user
+RECEIVE HTTP:GET http://localhost:3000/users/123
+
+EXPECT READ:REDIS GET user:123
+RETURNS {{payloads/cached-user.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "get_cached_user.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(spec.Expects) != 1 {
+		t.Fatalf("Expected 1 EXPECT, got %d", len(spec.Expects))
+	}
+
+	expect := spec.Expects[0]
+	if expect.Channel != types.ReadRedis {
+		t.Errorf("Expected channel READ_REDIS, got %s", expect.Channel)
+	}
+	if expect.Command != "GET" {
+		t.Errorf("Expected command 'GET', got %q", expect.Command)
+	}
+	if expect.RedisKey != "user:123" {
+		t.Errorf("Expected key 'user:123', got %q", expect.RedisKey)
+	}
+	if expect.ReturnsFile != "payloads/cached-user.json" {
+		t.Errorf("Unexpected ReturnsFile: %q", expect.ReturnsFile)
+	}
+}
+
+func TestParser_ExpectWriteRedis(t *testing.T) {
+	content := `TEST cache-session
+RECEIVE HTTP:POST http://localhost:3000/sessions
+
+EXPECT WRITE:REDIS SET session:abc
+WITH {{payloads/session-data.json}}
+
+RESPOND HTTP:201
+WITH {{payloads/session.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "cache_session.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expect := spec.Expects[0]
+	if expect.Channel != types.WriteRedis {
+		t.Errorf("Expected channel WRITE_REDIS, got %s", expect.Channel)
+	}
+	if expect.Command != "SET" {
+		t.Errorf("Expected command 'SET', got %q", expect.Command)
+	}
+	if expect.RedisKey != "session:abc" {
+		t.Errorf("Expected key 'session:abc', got %q", expect.RedisKey)
+	}
+}
+
+func TestParser_VerifyGRPC_RequestBody(t *testing.T) {
+	content := `TEST verify-grpc-body
+RECEIVE HTTP:GET http://localhost:3000/health
+
+EXPECT GRPC:users.UserService/GetUser
+VERIFY request_body CONTAINS "user_id"
+VERIFY metadata.authorization CONTAINS "Bearer"
+
+RESPOND HTTP:200
+WITH {{payloads/health.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "verify_grpc.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expect := spec.Expects[0]
+	if len(expect.Verify) != 2 {
+		t.Fatalf("Expected 2 VERIFY rules, got %d", len(expect.Verify))
+	}
+
+	if expect.Verify[0].Target != "request_body" {
+		t.Errorf("Expected target 'request_body', got %q", expect.Verify[0].Target)
+	}
+	if expect.Verify[1].Target != "metadata.authorization" {
+		t.Errorf("Expected target 'metadata.authorization', got %q", expect.Verify[1].Target)
+	}
+}
+
+func TestParser_VerifyRedis_Command(t *testing.T) {
+	content := `TEST verify-redis-command
+RECEIVE HTTP:DELETE http://localhost:3000/users/123
+
+EXPECT WRITE:REDIS DEL user:123
+VERIFY command CONTAINS "DEL"
+VERIFY key CONTAINS "user:"
+
+RESPOND HTTP:204
+WITH {{payloads/empty.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "verify_redis.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expect := spec.Expects[0]
+	if len(expect.Verify) != 2 {
+		t.Fatalf("Expected 2 VERIFY rules, got %d", len(expect.Verify))
+	}
+	if expect.Verify[0].Target != "command" {
+		t.Errorf("Expected target 'command', got %q", expect.Verify[0].Target)
+	}
+	if expect.Verify[1].Target != "key" {
+		t.Errorf("Expected target 'key', got %q", expect.Verify[1].Target)
+	}
+}
+
 func TestParser_HeadersOnRespond(t *testing.T) {
 	content := `TEST respond-headers
 RECEIVE HTTP:GET http://localhost:3000/items

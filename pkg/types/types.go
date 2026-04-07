@@ -12,6 +12,9 @@ const (
 	WritePostgreSQL ExpectChannel = "WRITE_POSTGRESQL"
 	ReadPostgreSQL  ExpectChannel = "READ_POSTGRESQL"
 	Event           ExpectChannel = "EVENT"
+	GRPC            ExpectChannel = "GRPC"
+	ReadRedis       ExpectChannel = "READ_REDIS"
+	WriteRedis      ExpectChannel = "WRITE_REDIS"
 )
 
 // VerifyRule defines a verification rule for any intercepted data
@@ -42,16 +45,22 @@ type ExpectStatement struct {
 	BaseDir         string            // To resolve payload files
 	Headers         map[string]string // For HTTP request header matching
 	ResponseHeaders map[string]string // For HTTP response headers (overrides inferred Content-Type)
+	Service         string            // For gRPC: fully-qualified service (e.g., "users.UserService")
+	RPCMethod       string            // For gRPC: method name (e.g., "GetUser")
+	Command         string            // For Redis: command (GET, SET, HGET, etc.)
+	RedisKey        string            // For Redis: key pattern
 }
 
 // ReceiveStatement defines the trigger request
 type ReceiveStatement struct {
-	Channel  ExpectChannel
-	Method   string
-	Path     string
-	Topic    string // For Kafka consumer triggers (RECEIVE KAFKA:topic-name)
-	WithFile string
-	Headers  map[string]string
+	Channel   ExpectChannel
+	Method    string
+	Path      string
+	Topic     string // For Kafka consumer triggers (RECEIVE KAFKA:topic-name)
+	WithFile  string
+	Headers   map[string]string
+	Service   string // For gRPC triggers: fully-qualified service
+	RPCMethod string // For gRPC triggers: method name
 }
 
 // RespondStatement defines the mock response for the trigger

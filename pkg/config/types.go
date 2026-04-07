@@ -267,6 +267,7 @@ type InfrastructureConfig struct {
 	Kafka      bool `yaml:"kafka"`
 	Database   bool `yaml:"database"`
 	Redis      bool `yaml:"redis"`
+	GRPC       bool `yaml:"grpc"`
 	ExternalDB bool `yaml:"external_db"` // Don't manage DB, service has its own
 }
 
