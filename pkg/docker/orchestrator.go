@@ -107,11 +107,25 @@ func (d *DockerOrchestrator) GetContainerIP(ctx context.Context, id string, netw
 
 // Prober methods
 
+// expBackoff returns the next retry delay using exponential backoff, capped at max.
+// attempt starts at 0 and increments each retry.
+func expBackoff(attempt int, base, max time.Duration) time.Duration {
+	d := base
+	for i := 0; i < attempt; i++ {
+		d *= 2
+		if d >= max {
+			return max
+		}
+	}
+	return d
+}
+
 // WaitTCPInternal waits for a TCP service to be available.
 // Uses direct TCP dial from host instead of spawning Alpine containers.
 // The address parameter should be in "host:port" format (e.g., "localhost:3306").
 func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, address string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var attempt int
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", address, 1*time.Second)
 		if err == nil {
@@ -121,14 +135,16 @@ func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, a
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 500*time.Millisecond)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for TCP %s", address)
 }
 
 func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var attempt int
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", address, 1*time.Second)
 		if err == nil {
@@ -138,8 +154,9 @@ func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeou
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(expBackoff(attempt, 100*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for TCP %s", address)
 }
@@ -147,6 +164,7 @@ func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeou
 func (d *DockerOrchestrator) WaitHTTP(ctx context.Context, url string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	httpClient := &http.Client{Timeout: 2 * time.Second}
+	var attempt int
 	for time.Now().Before(deadline) {
 		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 		resp, err := httpClient.Do(req)
@@ -156,14 +174,13 @@ func (d *DockerOrchestrator) WaitHTTP(ctx context.Context, url string, timeout t
 			if resp.StatusCode < 500 { // 200 or 404 is usually fine for Rails boot
 				return nil
 			}
-		} else {
-			// fmt.Printf("WaitHTTP: %s error: %v\n", url, err)
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(1 * time.Second):
+		case <-time.After(expBackoff(attempt, 100*time.Millisecond, 2*time.Second)):
 		}
+		attempt++
 	}
 	return fmt.Errorf("timeout waiting for HTTP %s", url)
 }
