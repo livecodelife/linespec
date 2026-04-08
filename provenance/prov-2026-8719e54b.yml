@@ -1,6 +1,6 @@
 id: prov-2026-8719e54b
 title: 'P4-C: Make PostgreSQL proxy debug logging opt-in with no-op fast path'
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: |
@@ -24,7 +24,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ece80c8c211636ffc3c2fd16c2e8f08f3e0b6393
 associated_specs:
   - path: examples/user-linespecs/get_user_success.linespec
     type: linespec
