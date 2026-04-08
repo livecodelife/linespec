@@ -1,6 +1,6 @@
 id: prov-2026-c99fbd8e
 title: 'Fix P5-B: HTTP proxy port is hardcoded to 80'
-status: open
+status: implemented
 created_at: "2026-04-08"
 author: calebcowen@gmail.com
 intent: "Allow HTTP dependency proxies to bind on the port declared in .linespec.yml instead of always port 80. Services that connect to HTTP dependencies on non-80 ports (e.g., user-service:3001) currently cannot be intercepted. Fix by using DependencyConfig.Port (which already exists) in two places in the runner: proxy command bind address and generated _URL env vars."
@@ -15,7 +15,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8af56e7bb004d89d1eae4ac4091e52a76c6c8c91
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     description: Exercises HTTP proxy interception via user-service dependency
