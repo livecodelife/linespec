@@ -179,6 +179,11 @@ func applyDefaults(config *LineSpecConfig) {
 		config.SchemaDiscovery.Mode = "auto"
 	}
 
+	// Test timeout default
+	if config.TestTimeoutSeconds == 0 {
+		config.TestTimeoutSeconds = 180 // 3 minutes
+	}
+
 	// Payload configuration defaults
 	if config.Payload == nil {
 		config.Payload = &PayloadConfig{}

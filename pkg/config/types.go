@@ -282,8 +282,9 @@ type LineSpecConfig struct {
 	PortConfig      *PortConfig            `yaml:"ports,omitempty"`
 	SchemaDiscovery *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
 	Payload         *PayloadConfig         `yaml:"payload,omitempty"`
-	Created         time.Time              `yaml:"-"`
-	BaseDir         string                 `yaml:"-"`
+	TestTimeoutSeconds int                    `yaml:"timeout_seconds,omitempty"`
+	Created            time.Time              `yaml:"-"`
+	BaseDir            string                 `yaml:"-"`
 }
 
 // EmbeddingConfig defines the embedding API configuration

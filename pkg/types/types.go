@@ -81,6 +81,7 @@ type TestSpec struct {
 	ExpectsNot []ExpectStatement
 	Respond    RespondStatement
 	Created    time.Time
+	Timeout    time.Duration // 0 means use the service-level default from .linespec.yml
 }
 
 // Mock is the common interface for protocol-specific mocks

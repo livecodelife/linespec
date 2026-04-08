@@ -25,6 +25,7 @@ const (
 	TokenUsingSql      TokenType = "USING_SQL"
 	TokenNoTransaction TokenType = "NO_TRANSACTION"
 	TokenSqlBlock      TokenType = "SQL_BLOCK"
+	TokenTimeout       TokenType = "TIMEOUT"
 	TokenEOF           TokenType = "EOF"
 )
 
@@ -62,6 +63,7 @@ func LexFile(filePath string) ([]Token, error) {
 	reWith := regexp.MustCompile(`(?i)^WITH\s+\{\{(.+)\}\}$`)
 	reReturns := regexp.MustCompile(`(?i)^RETURNS\s+(.+)$`)
 	reVerify := regexp.MustCompile(`(?i)^VERIFY\s+(.+)$`)
+	reTimeout := regexp.MustCompile(`(?i)^TIMEOUT\s+(\S+)$`)
 
 	inSqlBlock := false
 	var sqlBuffer strings.Builder
@@ -160,6 +162,8 @@ func LexFile(filePath string) ([]Token, error) {
 			tokens = append(tokens, Token{Type: TokenReturns, Literal: m[1], Line: lineNum})
 		} else if m := reVerify.FindStringSubmatch(trimmedLine); m != nil {
 			tokens = append(tokens, Token{Type: TokenVerify, Literal: m[1], Line: lineNum})
+		} else if m := reTimeout.FindStringSubmatch(trimmedLine); m != nil {
+			tokens = append(tokens, Token{Type: TokenTimeout, Literal: m[1], Line: lineNum})
 		} else {
 			// Unknown line
 			return nil, &LexerError{Message: fmt.Sprintf("Unexpected line: %s", trimmedLine), Line: lineNum}
