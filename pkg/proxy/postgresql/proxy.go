@@ -26,6 +26,10 @@ import (
 // Proxy is a PostgreSQL wire protocol proxy with mock capabilities
 // Uses transparent pass-through approach - only intercepts specific queries
 
+// debugWriter is a package-level buffered writer to stderr used only when
+// debug mode is enabled. All logDebug calls are no-ops otherwise.
+var debugWriter = bufio.NewWriter(os.Stderr)
+
 type Proxy struct {
 	addr         string
 	upstreamAddr string
@@ -33,7 +37,6 @@ type Proxy struct {
 	loader       *dsl.PayloadLoader
 	startup      *StartupHandler
 	result       *ResultHandler
-	debugLog     *os.File
 	dbConfig     *base.DatabaseProxyConfig // Configurable database name
 	schemaCache  map[string][]ColumnInfo   // table name -> column definitions
 }
@@ -72,14 +75,6 @@ func NewConnectionState() *ConnectionState {
 
 // NewProxy creates a new PostgreSQL proxy
 func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
-	// Open debug log file on mounted volume so it persists after container exits
-	debugLog, err := os.OpenFile("/app/project/postgres-proxy-debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Printf("❌ Failed to open debug log: %v\n", err)
-	} else {
-		fmt.Printf("✅ Opened debug log at /app/project/postgres-proxy-debug.log\n")
-	}
-
 	return &Proxy{
 		addr:         addr,
 		upstreamAddr: upstreamAddr,
@@ -87,7 +82,6 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		loader:       dsl.NewPayloadLoader(""),
 		startup:      NewStartupHandler(),
 		result:       NewResultHandler(),
-		debugLog:     debugLog,
 		dbConfig:     base.NewDatabaseProxyConfig("postgres"),
 		schemaCache:  make(map[string][]ColumnInfo),
 	}
@@ -2418,22 +2412,14 @@ func ReadRegularMessageFromReader(reader *bufio.Reader) (*Message, error) {
 	}, nil
 }
 
-// logDebug writes a debug message to the log file
+// logDebug writes a debug message to stderr when debug mode is enabled.
+// It is a true no-op when debug mode is off.
 func (p *Proxy) logDebug(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-
-	// Write to file if available
-	if p.debugLog != nil {
-		p.debugLog.WriteString(msg)
-		p.debugLog.Sync()
+	if !logger.IsDebug() {
+		return
 	}
-
-	// Always write to a well-known file path that persists
-	f, _ := os.OpenFile("/app/project/proxy-queries.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if f != nil {
-		f.WriteString(msg)
-		f.Close()
-	}
+	fmt.Fprintf(debugWriter, format, args...)
+	debugWriter.Flush()
 }
 
 // handleDescribe handles a Describe message and sends the appropriate response
