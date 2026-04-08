@@ -1,0 +1,28 @@
+id: prov-2026-e9e990bb
+title: 'P5-A: Make test timeout configurable via .linespec.yml and DSL'
+status: open
+created_at: "2026-04-08"
+author: calebcowen@gmail.com
+intent: "Add a service-level timeout_seconds field to .linespec.yml config and a per-test TIMEOUT DSL directive so users can override the hardcoded 3-minute per-test execution timeout. Per-test value wins over service default; both fall back to 180s (3 min) when unset."
+constraints:
+  - Default must remain 3 minutes (180s) to avoid breaking existing test suites
+  - Per-test TIMEOUT uses Go duration syntax (e.g. 5m, 30s) for consistency with time.ParseDuration
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/dsl/dsl_test.go
+    description: Unit tests for TIMEOUT DSL directive parsing
+associated_traces: []
+monitors: []
+tags: []
