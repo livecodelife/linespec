@@ -877,8 +877,20 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			logger.Debug("HTTP proxy alias: %s -> %s:%d", alias, dep.Host, dep.Port)
 		}
 
+		// Determine proxy bind port from the first dep with a non-zero port, default to 80.
+		// Note: one proxy container services all HTTP deps via Docker network aliases; if deps
+		// have different ports, only the first declared non-zero port will be served.
+		proxyPort := 80
+		for _, dep := range httpDeps {
+			if dep.Port != 0 {
+				proxyPort = dep.Port
+				break
+			}
+		}
+		proxyAddr := fmt.Sprintf("0.0.0.0:%d", proxyPort)
+
 		// Build HTTP proxy command with debug flag if enabled
-		httpProxyCmd := []string{"proxy", "http", "0.0.0.0:80", "unused", r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+		httpProxyCmd := []string{"proxy", "http", proxyAddr, "unused", r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
 		if logger.IsDebug() {
 			httpProxyCmd = append(httpProxyCmd, "--debug")
 		}
@@ -1223,8 +1235,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 		envVarName := strings.ToUpper(strings.ReplaceAll(dep.Name, "-", "_")) + "_URL"
 		if _, exists := serviceConfig.Service.Environment[envVarName]; !exists {
-			envMap[envVarName] = fmt.Sprintf("http://%s:80", alias)
-			logger.Debug("Added dependency URL: %s=http://%s:80", envVarName, alias)
+			depPort := dep.Port
+			if depPort == 0 {
+				depPort = 80
+			}
+			envMap[envVarName] = fmt.Sprintf("http://%s:%d", alias, depPort)
+			logger.Debug("Added dependency URL: %s=http://%s:%d", envVarName, alias, depPort)
 		}
 	}
 

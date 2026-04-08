@@ -11,7 +11,7 @@ service:
   environment:
     KAFKA_BROKERS: kafka:29092
     KAFKA_TOPIC: todo-events
-    USER_SERVICE_URL: http://user-service/api/v1/users/auth
+    USER_SERVICE_URL: http://user-service:3001/api/v1/users/auth
 
 database:
   type: mysql
