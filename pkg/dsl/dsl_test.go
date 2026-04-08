@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/livecodelife/linespec/pkg/types"
 )
@@ -975,5 +976,112 @@ HEADERS
 	}
 	if spec.Respond.Headers["X-Request-ID"] != "abc123" {
 		t.Errorf("Expected X-Request-ID='abc123', got %q", spec.Respond.Headers["X-Request-ID"])
+	}
+}
+
+func TestParser_TimeoutDirective(t *testing.T) {
+	content := `TEST timeout_test
+RECEIVE HTTP:POST http://localhost:3000/api
+TIMEOUT 5m
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "timeout_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Timeout != 5*time.Minute {
+		t.Errorf("Expected Timeout=5m, got %v", spec.Timeout)
+	}
+}
+
+func TestParser_TimeoutDirective_Seconds(t *testing.T) {
+	content := `TEST timeout_seconds_test
+RECEIVE HTTP:GET http://localhost:3000/health
+TIMEOUT 30s
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "timeout_seconds_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Timeout != 30*time.Second {
+		t.Errorf("Expected Timeout=30s, got %v", spec.Timeout)
+	}
+}
+
+func TestParser_NoTimeoutDirective(t *testing.T) {
+	content := `TEST no_timeout_test
+RECEIVE HTTP:GET http://localhost:3000/health
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "no_timeout_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if spec.Timeout != 0 {
+		t.Errorf("Expected Timeout=0 (not set), got %v", spec.Timeout)
+	}
+}
+
+func TestParser_TimeoutDirective_InvalidDuration(t *testing.T) {
+	content := `TEST bad_timeout_test
+RECEIVE HTTP:GET http://localhost:3000/health
+TIMEOUT notaduration
+RESPOND HTTP:200`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "bad_timeout_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	_, err = parser.Parse(tmpFile)
+	if err == nil {
+		t.Error("Expected parse error for invalid TIMEOUT value, got nil")
 	}
 }

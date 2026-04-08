@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/types"
@@ -153,6 +154,15 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	if p.peek().Type == TokenHeaders {
 		headersToken := p.consume()
 		spec.Receive.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
+	}
+
+	if p.peek().Type == TokenTimeout {
+		timeoutToken := p.consume()
+		d, err := time.ParseDuration(timeoutToken.Literal)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid TIMEOUT value at line %d: %q (use Go duration syntax, e.g. 5m, 30s)", timeoutToken.Line, timeoutToken.Literal)
+		}
+		spec.Timeout = d
 	}
 
 	for p.peek().Type == TokenExpect {

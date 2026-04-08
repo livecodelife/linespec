@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
@@ -155,7 +156,26 @@ func runTest() {
 	for i, file := range testFiles {
 		logger.TestRunning(i+1, len(testFiles), file)
 
-		testCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		// Determine per-test timeout:
+		// 1. Use TIMEOUT directive from the .linespec file if present.
+		// 2. Fall back to timeout_seconds from .linespec.yml (default: 180s).
+		var testTimeout time.Duration
+		if tokens, lexErr := dsl.LexFile(file); lexErr == nil {
+			parser := dsl.NewParser(tokens)
+			if spec, parseErr := parser.Parse(file); parseErr == nil {
+				testTimeout = spec.Timeout
+			}
+		}
+		if testTimeout == 0 {
+			if serviceConfig, cfgErr := config.LoadConfig(filepath.Dir(file)); cfgErr == nil {
+				testTimeout = time.Duration(serviceConfig.TestTimeoutSeconds) * time.Second
+			}
+		}
+		if testTimeout == 0 {
+			testTimeout = 3 * time.Minute
+		}
+
+		testCtx, cancel := context.WithTimeout(ctx, testTimeout)
 
 		func() {
 			defer cancel()

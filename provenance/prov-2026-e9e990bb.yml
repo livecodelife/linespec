@@ -15,14 +15,15 @@ affected_scope:
   - pkg/dsl/parser.go
   - pkg/runner/runner.go
   - cmd/linespec/main_beta.go
+  - pkg/dsl/dsl_test.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/dsl/dsl_test.go
-    description: Unit tests for TIMEOUT DSL directive parsing
+  - path: examples/user-linespecs/get_user_success.linespec
+    description: Existing test that exercises default timeout behavior (no TIMEOUT directive)
 associated_traces: []
 monitors: []
 tags: []
