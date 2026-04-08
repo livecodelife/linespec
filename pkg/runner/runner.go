@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,7 +39,8 @@ type TestSuite struct {
 	tempDir         string                            // Temp directory for shared files like schema cache
 	serviceConfigs  map[string]*config.LineSpecConfig // Discovered service configurations
 	defaultDBConfig *config.DatabaseConfig            // Default database configuration for shared infrastructure
-	containerNaming *config.ContainerNaming           // Container naming configuration
+	containerNaming    *config.ContainerNaming           // Container naming configuration
+	sharedSchemaBase64 string                           // Compact base64 JSON schema passed to MySQL proxies via --schema-data
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -274,12 +276,11 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 			if err != nil {
 				logger.Debug("Failed to fetch shared schema: %v", err)
 			} else {
-				schemaFile := filepath.Join(s.tempDir, ".linespec-shared-schema.json")
-				schemaData, _ := json.MarshalIndent(schemaCache, "", "  ")
-				if err := os.WriteFile(schemaFile, schemaData, 0644); err != nil {
-					logger.Debug("Failed to write shared schema file: %v", err)
+				if schemaData, encErr := json.Marshal(schemaCache); encErr != nil {
+					logger.Debug("Failed to marshal schema: %v", encErr)
 				} else {
-					logger.Debug("Shared schema cached to %s", schemaFile)
+					s.sharedSchemaBase64 = base64.StdEncoding.EncodeToString(schemaData)
+					logger.Debug("Shared schema encoded (%d tables, %d bytes base64)", len(schemaCache), len(s.sharedSchemaBase64))
 				}
 			}
 		}
@@ -803,6 +804,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 				// Build MySQL proxy command
 				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", serviceConfig.Database.Database}
+				if r.suite.sharedSchemaBase64 != "" {
+					mysqlProxyCmd = append(mysqlProxyCmd, "--schema-data", r.suite.sharedSchemaBase64)
+				}
 				if logger.IsDebug() {
 					mysqlProxyCmd = append(mysqlProxyCmd, "--debug")
 				}

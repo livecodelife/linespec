@@ -116,6 +116,15 @@ func (p *Proxy) LoadSchema(schemaFile string) error {
 	return nil
 }
 
+// LoadSchemaFromBytes unmarshals schema directly from bytes without file I/O.
+func (p *Proxy) LoadSchemaFromBytes(data []byte) error {
+	if err := json.Unmarshal(data, &p.schemaCache); err != nil {
+		return fmt.Errorf("failed to parse schema data: %w", err)
+	}
+	logger.Debug("Loaded schema for %d tables", len(p.schemaCache))
+	return nil
+}
+
 func (p *Proxy) Start(ctx context.Context) error {
 	if p.dbConfig.GetDatabaseName() == "" {
 		return fmt.Errorf("MySQL proxy requires a database name; pass --db-name argument")
