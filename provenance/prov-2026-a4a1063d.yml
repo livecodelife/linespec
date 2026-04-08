@@ -1,6 +1,6 @@
 id: prov-2026-a4a1063d
 title: 'P4-D: Pass MySQL schema inline via --schema-data flag instead of JSON file'
-status: open
+status: implemented
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: >
@@ -27,7 +27,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: b1a2f821610411fbe09ea4c4b633f239975e0d27
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
