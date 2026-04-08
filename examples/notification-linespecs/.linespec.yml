@@ -12,7 +12,7 @@ service:
     KAFKA_BROKERS: kafka:29092
     KAFKA_TOPIC: todo-events
     KAFKA_GROUP_ID: notification-service-group
-    USER_SERVICE_URL: http://user-service/api/v1/users/auth
+    USER_SERVICE_URL: http://user-service:3001/api/v1/users/auth
     DATABASE_URL: postgresql+asyncpg://notification_user:notification_password@db:5432/notification_service
     REDIS_URL: redis://redis-proxy:6379
     GRPC_HOST: grpc-proxy

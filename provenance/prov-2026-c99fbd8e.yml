@@ -9,6 +9,8 @@ constraints:
   - "Document the single-port-per-proxy-container limitation in a comment"
 affected_scope:
   - "pkg/runner/runner.go"
+  - "examples/todo-linespecs/.linespec.yml"
+  - "examples/notification-linespecs/.linespec.yml"
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
