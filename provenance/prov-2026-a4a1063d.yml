@@ -1,0 +1,36 @@
+id: prov-2026-a4a1063d
+title: 'P4-D: Pass MySQL schema inline via --schema-data flag instead of JSON file'
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: >
+  Replace the current approach of writing the MySQL database schema to a
+  temp file using json.MarshalIndent with passing it inline as compact
+  base64-encoded JSON via a --schema-data CLI flag to the MySQL proxy
+  container. This eliminates unnecessary file I/O (the file was written
+  but the path was never passed to the proxy, so the schema was never
+  actually delivered). The fix reduces overhead from indented JSON
+  formatting and disk writes, and correctly delivers the schema to the proxy.
+constraints:
+  - Proxies run in out-of-process Docker containers; in-process sharing is not possible
+  - Schema is optional — proxies must function without it (schema only affects SHOW FULL FIELDS intercept)
+  - Must not break existing transparent mode duration positional arg (index shift required)
+  - Both encoding sides must use base64.StdEncoding (standard, padded)
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - cmd/linespec/main_beta.go
+  - pkg/runner/runner.go
+forbidden_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/kafka/interceptor.go
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
