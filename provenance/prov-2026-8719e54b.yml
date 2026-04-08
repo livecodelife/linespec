@@ -1,0 +1,36 @@
+id: prov-2026-8719e54b
+title: 'P4-C: Make PostgreSQL proxy debug logging opt-in with no-op fast path'
+status: open
+created_at: "2026-04-07"
+author: calebcowen@gmail.com
+intent: |
+  Remove per-message synchronous disk I/O from the PostgreSQL proxy hot path.
+  Currently every intercepted message calls logDebug() which: (1) writes and
+  fsyncs to /app/project/postgres-proxy-debug.log via the already-open debugLog
+  file, and (2) opens, writes, and closes /app/project/proxy-queries.log on
+  every single call. With 178 call sites this creates two synchronous disk writes
+  per message unconditionally, regardless of whether debug mode is requested.
+  The fix makes logDebug a no-op when debug mode is not enabled, and in debug
+  mode writes to buffered stderr instead of fixed container file paths.
+constraints:
+  - Do not change the external interface of NewProxy or Proxy.Start
+  - The --debug flag passed to the proxy process must continue to enable debug output
+  - Debug output in debug mode must go to stderr, not hardcoded file paths
+  - logDebug must be a true no-op (no allocations, no I/O) in non-debug mode
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - performance
+  - postgresql-proxy
