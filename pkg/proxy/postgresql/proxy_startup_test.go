@@ -51,7 +51,6 @@ func newTestProxy(t *testing.T) *Proxy {
 		loader:       nil,
 		startup:      NewStartupHandler(),
 		result:       NewResultHandler(),
-		debugLog:     nil,
 	}
 }
 

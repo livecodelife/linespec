@@ -19,6 +19,7 @@ constraints:
   - logDebug must be a true no-op (no allocations, no I/O) in non-debug mode
 affected_scope:
   - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/proxy_startup_test.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
