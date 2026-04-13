@@ -283,6 +283,7 @@ type LineSpecConfig struct {
 	SchemaDiscovery *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
 	Payload         *PayloadConfig         `yaml:"payload,omitempty"`
 	TestTimeoutSeconds int                    `yaml:"timeout_seconds,omitempty"`
+	StrictPassthrough  bool                   `yaml:"strict_passthrough,omitempty"`
 	Created            time.Time              `yaml:"-"`
 	BaseDir            string                 `yaml:"-"`
 }

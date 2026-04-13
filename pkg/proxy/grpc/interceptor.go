@@ -93,6 +93,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	mock, found := i.registry.FindGRPCMock(service, method)
 	if !found {
 		logger.Debug("gRPC Interceptor: No mock found for %s/%s", service, method)
+		i.registry.RecordPassthrough("gRPC " + service + "/" + method)
 		writeGRPCError(w, 12, fmt.Sprintf("no mock registered for %s/%s", service, method))
 		return
 	}

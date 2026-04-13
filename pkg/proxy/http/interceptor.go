@@ -99,6 +99,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		logger.Debug("No mock found for %s %s (Tried keys: %v)", method, path, keys)
+		i.registry.RecordPassthrough("HTTP " + method + " " + path)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

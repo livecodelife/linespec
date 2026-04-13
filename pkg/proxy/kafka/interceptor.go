@@ -104,6 +104,9 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 				logger.Debug("Kafka Interceptor: Produce to topic %s", topic)
 				i.registry.CheckNegativeMocks(topic, "")
 				mock, found := i.registry.FindMock(topic, "")
+				if !found {
+					i.registry.RecordPassthrough("Kafka produce topic=" + topic)
+				}
 				if found && mock != nil && len(mock.Verify) > 0 {
 					kafkaRules := verify.ExtractVerifyRulesForTarget(mock.Verify, "kafka")
 					if len(kafkaRules) > 0 {

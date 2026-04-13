@@ -300,8 +300,14 @@ func runProxy() {
 	// Start a sidecar HTTP server for verification
 	srv := &http.Server{Addr: "0.0.0.0:8081"}
 	http.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
-		hits := reg.GetHits()
-		json.NewEncoder(w).Encode(hits)
+		resp := struct {
+			Hits         map[string]int `json:"hits"`
+			Passthroughs []string       `json:"passthroughs"`
+		}{
+			Hits:         reg.GetHits(),
+			Passthroughs: reg.GetPassthroughs(),
+		}
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	go func() {

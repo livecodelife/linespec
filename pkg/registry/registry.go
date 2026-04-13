@@ -18,6 +18,7 @@ type MockRegistry struct {
 	orderedMocks []*types.ExpectStatement            // All mocks in registration order (for deterministic fallback)
 	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
 	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
+	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
 }
 
 func NewMockRegistry() *MockRegistry {
@@ -26,6 +27,7 @@ func NewMockRegistry() *MockRegistry {
 		orderedMocks: make([]*types.ExpectStatement, 0),
 		hits:         make(map[*types.ExpectStatement]int),
 		seeds:        make(map[string][][]byte),
+		passthroughs: make([]string, 0),
 	}
 }
 
@@ -54,6 +56,30 @@ func (r *MockRegistry) ResetHits() {
 	r.Lock()
 	defer r.Unlock()
 	r.hits = make(map[*types.ExpectStatement]int)
+}
+
+// RecordPassthrough records that a request bypassed the mock layer (no matching mock found).
+// description should be a short human-readable string identifying the request, e.g. "SELECT users".
+func (r *MockRegistry) RecordPassthrough(description string) {
+	r.Lock()
+	defer r.Unlock()
+	r.passthroughs = append(r.passthroughs, description)
+}
+
+// GetPassthroughs returns a copy of all recorded passthrough descriptions.
+func (r *MockRegistry) GetPassthroughs() []string {
+	r.RLock()
+	defer r.RUnlock()
+	cp := make([]string, len(r.passthroughs))
+	copy(cp, r.passthroughs)
+	return cp
+}
+
+// AddPassthroughs merges passthrough records from a proxy container into this registry.
+func (r *MockRegistry) AddPassthroughs(passthroughs []string) {
+	r.Lock()
+	defer r.Unlock()
+	r.passthroughs = append(r.passthroughs, passthroughs...)
 }
 
 // IncrementHit increments the hit count for a specific mock (thread-safe)
@@ -659,4 +685,21 @@ func (r *MockRegistry) matchSQL(mockSQL string, query string) bool {
 		return true
 	}
 	return false
+}
+
+// VerifyPassthroughs logs a warning for every recorded passthrough. If strict is true and
+// any passthroughs were recorded, it returns an error so the test fails.
+func (r *MockRegistry) VerifyPassthroughs(strict bool) error {
+	r.RLock()
+	defer r.RUnlock()
+	if len(r.passthroughs) == 0 {
+		return nil
+	}
+	for _, desc := range r.passthroughs {
+		logger.Info("WARNING: passthrough — request bypassed mock layer: %s", desc)
+	}
+	if strict {
+		return fmt.Errorf("%d request(s) bypassed the mock layer (strict_passthrough is enabled); see warnings above", len(r.passthroughs))
+	}
+	return nil
 }
