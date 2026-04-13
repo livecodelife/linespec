@@ -1,0 +1,48 @@
+id: prov-2026-de632306
+title: 'Fix four incomplete plan items: P4-B regex, P4-A Kafka sleep, P5-E constant, P1-A mock'
+status: open
+created_at: "2026-04-13"
+author: calebcowen@gmail.com
+intent: |
+  Fix four items that were marked Complete in IMPROVEMENT_PLAN.md but were not fully implemented:
+  1. P4-B: Six static regex patterns in pkg/dsl/parser.go are still compiled inline on every parse
+     call (lines 131-133, 188, 341, 350). These should join the package-level var block.
+  2. P4-A: A fixed time.Sleep(12 * time.Second) remains at runner.go:1403 for the Kafka consumer
+     test wait path. P4-A required replacing all fixed sleeps with polling/backoff.
+  3. P5-E: The string literal "real-db" is still used in two default-setting locations
+     (runner.go:63 and parser.go:138) rather than a named constant. P5-E required removing all
+     inline string literals.
+  4. P1-A: CheckNegativeMocks in registry.go (lines 427-433) uses a channel-type heuristic when
+     a negative mock has no SQL field. Any SELECT will match a READ negative mock regardless of
+     table, causing false EXPECT_NOT violations.
+constraints:
+  - All existing unit tests must continue to pass (make test).
+  - All four linespec example suites must pass after changes.
+  - Must not change observable behaviour for tests that do not exercise the four bug paths.
+  - For P4-A (Kafka sleep), replace the fixed sleep with a polling loop that checks whether the
+    Kafka consumer has finished processing (e.g. poll the verify endpoint or use a configurable
+    timeout with short-interval retries).
+  - For P1-A (negative mock heuristic), the fix must only flag a negative mock as hit when the
+    query actually involves the table the mock is keyed on, not any query of the matching type.
+affected_scope:
+  - pkg/dsl/parser.go
+  - pkg/runner/runner.go
+  - pkg/registry/registry.go
+  - pkg/config/parser.go
+forbidden_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/provenance/**
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/create_user_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
