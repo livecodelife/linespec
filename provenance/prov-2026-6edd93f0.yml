@@ -1,0 +1,39 @@
+id: prov-2026-6edd93f0
+title: 'Add passthrough visibility: warn on unmatched mock requests'
+status: open
+created_at: "2026-04-12"
+author: calebcowen@gmail.com
+intent: "Implement P5-C from the improvement plan: add passthrough visibility so that when a
+  request doesn't match any mock and passes through to the real dependency, a warning is
+  emitted at verification time. Optionally allow strict_passthrough: true in .linespec.yml
+  to fail the test on any unmatched passthrough. Ensures tests cannot silently appear green
+  while the service talks to the real database the entire time."
+constraints:
+  - "Default behavior must be warn-only (not a test failure) to avoid breaking existing tests"
+  - "strict_passthrough: true in .linespec.yml causes test failure on any passthrough"
+  - "Passthrough data must flow from proxy containers through the /verify endpoint to the runner"
+  - "All proxy types (PostgreSQL, MySQL, HTTP, gRPC, Redis, Kafka) must record passthroughs"
+affected_scope:
+  - pkg/registry/registry.go
+  - cmd/linespec/main_beta.go
+  - pkg/runner/runner.go
+  - pkg/config/types.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/grpc/interceptor.go
+  - pkg/proxy/redis/interceptor.go
+  - pkg/proxy/kafka/interceptor.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_success.linespec
+    description: Existing test that will now emit passthrough warnings for any DB queries that bypass the mock layer
+  - path: examples/user-linespecs/create_user_success.linespec
+    description: Existing test that will validate no unmatched passthroughs occur under default (warn) mode
+associated_traces: []
+monitors: []
+tags: []
