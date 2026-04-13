@@ -1,6 +1,6 @@
 id: prov-2026-de632306
 title: 'Fix four incomplete plan items: P4-B regex, P4-A Kafka sleep, P5-E constant, P1-A mock'
-status: open
+status: implemented
 created_at: "2026-04-13"
 author: calebcowen@gmail.com
 intent: |
@@ -35,7 +35,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: aa4d31d1089498b8e8ca84fd4059486e3af1f7a9
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
