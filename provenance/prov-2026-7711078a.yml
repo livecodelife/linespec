@@ -1,0 +1,26 @@
+id: prov-2026-7711078a
+title: Fix GoReleaser beta formula skip_upload
+status: open
+created_at: "2026-04-13"
+author: calebcowen@gmail.com
+intent: "Fix .goreleaser.yml so the linespec-beta Homebrew formula is updated on every
+  beta release. The beta formula had skip_upload: auto which causes GoReleaser to skip
+  the formula commit whenever the release is marked as a prerelease. Since all beta tags
+  trigger prerelease: auto, the beta formula was never being updated. Changed
+  skip_upload to false on the beta formula only; the stable formula retains auto so it
+  is not touched by prerelease tags."
+constraints:
+  - Only change skip_upload on the beta formula, not the stable formula
+affected_scope:
+  - .goreleaser.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .goreleaser.yml
+    type: config
+associated_traces: []
+monitors: []
+tags: []
