@@ -191,7 +191,7 @@ brews:
     # Only publish beta builds to the beta formula
     ids:
       - linespec-beta
-    skip_upload: auto
+    skip_upload: false
 
 # Disable other artifact types for now
 nfpms: []
