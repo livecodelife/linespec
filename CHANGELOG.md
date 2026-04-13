@@ -5,6 +5,46 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0-beta] - 2026-04-13
+
+### Added (Beta)
+
+- **EXPECT_NOT enforcement** ([prov-2026-758af159](./provenance/prov-2026-758af159.yml)) - Negative expectations in `.linespec` test files are now properly enforced. Interactions matching an `EXPECT_NOT` block now cause the test to fail, closing a gap where negative assertions were silently ignored.
+
+- **Auto table discovery** ([prov-2026-9a74b241](./provenance/prov-2026-9a74b241.yml)) - PostgreSQL proxy now automatically discovers tables from query traffic instead of relying on a hardcoded Rails table list. Removes framework-specific assumptions from the proxy core.
+
+- **Data-driven framework config** ([prov-2026-83fdfdd9](./provenance/prov-2026-83fdfdd9.yml)) - Framework defaults (health endpoint, port, start command) are now driven by a config map rather than hardcoded structs. Chi framework defaults added.
+
+- **Chi framework defaults** ([prov-2026-eb5f2ecb](./provenance/prov-2026-eb5f2ecb.yml)) - Added Chi as a supported framework with sensible defaults in the framework config map.
+
+- **HTTP proxy Content-Type inference** ([prov-2026-ebfa7835](./provenance/prov-2026-ebfa7835.yml)) - HTTP proxy now infers `Content-Type` from the payload file extension (`.json` → `application/json`, `.xml` → `application/xml`, etc.) instead of always defaulting to `application/json`. Added `RESPONSE_HEADERS` support on `EXPECT` blocks and `HEADERS` support on `RESPOND` blocks for explicit overrides.
+
+### Fixed (Beta)
+
+- **Non-deterministic registry matching** ([prov-2026-cd962cbc](./provenance/prov-2026-cd962cbc.yml)) - Fixed fuzzy registry matching that produced inconsistent results across test runs due to map iteration order. Matching is now deterministic.
+
+- **PostgreSQL startup enforcement** ([prov-2026-0a7ec7ff](./provenance/prov-2026-0a7ec7ff.yml)) - PostgreSQL proxy now fails fast on startup timeout rather than silently hanging, improving error visibility in CI.
+
+- **MySQL CLIENT_QUERY_ATTRIBUTES parsing** ([prov-2026-976c7d8a](./provenance/prov-2026-976c7d8a.yml)) - Fixed MySQL proxy to correctly parse the `CLIENT_QUERY_ATTRIBUTES` capability flag, resolving handshake failures with MySQL 8.x clients.
+
+- **PostgreSQL mid-read deadlock** ([prov-2026-24c7e7aa](./provenance/prov-2026-24c7e7aa.yml)) - Fixed a deadlock in the PostgreSQL proxy that occurred when a read was in progress during config decoupling. Also decoupled proxy behavior config from the global `.linespec.yml` config.
+
+- **Proxy behavior config unification** ([prov-2026-aa64b036](./provenance/prov-2026-aa64b036.yml)) - Unified proxy behavior configuration across all proxy types (PostgreSQL, MySQL, HTTP, Kafka), replacing per-proxy ad-hoc config with a shared structure.
+
+### Related Provenance Records
+
+- [prov-2026-758af159](./provenance/prov-2026-758af159.yml) - Enforce EXPECT_NOT negative expectations
+- [prov-2026-cd962cbc](./provenance/prov-2026-cd962cbc.yml) - Fix non-deterministic fuzzy registry matching
+- [prov-2026-0a7ec7ff](./provenance/prov-2026-0a7ec7ff.yml) - Enforce PostgreSQL startup failure on timeout
+- [prov-2026-976c7d8a](./provenance/prov-2026-976c7d8a.yml) - Fix MySQL CLIENT_QUERY_ATTRIBUTES parsing
+- [prov-2026-9a74b241](./provenance/prov-2026-9a74b241.yml) - Auto table discovery replacing hardcoded Rails tables
+- [prov-2026-83fdfdd9](./provenance/prov-2026-83fdfdd9.yml) - Data-driven framework config replacing hardcoded structs
+- [prov-2026-24c7e7aa](./provenance/prov-2026-24c7e7aa.yml) - Config decoupling and PostgreSQL deadlock fix
+- [prov-2026-eb5f2ecb](./provenance/prov-2026-eb5f2ecb.yml) - Chi framework defaults
+- [prov-2026-aa64b036](./provenance/prov-2026-aa64b036.yml) - Proxy behavior config unification
+- [prov-2026-ebfa7835](./provenance/prov-2026-ebfa7835.yml) - HTTP proxy Content-Type inference from file extension
+- [prov-2026-70cbf556](./provenance/prov-2026-70cbf556.yml) - This release
+
 ## [1.4.0] - 2026-04-03
 
 ### Added
