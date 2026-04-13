@@ -178,6 +178,10 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		return fmt.Errorf("failed to discover services: %w", err)
 	}
 
+	// Apply container naming from the discovered service config so that user-configured
+	// values (e.g. network_alias) override the defaults set in NewTestSuite.
+	s.applyContainerNamingFromConfig()
+
 	// Create shared network
 	_, err := s.orch.CreateNetwork(ctx, s.networkName)
 	if err != nil {
@@ -358,6 +362,19 @@ func (s *TestSuite) hasMySQLServices() bool {
 		}
 	}
 	return false
+}
+
+// applyContainerNamingFromConfig overrides the suite's containerNaming with the first discovered
+// service config that has ContainerNaming set, so user-configured values (e.g. network_alias)
+// take effect. networkName is kept in sync since it is cached separately on the suite.
+func (s *TestSuite) applyContainerNamingFromConfig() {
+	for _, cfg := range s.serviceConfigs {
+		if cfg.ContainerNaming != nil {
+			s.containerNaming = cfg.ContainerNaming
+			s.networkName = cfg.ContainerNaming.NetworkName
+			return
+		}
+	}
 }
 
 // getSchemaDiscoveryConfig returns the SchemaDiscoveryConfig from the first service that has one,
@@ -724,7 +741,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
 				},
 			}, &network.NetworkingConfig{
-				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"real-db"}}},
+				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{r.suite.containerNaming.NetworkAlias}}},
 			}, dbContainerName)
 			if err != nil {
 				return fmt.Errorf("failed to start PostgreSQL container: %w", err)
@@ -750,7 +767,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
 				// Build PostgreSQL proxy command with debug flag if enabled
-				pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+				pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
 				if logger.IsDebug() {
 					pgProxyCmd = append(pgProxyCmd, "--debug")
 				}
@@ -803,7 +820,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				logger.Debug("MySQL proxy enabled for this service")
 
 				// Build MySQL proxy command
-				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, "real-db:" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", serviceConfig.Database.Database}
+				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", serviceConfig.Database.Database}
 				if r.suite.sharedSchemaBase64 != "" {
 					mysqlProxyCmd = append(mysqlProxyCmd, "--schema-data", r.suite.sharedSchemaBase64)
 				}
