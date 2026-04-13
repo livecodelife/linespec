@@ -105,7 +105,7 @@ func runTest() {
 				return err
 			}
 			// Only include files with .linespec extension, excluding files like Dockerfile.linespec
-			if !info.IsDir() && filepath.Ext(p) == ".linespec" && !strings.Contains(strings.ToLower(filepath.Base(p)), "dockerfile") {
+			if !info.IsDir() && filepath.Ext(p) == ".linespec" && filepath.Base(p) != "Dockerfile.linespec" {
 				testFiles = append(testFiles, p)
 			}
 			return nil
