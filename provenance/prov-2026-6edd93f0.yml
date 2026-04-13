@@ -1,6 +1,6 @@
 id: prov-2026-6edd93f0
 title: 'Add passthrough visibility: warn on unmatched mock requests'
-status: open
+status: implemented
 created_at: "2026-04-12"
 author: calebcowen@gmail.com
 intent: "Implement P5-C from the improvement plan: add passthrough visibility so that when a
@@ -28,7 +28,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6436e5d595f07c43bd44b4161f5041ecd99f2b52
 associated_specs:
   - path: examples/user-linespecs/get_user_success.linespec
     description: Existing test that will now emit passthrough warnings for any DB queries that bypass the mock layer
