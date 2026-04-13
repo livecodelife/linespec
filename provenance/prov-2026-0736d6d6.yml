@@ -1,0 +1,29 @@
+id: prov-2026-0736d6d6
+title: 'P5-D: Fix Dockerfile.linespec exclusion to use exact filename match'
+status: open
+created_at: "2026-04-13"
+author: calebcowen@gmail.com
+intent: "Change the .linespec test file exclusion logic in main_beta.go to match only the exact filename 'Dockerfile.linespec' instead of any filename containing the substring 'dockerfile' (case-insensitive). This prevents false exclusions of valid test files like 'my-dockerfile-spec.linespec'."
+constraints:
+  - "Only change the exclusion predicate — do not alter any other file-walking or test collection logic"
+  - "The exact filename 'Dockerfile.linespec' must still be excluded from test collection"
+affected_scope:
+  - "cmd/linespec/main_beta.go"
+forbidden_scope:
+  - "pkg/runner/**"
+  - "pkg/proxy/**"
+  - "pkg/dsl/**"
+  - "pkg/registry/**"
+  - "pkg/config/**"
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
