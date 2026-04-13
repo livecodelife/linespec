@@ -60,7 +60,7 @@ func NewTestSuite() (*TestSuite, error) {
 	containerNaming := &config.ContainerNaming{
 		DatabaseContainer: "linespec-shared-db",
 		NetworkName:       "linespec-shared-net",
-		NetworkAlias:      "real-db",
+		NetworkAlias:      config.DefaultNetworkAlias,
 		MigrateContainer:  "linespec-migrate-{{ .ServiceName }}",
 		KafkaContainer:    "linespec-shared-kafka",
 		ProxyContainer:    "proxy-{{ .Type }}-{{ .SpecName }}",
@@ -1398,9 +1398,36 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// 6. Trigger (HTTP) or wait (Kafka consumer)
 	if spec.Receive.Channel == types.Event {
 		// The trigger is the seeded Kafka message already in the interceptor.
-		// Wait for the consumer app to poll and process it.
-		logger.Debug("Kafka consumer test: waiting 12s for the app to consume the seeded message...")
-		time.Sleep(12 * time.Second)
+		// Poll the verify endpoints every 500ms until all expected mocks are satisfied
+		// or the test context deadline is reached.
+		logger.Debug("Kafka consumer test: polling for expected mock interactions...")
+		pollTicker := time.NewTicker(500 * time.Millisecond)
+		defer pollTicker.Stop()
+	kafkaPollLoop:
+		for {
+			if dbVerifyPort != "" {
+				r.collectHits("localhost:" + dbVerifyPort)
+			}
+			if httpVerifyPort != "" {
+				r.collectHits("localhost:" + httpVerifyPort)
+			}
+			if grpcVerifyPort != "" {
+				r.collectHits("localhost:" + grpcVerifyPort)
+			}
+			if redisVerifyPort != "" {
+				r.collectHits("localhost:" + redisVerifyPort)
+			}
+			if r.registry.VerifyAll() == nil {
+				logger.Debug("Kafka consumer test: all expected interactions satisfied")
+				break kafkaPollLoop
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("kafka consumer test timed out waiting for expected interactions: %w", ctx.Err())
+			case <-pollTicker.C:
+				// continue polling
+			}
+		}
 	} else {
 		// HTTP-triggered test: send the request and verify the response.
 		logger.Debug("Triggering request: %s %s", spec.Receive.Method, spec.Receive.Path)

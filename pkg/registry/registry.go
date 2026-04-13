@@ -421,18 +421,34 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 				continue
 			}
 			if query != "" && mock.SQL != "" {
+				// Explicit SQL constraint: use proper SQL matching.
 				if r.matchSQL(mock.SQL, query) {
 					r.hits[mock]++
 				}
 			} else if query != "" {
+				// No SQL constraint on the mock: match on channel type.
+				// Also require the table name (key) to appear in the query to
+				// prevent a JOIN or other multi-table query from triggering a
+				// negative mock that is not related to the table being accessed.
 				q := strings.TrimSpace(strings.ToUpper(query))
-				if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
+				keyUpper := strings.ToUpper(key)
+				if strings.HasPrefix(q, "SELECT") &&
+					(mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) &&
+					strings.Contains(q, keyUpper) {
 					r.hits[mock]++
-				} else if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
+				} else if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) &&
+					(mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) &&
+					strings.Contains(q, keyUpper) {
 					r.hits[mock]++
 				}
 			} else {
-				r.hits[mock]++
+				// Empty query: only fire for non-SQL channel types (e.g. Kafka events).
+				// SQL-type negative mocks require a query to match against; firing them
+				// on an empty-query call would produce spurious EXPECT_NOT violations.
+				if mock.Channel != types.ReadMySQL && mock.Channel != types.ReadPostgreSQL &&
+					mock.Channel != types.WriteMySQL && mock.Channel != types.WritePostgreSQL {
+					r.hits[mock]++
+				}
 			}
 		}
 	}

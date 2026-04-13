@@ -67,6 +67,17 @@ var (
 	reVerifyCommandContains    = regexp.MustCompile(`(?i)^command\s+CONTAINS\s+['"](.+?)['"]$`)
 	reVerifyCommandNotContains = regexp.MustCompile(`(?i)^command\s+NOT_CONTAINS\s+['"](.+?)['"]$`)
 	reVerifyCommandMatches     = regexp.MustCompile(`(?i)^command\s+MATCHES\s/(.+?)/$`)
+
+	// parseTestSpec / parseReceive patterns
+	reReceiveHTTP    = regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
+	reReceiveKafka   = regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
+	reReceiveGRPC    = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
+	reRespondStatus  = regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
+	reReturnsPayload = regexp.MustCompile(`^\{\{(.+)\}\}$`)
+
+	// parseExpectChannel patterns
+	reExpectEvent = regexp.MustCompile(`(?i)^(EVENT|MESSAGE):(.+)$`)
+	reExpectGRPC  = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
 )
 
 type Parser struct {
@@ -128,18 +139,14 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		return nil, err
 	}
 
-	reHttp := regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
-	reKafka := regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
-	reGRPCReceive := regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
-
-	if mHttp := reHttp.FindStringSubmatch(receiveToken.Literal); mHttp != nil {
+	if mHttp := reReceiveHTTP.FindStringSubmatch(receiveToken.Literal); mHttp != nil {
 		spec.Receive.Channel = types.HTTP
 		spec.Receive.Method = strings.ToUpper(mHttp[1])
 		spec.Receive.Path = p.resolve(mHttp[2])
-	} else if mKafka := reKafka.FindStringSubmatch(receiveToken.Literal); mKafka != nil {
+	} else if mKafka := reReceiveKafka.FindStringSubmatch(receiveToken.Literal); mKafka != nil {
 		spec.Receive.Channel = types.Event
 		spec.Receive.Topic = strings.TrimSpace(mKafka[1])
-	} else if mGRPC := reGRPCReceive.FindStringSubmatch(receiveToken.Literal); mGRPC != nil {
+	} else if mGRPC := reReceiveGRPC.FindStringSubmatch(receiveToken.Literal); mGRPC != nil {
 		spec.Receive.Channel = types.GRPC
 		spec.Receive.Service = mGRPC[1]
 		spec.Receive.RPCMethod = mGRPC[2]
@@ -185,8 +192,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	if p.peek() != nil && p.peek().Type == TokenRespond {
 		respondToken := p.consume()
 
-		reStatus := regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
-		mStatus := reStatus.FindStringSubmatch(respondToken.Literal)
+		mStatus := reRespondStatus.FindStringSubmatch(respondToken.Literal)
 		if mStatus == nil {
 			return nil, fmt.Errorf("Invalid RESPOND format at line %d: %s", respondToken.Line, respondToken.Literal)
 		}
@@ -277,7 +283,7 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		returnsToken := p.consume()
 		if strings.ToUpper(returnsToken.Literal) == "EMPTY" {
 			expect.ReturnsEmpty = true
-		} else if m := regexp.MustCompile(`^\{\{(.+)\}\}$`).FindStringSubmatch(returnsToken.Literal); m != nil {
+		} else if m := reReturnsPayload.FindStringSubmatch(returnsToken.Literal); m != nil {
 			expect.ReturnsFile = m[1]
 		} else {
 			expect.ReturnsFile = returnsToken.Literal
@@ -337,9 +343,7 @@ func parseHeaders(literal string) map[string]string {
 }
 
 func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) {
-	// Replicates parseExpectChannel logic from TypeScript
-	reEvent := regexp.MustCompile(`(?i)^(EVENT|MESSAGE):(.+)$`)
-	if m := reEvent.FindStringSubmatch(value); m != nil {
+	if m := reExpectEvent.FindStringSubmatch(value); m != nil {
 		return &types.ExpectStatement{
 			Channel: types.Event,
 			Topic:   m[2],
@@ -347,8 +351,7 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 	}
 
 	// gRPC: GRPC:package.Service/Method (no space, matched before SplitN)
-	reGRPC := regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
-	if m := reGRPC.FindStringSubmatch(value); m != nil {
+	if m := reExpectGRPC.FindStringSubmatch(value); m != nil {
 		return &types.ExpectStatement{
 			Channel:   types.GRPC,
 			Service:   m[1],

@@ -8,6 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultNetworkAlias is the container network alias used when no containerNaming.network_alias
+// is set in .linespec.yml. Exported so the runner can reference the same value.
+const DefaultNetworkAlias = "real-db"
+
 // LoadConfig searches for .linespec.yml starting from the given directory
 // and walking up to parent directories. Supports LINESPEC_CONFIG env var override.
 func LoadConfig(startDir string) (*LineSpecConfig, error) {
@@ -135,7 +139,7 @@ func applyDefaults(config *LineSpecConfig) {
 		config.ContainerNaming.NetworkName = "linespec-shared-net"
 	}
 	if config.ContainerNaming.NetworkAlias == "" {
-		config.ContainerNaming.NetworkAlias = "real-db"
+		config.ContainerNaming.NetworkAlias = DefaultNetworkAlias
 	}
 	if config.ContainerNaming.MigrateContainer == "" {
 		config.ContainerNaming.MigrateContainer = "linespec-migrate-{{ .ServiceName }}"
