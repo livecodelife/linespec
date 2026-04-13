@@ -15,7 +15,7 @@ affected_scope:
   - .goreleaser.yml
 forbidden_scope: []
 supersedes: ""
-superseded_by: ""
+superseded_by: "prov-2026-e6b1e142"
 related: []
 sealed_at_sha: c13944520e25c6bceafbc07b75cf31cd59f18c38
 associated_specs:

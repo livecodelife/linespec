@@ -1,0 +1,26 @@
+id: prov-2026-e6b1e142
+title: 'Fix goreleaser v2 field name: skip_upload → skip'
+status: open
+created_at: "2026-04-13"
+author: calebcowen@gmail.com
+intent: "GoReleaser v2 renamed the skip_upload field to skip in the brews section.
+  The previous fix (prov-2026-7711078a) used skip_upload: false which was silently
+  ignored by v2, causing it to fall back to the default 'auto' behavior and still
+  skip the beta formula update on prerelease tags. Fix both formulas to use the
+  correct v2 field name: beta formula gets skip: false, stable formula gets skip: auto."
+constraints:
+  - Only rename the field; do not change the values
+affected_scope:
+  - .goreleaser.yml
+  - provenance/prov-2026-7711078a.yml
+forbidden_scope: []
+supersedes: "prov-2026-7711078a"
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .goreleaser.yml
+    type: config
+associated_traces: []
+monitors: []
+tags: []
