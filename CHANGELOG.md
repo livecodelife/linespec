@@ -5,6 +5,69 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1-beta] - 2026-04-13
+
+### Added (Beta)
+
+- **MySQL prepared statement interception** ([prov-2026-edbd5218](./provenance/prov-2026-edbd5218.yml)) - MySQL proxy now intercepts `COM_STMT_PREPARE` and `COM_STMT_EXECUTE` commands in addition to plain `COM_QUERY`, enabling test coverage of services that use prepared statements.
+
+- **Kafka consumer/fetch protocol interception** ([prov-2026-abc98f0d](./provenance/prov-2026-abc98f0d.yml)) - Kafka proxy now intercepts consumer-side traffic: Fetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, OffsetCommit, and OffsetFetch requests. Enables `.linespec` tests to assert on messages consumed by the service under test.
+
+- **gRPC and Redis proxy support** ([prov-2026-9f50db3c](./provenance/prov-2026-9f50db3c.yml)) - New gRPC (HTTP/2 + JSON) and Redis (RESP2) protocol interceptors. Adds DSL channel types `GRPC:service/Method`, `READ:REDIS`, and `WRITE:REDIS` so services using gRPC or Redis dependencies can be tested with LineSpec.
+
+- **Configurable test timeout** ([prov-2026-e9e990bb](./provenance/prov-2026-e9e990bb.yml)) - Added `timeout_seconds` field to `.linespec.yml` service config and a per-test `TIMEOUT` DSL directive. Per-test value takes precedence over the service default; both fall back to 180s when unset.
+
+- **Passthrough visibility for unmatched mocks** ([prov-2026-6edd93f0](./provenance/prov-2026-6edd93f0.yml)) - Proxies now log a warning when a request passes through without matching any registered mock, making it easier to diagnose missing mock registrations during test development.
+
+- **notification-service Redis/gRPC example** ([prov-2026-f9eb4e06](./provenance/prov-2026-f9eb4e06.yml)) - Extended the notification-service example to demonstrate Redis auth-token caching and a gRPC+JSON client for user lookup in the Kafka consumer path.
+
+### Fixed (Beta)
+
+- **Kafka consumer protocol bugs** ([prov-2026-63f06580](./provenance/prov-2026-63f06580.yml)) - Fixed JoinGroup follower handling, round-robin assignor, `ListOffsets` offset 0 behavior, and YAML→JSON conversion for HTTP responses in Kafka consumer tests.
+
+- **Kafka produce message parsing** ([prov-2026-fe6a08be](./provenance/prov-2026-fe6a08be.yml)) - Fixed `extractProduceData` to use proper Kafka wire protocol parsing instead of magic positional offsets. Adds RecordBatch v2 varint/zigzag decoding, header extraction, MessageSet v0/v1 fallback, and compressed batch detection.
+
+- **HTTP proxy port now configurable** ([prov-2026-c99fbd8e](./provenance/prov-2026-c99fbd8e.yml)) - HTTP dependency proxies now bind on the port declared in `.linespec.yml` (`dep.Port`) instead of always defaulting to port 80, enabling interception of services on non-standard ports.
+
+- **Dockerfile.linespec exclusion false positives** ([prov-2026-0736d6d6](./provenance/prov-2026-0736d6d6.yml)) - Fixed test file exclusion logic to match only the exact filename `Dockerfile.linespec` instead of any path containing the substring "dockerfile", preventing valid test files from being silently skipped.
+
+- **Network alias sourced from containerNaming config** ([prov-2026-08169255](./provenance/prov-2026-08169255.yml)) - Container network aliases are now sourced exclusively from the `containerNaming` config template instead of being partially derived from hardcoded logic.
+
+- **MySQL integration tests broken by P2-E** ([prov-2026-e00e9f98](./provenance/prov-2026-e00e9f98.yml)) - Fixed MySQL integration tests that were broken by the database name enforcement added in P2-E.
+
+- **Remaining incomplete plan items** ([prov-2026-de632306](./provenance/prov-2026-de632306.yml)) - Fixed four items marked complete in the improvement plan but not fully implemented: remaining inline regex compilations (P4-B), a fixed 12-second sleep in the Kafka consumer wait path (P4-A), a hardcoded network alias constant (P5-E), and a mock registration gap (P1-A).
+
+### Changed (Beta)
+
+- **Exponential-backoff readiness polling** ([prov-2026-238350b1](./provenance/prov-2026-238350b1.yml)) - Replaced fixed `time.Sleep` calls in container startup with exponential-backoff polling, reducing total test suite time and eliminating arbitrary waits.
+
+- **PostgreSQL proxy debug logging opt-in** ([prov-2026-8719e54b](./provenance/prov-2026-8719e54b.yml)) - PostgreSQL proxy debug logging is now disabled by default with a no-op fast path. Enable via config to restore previous behavior.
+
+- **MySQL schema passed inline via `--schema-data`** ([prov-2026-a4a1063d](./provenance/prov-2026-a4a1063d.yml)) - MySQL schema is now passed to the proxy container as an inline flag argument (`--schema-data`) instead of a mounted JSON file, simplifying container setup.
+
+- **DSL verify-rule regex compiled once at init** ([prov-2026-00cfa45c](./provenance/prov-2026-00cfa45c.yml)) - Regex patterns used in DSL verify-rule parsing are now compiled once at package init rather than on every parse call, eliminating redundant compilation overhead.
+
+### Related Provenance Records
+
+- [prov-2026-edbd5218](./provenance/prov-2026-edbd5218.yml) - MySQL prepared statement interception
+- [prov-2026-abc98f0d](./provenance/prov-2026-abc98f0d.yml) - Kafka consumer/fetch protocol interception
+- [prov-2026-63f06580](./provenance/prov-2026-63f06580.yml) - Kafka consumer protocol bug fixes
+- [prov-2026-fe6a08be](./provenance/prov-2026-fe6a08be.yml) - Kafka produce message parsing fix
+- [prov-2026-9f50db3c](./provenance/prov-2026-9f50db3c.yml) - gRPC and Redis proxy support
+- [prov-2026-f9eb4e06](./provenance/prov-2026-f9eb4e06.yml) - notification-service Redis/gRPC example
+- [prov-2026-238350b1](./provenance/prov-2026-238350b1.yml) - Exponential-backoff readiness polling
+- [prov-2026-e00e9f98](./provenance/prov-2026-e00e9f98.yml) - MySQL integration test fix
+- [prov-2026-00cfa45c](./provenance/prov-2026-00cfa45c.yml) - DSL verify-rule regex compiled at init
+- [prov-2026-8719e54b](./provenance/prov-2026-8719e54b.yml) - PostgreSQL proxy debug logging opt-in
+- [prov-2026-a4a1063d](./provenance/prov-2026-a4a1063d.yml) - MySQL schema via --schema-data flag
+- [prov-2026-e9e990bb](./provenance/prov-2026-e9e990bb.yml) - Configurable test timeout
+- [prov-2026-c99fbd8e](./provenance/prov-2026-c99fbd8e.yml) - HTTP proxy port configurable
+- [prov-2026-6edd93f0](./provenance/prov-2026-6edd93f0.yml) - Passthrough visibility for unmatched mocks
+- [prov-2026-0736d6d6](./provenance/prov-2026-0736d6d6.yml) - Dockerfile.linespec exclusion fix
+- [prov-2026-08169255](./provenance/prov-2026-08169255.yml) - Network alias from containerNaming config
+- [prov-2026-de632306](./provenance/prov-2026-de632306.yml) - Fix four incomplete improvement-plan items
+- [prov-2026-f22371a0](./provenance/prov-2026-f22371a0.yml) - This release
+
 ## [1.4.0-beta] - 2026-04-13
 
 ### Added (Beta)
