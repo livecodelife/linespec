@@ -175,6 +175,7 @@ func (p *Proxy) handleQueryMessage(query string, msg []byte, clientConn, upstrea
 	}
 
 	// No mock - forward to upstream
+	p.registry.RecordPassthrough("PostgreSQL simple query: " + query[:min(80, len(query))])
 	if _, err := upstreamConn.Write(msg); err != nil {
 		return err
 	}
@@ -206,6 +207,7 @@ func (p *Proxy) handleParseMessage(query string, msg []byte, clientConn, upstrea
 	}
 
 	// No mock - forward to upstream
+	p.registry.RecordPassthrough("PostgreSQL extended query: " + query[:min(80, len(query))])
 	if _, err := upstreamConn.Write(msg); err != nil {
 		return err
 	}
@@ -1286,6 +1288,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 
 		if !found {
 			p.logDebug("  -> Mock not found, forwarding to upstream\n")
+			p.registry.RecordPassthrough("PostgreSQL simple query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
@@ -1325,6 +1328,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		mock, found := p.registry.FindMock(tableName, query)
 		if !found {
 			p.logDebug("  -> Mock not found for table %s, forwarding to upstream\n", tableName)
+			p.registry.RecordPassthrough("PostgreSQL extended query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
@@ -1694,6 +1698,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 
 		if !found {
 			p.logDebug("  -> Mock not found, forwarding to upstream\n")
+			p.registry.RecordPassthrough("PostgreSQL simple query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
@@ -1731,6 +1736,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		mock, found := p.registry.PeekMock(tableName, query)
 		if !found {
 			p.logDebug("  -> Mock not found for table %s, forwarding to upstream\n", tableName)
+			p.registry.RecordPassthrough("PostgreSQL extended query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 

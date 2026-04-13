@@ -256,6 +256,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 						logger.Debug("Mocking query for table %s: %s", tableName, query)
 						_ = p.sendMockResponse(clientConn, mock, clientCapabilities)
 					} else {
+						p.registry.RecordPassthrough("MySQL query: " + query[:min(80, len(query))])
 						_, _ = upstreamConn.Write(header)
 						_, _ = upstreamConn.Write(payload)
 					}

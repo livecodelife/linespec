@@ -157,6 +157,7 @@ func (i *Interceptor) handleCommand(cmd, key string, args []string) []byte {
 
 	if !found {
 		// No mock: nil for reads, OK for writes.
+		i.registry.RecordPassthrough("Redis " + cmd + " " + key)
 		if readCommands[cmd] {
 			return encodeNil()
 		}

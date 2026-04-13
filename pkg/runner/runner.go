@@ -1451,6 +1451,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		return err
 	}
 
+	// Check for passthrough requests (requests that bypassed the mock layer).
+	// Warn by default; fail if strict_passthrough: true is set in .linespec.yml.
+	strict := r.config != nil && r.config.StrictPassthrough
+	if err := r.registry.VerifyPassthroughs(strict); err != nil {
+		return err
+	}
+
 	logger.Debug("Test passed")
 	return nil
 }
@@ -1467,11 +1474,31 @@ func (r *testRunner) collectHits(addr string) {
 		}
 		defer resp.Body.Close()
 
-		var hits map[string]int
-		if err := json.NewDecoder(resp.Body).Decode(&hits); err != nil {
+		// Parse response: supports both new format {"hits":{...},"passthroughs":[...]}
+		// and legacy format {key: count, ...} for backward compatibility with older proxy images.
+		rawBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
 			return
 		}
-		r.registry.SetHits(hits)
+		var verifyResp struct {
+			Hits         map[string]int `json:"hits"`
+			Passthroughs []string       `json:"passthroughs"`
+		}
+		if err := json.Unmarshal(rawBytes, &verifyResp); err != nil {
+			return
+		}
+		if verifyResp.Hits != nil {
+			r.registry.SetHits(verifyResp.Hits)
+		} else {
+			// Legacy format: flat map[string]int
+			var legacyHits map[string]int
+			if err := json.Unmarshal(rawBytes, &legacyHits); err == nil {
+				r.registry.SetHits(legacyHits)
+			}
+		}
+		if len(verifyResp.Passthroughs) > 0 {
+			r.registry.AddPassthroughs(verifyResp.Passthroughs)
+		}
 		return
 	}
 }
