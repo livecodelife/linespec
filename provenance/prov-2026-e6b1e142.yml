@@ -1,6 +1,6 @@
 id: prov-2026-e6b1e142
 title: 'Fix goreleaser v2 field name: skip_upload → skip'
-status: open
+status: implemented
 created_at: "2026-04-13"
 author: calebcowen@gmail.com
 intent: "GoReleaser v2 renamed the skip_upload field to skip in the brews section.
@@ -17,7 +17,7 @@ forbidden_scope: []
 supersedes: "prov-2026-7711078a"
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2f715f7099e86ffe5b2383625499e9e38d7c2aa8
 associated_specs:
   - path: .goreleaser.yml
     type: config
