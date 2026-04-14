@@ -309,9 +309,11 @@ func runProxy() {
 		resp := struct {
 			Hits         map[string]int `json:"hits"`
 			Passthroughs []string       `json:"passthroughs"`
+			VerifyErrors []string       `json:"verify_errors,omitempty"`
 		}{
 			Hits:         reg.GetHits(),
 			Passthroughs: reg.GetPassthroughs(),
+			VerifyErrors: reg.GetVerifyErrors(),
 		}
 		json.NewEncoder(w).Encode(resp)
 	})

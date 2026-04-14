@@ -1540,6 +1540,7 @@ func (r *testRunner) collectHits(addr string) {
 		var verifyResp struct {
 			Hits         map[string]int `json:"hits"`
 			Passthroughs []string       `json:"passthroughs"`
+			VerifyErrors []string       `json:"verify_errors"`
 		}
 		if err := json.Unmarshal(rawBytes, &verifyResp); err != nil {
 			return
@@ -1555,6 +1556,9 @@ func (r *testRunner) collectHits(addr string) {
 		}
 		if len(verifyResp.Passthroughs) > 0 {
 			r.registry.AddPassthroughs(verifyResp.Passthroughs)
+		}
+		if len(verifyResp.VerifyErrors) > 0 {
+			r.registry.AddVerifyErrors(verifyResp.VerifyErrors)
 		}
 		return
 	}

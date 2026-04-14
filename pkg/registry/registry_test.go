@@ -280,6 +280,73 @@ func TestMockRegistry_MixedPositiveAndNegative(t *testing.T) {
 	}
 }
 
+func TestMockRegistry_VerifyErrorCausesVerifyAllFailure(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "verify_error_test",
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.WritePostgreSQL,
+				Table:   "orders",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Simulate the mock being hit (hit count incremented)
+	mock, found := reg.FindMock("orders", "INSERT INTO orders (customer_name) VALUES ('Alice')")
+	if !found {
+		t.Fatal("FindMock should find the mock for 'orders'")
+	}
+	_ = mock
+
+	// VerifyAll should pass because the mock was hit
+	if err := reg.VerifyAll(); err != nil {
+		t.Fatalf("VerifyAll should pass with hit mock and no verify errors, got: %v", err)
+	}
+
+	// Now record a VERIFY rule failure (as a proxy would after FindMock increments hit)
+	reg.RecordVerifyError("WRITE:POSTGRESQL [orders]: query does not contain 'something_invalid'")
+
+	// VerifyAll should now fail due to the recorded VERIFY error
+	err := reg.VerifyAll()
+	if err == nil {
+		t.Fatal("VerifyAll should fail when a VERIFY error was recorded")
+	}
+	if !contains(err.Error(), "VERIFY failed") {
+		t.Errorf("Expected error to mention 'VERIFY failed', got: %v", err)
+	}
+}
+
+func TestMockRegistry_AddVerifyErrorsMergesFromSidecar(t *testing.T) {
+	reg := NewMockRegistry()
+
+	reg.AddVerifyErrors([]string{"WRITE:POSTGRESQL [orders]: query does not contain 'x'"})
+	reg.AddVerifyErrors([]string{"HTTP [POST /api]: header missing"})
+
+	errs := reg.GetVerifyErrors()
+	if len(errs) != 2 {
+		t.Fatalf("Expected 2 verify errors, got %d", len(errs))
+	}
+
+	if err := reg.VerifyAll(); err == nil {
+		t.Fatal("VerifyAll should fail when verify errors exist")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestMockRegistry_SeedTopicAndGetSeeds(t *testing.T) {
 	reg := NewMockRegistry()
 	reg.SeedTopic("orders", []byte(`{"id":1}`))

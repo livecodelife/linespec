@@ -114,6 +114,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		rules := verify.ExtractVerifyRulesForTarget(mock.Verify, "grpc")
 		if err := verify.VerifyGRPC(req, rules); err != nil {
+			i.registry.RecordVerifyError("GRPC [" + service + "/" + method + "]: " + err.Error())
 			writeGRPCError(w, 2, err.Error())
 			return
 		}

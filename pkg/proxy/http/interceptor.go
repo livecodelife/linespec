@@ -118,6 +118,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := verify.VerifyHTTP(req, httpRules); err != nil {
 				logger.Error("VERIFY failed for HTTP %s %s: %v", method, path, err)
+				i.registry.RecordVerifyError(fmt.Sprintf("HTTP [%s %s]: %v", method, path, err))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				response := map[string]string{

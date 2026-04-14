@@ -19,6 +19,7 @@ type MockRegistry struct {
 	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
 	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
 	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
+	verifyErrors []string                            // VERIFY rule failures recorded by proxies
 }
 
 func NewMockRegistry() *MockRegistry {
@@ -80,6 +81,29 @@ func (r *MockRegistry) AddPassthroughs(passthroughs []string) {
 	r.Lock()
 	defer r.Unlock()
 	r.passthroughs = append(r.passthroughs, passthroughs...)
+}
+
+// RecordVerifyError records a VERIFY rule failure. Called by proxies when a VERIFY check fails.
+func (r *MockRegistry) RecordVerifyError(msg string) {
+	r.Lock()
+	defer r.Unlock()
+	r.verifyErrors = append(r.verifyErrors, msg)
+}
+
+// GetVerifyErrors returns a copy of all recorded VERIFY failures.
+func (r *MockRegistry) GetVerifyErrors() []string {
+	r.RLock()
+	defer r.RUnlock()
+	cp := make([]string, len(r.verifyErrors))
+	copy(cp, r.verifyErrors)
+	return cp
+}
+
+// AddVerifyErrors merges VERIFY failure records from a proxy container into this registry.
+func (r *MockRegistry) AddVerifyErrors(errors []string) {
+	r.Lock()
+	defer r.Unlock()
+	r.verifyErrors = append(r.verifyErrors, errors...)
 }
 
 // IncrementHit increments the hit count for a specific mock (thread-safe)
@@ -385,6 +409,10 @@ func (r *MockRegistry) matchHeaders(expected, actual map[string]string) bool {
 func (r *MockRegistry) VerifyAll() error {
 	r.RLock()
 	defer r.RUnlock()
+
+	if len(r.verifyErrors) > 0 {
+		return fmt.Errorf("VERIFY failed: %s", r.verifyErrors[0])
+	}
 
 	for _, mocks := range r.mocks {
 		for _, mock := range mocks {

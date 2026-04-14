@@ -113,6 +113,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 						msg := &verify.KafkaMessage{Key: key, Value: value, Headers: headers}
 						if err := verify.VerifyKafka(msg, kafkaRules); err != nil {
 							logger.Error("VERIFY failed for Kafka topic %s: %v", topic, err)
+							i.registry.RecordVerifyError("EVENT [" + topic + "]: " + err.Error())
 							i.sendProduceResponse(conn, correlationID, topic)
 							continue
 						}

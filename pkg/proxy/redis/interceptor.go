@@ -151,6 +151,7 @@ func (i *Interceptor) handleCommand(cmd, key string, args []string) []byte {
 		rules := verify.ExtractVerifyRulesForTarget(mock.Verify, "redis")
 		if err := verify.VerifyRedis(redisCmd, rules); err != nil {
 			logger.Debug("Redis Interceptor: VERIFY failed: %v", err)
+			i.registry.RecordVerifyError("REDIS [" + cmd + " " + key + "]: " + err.Error())
 			return encodeError(err.Error())
 		}
 	}

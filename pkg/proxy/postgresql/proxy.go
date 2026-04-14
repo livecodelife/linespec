@@ -834,6 +834,7 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 	// Execute VERIFY rules if any
 	if len(mock.Verify) > 0 {
 		if err := verify.VerifySQL(query, mock.Verify); err != nil {
+			p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
 			return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 		}
 	}
@@ -1301,6 +1302,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		if len(mock.Verify) > 0 {
 			if err := verify.VerifySQL(query, mock.Verify); err != nil {
 				p.logDebug("  -> VERIFY failed: %v\n", err)
+				p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
 				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 			}
 			p.logDebug("  -> All VERIFY rules passed\n")
@@ -1343,6 +1345,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		if len(mock.Verify) > 0 {
 			if err := verify.VerifySQL(query, mock.Verify); err != nil {
 				p.logDebug("  -> VERIFY failed: %v\n", err)
+				p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
 				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 			}
 			p.logDebug("  -> All VERIFY rules passed\n")
@@ -1711,6 +1714,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		if len(mock.Verify) > 0 {
 			if err := verify.VerifySQL(query, mock.Verify); err != nil {
 				p.logDebug("  -> VERIFY failed: %v\n", err)
+				p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
 				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 			}
 			p.logDebug("  -> All VERIFY rules passed\n")
@@ -1751,6 +1755,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		if len(mock.Verify) > 0 {
 			if err := verify.VerifySQL(query, mock.Verify); err != nil {
 				p.logDebug("  -> VERIFY failed: %v\n", err)
+				p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
 				return p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 			}
 			p.logDebug("  -> All VERIFY rules passed\n")

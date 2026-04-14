@@ -247,6 +247,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 						if len(mock.Verify) > 0 {
 							if err := verify.VerifySQL(query, mock.Verify); err != nil {
 								logger.Error("VERIFY failed for table %s: %v", tableName, err)
+								p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", tableName, err))
 								// Send error response to client
 								p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 								continue
@@ -310,6 +311,7 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 							if len(mock.Verify) > 0 {
 								if err := verify.VerifySQL(sql, mock.Verify); err != nil {
 									logger.Error("VERIFY failed for prepared stmt table %s: %v", tableName, err)
+									p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", tableName, err))
 									p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 									continue
 								}
