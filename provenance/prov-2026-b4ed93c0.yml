@@ -1,0 +1,26 @@
+id: prov-2026-b4ed93c0
+title: Migrate goreleaser brews to homebrew_casks
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "The deprecated brews section in GoReleaser v2 overrides skip_upload regardless
+  of the configured value, always applying auto behavior. The replacement is
+  homebrew_casks (deprecated since v2.10). Renaming brews to homebrew_casks exits
+  the deprecated code path so that skip_upload: false on the beta formula is actually
+  respected. The config structure is otherwise identical."
+constraints:
+  - Only rename the top-level key from brews to homebrew_casks; do not change any other fields
+affected_scope:
+  - .goreleaser.yml
+  - provenance/prov-2026-f59e9268.yml
+forbidden_scope: []
+supersedes: "prov-2026-f59e9268"
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .goreleaser.yml
+    type: config
+associated_traces: []
+monitors: []
+tags: []
