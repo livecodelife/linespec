@@ -1,6 +1,6 @@
 id: prov-2026-0984ab58
 title: 'Fix goreleaser beta formula: remove skip_upload entirely'
-status: open
+status: implemented
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "GoReleaser's SkipUpload field is a Go string type. The checks in brew.go only
@@ -20,7 +20,7 @@ forbidden_scope: []
 supersedes: "prov-2026-e6b1e142"
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8152792acec634eb5213e200222d4093f1635384
 associated_specs:
   - path: .goreleaser.yml
     type: config
