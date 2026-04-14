@@ -144,7 +144,7 @@ release:
     See [CHANGELOG.md](./CHANGELOG.md) for full details.
 
 # Publish to Homebrew tap
-brews:
+homebrew_casks:
   # Stable formula
   - name: linespec
     repository:
