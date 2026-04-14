@@ -257,8 +257,9 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
-	// Extract --db-name, --host, --schema-data, and --debug flags from remaining args
+	// Extract --db-name, --host, --schema-data, --sidecar-port, and --debug flags from remaining args
 	var dbName, kafkaHost, schemaDataB64 string
+	sidecarPort := "8081"
 	var filteredArgs []string
 	for i := 5; i < len(os.Args); i++ {
 		if os.Args[i] == "--db-name" && i+1 < len(os.Args) {
@@ -276,6 +277,11 @@ func runProxy() {
 			i++
 		} else if strings.HasPrefix(os.Args[i], "--schema-data=") {
 			schemaDataB64 = strings.TrimPrefix(os.Args[i], "--schema-data=")
+		} else if os.Args[i] == "--sidecar-port" && i+1 < len(os.Args) {
+			sidecarPort = os.Args[i+1]
+			i++
+		} else if strings.HasPrefix(os.Args[i], "--sidecar-port=") {
+			sidecarPort = strings.TrimPrefix(os.Args[i], "--sidecar-port=")
 		} else if os.Args[i] == "--debug" || os.Args[i] == "-d" {
 			logger.SetLevel(logger.DebugLevel)
 		} else {
@@ -298,7 +304,7 @@ func runProxy() {
 	}
 
 	// Start a sidecar HTTP server for verification
-	srv := &http.Server{Addr: "0.0.0.0:8081"}
+	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort}
 	http.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
 		resp := struct {
 			Hits         map[string]int `json:"hits"`
@@ -311,7 +317,7 @@ func runProxy() {
 	})
 
 	go func() {
-		logger.Debug("Verification sidecar listening on 0.0.0.0:8081")
+		logger.Debug("Verification sidecar listening on 0.0.0.0:%s", sidecarPort)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("Verification sidecar error: %v", err)
 		}

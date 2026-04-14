@@ -887,6 +887,11 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	httpDeps := r.getHTTPProxyDependencies(serviceConfig)
 	var httpProxyContainerName string
 	var httpProxyAliases []string
+	// The HTTP sidecar always binds this port inside the proxy container. Using a high port
+	// (19081) avoids any conflict with common service dependency ports (80, 443, 3000-3001,
+	// 8080-8082, etc.), regardless of what proxyPort the dep is configured with.
+	const httpSidecarContainerPort = 19081
+	httpSidecarNatPort := nat.Port(fmt.Sprintf("%d/tcp", httpSidecarContainerPort))
 
 	if len(httpDeps) > 0 {
 		logger.Debug("Starting HTTP proxy for %d HTTP dependencies", len(httpDeps))
@@ -914,11 +919,11 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		proxyAddr := fmt.Sprintf("0.0.0.0:%d", proxyPort)
 
 		// Build HTTP proxy command with debug flag if enabled
-		httpProxyCmd := []string{"proxy", "http", proxyAddr, "unused", r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+		httpProxyCmd := []string{"proxy", "http", proxyAddr, "unused", r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
+			fmt.Sprintf("--sidecar-port=%d", httpSidecarContainerPort)}
 		if logger.IsDebug() {
 			httpProxyCmd = append(httpProxyCmd, "--debug")
 		}
-
 		httpProxyContainerName = r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"})
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: proxyImage,
@@ -929,7 +934,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 			PortBindings: map[nat.Port][]nat.PortBinding{
-				"8081/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}},
+				httpSidecarNatPort: {{HostIP: "0.0.0.0", HostPort: "0"}},
 			},
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: httpProxyAliases}},
@@ -977,7 +982,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if httpProxyContainerName != "" {
 		inspectHttp, inspectHttpErr := r.suite.orch.GetContainerInspect(ctx, httpProxyContainerName)
 		if inspectHttpErr == nil && inspectHttp.NetworkSettings != nil {
-			if p, ok := inspectHttp.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+			if p, ok := inspectHttp.NetworkSettings.Ports[httpSidecarNatPort]; ok && len(p) > 0 {
 				httpVerifyPort = p[0].HostPort
 			}
 			if n, ok := inspectHttp.NetworkSettings.Networks[r.suite.networkName]; ok {
