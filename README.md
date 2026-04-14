@@ -284,6 +284,7 @@ database:
 infrastructure:
   database: true
   kafka: false
+  proxy_image: "linespec:latest"  # Docker image for protocol proxies (default: linespec:latest)
 
 # Container naming configuration (optional)
 container_naming:

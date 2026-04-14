@@ -5,6 +5,20 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3-beta] - 2026-04-14
+
+### Added (Beta)
+
+- **Configurable proxy Docker image** ([prov-2026-557f393c](./provenance/prov-2026-557f393c.yml)) - New `proxy_image` field under `infrastructure` in `.linespec.yml` lets teams point proxies at a custom image instead of the default `linespec:latest`. Useful for CI/CD pipelines, private registries, and machines that don't have the image built locally.
+
+### Fixed (Beta)
+
+- **Kafka proxy startup now gated on `infrastructure.kafka`** ([prov-2026-557f393c](./provenance/prov-2026-557f393c.yml)) - The Kafka proxy container was previously started whenever a test used a `RECEIVE EVENT:` trigger, regardless of the `infrastructure.kafka` flag. It now respects the flag, consistent with all other proxy types (PostgreSQL, MySQL, HTTP, Redis, gRPC).
+
+### Related Provenance Records
+
+- [prov-2026-557f393c](./provenance/prov-2026-557f393c.yml) - Configurable proxy image name and Kafka proxy startup guard
+
 ## [1.4.1-beta] - 2026-04-13
 
 ### Added (Beta)

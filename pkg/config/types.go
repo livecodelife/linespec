@@ -264,11 +264,12 @@ func substituteTemplate(template string, params ContainerNameParams) string {
 
 // InfrastructureConfig defines required infrastructure
 type InfrastructureConfig struct {
-	Kafka      bool `yaml:"kafka"`
-	Database   bool `yaml:"database"`
-	Redis      bool `yaml:"redis"`
-	GRPC       bool `yaml:"grpc"`
-	ExternalDB bool `yaml:"external_db"` // Don't manage DB, service has its own
+	Kafka      bool   `yaml:"kafka"`
+	Database   bool   `yaml:"database"`
+	Redis      bool   `yaml:"redis"`
+	GRPC       bool   `yaml:"grpc"`
+	ExternalDB bool   `yaml:"external_db"`  // Don't manage DB, service has its own
+	ProxyImage string `yaml:"proxy_image"`   // Docker image for protocol proxies (default: linespec:latest)
 }
 
 // LineSpecConfig is the root configuration structure

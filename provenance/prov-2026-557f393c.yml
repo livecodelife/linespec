@@ -10,7 +10,7 @@ constraints:
 affected_scope:
   - pkg/config/types.go
   - pkg/runner/runner.go
-  - LINESPEC.md
+  - README.md
   - CHANGELOG.md
 forbidden_scope: []
 supersedes: ""
