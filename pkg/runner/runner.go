@@ -631,6 +631,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	r.config = serviceConfig
 
+	// Resolve proxy image — configurable so teams can point at a private registry or
+	// a pinned version without rebuilding from source on every machine.
+	proxyImage := serviceConfig.Infrastructure.ProxyImage
+	if proxyImage == "" {
+		proxyImage = "linespec:latest"
+	}
+
 	// Populate resolver with service environment variables
 	// This allows ${VAR_NAME} in .linespec files to reference values from .linespec.yml
 	for k, v := range serviceConfig.Service.Environment {
@@ -773,7 +780,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				}
 
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-					Image: "linespec:latest",
+					Image: proxyImage,
 					Cmd:   pgProxyCmd,
 					ExposedPorts: map[nat.Port]struct{}{
 						nat.Port(dbPort + "/tcp"): {},
@@ -830,7 +837,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 				mysqlProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"})
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-					Image: "linespec:latest",
+					Image: proxyImage,
 					Cmd:   mysqlProxyCmd,
 					ExposedPorts: map[nat.Port]struct{}{
 						nat.Port("8081/tcp"): {}, // Verification sidecar port
@@ -914,7 +921,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 		httpProxyContainerName = r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"})
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-			Image: "linespec:latest",
+			Image: proxyImage,
 			Cmd:   httpProxyCmd,
 		}, &container.HostConfig{
 			Binds: []string{
@@ -982,9 +989,10 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// Start Kafka interceptor for consumer-triggered tests.
 	// Uses a distinct alias ("kafka-proxy") so it doesn't conflict with the real Kafka
 	// container on the network. The app's KAFKA_BROKERS will point to this interceptor.
+	// Requires infrastructure.kafka: true, consistent with all other proxy types.
 	const kafkaProxyAlias = "kafka-proxy"
 	kafkaProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"})
-	if spec.Receive.Channel == types.Event {
+	if serviceConfig.Infrastructure.Kafka && spec.Receive.Channel == types.Event {
 		kafkaProxyCmd := []string{
 			"proxy", "kafka", "0.0.0.0:9092", "unused",
 			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
@@ -994,7 +1002,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			kafkaProxyCmd = append(kafkaProxyCmd, "--debug")
 		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-			Image: "linespec:latest",
+			Image: proxyImage,
 			Cmd:   kafkaProxyCmd,
 		}, &container.HostConfig{
 			Binds: []string{
@@ -1052,7 +1060,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			grpcProxyCmd = append(grpcProxyCmd, "--debug")
 		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-			Image: "linespec:latest",
+			Image: proxyImage,
 			Cmd:   grpcProxyCmd,
 			ExposedPorts: map[nat.Port]struct{}{
 				nat.Port("50051/tcp"): {},
@@ -1115,7 +1123,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			redisProxyCmd = append(redisProxyCmd, "--debug")
 		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-			Image: "linespec:latest",
+			Image: proxyImage,
 			Cmd:   redisProxyCmd,
 			ExposedPorts: map[nat.Port]struct{}{
 				nat.Port("6379/tcp"): {},
