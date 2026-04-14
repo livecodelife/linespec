@@ -1,0 +1,27 @@
+id: prov-2026-f59e9268
+title: 'Fix goreleaser beta formula: explicit skip_upload false string'
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "GoReleaser v2 appears to default SkipUpload to 'auto' behavior even when the
+  field is absent. Previous attempts: skip_upload: false (YAML boolean into string
+  field — no effect), skip: false (wrong field name), omitting the field (still skips).
+  Fix: set skip_upload to the explicit YAML string 'false'. GoReleaser's brew.go only
+  checks for the strings 'true' and 'auto'; the string 'false' bypasses both checks
+  and always uploads."
+constraints:
+  - Value must be the quoted string \"false\", not a YAML boolean
+affected_scope:
+  - .goreleaser.yml
+  - provenance/prov-2026-0984ab58.yml
+forbidden_scope: []
+supersedes: "prov-2026-0984ab58"
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .goreleaser.yml
+    type: config
+associated_traces: []
+monitors: []
+tags: []
