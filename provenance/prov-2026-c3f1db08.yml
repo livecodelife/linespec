@@ -1,0 +1,51 @@
+id: prov-2026-c3f1db08
+title: Reuse app and proxy containers across tests within a suite
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "Eliminate per-test container startup overhead for HTTP-triggered test suites.
+  Instead of starting fresh app + proxy containers for every test, keep the app, db
+  proxy, HTTP proxy, gRPC proxy, and Redis proxy containers alive across tests within
+  a suite. Between tests: POST the new registry JSON to a /reload-registry endpoint
+  added to the proxy sidecar (resets hits/passthroughs/verifyErrors too), then
+  truncate database tables to reset data state (MySQL: TRUNCATE with FK checks off;
+  PostgreSQL: TRUNCATE ... CASCADE on all non-migration tables). The PostgreSQL
+  container is also kept alive instead of being recreated per test. On first use
+  containers are started normally and registered; subsequent tests skip the entire
+  startup path. The only exclusion is Kafka consumer tests (spec.Receive.Channel ==
+  Event) which use a fundamentally different seeding+polling trigger mechanism."
+constraints:
+  - Kafka consumer tests must continue using the existing per-test container lifecycle
+  - Registry state (hits, passthroughs, verifyErrors) must be fully reset before each reuse
+  - MySQL data must be truncated before each reuse (schema_migrations excluded)
+  - PostgreSQL data must be truncated before each reuse (CASCADE, schema_migrations excluded)
+  - Persistent containers must be cleaned up in CleanupSharedInfrastructure
+  - If the persistent app container fails its health check, fall back to a fresh start
+affected_scope:
+  - pkg/registry/registry.go
+  - cmd/linespec/main_beta.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-30cce3ba
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
