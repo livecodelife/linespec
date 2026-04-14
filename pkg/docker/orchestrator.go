@@ -135,7 +135,7 @@ func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, a
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 500*time.Millisecond)):
+		case <-time.After(expBackoff(attempt, 10*time.Millisecond, 500*time.Millisecond)):
 		}
 		attempt++
 	}
@@ -154,7 +154,7 @@ func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeou
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 100*time.Millisecond, 2*time.Second)):
+		case <-time.After(expBackoff(attempt, 10*time.Millisecond, 2*time.Second)):
 		}
 		attempt++
 	}
@@ -178,7 +178,7 @@ func (d *DockerOrchestrator) WaitHTTP(ctx context.Context, url string, timeout t
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 100*time.Millisecond, 2*time.Second)):
+		case <-time.After(expBackoff(attempt, 10*time.Millisecond, 2*time.Second)):
 		}
 		attempt++
 	}

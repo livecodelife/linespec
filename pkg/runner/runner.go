@@ -2,8 +2,10 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -268,6 +271,8 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 
 	// Fetch schema for all discovered tables after migrations complete.
 	// Only applies to the shared MySQL database; PostgreSQL is per-service and handled in RunSpec.
+	// Schema is cached to .linespec/schema-cache.json keyed on db config hash to skip re-fetching
+	// on warm runs when the database and config haven't changed.
 	dbConfig := s.getSharedDatabaseConfig()
 	if dbConfig != nil && s.dbHostPort != "" {
 		schemaDiscovery := s.getSchemaDiscoveryConfig()
@@ -275,11 +280,22 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		if err != nil {
 			logger.Debug("Failed to discover tables: %v", err)
 		} else {
-			schemaCache, err := s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
-				dbConfig.Username, dbConfig.Password, dbConfig.Database)
-			if err != nil {
-				logger.Debug("Failed to fetch shared schema: %v", err)
+			cacheKey := s.schemaConfigHash(dbConfig, tables)
+			cacheFile := filepath.Join(s.cwd, ".linespec", "schema-cache.json")
+			var schemaCache SchemaCache
+			if cached, ok := s.loadSchemaCache(cacheFile, cacheKey); ok {
+				schemaCache = cached
+				logger.Debug("Schema loaded from cache (%d tables)", len(schemaCache))
 			} else {
+				schemaCache, err = s.fetchSchemaFromDatabase(ctx, tables, "localhost", s.dbHostPort,
+					dbConfig.Username, dbConfig.Password, dbConfig.Database)
+				if err != nil {
+					logger.Debug("Failed to fetch shared schema: %v", err)
+				} else {
+					s.saveSchemaCache(cacheFile, cacheKey, schemaCache)
+				}
+			}
+			if schemaCache != nil {
 				if schemaData, encErr := json.Marshal(schemaCache); encErr != nil {
 					logger.Debug("Failed to marshal schema: %v", encErr)
 				} else {
@@ -415,6 +431,55 @@ func (s *TestSuite) discoverTables(ctx context.Context, dbConfig *config.Databas
 		return []string{}, nil
 	}
 	return tables, nil
+}
+
+type schemaCacheFile struct {
+	Hash   string      `json:"hash"`
+	Schema SchemaCache `json:"schema"`
+}
+
+// schemaConfigHash returns a hex hash of the db config and table list, used to key the schema cache.
+func (s *TestSuite) schemaConfigHash(dbConfig *config.DatabaseConfig, tables []string) string {
+	h := sha256.New()
+	h.Write([]byte(dbConfig.Host + dbConfig.Username + dbConfig.Password + dbConfig.Database))
+	for _, t := range tables {
+		h.Write([]byte(t))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// loadSchemaCache reads the schema cache file and returns the cached schema if the hash matches.
+func (s *TestSuite) loadSchemaCache(path, hash string) (SchemaCache, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var cf schemaCacheFile
+	if err := json.Unmarshal(data, &cf); err != nil {
+		return nil, false
+	}
+	if cf.Hash != hash {
+		return nil, false
+	}
+	return cf.Schema, true
+}
+
+// saveSchemaCache writes the schema and its config hash to the cache file.
+func (s *TestSuite) saveSchemaCache(path, hash string, sc SchemaCache) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		logger.Debug("Failed to create schema cache dir: %v", err)
+		return
+	}
+	cf := schemaCacheFile{Hash: hash, Schema: sc}
+	data, err := json.Marshal(cf)
+	if err != nil {
+		logger.Debug("Failed to marshal schema cache: %v", err)
+		return
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		logger.Debug("Failed to write schema cache: %v", err)
+	}
+	logger.Debug("Schema cache written to %s", path)
 }
 
 // runMigrationsForConfig runs migrations for a service based on its framework config
@@ -677,15 +742,26 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	logger.Debug("Created temp directory: %s", tempDir)
 	defer os.RemoveAll(tempDir) // Clean up temp directory after test
 
-	// Pre-cleanup test-specific containers only
+	// Pre-cleanup test-specific containers in parallel
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	params := config.ContainerNameParams{SpecName: spec.Name}
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetAppContainer(params))
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"}))
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"}))
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"}))
-	_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"}))
+	cleanupNames := []string{
+		r.suite.containerNaming.GetAppContainer(params),
+		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}),
+		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"}),
+		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"}),
+		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"}),
+		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"}),
+	}
+	var cleanupWg sync.WaitGroup
+	for _, name := range cleanupNames {
+		cleanupWg.Add(1)
+		go func(n string) {
+			defer cleanupWg.Done()
+			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, n)
+		}(name)
+	}
+	cleanupWg.Wait()
 	cleanupCancel()
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
@@ -1178,26 +1254,40 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
-	// Wait for services to be ready on the network
+	// Wait for services to be ready on the network (in parallel)
 	logger.Debug("Waiting for proxies to be ready")
+	type proxyWait struct {
+		addr string
+		name string
+	}
+	var proxyWaits []proxyWait
 	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
-		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+dbVerifyPort, 30*time.Second); err != nil {
-			return fmt.Errorf("database proxy not ready: %w", err)
-		}
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + dbVerifyPort, "database proxy"})
 	}
 	if httpVerifyPort != "" {
-		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+httpVerifyPort, 30*time.Second); err != nil {
-			return fmt.Errorf("HTTP proxy not ready: %w", err)
-		}
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + httpVerifyPort, "HTTP proxy"})
 	}
 	if grpcHostPort != "" {
-		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+grpcHostPort, 30*time.Second); err != nil {
-			return fmt.Errorf("gRPC proxy not ready: %w", err)
-		}
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + grpcHostPort, "gRPC proxy"})
 	}
 	if redisHostPort != "" {
-		if err := r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, "localhost:"+redisHostPort, 30*time.Second); err != nil {
-			return fmt.Errorf("Redis proxy not ready: %w", err)
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + redisHostPort, "Redis proxy"})
+	}
+	if len(proxyWaits) > 0 {
+		proxyErrs := make([]error, len(proxyWaits))
+		var proxyWg sync.WaitGroup
+		for i, pw := range proxyWaits {
+			proxyWg.Add(1)
+			go func(idx int, w proxyWait) {
+				defer proxyWg.Done()
+				proxyErrs[idx] = r.suite.orch.WaitTCPInternal(ctx, r.suite.networkName, w.addr, 30*time.Second)
+			}(i, pw)
+		}
+		proxyWg.Wait()
+		for i, err := range proxyErrs {
+			if err != nil {
+				return fmt.Errorf("%s not ready: %w", proxyWaits[i].name, err)
+			}
 		}
 	}
 
@@ -1401,10 +1491,6 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			logger.Debug("Warmup request failed: %v", err)
 		} else {
 			resp.Body.Close()
-		}
-
-		if warmupDelay := fwConfig.GetWarmupDelay(); warmupDelay > 0 {
-			time.Sleep(warmupDelay)
 		}
 	}
 
