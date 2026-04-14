@@ -212,7 +212,7 @@ func runTest() {
 }
 
 func printUsage() {
-	logger.Info(`LineSpec v1.3.0-beta - Provenance Records & Integration Testing
+	logger.Info(`LineSpec v`+version+`-beta - Provenance Records & Integration Testing
 
 Usage: linespec <command> [options]
 
