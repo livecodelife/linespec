@@ -189,9 +189,10 @@ brews:
     install: |
       bin.install "linespec" => "linespec-beta"
     # Only publish beta builds to the beta formula
-    # No skip_upload: omitting the field means empty string, which is neither "true" nor "auto", so it always uploads
+    # Explicit string "false" — GoReleaser's SkipUpload is a string type; only "true" and "auto" trigger skips
     ids:
       - linespec-beta
+    skip_upload: "false"
 
 # Disable other artifact types for now
 nfpms: []
