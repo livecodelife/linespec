@@ -1,6 +1,6 @@
 id: prov-2026-e3515dee
 title: Revert homebrew_casks to brews
-status: open
+status: implemented
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "Revert homebrew_casks back to brews. homebrew_casks is for macOS DMG-based
@@ -17,7 +17,7 @@ forbidden_scope: []
 supersedes: "prov-2026-b4ed93c0"
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2bf859340ec665b1ba50ee3b25d20436bf6ca529
 associated_specs:
   - path: .goreleaser.yml
     type: config
