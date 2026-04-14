@@ -1,0 +1,29 @@
+id: prov-2026-0984ab58
+title: 'Fix goreleaser beta formula: remove skip_upload entirely'
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "GoReleaser's SkipUpload field is a Go string type. The checks in brew.go only
+  match the strings 'true' and 'auto' — anything else (including empty string) proceeds
+  with upload. Previous attempts used skip_upload: false (YAML boolean into string field)
+  and skip: false (wrong field name entirely). The correct fix is to omit skip_upload
+  from the beta formula entirely, leaving it as the empty string default which bypasses
+  both checks. Also restores skip_upload: auto on the stable formula (reverts the
+  erroneous rename to skip: auto)."
+constraints:
+  - Do not set any skip_upload value on the beta formula — omit the field
+  - "Stable formula must retain skip_upload: auto"
+affected_scope:
+  - .goreleaser.yml
+  - provenance/prov-2026-e6b1e142.yml
+forbidden_scope: []
+supersedes: "prov-2026-e6b1e142"
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .goreleaser.yml
+    type: config
+associated_traces: []
+monitors: []
+tags: []
