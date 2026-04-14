@@ -1,6 +1,6 @@
 id: prov-2026-30cce3ba
 title: 'Speed up beta test runner: polling, parallel cleanup, parallel proxy waits, schema cache, warmup'
-status: open
+status: implemented
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "Reduce test suite wall-clock time by eliminating unnecessary latency in the beta test runner.
@@ -21,7 +21,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6921c550f422f64908e316f3f889ff1d82c82ae3
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
