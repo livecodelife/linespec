@@ -1460,6 +1460,24 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				defer logCancel()
 				_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name}), os.Stdout, os.Stderr)
 			}
+			// Collect verify errors from sidecars before reporting the status mismatch —
+			// a VERIFY failure causes the service to receive a proxy error and return a
+			// non-expected status code, so surfacing the VERIFY message is more useful.
+			if dbVerifyPort != "" {
+				r.collectHits("localhost:" + dbVerifyPort)
+			}
+			if httpVerifyPort != "" {
+				r.collectHits("localhost:" + httpVerifyPort)
+			}
+			if grpcVerifyPort != "" {
+				r.collectHits("localhost:" + grpcVerifyPort)
+			}
+			if redisVerifyPort != "" {
+				r.collectHits("localhost:" + redisVerifyPort)
+			}
+			if errs := r.registry.GetVerifyErrors(); len(errs) > 0 {
+				return fmt.Errorf("%s", errs[0])
+			}
 			return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
 		}
 

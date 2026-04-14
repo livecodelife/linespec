@@ -650,6 +650,20 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				if mock.SQL == "" {
 					mock.SQL = query
 				}
+
+				// Execute VERIFY rules if any
+				if len(mock.Verify) > 0 {
+					if err := verify.VerifySQL(query, mock.Verify); err != nil {
+						p.logDebug("  -> VERIFY failed: %v\n", err)
+						p.registry.RecordVerifyError(fmt.Sprintf("WRITE:POSTGRESQL [%s]: %v", mock.Table, err))
+						if err2 := p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err)); err2 != nil {
+							p.logDebug("  -> Error sending VERIFY error response: %v\n", err2)
+						}
+						continue
+					}
+					p.logDebug("  -> All VERIFY rules passed\n")
+				}
+
 				state.mockedPortals[portalName] = mock
 				// Send BindComplete ourselves, don't forward to upstream
 				if err := p.writeMessage(clientConn, MsgBindComplete, nil); err != nil {
