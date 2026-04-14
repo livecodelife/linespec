@@ -1,0 +1,42 @@
+id: prov-2026-30cce3ba
+title: 'Speed up beta test runner: polling, parallel cleanup, parallel proxy waits, schema cache, warmup'
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "Reduce test suite wall-clock time by eliminating unnecessary latency in the beta test runner.
+  Five targeted changes: (1) reduce exponential-backoff initial interval from 50-100ms to 10ms in
+  all Wait* pollers; (2) run the six pre-test container cleanups in parallel; (3) run the proxy
+  readiness WaitTCPInternal calls in parallel; (4) add a file-based cache for MySQL schema discovery
+  so SHOW FULL FIELDS FROM queries are skipped on warm runs; (5) remove the unconditional 100ms
+  warmup sleep for Rails/Django after the warmup request succeeds."
+constraints:
+  - Must not break existing test behaviour or verification logic
+  - Schema cache must be invalidated when .linespec.yml changes (keyed on config hash)
+  - Parallel cleanup/wait errors must still surface correctly
+affected_scope:
+  - pkg/docker/orchestrator.go
+  - pkg/runner/runner.go
+  - pkg/config/types.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
