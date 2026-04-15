@@ -10,9 +10,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	debugpkg "runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/config"
@@ -58,7 +60,7 @@ func main() {
 }
 
 func runTest() {
-	// Parse test command arguments
+	// Parse test command arguments — argument errors can exit immediately, no cleanup needed yet.
 	args := os.Args[2:]
 	debug := false
 	var path string
@@ -86,18 +88,43 @@ func runTest() {
 		os.Exit(1)
 	}
 
-	// Set log level based on debug flag
 	if debug {
 		logger.SetLevel(logger.DebugLevel)
 		logger.Debug("Debug mode enabled")
 	}
 
-	ctx := context.Background()
+	// Delegate to a helper that returns an exit code so that deferred cleanup
+	// always runs before os.Exit is called (os.Exit skips defers).
+	os.Exit(runTestWithCode(path))
+}
+
+// runTestWithCode executes the full test run and returns an exit code.
+// Using a return value instead of os.Exit ensures all deferred cleanups run.
+func runTestWithCode(path string) int {
+	// Create a cancellable root context. Signal handling below will cancel it,
+	// which propagates into every in-flight container operation.
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	// Catch SIGINT (Ctrl+C) and SIGTERM so we can clean up Docker resources
+	// before the process exits.  Without this, Go's default signal handling
+	// terminates the process immediately and deferred cleanups never run.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case sig := <-sigCh:
+			logger.Info("\nReceived %v, cleaning up Docker resources...", sig)
+			cancelCtx()
+		case <-ctx.Done():
+		}
+	}()
+	defer signal.Stop(sigCh)
 
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		logger.Error("Error: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
 	var testFiles []string
@@ -114,7 +141,7 @@ func runTest() {
 		})
 		if err != nil {
 			logger.Error("Error walking path: %v", err)
-			os.Exit(1)
+			return 1
 		}
 	} else {
 		testFiles = append(testFiles, path)
@@ -122,40 +149,49 @@ func runTest() {
 
 	if len(testFiles) == 0 {
 		logger.Info("No .linespec files found.")
-		return
+		return 0
 	}
 
 	// Create test suite with shared infrastructure
 	suite, err := runner.NewTestSuite()
 	if err != nil {
 		logger.Error("Failed to create test suite: %v", err)
-		os.Exit(1)
+		return 1
 	}
+
+	// Register cleanup before attempting setup so that partial infrastructure
+	// (containers started before an error) is always torn down on exit.
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		suite.CleanupSharedInfrastructure(cleanupCtx)
+	}()
 
 	// Setup shared infrastructure once
 	setupStop := logger.ShowSpinner("Setting up tests...")
-	infraCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	infraCtx, infraCancel := context.WithTimeout(ctx, 2*time.Minute)
 	setupErr := suite.SetupSharedInfrastructure(infraCtx)
-	cancel()
+	infraCancel()
 	logger.StopSpinner(setupStop)
 
 	if setupErr != nil {
 		logger.Error("Failed to setup infrastructure: %v", setupErr)
-		os.Exit(1)
+		return 1
 	}
 	logger.SetupComplete()
-
-	// Cleanup shared infrastructure when done
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		suite.CleanupSharedInfrastructure(cleanupCtx)
-		cancel()
-	}()
 
 	passed := 0
 	failed := 0
 
 	for i, file := range testFiles {
+		// Stop running more tests if the context was cancelled (e.g. Ctrl+C).
+		select {
+		case <-ctx.Done():
+			logger.Info("Interrupted, stopping test execution")
+			return 1
+		default:
+		}
+
 		logger.TestRunning(i+1, len(testFiles), file)
 
 		// Determine per-test timeout:
@@ -209,8 +245,9 @@ func runTest() {
 	logger.Summary(len(testFiles), passed, failed)
 
 	if failed > 0 {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func printUsage() {
