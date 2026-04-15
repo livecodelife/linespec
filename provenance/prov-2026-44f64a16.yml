@@ -1,0 +1,26 @@
+id: prov-2026-44f64a16
+title: Fix PostgreSQL proxy port conflict with persistent containers
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "When persistent containers are kept alive across tests, the PostgreSQL proxy
+  container holds a fixed host port (5432). A subsequent Kafka consumer test that
+  requires fresh containers tries to bind to the same port and fails with 'port is
+  already allocated'. Fix by using a dynamic host port (HostPort: \"0\") for the
+  PostgreSQL proxy so the OS assigns a free port each time, eliminating the conflict."
+constraints:
+  - Must use dynamic port binding (HostPort "0") for the PostgreSQL proxy DB port
+  - The dynamically assigned host port must still be read back from ContainerInspect and stored correctly
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
