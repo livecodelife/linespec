@@ -1,0 +1,32 @@
+id: prov-2026-5c6ea0f5
+title: Rebuild linespec-beta binary with multi-database support
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Rebuild the linespec-beta binary to include multi-database support from
+  prov-2026-ad64db54 (databases: list, per-database proxy sidecars, prefixed
+  env vars) and the order-events-service example from prov-2026-91ed882c.
+  Without this rebuild, ./linespec-beta runs the old binary and fails on any
+  config that uses the new databases: list format.
+constraints:
+  - Binary must be built with `make build-beta` (beta build tag)
+  - All example suites must pass before committing
+affected_scope:
+  - linespec-beta
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-ad64db54
+  - prov-2026-91ed882c
+  - prov-2026-c9e62857
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - binary
+  - multi-database
