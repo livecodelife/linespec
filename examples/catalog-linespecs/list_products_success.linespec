@@ -1,0 +1,9 @@
+TEST list_products_success
+
+RECEIVE HTTP:GET /products
+
+EXPECT READ:MONGODB products
+RETURNS {{payloads/products_list.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/products_list.json}}

@@ -1,0 +1,13 @@
+TEST create_product_success
+
+RECEIVE HTTP:POST /products
+WITH {{payloads/create_product_request.json}}
+
+EXPECT WRITE:MONGODB products
+WITH {{payloads/create_product_request.json}}
+
+RESPOND HTTP:201
+WITH {{payloads/create_product_response.json}}
+NOISE
+  body.id
+  body.created_at

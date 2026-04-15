@@ -33,6 +33,8 @@ affected_scope:
   - pkg/config/parser.go
   - pkg/runner/runner.go
   - cmd/linespec/main_beta.go
+  - examples/catalog-service/**
+  - examples/catalog-linespecs/**
 forbidden_scope:
   - pkg/proxy/postgresql/**
   - pkg/proxy/mysql/**

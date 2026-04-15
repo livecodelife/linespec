@@ -1,0 +1,21 @@
+services:
+  db:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_DATABASE: catalog_service
+    volumes:
+      - ./init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports:
+      - "27017:27017"
+
+  catalog-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      MONGODB_URI: mongodb://root:example@db:27017/catalog_service?authSource=admin
+      PORT: "8080"
+    depends_on:
+      - db

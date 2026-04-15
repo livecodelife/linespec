@@ -1,0 +1,30 @@
+service:
+  name: catalog-service
+  service_dir: ../catalog-service
+  type: web
+  framework: custom
+  port: 8080
+  health_endpoint: /health
+  docker_compose: ../catalog-service/docker-compose.yml
+  build_context: ../catalog-service
+  start_command: ./catalog-service
+  environment:
+    MONGODB_URI: mongodb://root:example@db:27017/catalog_service?authSource=admin
+    PORT: "8080"
+
+database:
+  type: mongodb
+  image: mongo:7
+  port: 27017
+  container: db
+  init_script: ../catalog-service/init.js
+  database: catalog_service
+  username: root
+  password: example
+
+infrastructure:
+  database: true
+  kafka: false
+  external_db: false
+
+dependencies: []
