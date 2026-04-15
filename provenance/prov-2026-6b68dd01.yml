@@ -1,0 +1,32 @@
+id: prov-2026-6b68dd01
+title: Document Redis and MongoDB DSL expectations, add .linespec.yml reference
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Document the Redis and MongoDB DSL channels in LINESPEC.md and the GitHub Pages
+  site (docs/linespec.html), which were implemented but never documented. Add a
+  comprehensive .linespec.yml configuration reference covering all supported fields,
+  framework defaults, and minimal examples so users can self-serve onboarding without
+  reading source code.
+constraints:
+  - LINESPEC.md MUST document READ:REDIS, WRITE:REDIS, READ:MONGODB, and WRITE:MONGODB channels with syntax, rules, and examples
+  - docs/linespec.html MUST mirror the same content with correct sidebar nav and TOC entries
+  - The VERIFY section MUST be updated to document Redis targets (command, key, value) alongside SQL targets
+  - A .linespec.yml configuration reference MUST be added covering all supported fields
+affected_scope:
+  - LINESPEC.md
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: LINESPEC.md
+    type: documentation
+  - path: docs/linespec.html
+    type: documentation
+associated_traces: []
+monitors: []
+tags: []

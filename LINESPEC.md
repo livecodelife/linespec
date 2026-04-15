@@ -276,17 +276,155 @@ EXPECT WRITE:POSTGRESQL <table_name>
 
 ---
 
-### VERIFY (SQL Validation)
+### EXPECT READ:REDIS
 
-The `VERIFY` clause validates the actual SQL query executed by the application at runtime. It can be attached to any MySQL or PostgreSQL EXPECT statement.
+```
+EXPECT READ:REDIS <COMMAND> <key>
+RETURNS {{<response_file>}}
+```
+
+Or for a cache miss / empty result:
+
+```
+EXPECT READ:REDIS <COMMAND> <key>
+RETURNS EMPTY
+```
+
+Example:
+
+```
+EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
+RETURNS {{payloads/cached_user.json}}
+
+EXPECT READ:REDIS GET session:${SESSION_ID}
+RETURNS EMPTY
+```
+
+Supported read commands: `GET`, `MGET`, `HGET`, `HGETALL`, `HMGET`, `LRANGE`, `LLEN`, `SMEMBERS`, `SISMEMBER`, `ZRANGE`, `ZRANGEBYSCORE`, `EXISTS`, `TTL`, `TYPE`, `KEYS`, `STRLEN`, `LINDEX`
+
+Rules:
+
+* `RETURNS` is required (either a file or `EMPTY`)
+* `RETURNS EMPTY` encodes as a Redis nil bulk string (`$-1\r\n`) — the correct response for a missing key
+* The interceptor speaks RESP2 and handles `PING`, `AUTH`, `SELECT`, `HELLO`, and `COMMAND` transparently without registry lookups
+
+---
+
+### EXPECT WRITE:REDIS
+
+```
+EXPECT WRITE:REDIS <COMMAND> <key>
+[WITH {{<input_payload>}}]
+[VERIFY command CONTAINS '<string>']
+[VERIFY command NOT_CONTAINS '<string>']
+[VERIFY command MATCHES /<regex>/]
+[VERIFY key CONTAINS '<string>']
+[VERIFY key NOT_CONTAINS '<string>']
+[VERIFY key MATCHES /<regex>/]
+[VERIFY value CONTAINS '<string>']
+[VERIFY value NOT_CONTAINS '<string>']
+[VERIFY value MATCHES /<regex>/]
+```
+
+Example:
+
+```
+EXPECT WRITE:REDIS SET session:abc
+WITH {{payloads/session-data.json}}
+
+EXPECT WRITE:REDIS DEL user:123
+VERIFY command CONTAINS 'DEL'
+VERIFY key CONTAINS 'user:'
+```
+
+Rules:
+
+* `WITH` is optional; write commands without a payload return `+OK`
+* `VERIFY` clauses can validate the command name, key, and/or the value argument independently
+* Unmatched write commands pass through and return `+OK`
+
+---
+
+### EXPECT READ:MONGODB
+
+```
+EXPECT READ:MONGODB <collection>
+RETURNS {{<response_file>}}
+```
+
+Or for empty results:
+
+```
+EXPECT READ:MONGODB <collection>
+RETURNS EMPTY
+```
+
+Example:
+
+```
+EXPECT READ:MONGODB products
+RETURNS {{payloads/products_list.json}}
+
+EXPECT READ:MONGODB users
+RETURNS EMPTY
+```
+
+Rules:
+
+* `RETURNS` is required (either a file or `EMPTY`)
+* The proxy intercepts at the MongoDB wire protocol level (OP_MSG) — no changes needed to the service under test
+* Payload files may contain a single JSON object or a `{"rows": [...]}` array for multiple documents
+* JSON `"id"` fields containing a 24-character hex string are automatically mapped to `_id: ObjectID`
+* Unmatched queries are forwarded transparently to the upstream MongoDB container
+
+---
+
+### EXPECT WRITE:MONGODB
+
+```
+EXPECT WRITE:MONGODB <collection>
+[WITH {{<input_payload>}}]
+```
+
+Example:
+
+```
+EXPECT WRITE:MONGODB products
+WITH {{payloads/create_product_request.json}}
+```
+
+Rules:
+
+* `WITH` is optional; all matched write operations return `{n: 1, ok: 1}` (MongoDB write acknowledgement)
+* The interceptor matches by collection name and command type (insert, update, delete, etc.)
+* Unmatched write commands are forwarded to the real upstream MongoDB
+
+---
+
+### VERIFY (Validation Rules)
+
+The `VERIFY` clause validates the actual query or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, and Redis EXPECT statements.
 
 Use cases include:
 - Security: Ensuring passwords are hashed before storage
 - Compliance: Verifying sensitive data is not logged in plain text
-- Correctness: Confirming proper SQL structure
+- Correctness: Confirming proper SQL structure or Redis key naming conventions
 - Injection prevention: Validating query patterns match expected templates
 
-Syntax:
+**Targets by channel:**
+
+| Channel | Valid VERIFY targets |
+|---------|----------------------|
+| MySQL / PostgreSQL | `query` |
+| Redis | `command`, `key`, `value` |
+
+Operators:
+
+* `CONTAINS` — Value must include the specified string (substring match)
+* `NOT_CONTAINS` — Value must NOT include the specified string
+* `MATCHES` — Value must match the specified regex pattern (full Go regexp support)
+
+**SQL VERIFY syntax:**
 
 ```
 EXPECT <CHANNEL> <resource>
@@ -297,11 +435,14 @@ VERIFY query NOT_CONTAINS '<string>'
 VERIFY query MATCHES /<regex>/
 ```
 
-Operators:
+**Redis VERIFY syntax:**
 
-* `CONTAINS` — Query must include the specified string (substring match)
-* `NOT_CONTAINS` — Query must NOT include the specified string (substring match)
-* `MATCHES` — Query must match the specified regex pattern (full Go regexp support)
+```
+EXPECT WRITE:REDIS <COMMAND> <key>
+VERIFY command CONTAINS '<string>'
+VERIFY key CONTAINS '<string>'
+VERIFY value CONTAINS '<string>'
+```
 
 **Best Practices:**
 
@@ -341,6 +482,19 @@ VERIFY query NOT_CONTAINS '`password`'
 RESPOND HTTP:201
 ```
 
+Example — Redis Key Convention:
+
+```
+TEST delete-user-clears-cache
+RECEIVE HTTP:DELETE /api/v1/users/123
+
+EXPECT WRITE:REDIS DEL user:123
+VERIFY command CONTAINS 'DEL'
+VERIFY key MATCHES /^user:\d+$/
+
+RESPOND HTTP:204
+```
+
 Example — Query Structure Validation:
 
 ```
@@ -359,10 +513,10 @@ RESPOND HTTP:201
 
 Runtime Behavior:
 
-* When the proxy matches a query to the mock, it checks all VERIFY rules
-* If any rule fails, the test fails with 🔒 SQL Verification Error
-* The actual query is shown in the error message for debugging
-* Verification happens at query interception time in both MySQL and PostgreSQL proxies
+* When the proxy matches an interaction to the mock, it checks all VERIFY rules
+* If any rule fails, the test fails with a verification error
+* The actual query or command is shown in the error message for debugging
+* Verification happens at interception time in MySQL, PostgreSQL, and Redis proxies
 
 ---
 
@@ -654,6 +808,203 @@ status: active
 - **Strict naming:** Only uppercase with underscores
 - **No nested interpolation:** Cannot do `${${VAR}}`
 - **First-use defines:** The first resolution of a variable determines its value for the entire test
+
+---
+
+# Configuration Reference (`.linespec.yml`)
+
+Every LineSpec test directory requires a `.linespec.yml` file that tells the runner how to build, start, and wire up your service and its dependencies.
+
+Below is a fully annotated example covering all supported fields. Only `service` is required; all other sections are optional.
+
+```yaml
+# ─────────────────────────────────────────────
+# Service Under Test
+# ─────────────────────────────────────────────
+service:
+  name: notification-service       # Logical name used in container labels
+  service_dir: notification-service # Directory containing the service source code
+  type: web                        # web | worker | consumer
+  framework: fastapi               # rails | fastapi | django | express | chi | custom
+                                   # Known frameworks get sensible defaults for start
+                                   # command, migration command, and warmup endpoint.
+  port: 3002                       # Port the service listens on inside the container
+  health_endpoint: /health         # Path polled to confirm the service is ready
+
+  # Docker build / run
+  docker_compose: docker-compose.yml  # Path to docker-compose file (relative to service_dir)
+  build_context: .                    # Docker build context (relative to .linespec.yml)
+
+  # Override the framework default start command.
+  # Use ${PORT} to inject the configured port at runtime.
+  start_command: uvicorn app.main:app --host 0.0.0.0 --port 3002
+
+  # Override the framework default migration command (optional).
+  migration_command: alembic upgrade head
+
+  # Warmup — wait for the service to accept traffic before running tests.
+  needs_warmup: true          # true | false (default: per-framework)
+  warmup_endpoint: /health    # Path to poll (overrides framework default)
+  warmup_delay_ms: 100        # Extra delay after health check passes (ms)
+
+  # Environment variables injected into the service container at test time.
+  environment:
+    DATABASE_URL: postgresql+asyncpg://user:pass@db:5432/mydb
+    REDIS_URL: redis://redis-proxy:6379
+    KAFKA_BROKERS: kafka:29092
+    USER_SERVICE_URL: http://user-service:3001/api/v1/users/auth
+
+# ─────────────────────────────────────────────
+# Database (omit if external_db: true)
+# ─────────────────────────────────────────────
+database:
+  type: postgresql     # mysql | postgresql | mongodb
+  image: postgres:16-alpine
+  port: 5432
+  container: db        # Service name in docker-compose
+  init_script: init.sql  # SQL/JS file run on first startup to seed schema
+  database: mydb
+  username: myuser
+  password: mypassword
+
+  # For external databases (not managed by LineSpec):
+  host: db.internal    # External host (used when external_db: true)
+
+  # Set to false to disable the protocol-level proxy for this database.
+  # Default: true when infrastructure.database is true.
+  proxy: true
+
+# ─────────────────────────────────────────────
+# Infrastructure Flags
+# ─────────────────────────────────────────────
+infrastructure:
+  database: true    # Start and proxy a database container
+  kafka: true       # Start a Kafka container for EVENT/MESSAGE expectations
+  redis: true       # Start and proxy a Redis interceptor
+  grpc: false       # Start a gRPC proxy sidecar
+  external_db: false  # true = don't manage the DB container; connect to host above
+
+  # Docker image used for protocol proxy sidecars.
+  # Default: linespec:latest
+  proxy_image: linespec:latest
+
+# ─────────────────────────────────────────────
+# External HTTP / service dependencies
+# ─────────────────────────────────────────────
+dependencies:
+  - name: user-service
+    type: http
+    host: user-service.local   # Hostname the SUT dials
+    port: 3001
+    proxy: true                # Intercept calls to this host
+    host_alias: user-svc       # Optional DNS alias inside the test network
+    headers:                   # Default headers added to all matched requests
+      X-Internal-Token: secret
+
+# ─────────────────────────────────────────────
+# Provenance (optional — enables git hooks)
+# ─────────────────────────────────────────────
+provenance:
+  dir: provenance/
+  enforcement: warn        # none | warn | strict
+  commit_tag_required: true
+  auto_affected_scope: true
+
+  # Voyage AI embeddings for semantic search
+  embedding:
+    provider: voyage
+    index_model: voyage-4-large
+    query_model: voyage-4-lite
+    api_key: "${VOYAGE_API_KEY}"
+    similarity_threshold: 0.50
+    index_on_complete: true
+
+# ─────────────────────────────────────────────
+# Container & Network Naming (optional)
+# Template variables: {{ .ServiceName }}, {{ .SpecName }}, {{ .Type }}
+# ─────────────────────────────────────────────
+container_naming:
+  database_container: linespec-shared-db
+  network_alias: real-db
+  kafka_container: linespec-shared-kafka
+  proxy_container: proxy-{{ .Type }}-{{ .SpecName }}
+  app_container: app-{{ .SpecName }}
+  migrate_container: linespec-migrate-{{ .ServiceName }}
+  network_name: linespec-shared-net
+  project_mount_path: /app/project    # Where the spec directory is mounted
+  registry_mount_path: /app/registry  # Where mock payloads are mounted
+
+# ─────────────────────────────────────────────
+# Dynamic Port Allocation (optional)
+# ─────────────────────────────────────────────
+ports:
+  dynamic_ports: true       # Allocate random host ports (default: true)
+  min_port: 20000           # Lower bound for random port range
+  max_port: 30000           # Upper bound for random port range
+  fixed_proxy_port: 0       # Set to a specific port to pin the verify sidecar (0 = dynamic)
+
+# ─────────────────────────────────────────────
+# Schema Discovery (optional — MySQL/PostgreSQL)
+# ─────────────────────────────────────────────
+schema_discovery:
+  mode: auto            # auto | static | none
+  tables:               # Used when mode: static
+    - users
+    - orders
+  exclude_tables:       # Tables to ignore in auto mode
+    - schema_migrations
+    - ar_internal_metadata
+  cache_file: .linespec/schema-cache.json
+
+# ─────────────────────────────────────────────
+# Payload Loading (optional)
+# ─────────────────────────────────────────────
+payload:
+  directory: payloads       # Subdirectory name for payload files (default: payloads)
+  status_field: status      # JSON field path used to extract HTTP status from payload files
+
+# ─────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────
+timeout_seconds: 60     # Per-test timeout (default: 30)
+strict_passthrough: false  # true = fail on any unmatched proxy interaction
+```
+
+## Framework defaults
+
+When `framework` is set to a known value, LineSpec supplies defaults that you can selectively override:
+
+| Framework | Default start command | Default migration command | Warmup endpoint |
+|-----------|----------------------|--------------------------|-----------------|
+| `rails` | `bundle exec rails server -b 0.0.0.0 -p ${PORT}` | `bundle exec rails db:migrate` | `/up` |
+| `fastapi` | `python -m uvicorn main:app --host 0.0.0.0 --port ${PORT}` | — | `/health` |
+| `django` | `python manage.py runserver 0.0.0.0:${PORT}` | `python manage.py migrate` | `/health` |
+| `express` | `npm start` | — | `/health` |
+| `chi` | `PORT=${PORT} go run .` | — | `/health` |
+| `custom` | (required — must set `start_command`) | — | `/` |
+
+## Minimal example
+
+A minimal config for a FastAPI service with a PostgreSQL database:
+
+```yaml
+service:
+  name: my-service
+  framework: fastapi
+  port: 8000
+
+database:
+  type: postgresql
+  image: postgres:16-alpine
+  port: 5432
+  container: db
+  database: mydb
+  username: myuser
+  password: mypassword
+
+infrastructure:
+  database: true
+```
 
 ---
 
