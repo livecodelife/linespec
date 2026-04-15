@@ -1,0 +1,32 @@
+id: prov-2026-36e13aa2
+title: Fix Kafka consumer test hang caused by duplicate network aliases from persistent containers
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: "When HTTP-triggered tests 1..N run and persist containers, those containers stay
+  alive on the shared Docker network holding fixed aliases (\"db\", \"grpc-proxy\",
+  \"redis-proxy\", the app NetworkAlias, etc.). A subsequent Kafka consumer test that
+  cannot reuse persistent containers starts fresh containers with the same aliases.
+  Docker then round-robins connections between the old and new containers, so the new
+  app may connect to the old proxy whose registry was never seeded for this test. The
+  Kafka poll loop never sees all expected interactions satisfied and hangs until
+  context timeout. Fix: before starting fresh containers for a non-reusable test,
+  stop and remove any persistent containers for the same service key so their network
+  aliases are freed."
+constraints:
+  - Persistent containers must be stopped before fresh containers are started for non-reusable tests
+  - The stop must be parallel and complete before container startup begins
+  - persistentContainers map must be updated atomically under the mutex
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
