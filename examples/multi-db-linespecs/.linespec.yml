@@ -1,0 +1,52 @@
+# Example: service that uses both MySQL (relational orders) and MongoDB (event log)
+#
+# This demonstrates the `databases:` list format for multi-database services.
+# Each entry gets its own proxy sidecar on the Docker network.
+#
+# Network aliases assigned automatically:
+#   mysql  proxy  → alias "mysql"    real DB → alias "real-mysql"
+#   mongo  proxy  → alias "mongo"    real DB → alias "real-mongo"
+#
+# Environment variables injected into the app container:
+#   Legacy unprefixed (first database):  DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD
+#   Prefixed by name:  MYSQL_DB_HOST, MYSQL_DB_PORT, MONGO_MONGODB_URI, etc.
+
+service:
+  name: order-events-service
+  type: web
+  framework: custom
+  port: 3000
+  health_endpoint: /health
+  start_command: ./order-events-service
+  environment:
+    PORT: "3000"
+
+databases:
+  - name: mysql
+    type: mysql
+    image: mysql:8.4
+    port: 3306
+    database: orders_development
+    username: orders_user
+    password: orders_password
+    # host defaults to the name "mysql" — app connects via DB_HOST=mysql
+
+  - name: mongo
+    type: mongodb
+    image: mongo:7
+    port: 27017
+    database: order_events
+    username: events_user
+    password: events_password
+    # host defaults to the name "mongo" — app connects via MONGO_MONGODB_URI
+
+infrastructure:
+  database: true
+  kafka: false
+  external_db: false
+
+provenance:
+  dir: provenance/
+  enforcement: warn
+  commit_tag_required: true
+  auto_affected_scope: true

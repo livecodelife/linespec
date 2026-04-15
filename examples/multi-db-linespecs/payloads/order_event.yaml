@@ -1,0 +1,4 @@
+event_type: "order_created"
+product_id: "prod_abc123"
+quantity: 2
+customer_id: "cust_xyz789"

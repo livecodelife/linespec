@@ -67,6 +67,7 @@ constraints:
 affected_scope:
   - pkg/config/types.go
   - pkg/config/parser.go
+  - pkg/config/database_config_test.go
   - pkg/runner/runner.go
   - LINESPEC.md
   - examples/multi-db-linespecs/**

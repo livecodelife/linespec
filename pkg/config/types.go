@@ -147,6 +147,7 @@ type ServiceConfig struct {
 
 // DatabaseConfig defines database requirements
 type DatabaseConfig struct {
+	Name       string `yaml:"name"`            // Logical name used to identify this database (required when using databases: list)
 	Type       string `yaml:"type"` // mysql, postgresql
 	Image      string `yaml:"image"`
 	Port       int    `yaml:"port"`
@@ -155,7 +156,7 @@ type DatabaseConfig struct {
 	Database   string `yaml:"database"`
 	Username   string `yaml:"username"`
 	Password   string `yaml:"password"`
-	Host       string `yaml:"host"`            // Host for external databases (when not using container)
+	Host       string `yaml:"host"`            // Host alias the app uses to connect (proxy occupies this alias on the Docker network)
 	Proxy      *bool  `yaml:"proxy,omitempty"` // Whether to use a proxy for this database (enables interception)
 }
 
@@ -275,7 +276,8 @@ type InfrastructureConfig struct {
 // LineSpecConfig is the root configuration structure
 type LineSpecConfig struct {
 	Service         ServiceConfig          `yaml:"service"`
-	Database        *DatabaseConfig        `yaml:"database,omitempty"`
+	Database        *DatabaseConfig        `yaml:"database,omitempty"`  // Single-database form (backward compat). Normalised into Databases by applyDefaults.
+	Databases       []DatabaseConfig       `yaml:"databases,omitempty"` // Multi-database form. Takes precedence over Database when both are set.
 	Infrastructure  InfrastructureConfig   `yaml:"infrastructure"`
 	Dependencies    []DependencyConfig     `yaml:"dependencies,omitempty"`
 	Provenance      *ProvenanceConfig      `yaml:"provenance,omitempty"`

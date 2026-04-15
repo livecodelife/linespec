@@ -41,20 +41,21 @@ import (
 // persistentServiceContainers holds references to containers that are kept alive
 // across tests within a suite, avoiding per-test startup overhead.
 type persistentServiceContainers struct {
-	dbProxyName    string
-	httpProxyName  string
-	grpcProxyName  string
-	redisProxyName string
-	appName        string
-	appHostPort    string
-	dbVerifyPort   string
-	httpVerifyPort string
-	grpcVerifyPort string
+	// Per-database state — keyed by db.Host (the proxy's network alias).
+	dbProxies     map[string]string // db.Host → proxy container name
+	dbContainers  map[string]string // db.Host → real DB container name (empty for shared MySQL)
+	dbVerifyPorts map[string]string // db.Host → sidecar verify port
+	dbHostPorts   map[string]string // db.Host → "localhost:port" of real DB (for truncation)
+	dbTypes       map[string]string // db.Host → "mysql"|"postgresql"|"mongodb"
+
+	httpProxyName   string
+	grpcProxyName   string
+	redisProxyName  string
+	appName         string
+	appHostPort     string
+	httpVerifyPort  string
+	grpcVerifyPort  string
 	redisVerifyPort string
-	dbType              string // "mysql", "postgresql", or "mongodb"
-	dbHostPort          string // host:port of the DB container (for truncation)
-	pgContainerName     string // PostgreSQL container name (kept alive)
-	mongoContainerName  string // MongoDB container name (kept alive)
 }
 
 type TestSuite struct {
@@ -386,22 +387,26 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	return nil
 }
 
-// getSharedDatabaseConfig returns the database config for the shared MySQL infrastructure,
-// or nil if no MySQL service is configured.
+// getSharedDatabaseConfig returns the first MySQL database config found across all
+// discovered services, or nil if no MySQL database is configured.
 func (s *TestSuite) getSharedDatabaseConfig() *config.DatabaseConfig {
 	for _, cfg := range s.serviceConfigs {
-		if cfg.Database != nil && cfg.Database.Type == "mysql" {
-			return cfg.Database
+		for i := range cfg.Databases {
+			if cfg.Databases[i].Type == "mysql" {
+				return &cfg.Databases[i]
+			}
 		}
 	}
 	return nil
 }
 
-// hasMySQLServices returns true if any discovered service uses MySQL
+// hasMySQLServices returns true if any discovered service has a MySQL database configured.
 func (s *TestSuite) hasMySQLServices() bool {
 	for _, cfg := range s.serviceConfigs {
-		if cfg.Database != nil && cfg.Database.Type == "mysql" {
-			return true
+		for _, db := range cfg.Databases {
+			if db.Type == "mysql" {
+				return true
+			}
 		}
 	}
 	return false
@@ -625,8 +630,8 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 		name string
 	}
 	var targets []reloadTarget
-	if pc.dbVerifyPort != "" {
-		targets = append(targets, reloadTarget{"localhost:" + pc.dbVerifyPort, "db proxy"})
+	for host, vp := range pc.dbVerifyPorts {
+		targets = append(targets, reloadTarget{"localhost:" + vp, "db proxy (" + host + ")"})
 	}
 	if pc.httpVerifyPort != "" {
 		targets = append(targets, reloadTarget{"localhost:" + pc.httpVerifyPort, "HTTP proxy"})
@@ -654,20 +659,32 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 		}
 	}
 
-	// Truncate database
-	if serviceConfig.Database != nil {
-		switch pc.dbType {
+	// Truncate all configured databases
+	for host, dbType := range pc.dbTypes {
+		hostPort := pc.dbHostPorts[host]
+		// Find the matching DatabaseConfig by host alias.
+		var dbCfg *config.DatabaseConfig
+		for i := range serviceConfig.Databases {
+			if serviceConfig.Databases[i].Host == host {
+				dbCfg = &serviceConfig.Databases[i]
+				break
+			}
+		}
+		if dbCfg == nil {
+			continue
+		}
+		switch dbType {
 		case "mysql":
-			if err := r.suite.truncateMySQLTables(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
-				logger.Debug("Failed to truncate MySQL tables: %v", err)
+			if err := r.suite.truncateMySQLTables(ctx, dbCfg, hostPort); err != nil {
+				logger.Debug("Failed to truncate MySQL tables (%s): %v", host, err)
 			}
 		case "postgresql":
-			if err := r.suite.truncatePostgreSQLTables(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
-				logger.Debug("Failed to truncate PostgreSQL tables: %v", err)
+			if err := r.suite.truncatePostgreSQLTables(ctx, dbCfg, hostPort); err != nil {
+				logger.Debug("Failed to truncate PostgreSQL tables (%s): %v", host, err)
 			}
 		case "mongodb":
-			if err := r.suite.truncateMongoDBCollections(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
-				logger.Debug("Failed to truncate MongoDB collections: %v", err)
+			if err := r.suite.truncateMongoDBCollections(ctx, dbCfg, hostPort); err != nil {
+				logger.Debug("Failed to truncate MongoDB collections (%s): %v", host, err)
 			}
 		}
 	}
@@ -788,23 +805,54 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 	// Clean up any existing migration container
 	_ = s.orch.StopAndRemoveContainer(context.Background(), containerName)
 
-	// Get database configuration
-	dbConfig := cfg.Database
-	if dbConfig == nil {
-		dbConfig = s.getSharedDatabaseConfig()
-	}
-
 	// Build environment variables from config
 	appEnv := []string{}
 
-	if cfg.Infrastructure.Database && dbConfig != nil {
-		appEnv = append(appEnv,
-			fmt.Sprintf("DB_HOST=%s", s.containerNaming.NetworkAlias),
-			fmt.Sprintf("DB_PORT=%d", dbConfig.Port),
-			fmt.Sprintf("DB_USERNAME=%s", dbConfig.Username),
-			fmt.Sprintf("DB_PASSWORD=%s", dbConfig.Password),
-			fmt.Sprintf("RAILS_ENV=development"),
-		)
+	// Inject connection env vars for each configured database.
+	// The migration container connects to the real DB (bypasses proxy) via the network alias.
+	if cfg.Infrastructure.Database {
+		for i, db := range cfg.Databases {
+			isFirst := i == 0
+			// During migrations there is no proxy; connect directly via the real-db alias.
+			realAlias := "real-" + db.Host
+			namePrefix := strings.ToUpper(db.Name) + "_"
+
+			switch db.Type {
+			case "mysql":
+				appEnv = append(appEnv,
+					fmt.Sprintf("%sDB_HOST=%s", namePrefix, s.containerNaming.NetworkAlias),
+					fmt.Sprintf("%sDB_PORT=%d", namePrefix, db.Port),
+					fmt.Sprintf("%sDB_USERNAME=%s", namePrefix, db.Username),
+					fmt.Sprintf("%sDB_PASSWORD=%s", namePrefix, db.Password),
+				)
+				if isFirst {
+					appEnv = append(appEnv,
+						fmt.Sprintf("DB_HOST=%s", s.containerNaming.NetworkAlias),
+						fmt.Sprintf("DB_PORT=%d", db.Port),
+						fmt.Sprintf("DB_USERNAME=%s", db.Username),
+						fmt.Sprintf("DB_PASSWORD=%s", db.Password),
+						"RAILS_ENV=development",
+					)
+				}
+			case "postgresql":
+				dbURL := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", db.Username, db.Password, realAlias, db.Port, db.Database)
+				appEnv = append(appEnv, fmt.Sprintf("%sDATABASE_URL=%s", namePrefix, dbURL))
+				if isFirst {
+					appEnv = append(appEnv, fmt.Sprintf("DATABASE_URL=%s", dbURL))
+				}
+			case "mongodb":
+				var mongoURI string
+				if db.Username != "" && db.Password != "" {
+					mongoURI = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin", db.Username, db.Password, realAlias, db.Port, db.Database)
+				} else {
+					mongoURI = fmt.Sprintf("mongodb://%s:%d/%s", realAlias, db.Port, db.Database)
+				}
+				appEnv = append(appEnv, fmt.Sprintf("%sMONGODB_URI=%s", namePrefix, mongoURI))
+				if isFirst {
+					appEnv = append(appEnv, fmt.Sprintf("MONGODB_URI=%s", mongoURI))
+				}
+			}
+		}
 	}
 
 	// Add Kafka environment variables if enabled
@@ -870,7 +918,13 @@ func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	s.persistentMu.Lock()
 	var persistentNames []string
 	for _, pc := range s.persistentContainers {
-		persistentNames = append(persistentNames, pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName, pc.mongoContainerName)
+		persistentNames = append(persistentNames, pc.appName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName)
+		for _, name := range pc.dbProxies {
+			persistentNames = append(persistentNames, name)
+		}
+		for _, name := range pc.dbContainers {
+			persistentNames = append(persistentNames, name)
+		}
 	}
 	s.persistentContainers = make(map[string]*persistentServiceContainers)
 	s.persistentMu.Unlock()
@@ -975,7 +1029,14 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					delete(r.suite.persistentContainers, serviceKey)
 					r.suite.persistentMu.Unlock()
 				} else {
-					return r.runTestPhase(ctx, spec, pc.appHostPort, pc.dbVerifyPort, pc.httpVerifyPort, pc.grpcVerifyPort, pc.redisVerifyPort)
+					// Collect all db verify ports (ordered) for runTestPhase.
+					var persistedDBVerifyPorts []string
+					for _, vp := range pc.dbVerifyPorts {
+						if vp != "" {
+							persistedDBVerifyPorts = append(persistedDBVerifyPorts, vp)
+						}
+					}
+					return r.runTestPhase(ctx, spec, pc.appHostPort, persistedDBVerifyPorts, pc.httpVerifyPort, pc.grpcVerifyPort, pc.redisVerifyPort)
 				}
 			} else {
 				logger.Debug("Persistent app container unhealthy, falling back to fresh start")
@@ -999,7 +1060,15 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			logger.Debug("Stopping persistent containers before non-reusable test for %s", serviceKey)
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
 			var stopWg sync.WaitGroup
-			for _, name := range []string{pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName, pc.mongoContainerName} {
+			var stopNames []string
+			for _, name := range pc.dbProxies {
+				stopNames = append(stopNames, name)
+			}
+			for _, name := range pc.dbContainers {
+				stopNames = append(stopNames, name)
+			}
+			stopNames = append(stopNames, pc.appName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName)
+			for _, name := range stopNames {
 				if name == "" {
 					continue
 				}
@@ -1028,11 +1097,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	params := config.ContainerNameParams{SpecName: spec.Name}
 	cleanupNames := []string{
 		r.suite.containerNaming.GetAppContainer(params),
-		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}),
 		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "http"}),
 		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"}),
 		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"}),
 		r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "redis"}),
+	}
+	// Add per-database proxy container names (proxy alias = db.Host, used as Type in naming template).
+	for _, db := range serviceConfig.Databases {
+		cleanupNames = append(cleanupNames,
+			r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: db.Host}),
+		)
 	}
 	var cleanupWg sync.WaitGroup
 	for _, name := range cleanupNames {
@@ -1046,17 +1120,22 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	cleanupCancel()
 
 	// Cleanup guards: flipped to false at end of run() to keep containers alive for reuse.
-	cleanupPG := true
-	cleanupDB := true
 	cleanupHTTPProxy := true
 	cleanupGRPCProxy := true
 	cleanupRedisProxy := true
 	cleanupApp := true
 	persistSetupComplete := false
 
-	// Track DB host port and type for persistence registration.
-	var dbHostPortForPersistence string
-	var dbTypeForPersistence string
+	// Per-database cleanup guards collected during the Databases loop (flipped on persistence).
+	var dbCleanupGuards []*bool
+
+	// Per-database state accumulated during the Databases loop.
+	dbProxies := make(map[string]string)    // db.Host → proxy container name
+	dbContainers := make(map[string]string) // db.Host → real DB container name
+	dbVerifyPortsByHost := make(map[string]string) // db.Host → verify sidecar port
+	dbHostPortsMap := make(map[string]string)      // db.Host → "localhost:port" of real DB
+	dbTypesMap := make(map[string]string)           // db.Host → "mysql"|"postgresql"|"mongodb"
+	var dbVerifyPortsList []string                  // ordered list for runTestPhase + proxy wait
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
 	if serviceConfig.Service.ServiceDir != "" {
@@ -1075,305 +1154,319 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	regFile := filepath.Join(r.tempDir, "registry-"+spec.Name+".json")
 	_ = r.registry.SaveToFile(regFile)
 
-	// 3. Start Database and Proxy Containers (if database is enabled)
-	var dbContainerName string
-	logger.Debug("DEBUG: Infrastructure.Database=%v, DatabaseConfig is nil=%v", serviceConfig.Infrastructure.Database, serviceConfig.Database == nil)
-	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
-		dbType := serviceConfig.Database.Type
-		dbPort := fmt.Sprintf("%d", serviceConfig.Database.Port)
-		logger.Debug("Database type: %s, Proxy: %v", dbType, serviceConfig.Database.Proxy)
+	// 3. Start Database and Proxy Containers — one per entry in serviceConfig.Databases.
+	// Each database gets a unique network alias derived from db.Host.  The proxy occupies
+	// alias=db.Host; the real DB occupies alias="real-"+db.Host.  For the common single-
+	// database case (host defaults to "db") this reproduces the original "db"/"real-db"
+	// aliases unchanged, preserving backward compatibility.
+	logger.Debug("DEBUG: Infrastructure.Database=%v, len(Databases)=%d", serviceConfig.Infrastructure.Database, len(serviceConfig.Databases))
+	if serviceConfig.Infrastructure.Database && len(serviceConfig.Databases) > 0 {
+		for _, dbCfg := range serviceConfig.Databases {
+			db := dbCfg // local copy so defers capture the right value
+			dbType := db.Type
+			dbPort := fmt.Sprintf("%d", db.Port)
+			realAlias := "real-" + db.Host
+			proxyAlias := db.Host
+			proxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: db.Host})
+			dbProxies[db.Host] = proxyContainerName
+			dbTypesMap[db.Host] = dbType
 
-		logger.Debug("DEBUG: Database infrastructure enabled, dbType='%s', port=%s", dbType, dbPort)
-		logger.Debug("DEBUG: Database config: Type=%s, Image=%s", serviceConfig.Database.Type, serviceConfig.Database.Image)
+			logger.Debug("Setting up database: type=%s host=%s proxy=%v", dbType, db.Host, db.Proxy)
 
-		switch dbType {
-		case "postgresql":
-			logger.Debug("Starting PostgreSQL database and proxy")
-			// Start PostgreSQL container for this service
-			dbContainerName = "linespec-postgres-" + spec.Name
-			db := serviceConfig.Database
+			switch dbType {
+			case "postgresql":
+				logger.Debug("Starting PostgreSQL database (host=%s)", db.Host)
+				pgContainerName := "linespec-postgresql-" + db.Host + "-" + spec.Name
 
-			// Check for init script
-			var pgBinds []string
-			if db.InitScript != "" {
-				initScriptPath := filepath.Join(serviceConfig.BaseDir, db.InitScript)
-				if _, err := os.Stat(initScriptPath); err == nil {
-					initScriptName := filepath.Base(initScriptPath)
-					pgBinds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initScriptPath, initScriptName)}
-					logger.Debug("Mounting PostgreSQL init script: %s", initScriptPath)
-				}
-			}
-
-			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-				Image: db.Image,
-				Env: []string{
-					fmt.Sprintf("POSTGRES_DB=%s", db.Database),
-					fmt.Sprintf("POSTGRES_USER=%s", db.Username),
-					fmt.Sprintf("POSTGRES_PASSWORD=%s", db.Password),
-					"POSTGRES_HOST_AUTH_METHOD=trust", // Enable trust authentication
-				},
-			}, &container.HostConfig{
-				Binds: pgBinds,
-				PortBindings: map[nat.Port][]nat.PortBinding{
-					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
-				},
-			}, &network.NetworkingConfig{
-				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{r.suite.containerNaming.NetworkAlias}}},
-			}, dbContainerName)
-			if err != nil {
-				return fmt.Errorf("failed to start PostgreSQL container: %w", err)
-			}
-			defer func() {
-				if !cleanupPG {
-					return
-				}
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
-			}()
-
-			// Wait for PostgreSQL to be ready with actual connection check
-			logger.Debug("Waiting for PostgreSQL to be ready")
-			postgresHostPort, err := r.suite.waitForContainerPort(ctx, dbContainerName, dbPort+"/tcp", 30*time.Second)
-			if err != nil {
-				return fmt.Errorf("failed to get PostgreSQL host port: %w", err)
-			}
-
-			// Actually verify PostgreSQL is accepting connections
-			if err := r.suite.waitForPostgreSQL(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database, 30*time.Second); err != nil {
-				return fmt.Errorf("PostgreSQL not accepting connections: %w", err)
-			}
-			logger.Debug("PostgreSQL is ready and accepting connections")
-			dbTypeForPersistence = "postgresql"
-			dbHostPortForPersistence = "localhost:" + postgresHostPort
-
-			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
-				// Build PostgreSQL proxy command with debug flag if enabled
-				pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
-				if logger.IsDebug() {
-					pgProxyCmd = append(pgProxyCmd, "--debug")
-				}
-
-				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-					Image: proxyImage,
-					Cmd:   pgProxyCmd,
-					ExposedPorts: map[nat.Port]struct{}{
-						nat.Port(dbPort + "/tcp"): {},
-						nat.Port("8081/tcp"):      {}, // Verification sidecar port
-					},
-				}, &container.HostConfig{
-					Binds: []string{
-						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
-						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
-					},
-					PortBindings: map[nat.Port][]nat.PortBinding{
-						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic — avoid conflicts with persistent containers
-						nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port
-					},
-				}, &network.NetworkingConfig{
-					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
-				}, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-				if err != nil {
-					return fmt.Errorf("failed to start PostgreSQL proxy: %w", err)
-				}
-
-				logger.Debug("PostgreSQL proxy started")
-
-				defer func() {
-					if !cleanupDB {
-						return
+				var pgBinds []string
+				if db.InitScript != "" {
+					initScriptPath := filepath.Join(serviceConfig.BaseDir, db.InitScript)
+					if _, err := os.Stat(initScriptPath); err == nil {
+						initScriptName := filepath.Base(initScriptPath)
+						pgBinds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initScriptPath, initScriptName)}
+						logger.Debug("Mounting PostgreSQL init script: %s", initScriptPath)
 					}
-					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cancel()
-					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
-				}()
-
-				// Stream proxy logs for debugging (only in debug mode)
-				if logger.IsDebug() {
-					go func() {
-						logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
-						defer logCancel()
-						_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}), os.Stdout, os.Stderr)
-					}()
-				}
-			} else {
-				logger.Info("PostgreSQL proxy disabled (proxy: false), mock matching will not work for database interactions")
-			}
-
-		case "mysql":
-			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
-				logger.Debug("MySQL proxy enabled for this service")
-
-				// Build MySQL proxy command
-				mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", serviceConfig.Database.Database}
-				if r.suite.sharedSchemaBase64 != "" {
-					mysqlProxyCmd = append(mysqlProxyCmd, "--schema-data", r.suite.sharedSchemaBase64)
-				}
-				if logger.IsDebug() {
-					mysqlProxyCmd = append(mysqlProxyCmd, "--debug")
-				}
-
-				mysqlProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"})
-				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-					Image: proxyImage,
-					Cmd:   mysqlProxyCmd,
-					ExposedPorts: map[nat.Port]struct{}{
-						nat.Port("8081/tcp"): {}, // Verification sidecar port
-					},
-				}, &container.HostConfig{
-					Binds: []string{
-						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
-						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
-					},
-					PortBindings: map[nat.Port][]nat.PortBinding{
-						nat.Port("8081/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port for verification
-					},
-				}, &network.NetworkingConfig{
-					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
-				}, mysqlProxyContainerName)
-				if err != nil {
-					return fmt.Errorf("failed to start MySQL proxy: %w", err)
-				}
-
-				logger.Debug("MySQL proxy started")
-				dbTypeForPersistence = "mysql"
-				dbHostPortForPersistence = "localhost:" + r.suite.dbHostPort
-
-				defer func() {
-					if !cleanupDB {
-						return
-					}
-					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cancel()
-					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, mysqlProxyContainerName)
-				}()
-
-				// Stream proxy logs for debugging (only in debug mode)
-				if logger.IsDebug() {
-					go func() {
-						logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
-						defer logCancel()
-						_ = r.suite.orch.StreamLogs(logCtx, mysqlProxyContainerName, os.Stdout, os.Stderr)
-					}()
-				}
-			} else {
-				logger.Info("MySQL proxy disabled (proxy: false), mock matching will not work for database interactions")
-			}
-		case "mongodb":
-			logger.Debug("Starting MongoDB database and proxy")
-			dbContainerName = "linespec-mongo-" + spec.Name
-			db := serviceConfig.Database
-
-			// Mount init script if provided
-			var mongoBinds []string
-			if db.InitScript != "" {
-				initScriptPath := filepath.Join(serviceConfig.BaseDir, db.InitScript)
-				if _, err := os.Stat(initScriptPath); err == nil {
-					initScriptName := filepath.Base(initScriptPath)
-					mongoBinds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initScriptPath, initScriptName)}
-					logger.Debug("Mounting MongoDB init script: %s", initScriptPath)
-				}
-			}
-
-			mongoEnv := []string{}
-			if db.Username != "" && db.Password != "" {
-				mongoEnv = append(mongoEnv,
-					fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", db.Username),
-					fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", db.Password),
-				)
-			}
-			if db.Database != "" {
-				mongoEnv = append(mongoEnv, fmt.Sprintf("MONGO_INITDB_DATABASE=%s", db.Database))
-			}
-
-			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-				Image: db.Image,
-				Env:   mongoEnv,
-			}, &container.HostConfig{
-				Binds: mongoBinds,
-				PortBindings: map[nat.Port][]nat.PortBinding{
-					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
-				},
-			}, &network.NetworkingConfig{
-				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{r.suite.containerNaming.NetworkAlias}}},
-			}, dbContainerName)
-			if err != nil {
-				return fmt.Errorf("failed to start MongoDB container: %w", err)
-			}
-			defer func() {
-				if !cleanupPG {
-					return
-				}
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
-			}()
-
-			logger.Debug("Waiting for MongoDB to be ready")
-			mongoHostPort, err := r.suite.waitForContainerPort(ctx, dbContainerName, dbPort+"/tcp", 30*time.Second)
-			if err != nil {
-				return fmt.Errorf("failed to get MongoDB host port: %w", err)
-			}
-			if err := r.suite.waitForMongoDB(ctx, "localhost", mongoHostPort, db.Username, db.Password, db.Database, 45*time.Second); err != nil {
-				return fmt.Errorf("MongoDB not accepting connections: %w", err)
-			}
-			logger.Debug("MongoDB is ready and accepting connections on :%s", mongoHostPort)
-			dbTypeForPersistence = "mongodb"
-			dbHostPortForPersistence = "localhost:" + mongoHostPort
-
-			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
-				mongoProxyCmd := []string{"proxy", "mongodb", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
-				if logger.IsDebug() {
-					mongoProxyCmd = append(mongoProxyCmd, "--debug")
 				}
 
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-					Image: proxyImage,
-					Cmd:   mongoProxyCmd,
-					ExposedPorts: map[nat.Port]struct{}{
-						nat.Port(dbPort + "/tcp"): {},
-						nat.Port("8081/tcp"):      {},
+					Image: db.Image,
+					Env: []string{
+						fmt.Sprintf("POSTGRES_DB=%s", db.Database),
+						fmt.Sprintf("POSTGRES_USER=%s", db.Username),
+						fmt.Sprintf("POSTGRES_PASSWORD=%s", db.Password),
+						"POSTGRES_HOST_AUTH_METHOD=trust",
 					},
 				}, &container.HostConfig{
-					Binds: []string{
-						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
-						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
-					},
+					Binds: pgBinds,
 					PortBindings: map[nat.Port][]nat.PortBinding{
 						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
-						nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}},
 					},
 				}, &network.NetworkingConfig{
-					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
-				}, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{realAlias}}},
+				}, pgContainerName)
 				if err != nil {
-					return fmt.Errorf("failed to start MongoDB proxy: %w", err)
+					return fmt.Errorf("failed to start PostgreSQL container (%s): %w", db.Host, err)
 				}
+				dbContainers[db.Host] = pgContainerName
 
-				logger.Debug("MongoDB proxy started")
-
+				containerGuard := new(bool)
+				*containerGuard = true
+				dbCleanupGuards = append(dbCleanupGuards, containerGuard)
+				localPGContainer := pgContainerName
+				localContainerGuard := containerGuard
 				defer func() {
-					if !cleanupDB {
+					if !*localContainerGuard {
 						return
 					}
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localPGContainer)
 				}()
 
-				if logger.IsDebug() {
-					go func() {
-						logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
-						defer logCancel()
-						_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}), os.Stdout, os.Stderr)
-					}()
+				logger.Debug("Waiting for PostgreSQL to be ready (host=%s)", db.Host)
+				postgresHostPort, err := r.suite.waitForContainerPort(ctx, pgContainerName, dbPort+"/tcp", 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to get PostgreSQL host port (%s): %w", db.Host, err)
 				}
-			} else {
-				logger.Info("MongoDB proxy disabled (proxy: false), mock matching will not work for database interactions")
-			}
+				if err := r.suite.waitForPostgreSQL(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database, 30*time.Second); err != nil {
+					return fmt.Errorf("PostgreSQL not accepting connections (%s): %w", db.Host, err)
+				}
+				logger.Debug("PostgreSQL is ready (host=%s)", db.Host)
+				dbHostPortsMap[db.Host] = "localhost:" + postgresHostPort
 
-		default:
-			logger.Debug("DEBUG: Unknown dbType '%s', no proxy started", dbType)
+				if db.Proxy != nil && *db.Proxy {
+					pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+					if logger.IsDebug() {
+						pgProxyCmd = append(pgProxyCmd, "--debug")
+					}
+					_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+						Image: proxyImage,
+						Cmd:   pgProxyCmd,
+						ExposedPorts: map[nat.Port]struct{}{
+							nat.Port(dbPort + "/tcp"): {},
+							nat.Port("8081/tcp"):      {},
+						},
+					}, &container.HostConfig{
+						Binds: []string{
+							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+						},
+						PortBindings: map[nat.Port][]nat.PortBinding{
+							nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+							nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}},
+						},
+					}, &network.NetworkingConfig{
+						EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{proxyAlias}}},
+					}, proxyContainerName)
+					if err != nil {
+						return fmt.Errorf("failed to start PostgreSQL proxy (%s): %w", db.Host, err)
+					}
+					logger.Debug("PostgreSQL proxy started (alias=%s)", proxyAlias)
+
+					proxyGuard := new(bool)
+					*proxyGuard = true
+					dbCleanupGuards = append(dbCleanupGuards, proxyGuard)
+					localProxyContainer := proxyContainerName
+					localProxyGuard := proxyGuard
+					defer func() {
+						if !*localProxyGuard {
+							return
+						}
+						cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer cancel()
+						_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localProxyContainer)
+					}()
+					if logger.IsDebug() {
+						go func() {
+							logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer logCancel()
+							_ = r.suite.orch.StreamLogs(logCtx, proxyContainerName, os.Stdout, os.Stderr)
+						}()
+					}
+				} else {
+					logger.Info("PostgreSQL proxy disabled for host=%s, mock matching will not work", db.Host)
+				}
+
+			case "mysql":
+				// MySQL uses the shared persistent container started in SetupSharedInfrastructure.
+				// The proxy connects to the shared container via the suite-level NetworkAlias.
+				if db.Proxy != nil && *db.Proxy {
+					logger.Debug("Starting MySQL proxy (host=%s)", db.Host)
+					mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", db.Database}
+					if r.suite.sharedSchemaBase64 != "" {
+						mysqlProxyCmd = append(mysqlProxyCmd, "--schema-data", r.suite.sharedSchemaBase64)
+					}
+					if logger.IsDebug() {
+						mysqlProxyCmd = append(mysqlProxyCmd, "--debug")
+					}
+					_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+						Image: proxyImage,
+						Cmd:   mysqlProxyCmd,
+						ExposedPorts: map[nat.Port]struct{}{
+							nat.Port("8081/tcp"): {},
+						},
+					}, &container.HostConfig{
+						Binds: []string{
+							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+						},
+						PortBindings: map[nat.Port][]nat.PortBinding{
+							nat.Port("8081/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+						},
+					}, &network.NetworkingConfig{
+						EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{proxyAlias}}},
+					}, proxyContainerName)
+					if err != nil {
+						return fmt.Errorf("failed to start MySQL proxy (%s): %w", db.Host, err)
+					}
+					logger.Debug("MySQL proxy started (alias=%s)", proxyAlias)
+					dbHostPortsMap[db.Host] = "localhost:" + r.suite.dbHostPort
+
+					proxyGuard := new(bool)
+					*proxyGuard = true
+					dbCleanupGuards = append(dbCleanupGuards, proxyGuard)
+					localProxyContainer := proxyContainerName
+					localProxyGuard := proxyGuard
+					defer func() {
+						if !*localProxyGuard {
+							return
+						}
+						cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer cancel()
+						_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localProxyContainer)
+					}()
+					if logger.IsDebug() {
+						go func() {
+							logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer logCancel()
+							_ = r.suite.orch.StreamLogs(logCtx, proxyContainerName, os.Stdout, os.Stderr)
+						}()
+					}
+				} else {
+					logger.Info("MySQL proxy disabled for host=%s, mock matching will not work", db.Host)
+				}
+
+			case "mongodb":
+				logger.Debug("Starting MongoDB database (host=%s)", db.Host)
+				mongoContainerName := "linespec-mongodb-" + db.Host + "-" + spec.Name
+
+				var mongoBinds []string
+				if db.InitScript != "" {
+					initScriptPath := filepath.Join(serviceConfig.BaseDir, db.InitScript)
+					if _, err := os.Stat(initScriptPath); err == nil {
+						initScriptName := filepath.Base(initScriptPath)
+						mongoBinds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initScriptPath, initScriptName)}
+						logger.Debug("Mounting MongoDB init script: %s", initScriptPath)
+					}
+				}
+				mongoEnv := []string{}
+				if db.Username != "" && db.Password != "" {
+					mongoEnv = append(mongoEnv,
+						fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", db.Username),
+						fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", db.Password),
+					)
+				}
+				if db.Database != "" {
+					mongoEnv = append(mongoEnv, fmt.Sprintf("MONGO_INITDB_DATABASE=%s", db.Database))
+				}
+
+				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+					Image: db.Image,
+					Env:   mongoEnv,
+				}, &container.HostConfig{
+					Binds: mongoBinds,
+					PortBindings: map[nat.Port][]nat.PortBinding{
+						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+					},
+				}, &network.NetworkingConfig{
+					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{realAlias}}},
+				}, mongoContainerName)
+				if err != nil {
+					return fmt.Errorf("failed to start MongoDB container (%s): %w", db.Host, err)
+				}
+				dbContainers[db.Host] = mongoContainerName
+
+				containerGuard := new(bool)
+				*containerGuard = true
+				dbCleanupGuards = append(dbCleanupGuards, containerGuard)
+				localMongoContainer := mongoContainerName
+				localContainerGuard := containerGuard
+				defer func() {
+					if !*localContainerGuard {
+						return
+					}
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localMongoContainer)
+				}()
+
+				logger.Debug("Waiting for MongoDB to be ready (host=%s)", db.Host)
+				mongoHostPort, err := r.suite.waitForContainerPort(ctx, mongoContainerName, dbPort+"/tcp", 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to get MongoDB host port (%s): %w", db.Host, err)
+				}
+				if err := r.suite.waitForMongoDB(ctx, "localhost", mongoHostPort, db.Username, db.Password, db.Database, 45*time.Second); err != nil {
+					return fmt.Errorf("MongoDB not accepting connections (%s): %w", db.Host, err)
+				}
+				logger.Debug("MongoDB is ready (host=%s)", db.Host)
+				dbHostPortsMap[db.Host] = "localhost:" + mongoHostPort
+
+				if db.Proxy != nil && *db.Proxy {
+					mongoProxyCmd := []string{"proxy", "mongodb", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+					if logger.IsDebug() {
+						mongoProxyCmd = append(mongoProxyCmd, "--debug")
+					}
+					_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+						Image: proxyImage,
+						Cmd:   mongoProxyCmd,
+						ExposedPorts: map[nat.Port]struct{}{
+							nat.Port(dbPort + "/tcp"): {},
+							nat.Port("8081/tcp"):      {},
+						},
+					}, &container.HostConfig{
+						Binds: []string{
+							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+						},
+						PortBindings: map[nat.Port][]nat.PortBinding{
+							nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+							nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}},
+						},
+					}, &network.NetworkingConfig{
+						EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{proxyAlias}}},
+					}, proxyContainerName)
+					if err != nil {
+						return fmt.Errorf("failed to start MongoDB proxy (%s): %w", db.Host, err)
+					}
+					logger.Debug("MongoDB proxy started (alias=%s)", proxyAlias)
+
+					proxyGuard := new(bool)
+					*proxyGuard = true
+					dbCleanupGuards = append(dbCleanupGuards, proxyGuard)
+					localProxyContainer := proxyContainerName
+					localProxyGuard := proxyGuard
+					defer func() {
+						if !*localProxyGuard {
+							return
+						}
+						cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer cancel()
+						_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localProxyContainer)
+					}()
+					if logger.IsDebug() {
+						go func() {
+							logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer logCancel()
+							_ = r.suite.orch.StreamLogs(logCtx, proxyContainerName, os.Stdout, os.Stderr)
+						}()
+					}
+				} else {
+					logger.Info("MongoDB proxy disabled for host=%s, mock matching will not work", db.Host)
+				}
+
+			default:
+				logger.Debug("Unknown dbType '%s' for host=%s, no proxy started", dbType, db.Host)
+			}
 		}
 	} else {
 		logger.Debug("DEBUG: Database infrastructure disabled or no database config")
@@ -1466,14 +1559,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	// Inspect all proxies to get ports and IPs
-	var dbVerifyPort, httpVerifyPort, proxyHttpIP string
+	var httpVerifyPort, proxyHttpIP string
 
-	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
-		// Both MySQL and PostgreSQL now have proxies we can inspect
-		inspectDb, inspectDbErr := r.suite.orch.GetContainerInspect(ctx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+	// Inspect each database proxy to get its verify sidecar port.
+	for host, proxyName := range dbProxies {
+		inspectDb, inspectDbErr := r.suite.orch.GetContainerInspect(ctx, proxyName)
 		if inspectDbErr == nil && inspectDb.NetworkSettings != nil {
 			if p, ok := inspectDb.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
-				dbVerifyPort = p[0].HostPort
+				vp := p[0].HostPort
+				dbVerifyPortsByHost[host] = vp
+				dbVerifyPortsList = append(dbVerifyPortsList, vp)
 			}
 		}
 	}
@@ -1690,8 +1785,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		name string
 	}
 	var proxyWaits []proxyWait
-	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil && dbVerifyPort != "" {
-		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + dbVerifyPort, "database proxy"})
+	for host, vp := range dbVerifyPortsByHost {
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + vp, "database proxy (" + host + ")"})
 	}
 	if httpVerifyPort != "" {
 		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + httpVerifyPort, "HTTP proxy"})
@@ -1732,44 +1827,65 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// 4. Infrastructure defaults (database, kafka)
 	envMap := make(map[string]string)
 
-	// 4. Add infrastructure defaults first (lowest priority)
-	if serviceConfig.Infrastructure.Database && serviceConfig.Database != nil {
-		db := serviceConfig.Database
-		switch db.Type {
-		case "mysql":
-			dbHost := r.suite.containerNaming.NetworkAlias
+	// 4. Add infrastructure defaults first (lowest priority).
+	// For each database, inject connection env vars.  The first database in the list also
+	// receives the legacy unprefixed names (DB_HOST, DATABASE_URL, MONGODB_URI) so that
+	// single-database configs continue to work without any changes.
+	if serviceConfig.Infrastructure.Database {
+		for i, db := range serviceConfig.Databases {
+			isFirst := i == 0
+			// Determine the hostname the app should use (proxy alias when proxied).
+			dbHost := "real-" + db.Host // direct connection to real container
 			if db.Proxy != nil && *db.Proxy {
-				dbHost = "db"
-				logger.Debug("MySQL proxy enabled: app will connect to 'db' (proxy)")
-			} else {
-				logger.Debug("MySQL proxy disabled: app will connect directly to '%s'", dbHost)
+				dbHost = db.Host // connect to proxy sidecar
 			}
-			envMap["DB_HOST"] = dbHost
-			envMap["DB_PORT"] = fmt.Sprintf("%d", db.Port)
-			envMap["DB_USERNAME"] = db.Username
-			envMap["DB_PASSWORD"] = db.Password
-			envMap["RAILS_ENV"] = "development"
-		case "postgresql":
-			dbHost := "db"
-			if db.Proxy == nil || !*db.Proxy {
-				dbHost = r.suite.containerNaming.NetworkAlias
-				logger.Debug("PostgreSQL proxy disabled: app will connect directly to '%s'", dbHost)
-			} else {
-				logger.Debug("PostgreSQL proxy enabled: app will connect to 'db' (proxy)")
-			}
-			envMap["DATABASE_URL"] = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", db.Username, db.Password, dbHost, db.Port, db.Database)
-		case "mongodb":
-			dbHost := "db"
-			if db.Proxy == nil || !*db.Proxy {
-				dbHost = r.suite.containerNaming.NetworkAlias
-				logger.Debug("MongoDB proxy disabled: app will connect directly to '%s'", dbHost)
-			} else {
-				logger.Debug("MongoDB proxy enabled: app will connect to 'db' (proxy)")
-			}
-			if db.Username != "" && db.Password != "" {
-				envMap["MONGODB_URI"] = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin", db.Username, db.Password, dbHost, db.Port, db.Database)
-			} else {
-				envMap["MONGODB_URI"] = fmt.Sprintf("mongodb://%s:%d/%s", dbHost, db.Port, db.Database)
+			namePrefix := strings.ToUpper(db.Name) + "_"
+
+			switch db.Type {
+			case "mysql":
+				if db.Proxy != nil && *db.Proxy {
+					logger.Debug("MySQL proxy enabled: app will connect to '%s' (proxy)", dbHost)
+				} else {
+					logger.Debug("MySQL proxy disabled: app will connect directly to '%s'", dbHost)
+				}
+				envMap[namePrefix+"DB_HOST"] = dbHost
+				envMap[namePrefix+"DB_PORT"] = fmt.Sprintf("%d", db.Port)
+				envMap[namePrefix+"DB_USERNAME"] = db.Username
+				envMap[namePrefix+"DB_PASSWORD"] = db.Password
+				if isFirst {
+					envMap["DB_HOST"] = dbHost
+					envMap["DB_PORT"] = fmt.Sprintf("%d", db.Port)
+					envMap["DB_USERNAME"] = db.Username
+					envMap["DB_PASSWORD"] = db.Password
+					envMap["RAILS_ENV"] = "development"
+				}
+			case "postgresql":
+				if db.Proxy != nil && *db.Proxy {
+					logger.Debug("PostgreSQL proxy enabled: app will connect to '%s' (proxy)", dbHost)
+				} else {
+					logger.Debug("PostgreSQL proxy disabled: app will connect directly to '%s'", dbHost)
+				}
+				dbURL := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", db.Username, db.Password, dbHost, db.Port, db.Database)
+				envMap[namePrefix+"DATABASE_URL"] = dbURL
+				if isFirst {
+					envMap["DATABASE_URL"] = dbURL
+				}
+			case "mongodb":
+				if db.Proxy != nil && *db.Proxy {
+					logger.Debug("MongoDB proxy enabled: app will connect to '%s' (proxy)", dbHost)
+				} else {
+					logger.Debug("MongoDB proxy disabled: app will connect directly to '%s'", dbHost)
+				}
+				var mongoURI string
+				if db.Username != "" && db.Password != "" {
+					mongoURI = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin", db.Username, db.Password, dbHost, db.Port, db.Database)
+				} else {
+					mongoURI = fmt.Sprintf("mongodb://%s:%d/%s", dbHost, db.Port, db.Database)
+				}
+				envMap[namePrefix+"MONGODB_URI"] = mongoURI
+				if isFirst {
+					envMap["MONGODB_URI"] = mongoURI
+				}
 			}
 		}
 	}
@@ -1940,32 +2056,31 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
-	testErr := r.runTestPhase(ctx, spec, hostPort, dbVerifyPort, httpVerifyPort, grpcVerifyPort, redisVerifyPort)
+	testErr := r.runTestPhase(ctx, spec, hostPort, dbVerifyPortsList, httpVerifyPort, grpcVerifyPort, redisVerifyPort)
 
 	// On success, register containers for reuse by subsequent tests in this suite.
 	if testErr == nil && persist && persistSetupComplete {
-		dbProxyName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"})
 		r.suite.persistentMu.Lock()
 		r.suite.persistentContainers[serviceKey] = &persistentServiceContainers{
-			dbProxyName:     dbProxyName,
+			dbProxies:       dbProxies,
+			dbContainers:    dbContainers,
+			dbVerifyPorts:   dbVerifyPortsByHost,
+			dbHostPorts:     dbHostPortsMap,
+			dbTypes:         dbTypesMap,
 			httpProxyName:   httpProxyContainerName,
 			grpcProxyName:   grpcProxyContainerName,
 			redisProxyName:  redisProxyContainerName,
 			appName:         appContainerName,
 			appHostPort:     hostPort,
-			dbVerifyPort:    dbVerifyPort,
 			httpVerifyPort:  httpVerifyPort,
 			grpcVerifyPort:  grpcVerifyPort,
 			redisVerifyPort: redisVerifyPort,
-			dbType:             dbTypeForPersistence,
-			dbHostPort:         dbHostPortForPersistence,
-			pgContainerName:    func() string { if dbTypeForPersistence == "postgresql" { return dbContainerName }; return "" }(),
-			mongoContainerName: func() string { if dbTypeForPersistence == "mongodb" { return dbContainerName }; return "" }(),
 		}
 		r.suite.persistentMu.Unlock()
-		// Flip guards so defers skip container teardown.
-		cleanupPG = false
-		cleanupDB = false
+		// Flip all DB cleanup guards and other guards so defers skip container teardown.
+		for _, g := range dbCleanupGuards {
+			*g = false
+		}
 		cleanupHTTPProxy = false
 		cleanupGRPCProxy = false
 		cleanupRedisProxy = false
@@ -1982,7 +2097,7 @@ func (r *testRunner) runTestPhase(
 	ctx context.Context,
 	spec *types.TestSpec,
 	hostPort string,
-	dbVerifyPort string,
+	dbVerifyPorts []string,
 	httpVerifyPort string,
 	grpcVerifyPort string,
 	redisVerifyPort string,
@@ -1997,8 +2112,8 @@ func (r *testRunner) runTestPhase(
 		defer pollTicker.Stop()
 	kafkaPollLoop:
 		for {
-			if dbVerifyPort != "" {
-				r.collectHits("localhost:" + dbVerifyPort)
+			for _, vp := range dbVerifyPorts {
+				r.collectHits("localhost:" + vp)
 			}
 			if httpVerifyPort != "" {
 				r.collectHits("localhost:" + httpVerifyPort)
@@ -2042,8 +2157,8 @@ func (r *testRunner) runTestPhase(
 			// Collect verify errors from sidecars before reporting the status mismatch —
 			// a VERIFY failure causes the service to receive a proxy error and return a
 			// non-expected status code, so surfacing the VERIFY message is more useful.
-			if dbVerifyPort != "" {
-				r.collectHits("localhost:" + dbVerifyPort)
+			for _, vp := range dbVerifyPorts {
+				r.collectHits("localhost:" + vp)
 			}
 			if httpVerifyPort != "" {
 				r.collectHits("localhost:" + httpVerifyPort)
@@ -2079,8 +2194,8 @@ func (r *testRunner) runTestPhase(
 	}
 
 	// 8. Final Registry Verification
-	if dbVerifyPort != "" {
-		r.collectHits("localhost:" + dbVerifyPort)
+	for _, vp := range dbVerifyPorts {
+		r.collectHits("localhost:" + vp)
 	}
 	if httpVerifyPort != "" {
 		r.collectHits("localhost:" + httpVerifyPort)

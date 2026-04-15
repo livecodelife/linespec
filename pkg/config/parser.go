@@ -93,44 +93,69 @@ func applyDefaults(config *LineSpecConfig) {
 		config.Service.DockerCompose = defaults.Service.DockerCompose
 	}
 
-	// Database defaults
-	if config.Infrastructure.Database && config.Database == nil {
+	// Database defaults — normalise both forms into config.Databases, then keep
+	// config.Database pointing at Databases[0] for backward-compatible runner code.
+
+	// 1. If infrastructure.database is set but no database config provided at all, use framework defaults.
+	if config.Infrastructure.Database && config.Database == nil && len(config.Databases) == 0 {
 		config.Database = defaults.Database
 	}
 
-	if config.Database != nil {
-		if config.Database.Type == "" {
-			config.Database.Type = "mysql"
+	// 2. If the singular `database:` form is set but `databases:` is empty, promote it.
+	if config.Database != nil && len(config.Databases) == 0 {
+		entry := *config.Database
+		if entry.Name == "" {
+			entry.Name = "primary"
 		}
-		if config.Database.Image == "" {
-			switch config.Database.Type {
+		config.Databases = []DatabaseConfig{entry}
+	}
+
+	// 3. Apply per-entry defaults to every entry in Databases.
+	for i := range config.Databases {
+		db := &config.Databases[i]
+		if db.Type == "" {
+			db.Type = "mysql"
+		}
+		if db.Image == "" {
+			switch db.Type {
 			case "mysql":
-				config.Database.Image = "mysql:8.4"
-				if config.Database.Port == 0 {
-					config.Database.Port = 3306
+				db.Image = "mysql:8.4"
+				if db.Port == 0 {
+					db.Port = 3306
 				}
 			case "postgresql":
-				config.Database.Image = "postgres:16-alpine"
-				if config.Database.Port == 0 {
-					config.Database.Port = 5432
+				db.Image = "postgres:16-alpine"
+				if db.Port == 0 {
+					db.Port = 5432
 				}
 			case "mongodb":
-				config.Database.Image = "mongo:7"
-				if config.Database.Port == 0 {
-					config.Database.Port = 27017
+				db.Image = "mongo:7"
+				if db.Port == 0 {
+					db.Port = 27017
 				}
 			}
 		}
-		// Host defaults to "db" for internal container communication
-		if config.Database.Host == "" {
-			config.Database.Host = "db"
+		// Host defaults: single unnamed database keeps "db" for backward compat;
+		// named databases default their host to their name so each gets a unique alias.
+		if db.Host == "" {
+			if db.Name != "" && db.Name != "primary" {
+				db.Host = db.Name
+			} else if len(config.Databases) == 1 {
+				db.Host = "db"
+			} else {
+				db.Host = db.Name
+			}
 		}
-		// Proxy defaults to true for all database types (enables mock interception)
-		// Use proxy: false in .linespec.yml to opt out; mock matching will not work without a proxy
-		if config.Database.Proxy == nil {
+		// Proxy defaults to true for all database types (enables mock interception).
+		if db.Proxy == nil {
 			defaultProxy := true
-			config.Database.Proxy = &defaultProxy
+			db.Proxy = &defaultProxy
 		}
+	}
+
+	// 4. Keep config.Database pointing at Databases[0] so existing code that reads it still works.
+	if len(config.Databases) > 0 {
+		config.Database = &config.Databases[0]
 	}
 
 	// Container naming defaults
@@ -218,20 +243,37 @@ func validate(config *LineSpecConfig) error {
 		return fmt.Errorf("service.port is required")
 	}
 	if config.Infrastructure.Database {
-		if config.Database == nil {
+		if len(config.Databases) == 0 {
 			return fmt.Errorf("database configuration required when infrastructure.database is true")
 		}
-		if config.Database.Type == "" {
-			return fmt.Errorf("database.type is required")
-		}
-		if config.Database.Database == "" {
-			return fmt.Errorf("database.database is required; set it explicitly in .linespec.yml")
-		}
-		if config.Database.Username == "" {
-			return fmt.Errorf("database.username is required; set it explicitly in .linespec.yml")
-		}
-		if config.Database.Password == "" {
-			return fmt.Errorf("database.password is required; set it explicitly in .linespec.yml")
+		// Validate each database entry.
+		seenHosts := make(map[string]string)
+		for i, db := range config.Databases {
+			label := db.Name
+			if label == "" {
+				label = fmt.Sprintf("databases[%d]", i)
+			}
+			if db.Type == "" {
+				return fmt.Errorf("%s.type is required", label)
+			}
+			if db.Database == "" {
+				return fmt.Errorf("%s.database is required; set it explicitly in .linespec.yml", label)
+			}
+			if db.Username == "" {
+				return fmt.Errorf("%s.username is required; set it explicitly in .linespec.yml", label)
+			}
+			if db.Password == "" {
+				return fmt.Errorf("%s.password is required; set it explicitly in .linespec.yml", label)
+			}
+			// Require name on every entry when there are multiple databases.
+			if len(config.Databases) > 1 && db.Name == "" {
+				return fmt.Errorf("databases[%d].name is required when multiple databases are configured", i)
+			}
+			// Reject duplicate host aliases — each proxy must occupy a unique network alias.
+			if prev, exists := seenHosts[db.Host]; exists {
+				return fmt.Errorf("databases %q and %q share the same host alias %q; each database must have a unique host", prev, label, db.Host)
+			}
+			seenHosts[db.Host] = label
 		}
 	}
 	return nil

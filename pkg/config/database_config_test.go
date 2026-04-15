@@ -27,7 +27,7 @@ database:
   username: myuser
   password: mypass
 `,
-			wantErr: "database.database is required",
+			wantErr: ".database is required",
 		},
 		{
 			name: "missing username",
@@ -42,7 +42,7 @@ database:
   database: mydb
   password: mypass
 `,
-			wantErr: "database.username is required",
+			wantErr: ".username is required",
 		},
 		{
 			name: "missing password",
@@ -57,7 +57,7 @@ database:
   database: mydb
   username: myuser
 `,
-			wantErr: "database.password is required",
+			wantErr: ".password is required",
 		},
 	}
 
