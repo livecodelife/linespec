@@ -1,0 +1,27 @@
+id: prov-2026-c673e4af
+title: Ensure Docker containers are always cleaned up when test run ends
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Fix the test runner so that all Docker containers started during a test run
+  are guaranteed to be removed when the process exits, regardless of whether
+  tests pass, fail, or the user cancels with Ctrl+C. Add SIGINT/SIGTERM signal
+  handling and restructure exit paths so cleanup defers always execute before
+  the process terminates.
+constraints: []
+affected_scope:
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/catalog-linespecs/get_product_success.linespec
+    type: linespec
+  - path: examples/order-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
