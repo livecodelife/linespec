@@ -1130,7 +1130,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 					},
 					PortBindings: map[nat.Port][]nat.PortBinding{
-						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: dbPort}},
+						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic — avoid conflicts with persistent containers
 						nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}}, // Dynamic host port
 					},
 				}, &network.NetworkingConfig{
