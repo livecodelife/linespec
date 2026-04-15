@@ -1,0 +1,9 @@
+{
+  "id": "507f1f77bcf86cd799439011",
+  "name": "Sample Widget",
+  "sku": "SAMPLE-001",
+  "price": 9.99,
+  "stock": 100,
+  "category": "General",
+  "created_at": "2026-01-01T00:00:00Z"
+}
