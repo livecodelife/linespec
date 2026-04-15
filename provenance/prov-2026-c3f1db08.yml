@@ -1,6 +1,6 @@
 id: prov-2026-c3f1db08
 title: Reuse app and proxy containers across tests within a suite
-status: open
+status: implemented
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "Eliminate per-test container startup overhead for HTTP-triggered test suites.
@@ -30,7 +30,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-30cce3ba
-sealed_at_sha: ""
+sealed_at_sha: 1821cc8591b5b47f54695fa3046540baaed780a2
 associated_specs:
   - path: examples/todo-linespecs/create_todo_success.linespec
     type: linespec
