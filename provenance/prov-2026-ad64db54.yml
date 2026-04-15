@@ -1,0 +1,90 @@
+id: prov-2026-ad64db54
+title: Support multiple databases per service in .linespec.yml
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: |
+  A service may depend on more than one database at the same time (e.g. MySQL for
+  relational data and MongoDB for sessions, or PostgreSQL and Redis-backed store).
+  LineSpec currently accepts only a single `database:` block per .linespec.yml, which
+  makes it impossible to proxy both connections in a single test run.
+
+  This record adds a `databases:` list field to LineSpecConfig so that any number of
+  database backends can be declared, each receiving its own real-DB container and proxy
+  sidecar during test execution. The existing `database:` singular form is preserved as
+  a backward-compatible alias and is normalised to a one-element `databases:` list
+  during config loading.
+
+  Design decisions:
+
+  1. CONFIG FORMAT — new `databases:` list alongside existing `database:` (kept for
+     backward compat).  Each entry adds a `name:` field.  The `host:` field (already on
+     DatabaseConfig, defaults to "db") determines the Docker network alias the proxy
+     occupies.  For a named entry the `host:` default becomes the entry's `name`.
+
+  2. NETWORK ALIASES — per database entry, the proxy container gets alias = db.Host,
+     and the real DB container gets alias = "real-" + db.Host.  For single-database
+     configs `host` still defaults to "db", giving aliases "db" (proxy) and "real-db"
+     (real container), identical to today's behaviour.
+
+  3. CONTAINER NAMES — proxy named "proxy-<host>-<specName>"; real DB named
+     "linespec-<type>-<host>-<specName>" (MySQL reuses the shared container).
+
+  4. ENV INJECTION — single-database configs continue to receive the existing env vars
+     (DB_HOST, DATABASE_URL, MONGODB_URI, etc.).  When multiple databases are present,
+     each also receives a prefixed variant keyed by the database name in upper-case:
+     <NAME>_DB_HOST / <NAME>_DATABASE_URL / <NAME>_MONGODB_URI / etc.  The first entry
+     in `databases:` also receives the legacy unprefixed names for backward compat.
+
+  5. DSL CHANNELS — no changes required.  READ:MYSQL / WRITE:POSTGRESQL / READ:MONGODB
+     etc. are already protocol-specific and are sufficient to disambiguate interactions
+     when databases have different types.  Support for two databases of the same type is
+     explicitly out of scope for this record.
+
+  6. SHARED MYSQL INFRA — MySQL uses a shared persistent container across tests.
+     `hasMySQLServices()` and `getSharedDatabaseConfig()` are updated to iterate the
+     `Databases` slice rather than the single `Database` pointer.
+
+  7. MIGRATIONS — the migration container is given env vars for all configured
+     databases, so multi-database services with schema migrations work correctly.
+
+  8. VALIDATION — the validator rejects configs where two database entries share the
+     same `host` value (alias collision), and requires `name:` on every entry when
+     `databases:` is used.
+constraints:
+  - The `database:` singular YAML key must continue to work unchanged; existing
+    .linespec.yml files must not require modification.
+  - When only one database is configured (via either form), all env var names and Docker
+    network aliases must remain identical to pre-change behaviour.
+  - Each database entry must have a unique `host:` value within a single config;
+    the validator must reject configs with duplicate host aliases.
+  - DSL channel syntax (READ:MYSQL, WRITE:POSTGRESQL, etc.) is not modified by this
+    change.  Two databases of the same protocol type are not supported in this record.
+  - Proxy containers and real-DB containers for each database must be started and
+    stopped independently; a failure to start one database must not silently suppress
+    the other.
+  - All four example test suites must pass after the change (make test + example suites).
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/runner/runner.go
+  - LINESPEC.md
+  - examples/multi-db-linespecs/**
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-007
+  - prov-2026-8227b384
+  - prov-2026-c3f1db08
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - beta
+  - multi-database
+  - config
+  - runner

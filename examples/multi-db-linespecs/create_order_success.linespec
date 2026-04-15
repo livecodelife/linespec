@@ -1,0 +1,16 @@
+TEST create_order_success
+
+RECEIVE HTTP:POST /orders
+WITH {{payloads/create_order_request.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{payloads/order_insert.yaml}}
+
+EXPECT WRITE:MONGODB order_events
+WITH {{payloads/order_event.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/created_order.yaml}}
+NOISE
+  body.id
+  body.created_at
