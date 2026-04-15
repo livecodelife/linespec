@@ -1,6 +1,6 @@
 id: prov-2026-ad64db54
 title: Support multiple databases per service in .linespec.yml
-status: open
+status: implemented
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: |
@@ -78,7 +78,7 @@ related:
   - prov-2026-007
   - prov-2026-8227b384
   - prov-2026-c3f1db08
-sealed_at_sha: ""
+sealed_at_sha: 72f8f646da143066b10b2fa37897d9b5e527ced9
 associated_specs:
   - path: examples/multi-db-linespecs/create_order_success.linespec
     type: linespec
