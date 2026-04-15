@@ -6,4 +6,4 @@ EXPECT READ:MONGODB products
 RETURNS {{payloads/products_list.json}}
 
 RESPOND HTTP:200
-WITH {{payloads/products_list.json}}
+WITH {{payloads/products_list_response.json}}

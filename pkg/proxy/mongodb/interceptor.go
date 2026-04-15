@@ -341,10 +341,22 @@ func jsonToBSONDoc(raw []byte) (bson.D, error) {
 }
 
 // mapToBSONDoc converts a map[string]interface{} to bson.D.
+// It maps JSON "id" fields that look like 24-char hex ObjectIDs to BSON "_id: ObjectID",
+// so payloads written in JSON API format work correctly with the MongoDB wire protocol.
 func mapToBSONDoc(m map[string]interface{}) bson.D {
 	doc := make(bson.D, 0, len(m))
 	for k, v := range m {
-		doc = append(doc, bson.E{Key: k, Value: normaliseValue(v)})
+		key := k
+		val := normaliseValue(v)
+		if k == "id" {
+			if s, ok := v.(string); ok && len(s) == 24 {
+				if oid, err := bson.ObjectIDFromHex(s); err == nil {
+					key = "_id"
+					val = oid
+				}
+			}
+		}
+		doc = append(doc, bson.E{Key: key, Value: val})
 	}
 	return doc
 }
