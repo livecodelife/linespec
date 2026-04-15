@@ -1,6 +1,6 @@
 id: prov-2026-44f64a16
 title: Fix PostgreSQL proxy port conflict with persistent containers
-status: open
+status: implemented
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "When persistent containers are kept alive across tests, the PostgreSQL proxy
@@ -17,7 +17,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 06a4d6599046800f95d90ebc69a1a55b8d94e6b5
 associated_specs:
   - path: examples/notification-linespecs/process_todo_created_event.linespec
     type: linespec
