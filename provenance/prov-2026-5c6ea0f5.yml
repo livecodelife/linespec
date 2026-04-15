@@ -1,6 +1,6 @@
 id: prov-2026-5c6ea0f5
 title: Rebuild linespec-beta binary with multi-database support
-status: open
+status: implemented
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -21,7 +21,7 @@ related:
   - prov-2026-ad64db54
   - prov-2026-91ed882c
   - prov-2026-c9e62857
-sealed_at_sha: ""
+sealed_at_sha: 03b040c285d37b04677f4ab43ef6c87e0c0f0147
 associated_specs:
   - path: examples/multi-db-linespecs/create_order_success.linespec
     type: linespec
