@@ -1,0 +1,33 @@
+id: prov-2026-c9e62857
+title: Rebuild linespec-beta binary for v1.4.8 release
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Rebuild the linespec-beta binary to include all changes since the last committed
+  binary: MongoDB wire protocol proxy, PostgreSQL proxy port conflict fix, Kafka
+  consumer test hang fix, and container reuse optimizations. Tag as v1.4.8-beta.
+constraints:
+  - Binary must be built with `make build-beta` (beta build tag)
+  - All example suites must pass before committing
+affected_scope:
+  - linespec-beta
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-732c4ad5
+  - prov-2026-36e13aa2
+  - prov-2026-44f64a16
+  - prov-2026-c3f1db08
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/catalog-linespecs/get_product_success.linespec
+    type: linespec
+  - path: examples/order-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - beta
