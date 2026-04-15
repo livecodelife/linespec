@@ -223,7 +223,8 @@ func (r *MockRegistry) GetTables() []string {
 		// Check if any mock for this key is a database operation
 		for _, mock := range mocks {
 			if mock.Channel == types.ReadMySQL || mock.Channel == types.WriteMySQL ||
-				mock.Channel == types.ReadPostgreSQL || mock.Channel == types.WritePostgreSQL {
+				mock.Channel == types.ReadPostgreSQL || mock.Channel == types.WritePostgreSQL ||
+				mock.Channel == types.ReadMongoDB || mock.Channel == types.WriteMongoDB {
 				tableSet[key] = true
 				break
 			}
@@ -298,6 +299,12 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
 				return mock, true
 			}
+			if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
+				return mock, true
+			}
+			if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
+				return mock, true
+			}
 		} else {
 			return mock, true
 		}
@@ -368,6 +375,14 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 				return mock, true
 			}
 			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
+				r.hits[mock]++
+				return mock, true
+			}
+			if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
+				r.hits[mock]++
+				return mock, true
+			}
+			if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
 				r.hits[mock]++
 				return mock, true
 			}
@@ -510,13 +525,17 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 					(mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) &&
 					strings.Contains(q, keyUpper) {
 					r.hits[mock]++
+				} else if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
+					r.hits[mock]++
+				} else if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
+					r.hits[mock]++
 				}
 			} else {
 				// Empty query: only fire for non-SQL channel types (e.g. Kafka events).
-				// SQL-type negative mocks require a query to match against; firing them
-				// on an empty-query call would produce spurious EXPECT_NOT violations.
+				// SQL-type and MongoDB negative mocks require a command name to match against.
 				if mock.Channel != types.ReadMySQL && mock.Channel != types.ReadPostgreSQL &&
-					mock.Channel != types.WriteMySQL && mock.Channel != types.WritePostgreSQL {
+					mock.Channel != types.WriteMySQL && mock.Channel != types.WritePostgreSQL &&
+					mock.Channel != types.ReadMongoDB && mock.Channel != types.WriteMongoDB {
 					r.hits[mock]++
 				}
 			}
@@ -788,4 +807,22 @@ func (r *MockRegistry) VerifyPassthroughs(strict bool) error {
 		return fmt.Errorf("%d request(s) bypassed the mock layer (strict_passthrough is enabled); see warnings above", len(r.passthroughs))
 	}
 	return nil
+}
+
+// isMongoReadCommand reports whether the command name (already uppercased) is a MongoDB read operation.
+func isMongoReadCommand(cmd string) bool {
+	switch cmd {
+	case "FIND", "AGGREGATE", "COUNT", "DISTINCT", "LISTCOLLECTIONS", "LISTINDEXES":
+		return true
+	}
+	return false
+}
+
+// isMongoWriteCommand reports whether the command name (already uppercased) is a MongoDB write operation.
+func isMongoWriteCommand(cmd string) bool {
+	switch cmd {
+	case "INSERT", "UPDATE", "DELETE", "FINDANDMODIFY", "CREATEINDEXES", "DROP":
+		return true
+	}
+	return false
 }

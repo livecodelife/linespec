@@ -409,6 +409,20 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		}, nil
 	}
 
+	if channelPart == "WRITE:MONGODB" {
+		return &types.ExpectStatement{
+			Channel: types.WriteMongoDB,
+			Table:   rest,
+		}, nil
+	}
+
+	if channelPart == "READ:MONGODB" {
+		return &types.ExpectStatement{
+			Channel: types.ReadMongoDB,
+			Table:   rest,
+		}, nil
+	}
+
 	// Redis: READ:REDIS <command> <key> or WRITE:REDIS <command> <key>
 	if channelPart == "READ:REDIS" || channelPart == "WRITE:REDIS" {
 		channel := types.ReadRedis

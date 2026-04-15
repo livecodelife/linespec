@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +30,9 @@ import (
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/schema"
 	"github.com/livecodelife/linespec/pkg/types"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	mongooptions "go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -47,9 +51,10 @@ type persistentServiceContainers struct {
 	httpVerifyPort string
 	grpcVerifyPort string
 	redisVerifyPort string
-	dbType         string // "mysql" or "postgresql"
-	dbHostPort     string // host:port of the DB container (for truncation)
-	pgContainerName string // PostgreSQL container name (kept alive)
+	dbType              string // "mysql", "postgresql", or "mongodb"
+	dbHostPort          string // host:port of the DB container (for truncation)
+	pgContainerName     string // PostgreSQL container name (kept alive)
+	mongoContainerName  string // MongoDB container name (kept alive)
 }
 
 type TestSuite struct {
@@ -660,6 +665,10 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 			if err := r.suite.truncatePostgreSQLTables(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
 				logger.Debug("Failed to truncate PostgreSQL tables: %v", err)
 			}
+		case "mongodb":
+			if err := r.suite.truncateMongoDBCollections(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
+				logger.Debug("Failed to truncate MongoDB collections: %v", err)
+			}
 		}
 	}
 	return nil
@@ -861,7 +870,7 @@ func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	s.persistentMu.Lock()
 	var persistentNames []string
 	for _, pc := range s.persistentContainers {
-		persistentNames = append(persistentNames, pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName)
+		persistentNames = append(persistentNames, pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName, pc.mongoContainerName)
 	}
 	s.persistentContainers = make(map[string]*persistentServiceContainers)
 	s.persistentMu.Unlock()
@@ -990,7 +999,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			logger.Debug("Stopping persistent containers before non-reusable test for %s", serviceKey)
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
 			var stopWg sync.WaitGroup
-			for _, name := range []string{pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName} {
+			for _, name := range []string{pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName, pc.mongoContainerName} {
 				if name == "" {
 					continue
 				}
@@ -1250,6 +1259,119 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			} else {
 				logger.Info("MySQL proxy disabled (proxy: false), mock matching will not work for database interactions")
 			}
+		case "mongodb":
+			logger.Debug("Starting MongoDB database and proxy")
+			dbContainerName = "linespec-mongo-" + spec.Name
+			db := serviceConfig.Database
+
+			// Mount init script if provided
+			var mongoBinds []string
+			if db.InitScript != "" {
+				initScriptPath := filepath.Join(serviceConfig.BaseDir, db.InitScript)
+				if _, err := os.Stat(initScriptPath); err == nil {
+					initScriptName := filepath.Base(initScriptPath)
+					mongoBinds = []string{fmt.Sprintf("%s:/docker-entrypoint-initdb.d/%s", initScriptPath, initScriptName)}
+					logger.Debug("Mounting MongoDB init script: %s", initScriptPath)
+				}
+			}
+
+			mongoEnv := []string{}
+			if db.Username != "" && db.Password != "" {
+				mongoEnv = append(mongoEnv,
+					fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", db.Username),
+					fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", db.Password),
+				)
+			}
+			if db.Database != "" {
+				mongoEnv = append(mongoEnv, fmt.Sprintf("MONGO_INITDB_DATABASE=%s", db.Database))
+			}
+
+			_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+				Image: db.Image,
+				Env:   mongoEnv,
+			}, &container.HostConfig{
+				Binds: mongoBinds,
+				PortBindings: map[nat.Port][]nat.PortBinding{
+					nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+				},
+			}, &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{r.suite.containerNaming.NetworkAlias}}},
+			}, dbContainerName)
+			if err != nil {
+				return fmt.Errorf("failed to start MongoDB container: %w", err)
+			}
+			defer func() {
+				if !cleanupPG {
+					return
+				}
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
+			}()
+
+			logger.Debug("Waiting for MongoDB to be ready")
+			mongoHostPort, err := r.suite.waitForContainerPort(ctx, dbContainerName, dbPort+"/tcp", 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to get MongoDB host port: %w", err)
+			}
+			if err := r.suite.waitForMongoDB(ctx, "localhost", mongoHostPort, db.Username, db.Password, db.Database, 45*time.Second); err != nil {
+				return fmt.Errorf("MongoDB not accepting connections: %w", err)
+			}
+			logger.Debug("MongoDB is ready and accepting connections on :%s", mongoHostPort)
+			dbTypeForPersistence = "mongodb"
+			dbHostPortForPersistence = "localhost:" + mongoHostPort
+
+			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
+				mongoProxyCmd := []string{"proxy", "mongodb", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+				if logger.IsDebug() {
+					mongoProxyCmd = append(mongoProxyCmd, "--debug")
+				}
+
+				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+					Image: proxyImage,
+					Cmd:   mongoProxyCmd,
+					ExposedPorts: map[nat.Port]struct{}{
+						nat.Port(dbPort + "/tcp"): {},
+						nat.Port("8081/tcp"):      {},
+					},
+				}, &container.HostConfig{
+					Binds: []string{
+						r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+						r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+					},
+					PortBindings: map[nat.Port][]nat.PortBinding{
+						nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+						nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}},
+					},
+				}, &network.NetworkingConfig{
+					EndpointsConfig: map[string]*network.EndpointSettings{r.suite.networkName: {Aliases: []string{"db"}}},
+				}, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+				if err != nil {
+					return fmt.Errorf("failed to start MongoDB proxy: %w", err)
+				}
+
+				logger.Debug("MongoDB proxy started")
+
+				defer func() {
+					if !cleanupDB {
+						return
+					}
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
+				}()
+
+				if logger.IsDebug() {
+					go func() {
+						logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+						defer logCancel()
+						_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}), os.Stdout, os.Stderr)
+					}()
+				}
+			} else {
+				logger.Info("MongoDB proxy disabled (proxy: false), mock matching will not work for database interactions")
+			}
+
 		default:
 			logger.Debug("DEBUG: Unknown dbType '%s', no proxy started", dbType)
 		}
@@ -1636,6 +1758,19 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				logger.Debug("PostgreSQL proxy enabled: app will connect to 'db' (proxy)")
 			}
 			envMap["DATABASE_URL"] = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", db.Username, db.Password, dbHost, db.Port, db.Database)
+		case "mongodb":
+			dbHost := "db"
+			if db.Proxy == nil || !*db.Proxy {
+				dbHost = r.suite.containerNaming.NetworkAlias
+				logger.Debug("MongoDB proxy disabled: app will connect directly to '%s'", dbHost)
+			} else {
+				logger.Debug("MongoDB proxy enabled: app will connect to 'db' (proxy)")
+			}
+			if db.Username != "" && db.Password != "" {
+				envMap["MONGODB_URI"] = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin", db.Username, db.Password, dbHost, db.Port, db.Database)
+			} else {
+				envMap["MONGODB_URI"] = fmt.Sprintf("mongodb://%s:%d/%s", dbHost, db.Port, db.Database)
+			}
 		}
 	}
 
@@ -1822,9 +1957,10 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			httpVerifyPort:  httpVerifyPort,
 			grpcVerifyPort:  grpcVerifyPort,
 			redisVerifyPort: redisVerifyPort,
-			dbType:          dbTypeForPersistence,
-			dbHostPort:      dbHostPortForPersistence,
-			pgContainerName: dbContainerName,
+			dbType:             dbTypeForPersistence,
+			dbHostPort:         dbHostPortForPersistence,
+			pgContainerName:    func() string { if dbTypeForPersistence == "postgresql" { return dbContainerName }; return "" }(),
+			mongoContainerName: func() string { if dbTypeForPersistence == "mongodb" { return dbContainerName }; return "" }(),
 		}
 		r.suite.persistentMu.Unlock()
 		// Flip guards so defers skip container teardown.
@@ -2314,6 +2450,76 @@ func (s *TestSuite) waitForPostgreSQL(ctx context.Context, host, port, user, pas
 		attempt++
 	}
 	return fmt.Errorf("timeout waiting for PostgreSQL at %s:%s", host, port)
+}
+
+// buildMongoURI constructs a MongoDB connection URI from components.
+func buildMongoURI(host, port, user, password, database string) string {
+	uri := "mongodb://"
+	if user != "" && password != "" {
+		uri += user + ":" + password + "@"
+	}
+	uri += host + ":" + port + "/" + database
+	if user != "" {
+		uri += "?authSource=admin"
+	}
+	return uri
+}
+
+// waitForMongoDB polls until MongoDB is accepting connections using a TCP dial.
+func (s *TestSuite) waitForMongoDB(ctx context.Context, host, port, user, password, database string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	addr := host + ":" + port
+	var attempt int
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(expBackoff(attempt, 200*time.Millisecond, 3*time.Second)):
+		}
+		attempt++
+	}
+	return fmt.Errorf("timeout waiting for MongoDB at %s:%s", host, port)
+}
+
+// truncateMongoDBCollections drops all non-system collections in the service database.
+func (s *TestSuite) truncateMongoDBCollections(ctx context.Context, dbConfig *config.DatabaseConfig, hostPort string) error {
+	// Split hostPort into host and port components for URI construction
+	host := hostPort
+	port := ""
+	if h, p, err := net.SplitHostPort(hostPort); err == nil {
+		host = h
+		port = p
+	}
+	uri := buildMongoURI(host, port, dbConfig.Username, dbConfig.Password, dbConfig.Database)
+
+	mongoCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(mongooptions.Client().ApplyURI(uri))
+	if err != nil {
+		return fmt.Errorf("failed to connect to MongoDB for truncation: %w", err)
+	}
+	defer client.Disconnect(context.Background()) //nolint:errcheck
+
+	db := client.Database(dbConfig.Database)
+	collections, err := db.ListCollectionNames(mongoCtx, bson.D{})
+	if err != nil {
+		return fmt.Errorf("failed to list MongoDB collections: %w", err)
+	}
+	for _, coll := range collections {
+		if len(coll) > 7 && coll[:7] == "system." {
+			continue
+		}
+		if err := db.Collection(coll).Drop(mongoCtx); err != nil {
+			logger.Debug("Failed to drop MongoDB collection %s: %v", coll, err)
+		}
+	}
+	return nil
 }
 
 // Deprecated: Use NewTestSuite instead
