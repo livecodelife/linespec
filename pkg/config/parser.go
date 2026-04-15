@@ -114,6 +114,11 @@ func applyDefaults(config *LineSpecConfig) {
 				if config.Database.Port == 0 {
 					config.Database.Port = 5432
 				}
+			case "mongodb":
+				config.Database.Image = "mongo:7"
+				if config.Database.Port == 0 {
+					config.Database.Port = 27017
+				}
 			}
 		}
 		// Host defaults to "db" for internal container communication

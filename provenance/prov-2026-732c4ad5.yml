@@ -33,6 +33,8 @@ affected_scope:
   - pkg/config/parser.go
   - pkg/runner/runner.go
   - cmd/linespec/main_beta.go
+  - go.mod
+  - go.sum
   - examples/catalog-service/**
   - examples/catalog-linespecs/**
 forbidden_scope:

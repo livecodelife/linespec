@@ -15,6 +15,8 @@ const (
 	GRPC            ExpectChannel = "GRPC"
 	ReadRedis       ExpectChannel = "READ_REDIS"
 	WriteRedis      ExpectChannel = "WRITE_REDIS"
+	ReadMongoDB     ExpectChannel = "READ_MONGODB"
+	WriteMongoDB    ExpectChannel = "WRITE_MONGODB"
 )
 
 // VerifyRule defines a verification rule for any intercepted data

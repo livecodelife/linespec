@@ -23,6 +23,7 @@ import (
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
 	"github.com/livecodelife/linespec/pkg/proxy/kafka"
+	mongodbproxy "github.com/livecodelife/linespec/pkg/proxy/mongodb"
 	"github.com/livecodelife/linespec/pkg/proxy/mysql"
 	"github.com/livecodelife/linespec/pkg/proxy/postgresql"
 	redisproxy "github.com/livecodelife/linespec/pkg/proxy/redis"
@@ -397,6 +398,9 @@ func runProxy() {
 		proxyErr = p.Start(ctx)
 	case "redis":
 		p := redisproxy.NewInterceptor(addr, reg)
+		proxyErr = p.Start(ctx)
+	case "mongodb":
+		p := mongodbproxy.NewInterceptor(addr, upstream, reg)
 		proxyErr = p.Start(ctx)
 	default:
 		logger.Error("Unknown proxy type: %s", pType)
