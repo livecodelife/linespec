@@ -975,6 +975,34 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				r.suite.persistentMu.Unlock()
 			}
 		}
+	} else {
+		// Non-reusable test (e.g. Kafka consumer): stop any persistent containers for this
+		// service that are still alive. They hold the same network aliases ("db", "grpc-proxy",
+		// etc.) and Docker would round-robin connections between them and the fresh containers
+		// we're about to start, causing the new app to talk to the wrong proxy.
+		r.suite.persistentMu.Lock()
+		pc := r.suite.persistentContainers[serviceKey]
+		if pc != nil {
+			delete(r.suite.persistentContainers, serviceKey)
+		}
+		r.suite.persistentMu.Unlock()
+		if pc != nil {
+			logger.Debug("Stopping persistent containers before non-reusable test for %s", serviceKey)
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+			var stopWg sync.WaitGroup
+			for _, name := range []string{pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName} {
+				if name == "" {
+					continue
+				}
+				stopWg.Add(1)
+				go func(n string) {
+					defer stopWg.Done()
+					_ = r.suite.orch.StopAndRemoveContainer(stopCtx, n)
+				}(name)
+			}
+			stopWg.Wait()
+			stopCancel()
+		}
 	}
 
 	// Create temp directory for this test run
