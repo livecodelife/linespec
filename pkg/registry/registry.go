@@ -59,6 +59,48 @@ func (r *MockRegistry) ResetHits() {
 	r.hits = make(map[*types.ExpectStatement]int)
 }
 
+// ClearState resets hits, passthroughs, and verifyErrors without touching mocks.
+// Used after LoadFromBytes/LoadFromFile when hot-reloading between test runs.
+func (r *MockRegistry) ClearState() {
+	r.Lock()
+	defer r.Unlock()
+	r.hits = make(map[*types.ExpectStatement]int)
+	r.passthroughs = make([]string, 0)
+	r.verifyErrors = make([]string, 0)
+}
+
+// ToBytes serialises the registry mocks and seeds to JSON.
+func (r *MockRegistry) ToBytes() ([]byte, error) {
+	r.RLock()
+	defer r.RUnlock()
+	return json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds})
+}
+
+// LoadFromBytes replaces the registry contents from JSON bytes (same format as SaveToFile).
+func (r *MockRegistry) LoadFromBytes(data []byte) error {
+	r.Lock()
+	defer r.Unlock()
+	var rf registryFile
+	if err := json.Unmarshal(data, &rf); err != nil {
+		return err
+	}
+	if rf.Mocks != nil {
+		r.mocks = rf.Mocks
+	} else {
+		if err := json.Unmarshal(data, &r.mocks); err != nil {
+			return err
+		}
+	}
+	if rf.Seeds != nil {
+		r.seeds = rf.Seeds
+	}
+	r.orderedMocks = make([]*types.ExpectStatement, 0)
+	for _, mocksList := range r.mocks {
+		r.orderedMocks = append(r.orderedMocks, mocksList...)
+	}
+	return nil
+}
+
 // RecordPassthrough records that a request bypassed the mock layer (no matching mock found).
 // description should be a short human-readable string identifying the request, e.g. "SELECT users".
 func (r *MockRegistry) RecordPassthrough(description string) {

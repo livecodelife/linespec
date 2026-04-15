@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -303,9 +304,10 @@ func runProxy() {
 		logger.Debug("Registry file size: %d bytes", len(data))
 	}
 
-	// Start a sidecar HTTP server for verification
-	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort}
-	http.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
+	// Start a sidecar HTTP server for verification and registry hot-reload
+	mux := http.NewServeMux()
+	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort, Handler: mux}
+	mux.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
 		resp := struct {
 			Hits         map[string]int `json:"hits"`
 			Passthroughs []string       `json:"passthroughs"`
@@ -316,6 +318,27 @@ func runProxy() {
 			VerifyErrors: reg.GetVerifyErrors(),
 		}
 		json.NewEncoder(w).Encode(resp)
+	})
+	// /reload-registry accepts a POST with the new registry JSON in the body.
+	// It replaces the proxy's in-memory registry and clears all state counters,
+	// allowing the same proxy container to be reused across multiple test runs.
+	mux.HandleFunc("/reload-registry", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := reg.LoadFromBytes(body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		reg.ClearState()
+		logger.Debug("Registry hot-reloaded (%d bytes)", len(body))
+		w.WriteHeader(http.StatusOK)
 	})
 
 	go func() {

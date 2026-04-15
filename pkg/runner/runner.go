@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -33,6 +34,24 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// persistentServiceContainers holds references to containers that are kept alive
+// across tests within a suite, avoiding per-test startup overhead.
+type persistentServiceContainers struct {
+	dbProxyName    string
+	httpProxyName  string
+	grpcProxyName  string
+	redisProxyName string
+	appName        string
+	appHostPort    string
+	dbVerifyPort   string
+	httpVerifyPort string
+	grpcVerifyPort string
+	redisVerifyPort string
+	dbType         string // "mysql" or "postgresql"
+	dbHostPort     string // host:port of the DB container (for truncation)
+	pgContainerName string // PostgreSQL container name (kept alive)
+}
+
 type TestSuite struct {
 	orch            *docker.DockerOrchestrator
 	networkName     string
@@ -44,6 +63,8 @@ type TestSuite struct {
 	defaultDBConfig *config.DatabaseConfig            // Default database configuration for shared infrastructure
 	containerNaming    *config.ContainerNaming           // Container naming configuration
 	sharedSchemaBase64 string                           // Compact base64 JSON schema passed to MySQL proxies via --schema-data
+	persistentContainers map[string]*persistentServiceContainers
+	persistentMu         sync.Mutex
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -73,12 +94,13 @@ func NewTestSuite() (*TestSuite, error) {
 	}
 
 	return &TestSuite{
-		orch:            orch,
-		networkName:     containerNaming.NetworkName,
-		cwd:             cwd,
-		tempDir:         tempDir,
-		serviceConfigs:  make(map[string]*config.LineSpecConfig),
-		containerNaming: containerNaming,
+		orch:                 orch,
+		networkName:          containerNaming.NetworkName,
+		cwd:                  cwd,
+		tempDir:              tempDir,
+		serviceConfigs:       make(map[string]*config.LineSpecConfig),
+		containerNaming:      containerNaming,
+		persistentContainers: make(map[string]*persistentServiceContainers),
 	}, nil
 }
 
@@ -482,6 +504,178 @@ func (s *TestSuite) saveSchemaCache(path, hash string, sc SchemaCache) {
 	logger.Debug("Schema cache written to %s", path)
 }
 
+// persistenceKey returns a stable key for a service config used to look up persistent containers.
+func persistenceKey(serviceConfig *config.LineSpecConfig) string {
+	return serviceConfig.BaseDir
+}
+
+// canUsePersistentContainers returns true when the suite can keep containers alive across
+// tests for this spec. Kafka consumer tests are excluded because their trigger mechanism
+// (seeding + polling) requires a fresh interceptor per test.
+func canUsePersistentContainers(spec *types.TestSpec) bool {
+	return spec.Receive.Channel != types.Event
+}
+
+// reloadProxy POSTs registry bytes to a proxy sidecar's /reload-registry endpoint.
+func (r *testRunner) reloadProxy(ctx context.Context, sidecarAddr string, regBytes []byte) error {
+	url := "http://" + sidecarAddr + "/reload-registry"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(regBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("reload-registry request failed: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("reload-registry returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// truncateMySQLTables truncates all user tables in the shared MySQL database,
+// excluding schema_migrations, to reset data state between tests.
+func (s *TestSuite) truncateMySQLTables(ctx context.Context, dbConfig *config.DatabaseConfig, hostPort string) error {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
+		dbConfig.Username, dbConfig.Password, hostPort, dbConfig.Database)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to open MySQL for truncation: %w", err)
+	}
+	defer db.Close()
+
+	schemaDiscovery := &config.SchemaDiscoveryConfig{
+		Mode:          "auto",
+		ExcludeTables: []string{"schema_migrations"},
+	}
+	tables, err := s.discoverTables(ctx, dbConfig, schemaDiscovery)
+	if err != nil {
+		return fmt.Errorf("failed to discover tables for truncation: %w", err)
+	}
+	if len(tables) == 0 {
+		return nil
+	}
+
+	if _, err := db.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
+		return err
+	}
+	for _, table := range tables {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE `%s`", table)); err != nil {
+			logger.Debug("Failed to truncate table %s: %v", table, err)
+		}
+	}
+	_, err = db.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1")
+	return err
+}
+
+// truncatePostgreSQLTables truncates all user tables in the given PostgreSQL database,
+// excluding schema_migrations, using CASCADE to handle foreign keys.
+func (s *TestSuite) truncatePostgreSQLTables(ctx context.Context, dbConfig *config.DatabaseConfig, hostPort string) error {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
+		dbConfig.Username, dbConfig.Password, hostPort, dbConfig.Database)
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to open PostgreSQL for truncation: %w", err)
+	}
+	defer db.Close()
+
+	rows, err := db.QueryContext(ctx,
+		"SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations')")
+	if err != nil {
+		return fmt.Errorf("failed to list PostgreSQL tables: %w", err)
+	}
+	defer rows.Close()
+	var tables []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err == nil {
+			tables = append(tables, t)
+		}
+	}
+	if len(tables) == 0 {
+		return nil
+	}
+	for _, table := range tables {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table)); err != nil {
+			logger.Debug("Failed to truncate PostgreSQL table %s: %v", table, err)
+		}
+	}
+	return nil
+}
+
+// prepareForReuse reloads registries on all running proxy sidecars and truncates
+// the database, resetting state so the persistent containers are clean for the next test.
+func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceContainers, serviceConfig *config.LineSpecConfig) error {
+	regBytes, err := r.registry.ToBytes()
+	if err != nil {
+		return fmt.Errorf("failed to serialise registry: %w", err)
+	}
+
+	// Reload proxy registries in parallel
+	type reloadTarget struct {
+		addr string
+		name string
+	}
+	var targets []reloadTarget
+	if pc.dbVerifyPort != "" {
+		targets = append(targets, reloadTarget{"localhost:" + pc.dbVerifyPort, "db proxy"})
+	}
+	if pc.httpVerifyPort != "" {
+		targets = append(targets, reloadTarget{"localhost:" + pc.httpVerifyPort, "HTTP proxy"})
+	}
+	if pc.grpcVerifyPort != "" {
+		targets = append(targets, reloadTarget{"localhost:" + pc.grpcVerifyPort, "gRPC proxy"})
+	}
+	if pc.redisVerifyPort != "" {
+		targets = append(targets, reloadTarget{"localhost:" + pc.redisVerifyPort, "Redis proxy"})
+	}
+
+	reloadErrs := make([]error, len(targets))
+	var wg sync.WaitGroup
+	for i, t := range targets {
+		wg.Add(1)
+		go func(idx int, tgt reloadTarget) {
+			defer wg.Done()
+			reloadErrs[idx] = r.reloadProxy(ctx, tgt.addr, regBytes)
+		}(i, t)
+	}
+	wg.Wait()
+	for i, err := range reloadErrs {
+		if err != nil {
+			return fmt.Errorf("failed to reload %s: %w", targets[i].name, err)
+		}
+	}
+
+	// Truncate database
+	if serviceConfig.Database != nil {
+		switch pc.dbType {
+		case "mysql":
+			if err := r.suite.truncateMySQLTables(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
+				logger.Debug("Failed to truncate MySQL tables: %v", err)
+			}
+		case "postgresql":
+			if err := r.suite.truncatePostgreSQLTables(ctx, serviceConfig.Database, pc.dbHostPort); err != nil {
+				logger.Debug("Failed to truncate PostgreSQL tables: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+// isContainerHealthy returns true if the app container responds to its health endpoint.
+func (s *TestSuite) isContainerHealthy(healthURL string) bool {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(healthURL)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode < 500
+}
+
 // runMigrationsForConfig runs migrations for a service based on its framework config
 func (s *TestSuite) runMigrationsForConfig(ctx context.Context, cfg *config.LineSpecConfig, serviceName, serviceDir string) error {
 	framework := cfg.Service.Framework
@@ -662,6 +856,28 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}))
 	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetDatabaseContainer(config.ContainerNameParams{}))
+
+	// Stop all persistent containers (app + proxies kept alive across tests)
+	s.persistentMu.Lock()
+	var persistentNames []string
+	for _, pc := range s.persistentContainers {
+		persistentNames = append(persistentNames, pc.appName, pc.dbProxyName, pc.httpProxyName, pc.grpcProxyName, pc.redisProxyName, pc.pgContainerName)
+	}
+	s.persistentContainers = make(map[string]*persistentServiceContainers)
+	s.persistentMu.Unlock()
+	var stopWg sync.WaitGroup
+	for _, name := range persistentNames {
+		if name == "" {
+			continue
+		}
+		stopWg.Add(1)
+		go func(n string) {
+			defer stopWg.Done()
+			_ = s.orch.StopAndRemoveContainer(ctx, n)
+		}(name)
+	}
+	stopWg.Wait()
+
 	_ = s.orch.RemoveNetwork(ctx, s.networkName)
 
 	// Note: We don't clean up tempDir here - it's needed for shared schema file
@@ -733,6 +949,34 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		r.registry.SeedTopic(spec.Receive.Topic, seedBytes)
 	}
 
+	// Container persistence: if eligible and we have healthy persistent containers, skip setup.
+	persist := canUsePersistentContainers(spec)
+	serviceKey := persistenceKey(serviceConfig)
+	if persist {
+		r.suite.persistentMu.Lock()
+		pc := r.suite.persistentContainers[serviceKey]
+		r.suite.persistentMu.Unlock()
+		if pc != nil {
+			healthURL := fmt.Sprintf("http://localhost:%s%s", pc.appHostPort, serviceConfig.Service.HealthEndpoint)
+			if r.suite.isContainerHealthy(healthURL) {
+				logger.Debug("Reusing persistent containers for %s", serviceKey)
+				if err := r.prepareForReuse(ctx, pc, serviceConfig); err != nil {
+					logger.Debug("prepareForReuse failed, falling back to fresh start: %v", err)
+					r.suite.persistentMu.Lock()
+					delete(r.suite.persistentContainers, serviceKey)
+					r.suite.persistentMu.Unlock()
+				} else {
+					return r.runTestPhase(ctx, spec, pc.appHostPort, pc.dbVerifyPort, pc.httpVerifyPort, pc.grpcVerifyPort, pc.redisVerifyPort)
+				}
+			} else {
+				logger.Debug("Persistent app container unhealthy, falling back to fresh start")
+				r.suite.persistentMu.Lock()
+				delete(r.suite.persistentContainers, serviceKey)
+				r.suite.persistentMu.Unlock()
+			}
+		}
+	}
+
 	// Create temp directory for this test run
 	tempDir, err := os.MkdirTemp("", "linespec-*")
 	if err != nil {
@@ -763,6 +1007,19 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	cleanupWg.Wait()
 	cleanupCancel()
+
+	// Cleanup guards: flipped to false at end of run() to keep containers alive for reuse.
+	cleanupPG := true
+	cleanupDB := true
+	cleanupHTTPProxy := true
+	cleanupGRPCProxy := true
+	cleanupRedisProxy := true
+	cleanupApp := true
+	persistSetupComplete := false
+
+	// Track DB host port and type for persistence registration.
+	var dbHostPortForPersistence string
+	var dbTypeForPersistence string
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
 	if serviceConfig.Service.ServiceDir != "" {
@@ -830,6 +1087,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				return fmt.Errorf("failed to start PostgreSQL container: %w", err)
 			}
 			defer func() {
+				if !cleanupPG {
+					return
+				}
 				cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, dbContainerName)
@@ -847,6 +1107,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				return fmt.Errorf("PostgreSQL not accepting connections: %w", err)
 			}
 			logger.Debug("PostgreSQL is ready and accepting connections")
+			dbTypeForPersistence = "postgresql"
+			dbHostPortForPersistence = "localhost:" + postgresHostPort
 
 			if serviceConfig.Database.Proxy != nil && *serviceConfig.Database.Proxy {
 				// Build PostgreSQL proxy command with debug flag if enabled
@@ -881,6 +1143,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				logger.Debug("PostgreSQL proxy started")
 
 				defer func() {
+					if !cleanupDB {
+						return
+					}
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"}))
@@ -934,8 +1199,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				}
 
 				logger.Debug("MySQL proxy started")
+				dbTypeForPersistence = "mysql"
+				dbHostPortForPersistence = "localhost:" + r.suite.dbHostPort
 
 				defer func() {
+					if !cleanupDB {
+						return
+					}
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, mysqlProxyContainerName)
@@ -1020,6 +1290,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 		logger.Debug("HTTP proxy container started: %s", httpProxyContainerName)
 		defer func() {
+			if !cleanupHTTPProxy {
+				return
+			}
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if logger.IsDebug() {
@@ -1173,6 +1446,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}()
 		}
 		defer func() {
+			if !cleanupGRPCProxy {
+				return
+			}
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if logger.IsDebug() {
@@ -1236,6 +1512,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}()
 		}
 		defer func() {
+			if !cleanupRedisProxy {
+				return
+			}
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if logger.IsDebug() {
@@ -1445,6 +1724,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		return err
 	}
 	defer func() {
+		if !cleanupApp {
+			return
+		}
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, appContainerName)
@@ -1472,6 +1754,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		return err
 	}
 	logger.Debug("App is healthy")
+	persistSetupComplete = true
 
 	// Warmup for apps that need it
 	fwConfig := config.GetFrameworkConfig(
@@ -1494,6 +1777,52 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 	}
 
+	testErr := r.runTestPhase(ctx, spec, hostPort, dbVerifyPort, httpVerifyPort, grpcVerifyPort, redisVerifyPort)
+
+	// On success, register containers for reuse by subsequent tests in this suite.
+	if testErr == nil && persist && persistSetupComplete {
+		dbProxyName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "db"})
+		r.suite.persistentMu.Lock()
+		r.suite.persistentContainers[serviceKey] = &persistentServiceContainers{
+			dbProxyName:     dbProxyName,
+			httpProxyName:   httpProxyContainerName,
+			grpcProxyName:   grpcProxyContainerName,
+			redisProxyName:  redisProxyContainerName,
+			appName:         appContainerName,
+			appHostPort:     hostPort,
+			dbVerifyPort:    dbVerifyPort,
+			httpVerifyPort:  httpVerifyPort,
+			grpcVerifyPort:  grpcVerifyPort,
+			redisVerifyPort: redisVerifyPort,
+			dbType:          dbTypeForPersistence,
+			dbHostPort:      dbHostPortForPersistence,
+			pgContainerName: dbContainerName,
+		}
+		r.suite.persistentMu.Unlock()
+		// Flip guards so defers skip container teardown.
+		cleanupPG = false
+		cleanupDB = false
+		cleanupHTTPProxy = false
+		cleanupGRPCProxy = false
+		cleanupRedisProxy = false
+		cleanupApp = false
+		logger.Debug("Registered persistent containers for %s", serviceKey)
+	}
+
+	return testErr
+}
+
+// runTestPhase executes the trigger + response verify + mock verify steps.
+// It is called both from the fresh-start path in run() and the reuse path.
+func (r *testRunner) runTestPhase(
+	ctx context.Context,
+	spec *types.TestSpec,
+	hostPort string,
+	dbVerifyPort string,
+	httpVerifyPort string,
+	grpcVerifyPort string,
+	redisVerifyPort string,
+) error {
 	// 6. Trigger (HTTP) or wait (Kafka consumer)
 	if spec.Receive.Channel == types.Event {
 		// The trigger is the seeded Kafka message already in the interceptor.
@@ -1598,7 +1927,6 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if redisVerifyPort != "" {
 		r.collectHits("localhost:" + redisVerifyPort)
 	}
-	// REMOVED: time.Sleep(500 * time.Millisecond)
 	// collectHits already waits for proxy responses with retry logic
 
 	if err := r.registry.VerifyAll(); err != nil {
