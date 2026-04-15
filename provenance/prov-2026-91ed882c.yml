@@ -1,0 +1,48 @@
+id: prov-2026-91ed882c
+title: Add order-events-service example for multi-database testing
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: |
+  prov-2026-ad64db54 added the databases: list syntax and the proxy
+  infrastructure to support multiple databases per service. This record
+  delivers the concrete proof-of-concept: a real Go service (order-events-service)
+  that uses both MySQL and MongoDB simultaneously.
+
+  The service exposes POST /orders which:
+  1. Inserts a row into the MySQL orders table (intercepted by MySQL proxy)
+  2. Inserts a document into MongoDB order_events collection (intercepted by MongoDB proxy)
+  3. Returns a 201 Created JSON response
+
+  The multi-db-linespecs suite uses the databases: list form (mysql + mongo entries)
+  and a single .linespec spec that asserts both database writes happen, proving that
+  two proxies can operate in parallel within a single test run.
+
+  The example doubles as a regression fixture: any breakage in multi-database
+  proxy plumbing will surface immediately when the suite is run.
+constraints:
+  - The service binary must be built inside Docker (Dockerfile) to match real test execution
+  - MySQL credentials must match the shared linespec-shared-db container (todo_user/todo_password/todo_api_development)
+  - The MongoDB databases entry must have proxy enabled so the proxy intercepts writes
+  - The spec must pass on a clean run without any pre-existing containers
+affected_scope:
+  - examples/multi-db-service/**
+  - examples/multi-db-linespecs/.linespec.yml
+  - examples/multi-db-linespecs/payloads/create_order_request.yaml
+  - examples/multi-db-linespecs/payloads/created_order.yaml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-ad64db54
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - example
+  - multi-database
+  - mysql
+  - mongodb
