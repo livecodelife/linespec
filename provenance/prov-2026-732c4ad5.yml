@@ -1,0 +1,62 @@
+id: prov-2026-732c4ad5
+title: Add MongoDB wire protocol proxy for LineSpec Testing
+status: open
+created_at: "2026-04-14"
+author: calebcowen@gmail.com
+intent: |
+  Add MongoDB as a supported database type in LineSpec Testing. Services that use MongoDB
+  should be able to declare READ:MONGODB and WRITE:MONGODB expectations in .linespec DSL
+  files, with the proxy intercepting the MongoDB wire protocol (OP_MSG) to match queries
+  against mock payloads and synthesize BSON responses.
+
+  The implementation follows the same pattern as the existing PostgreSQL and MySQL proxies:
+  a sidecar container intercepts TCP traffic on port 27017, forwards unmatched traffic to
+  a real mongo:7 container, and serves synthetic responses for matched mocks. After the
+  test, the /verify endpoint confirms which mocks were hit.
+
+  Containers are reused across tests within a suite (matching the container reuse
+  architecture introduced in prov-2026-c3f1db08). Between tests, MongoDB collections are
+  truncated via prepareForReuse rather than destroying and recreating containers.
+constraints:
+  - Must use go.mongodb.org/mongo-driver/bson for BSON encoding/decoding rather than a hand-rolled parser
+  - OP_QUERY messages (used for legacy hello/isMaster handshakes) must be forwarded transparently without interception
+  - Synthetic find responses must set cursor.id = 0 so drivers do not issue getMore requests
+  - No schema discovery is needed — MongoDB is schemaless; payloads are loaded as raw BSON/JSON
+  - Initial implementation matches mocks by collection name only (no USING_FILTER exact-match); consistent with Kafka topic-name-only matching
+  - All host port bindings must use HostPort "0" (ephemeral) for both the forwarding port and the sidecar port 8081 — never bind a fixed host port; this is required to avoid conflicts with persistent containers (lesson from prov-2026-44f64a16)
+  - Must not break existing MySQL, PostgreSQL, HTTP, Kafka, Redis, or gRPC proxy behavior
+affected_scope:
+  - pkg/proxy/mongodb/interceptor.go
+  - pkg/types/types.go
+  - pkg/dsl/parser.go
+  - pkg/registry/registry.go
+  - pkg/config/parser.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_beta.go
+forbidden_scope:
+  - pkg/proxy/postgresql/**
+  - pkg/proxy/mysql/**
+  - pkg/proxy/http/**
+  - pkg/proxy/kafka/**
+  - cmd/linespec/main_stable.go
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c3f1db08
+  - prov-2026-44f64a16
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/catalog-linespecs/create_product_success.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/get_product_success.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/get_product_not_found.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/list_products_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - beta
+  - proxy
+  - mongodb
