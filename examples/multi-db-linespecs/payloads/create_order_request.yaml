@@ -1,4 +1,3 @@
-body:
-  product_id: "prod_abc123"
-  quantity: 2
-  customer_id: "cust_xyz789"
+product_id: "prod_abc123"
+quantity: 2
+customer_id: "cust_xyz789"

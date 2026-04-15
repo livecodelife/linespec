@@ -13,23 +13,29 @@
 
 service:
   name: order-events-service
+  service_dir: ../multi-db-service
   type: web
   framework: custom
   port: 3000
   health_endpoint: /health
+  build_context: ../multi-db-service
   start_command: ./order-events-service
   environment:
     PORT: "3000"
+    DB_NAME: todo_api_development
+    MONGO_DB_NAME: order_events
 
 databases:
   - name: mysql
     type: mysql
     image: mysql:8.4
     port: 3306
-    database: orders_development
-    username: orders_user
-    password: orders_password
-    # host defaults to the name "mysql" — app connects via DB_HOST=mysql
+    database: todo_api_development
+    username: todo_user
+    password: todo_password
+    proxy: true
+    # host defaults to the name "mysql" — app connects via DB_HOST=mysql (proxy)
+    # Uses shared MySQL credentials so this service shares the linespec-shared-db container
 
   - name: mongo
     type: mongodb
@@ -38,7 +44,8 @@ databases:
     database: order_events
     username: events_user
     password: events_password
-    # host defaults to the name "mongo" — app connects via MONGO_MONGODB_URI
+    proxy: true
+    # host defaults to the name "mongo" — app connects via MONGO_MONGODB_URI=mongodb://...@mongo:27017/...
 
 infrastructure:
   database: true
