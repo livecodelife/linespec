@@ -1,0 +1,28 @@
+id: prov-2026-afed8852
+title: Multi-pack aware git hooks for provenance lint and check
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: |
+  Update the git hooks installed by `linespec provenance install-hooks` to support
+  monorepos with multiple .linespec.yml files (e.g. packwerk). The pre-commit hook
+  now walks up the directory tree from each staged provenance record to find the
+  nearest .linespec.yml and lints using that config (-c flag). The commit-msg hook
+  scans for all .linespec.yml files in the repo and runs scope-check for each one
+  that is relevant to the staged changes; non-root configs only fire when staged
+  files exist under their directory, preventing spurious commit_tag_required failures
+  from unrelated pack configs.
+constraints: []
+affected_scope:
+  - pkg/provenance/commands.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+associated_traces: []
+monitors: []
+tags: []
