@@ -1,0 +1,41 @@
+id: prov-2026-556ce2a7
+title: Add USING_SQL_CONTAINS DSL keyword and release v2.3.0
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: |
+  Document the new USING_SQL_CONTAINS DSL keyword in LINESPEC.md and the docs
+  site, update USING_SQL behavior notes to clarify exact-match-only semantics,
+  bump the version to v2.3.0, and add a CHANGELOG entry for all the changes
+  introduced in this release (USING_SQL_CONTAINS keyword, exact-match USING_SQL,
+  proxy fix for SQLContains hit tracking, and example linespec updates).
+constraints:
+  - Update LINESPEC.md with USING_SQL_CONTAINS syntax and behavior
+  - Update docs/linespec.html with same content
+  - Add v2.3.0 CHANGELOG entry
+  - Bump version from 2.2.0 to 2.3.0
+affected_scope:
+  - CHANGELOG.md
+  - LINESPEC.md
+  - VERSION
+  - README.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - provenance/prov-2026-782ae9dd.yml
+forbidden_scope: []
+supersedes: prov-2026-782ae9dd
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: LINESPEC.md
+    type: docs
+  - path: CHANGELOG.md
+    type: docs
+  - path: docs/linespec.html
+    type: docs
+associated_traces: []
+monitors: []
+tags: []
