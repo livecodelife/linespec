@@ -1,0 +1,44 @@
+id: prov-2026-2155a00e
+title: Run associated specs on pre-commit during implementation transition
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Add an opt-in mechanism so the pre-commit hook runs a record's associated_specs
+  before allowing the commit that marks it as implemented. This closes the gap between
+  declaring a spec as proof of a decision and actually verifying it passes at commit
+  time. Adds a run_command field to associated_specs entries so teams can override the
+  default command for a given type, and exposes a linespec provenance run-specs
+  subcommand for manual or scripted use.
+constraints:
+  - Feature must be off by default (run_associated_specs_on_complete false); existing
+    repos must not be affected without opt-in.
+  - Specs with no type and no run_command must be skipped with a warning, not a hard
+    failure, to accommodate non-executable proof artifacts (type config).
+  - The run-specs command must silently exit 0 when the config flag is disabled so the
+    hook can call it unconditionally without needing to parse config itself.
+  - run_command supports a path placeholder; if absent, path is appended as a trailing
+    argument.
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/run_specs_test.go
+  - pkg/config/types.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - PROVENANCE_RECORD_SCHEMA.md
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+  - docs/provenance.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/run_specs_test.go
+    type: go-test
+    run_command: go test ./pkg/provenance/... -run TestBuildSpec,TestRunSpecs
+associated_traces: []
+monitors: []
+tags: []
