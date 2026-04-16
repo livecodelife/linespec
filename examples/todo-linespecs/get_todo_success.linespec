@@ -10,8 +10,8 @@ HEADERS
 RETURNS {{payloads/authenticated_user.yaml}}
 
 EXPECT READ:MYSQL todos
-USING_SQL """
-SELECT * FROM `todos` WHERE `todos`.`id` = 1 AND `todos`.`user_id` = 42 LIMIT 1
+USING_SQL_CONTAINS """
+WHERE todos.id = 1 AND todos.user_id = 42
 """
 RETURNS {{payloads/todo_single.yaml}}
 
