@@ -1,0 +1,33 @@
+id: prov-2026-05355a33
+title: Update docs for multi-database support
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  Document the multi-database support introduced in prov-2026-ad64db54 across
+  all user-facing docs: LINESPEC.md (DSL reference), docs/linespec.html (site
+  docs), and CHANGELOG.md. Adds the databases: list format to the config
+  reference, documents the env var injection rules, adds a complete Example 5
+  (MySQL + MongoDB), and adds a v1.4.9-beta changelog entry.
+constraints:
+  - All three files must be updated consistently — same field names, same env var rules
+  - Changelog entry must match the version bumped in the binary rebuild
+affected_scope:
+  - LINESPEC.md
+  - CHANGELOG.md
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-ad64db54
+  - prov-2026-91ed882c
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - docs
+  - multi-database
