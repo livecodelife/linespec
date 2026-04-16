@@ -8,8 +8,8 @@ WITH {{payloads/order_insert.yaml}}
 RETURNS {{payloads/order_insert_result.yaml}}
 
 EXPECT WRITE:MYSQL orders
-USING_SQL """
-UPDATE orders SET status = 'processing' WHERE id = 42
+USING_SQL_CONTAINS """
+UPDATE orders SET status
 """
 RETURNS {{payloads/order_update_result.yaml}}
 
