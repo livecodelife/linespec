@@ -212,13 +212,14 @@ EXPECT WRITE:MYSQL <table_name>
 <SQL INSERT/UPDATE/DELETE statement>
 """]
 [WITH {{<input_payload>}}]
+[RETURNS {{<write_result_file>}}]
 [NO TRANSACTION]
 [VERIFY query CONTAINS '<string>']
 [VERIFY query NOT_CONTAINS '<string>']
 [VERIFY query MATCHES /<regex>/]
 ```
 
-Example:
+Example — simple write:
 
 ```
 EXPECT WRITE:MYSQL users
@@ -226,13 +227,39 @@ WITH {{user_create.yaml}}
 VERIFY query CONTAINS 'password_digest'
 ```
 
+Example — INSERT followed by UPDATE using the inserted ID:
+
+```
+EXPECT WRITE:MYSQL orders
+WITH {{order_insert.yaml}}
+RETURNS {{order_insert_result.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{order_status_update.yaml}}
+RETURNS {{order_update_result.yaml}}
+```
+
+Where `order_insert_result.yaml` specifies the OK packet values the MySQL driver will read:
+
+```yaml
+affected_rows: 1
+last_insert_id: 42
+```
+
+And `order_update_result.yaml`:
+
+```yaml
+affected_rows: 1
+```
+
 Rules:
 
 * WITH is optional for write operations
 * USING_SQL is optional; if omitted, the proxy matches by table name and operation type
+* RETURNS is optional. When present, the payload must be a YAML object with optional `affected_rows` and `last_insert_id` fields. Omitting RETURNS defaults to `affected_rows=0, last_insert_id=0`.
+* Multiple WRITE mocks on the same table are matched in declaration order (first declared, first consumed). This is how INSERT + UPDATE sequences are distinguished.
 * NO TRANSACTION is parsed but has no effect (transactions always pass through)
 * VERIFY clauses validate the actual SQL executed at runtime
-* The proxy sends a generic OK response for matched write operations
 
 ---
 
@@ -258,10 +285,20 @@ EXPECT WRITE:POSTGRESQL <table_name>
 <SQL INSERT/UPDATE/DELETE statement>
 """]
 [WITH {{<input_payload>}}]
+[RETURNS {{<write_result_file>}}]
 [VERIFY query CONTAINS '<string>']
 [VERIFY query NOT_CONTAINS '<string>']
 [VERIFY query MATCHES /<regex>/]
 ```
+
+When `RETURNS` is provided for a write operation, the payload controls the `affected_rows` value sent in the CommandComplete tag (e.g. `"UPDATE 3"`). Omitting RETURNS defaults to `affected_rows=1`.
+
+```yaml
+# write_result.yaml
+affected_rows: 3
+```
+
+Note: `RETURNING` clauses in the SQL (PostgreSQL's row-returning syntax) are handled separately — the proxy returns a full result set for those, not a RETURNS payload.
 
 ---
 

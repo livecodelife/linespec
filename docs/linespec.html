@@ -307,19 +307,71 @@ RETURNS EMPTY</code></pre>
                         <div class="code-header">
                             <span>LineSpec</span>
                         </div>
-                        <pre><code>EXPECT WRITE:MYSQL <table_name>
+                        <pre><code>EXPECT WRITE:MYSQL &lt;table_name&gt;
 [USING_SQL """
-<SQL INSERT/UPDATE/DELETE statement>
+&lt;SQL INSERT/UPDATE/DELETE statement&gt;
 """]
-[WITH {{<input_payload>}}]
+[WITH {{&lt;input_payload&gt;}}]
+[RETURNS {{&lt;write_result_file&gt;}}]
 [NO TRANSACTION]
-[VERIFY query CONTAINS '<string>']
-[VERIFY query NOT_CONTAINS '<string>']
-[VERIFY query MATCHES /<regex>/]</code></pre>
+[VERIFY query CONTAINS '&lt;string&gt;']
+[VERIFY query NOT_CONTAINS '&lt;string&gt;']
+[VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
                     </div>
 
-                    <h3>EXPECT READ:POSTGRESQL / EXPECT WRITE:POSTGRESQL</h3>
-                    <p>Same syntax as MySQL variants. The proxy supports both MySQL and PostgreSQL protocols.</p>
+                    <p>The optional <code>RETURNS</code> payload controls what the MySQL driver sees in the OK packet response. This is essential when one write's result (e.g. <code>last_insert_id</code> from an INSERT) is used in a subsequent query.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>order_insert_result.yaml</span></div>
+                        <pre><code>affected_rows: 1
+last_insert_id: 42</code></pre>
+                    </div>
+
+                    <p>Multiple <code>WRITE:MYSQL</code> expectations on the same table are consumed in declaration order — the first declared mock matches the first matching query, enabling INSERT + UPDATE sequences:</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>create_order.linespec</span></div>
+                        <pre><code>EXPECT WRITE:MYSQL orders
+WITH {{order_insert.yaml}}
+RETURNS {{order_insert_result.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{order_status_update.yaml}}
+RETURNS {{order_update_result.yaml}}</code></pre>
+                    </div>
+
+                    <p><strong>Rules:</strong></p>
+                    <ul>
+                        <li><code>WITH</code> is optional</li>
+                        <li><code>RETURNS</code> is optional. Omitting it defaults to <code>affected_rows=0, last_insert_id=0</code></li>
+                        <li><code>NO TRANSACTION</code> is parsed but has no effect (transactions pass through)</li>
+                        <li><code>VERIFY</code> clauses validate the actual SQL executed at runtime</li>
+                    </ul>
+
+                    <h3>EXPECT WRITE:POSTGRESQL</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT WRITE:POSTGRESQL &lt;table_name&gt;
+[USING_SQL """
+&lt;SQL INSERT/UPDATE/DELETE statement&gt;
+"""]
+[WITH {{&lt;input_payload&gt;}}]
+[RETURNS {{&lt;write_result_file&gt;}}]
+[VERIFY query CONTAINS '&lt;string&gt;']
+[VERIFY query NOT_CONTAINS '&lt;string&gt;']
+[VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
+                    </div>
+
+                    <p>The optional <code>RETURNS</code> payload controls the <code>affected_rows</code> count in the PostgreSQL <code>CommandComplete</code> tag (e.g. <code>"UPDATE 3"</code>). Omitting it defaults to <code>affected_rows=1</code>.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>write_result.yaml</span></div>
+                        <pre><code>affected_rows: 3</code></pre>
+                    </div>
+
+                    <p>Note: SQL <code>RETURNING</code> clauses (PostgreSQL's row-returning syntax) are handled separately — the proxy returns a full result set for those queries, and the <code>RETURNS</code> payload is not used.</p>
                 </section>
 
                 <section id="expect-redis" class="docs-section">

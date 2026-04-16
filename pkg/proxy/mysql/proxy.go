@@ -385,8 +385,74 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 	}
 }
 
+// writeResult holds the optional RETURNS payload fields for WRITE operations.
+type writeResult struct {
+	AffectedRows int64 `yaml:"affected_rows" json:"affected_rows"`
+	LastInsertID int64 `yaml:"last_insert_id" json:"last_insert_id"`
+}
+
+// loadWriteResult loads and parses a RETURNS payload for a WRITE operation.
+func (p *Proxy) loadWriteResult(file string) (writeResult, error) {
+	raw, err := p.loader.Load(file)
+	if err != nil {
+		return writeResult{}, err
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return writeResult{}, fmt.Errorf("write result payload must be a YAML object")
+	}
+	var r writeResult
+	if v, ok := m["affected_rows"]; ok {
+		switch n := v.(type) {
+		case int:
+			r.AffectedRows = int64(n)
+		case int64:
+			r.AffectedRows = n
+		case float64:
+			r.AffectedRows = int64(n)
+		}
+	}
+	if v, ok := m["last_insert_id"]; ok {
+		switch n := v.(type) {
+		case int:
+			r.LastInsertID = int64(n)
+		case int64:
+			r.LastInsertID = n
+		case float64:
+			r.LastInsertID = int64(n)
+		}
+	}
+	return r, nil
+}
+
+// encodeLengthInt encodes n as a MySQL length-encoded integer.
+func encodeLengthInt(n int64) []byte {
+	if n < 251 {
+		return []byte{byte(n)}
+	}
+	if n < 65536 {
+		return []byte{0xFC, byte(n), byte(n >> 8)}
+	}
+	if n < 16777216 {
+		return []byte{0xFD, byte(n), byte(n >> 8), byte(n >> 16)}
+	}
+	return []byte{0xFE,
+		byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24),
+		byte(n >> 32), byte(n >> 40), byte(n >> 48), byte(n >> 56),
+	}
+}
+
 func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement, clientCapabilities uint32) error {
 	if mock.Channel == types.WriteMySQL {
+		if mock.ReturnsFile != "" {
+			p.loader.BaseDir = mock.BaseDir
+			r, err := p.loadWriteResult(mock.ReturnsFile)
+			if err != nil {
+				logger.Error("Error loading write result %s: %v", mock.ReturnsFile, err)
+				return p.sendMockOK(conn)
+			}
+			return p.sendMockOKWithResult(conn, r.AffectedRows, r.LastInsertID)
+		}
 		return p.sendMockOK(conn)
 	}
 
@@ -532,7 +598,18 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 }
 
 func (p *Proxy) sendMockOK(conn net.Conn) error {
-	payload := []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}
+	return p.sendMockOKWithResult(conn, 0, 0)
+}
+
+// sendMockOKWithResult sends a MySQL OK packet with explicit affected_rows and last_insert_id.
+// MySQL OK packet: 0x00 | affected_rows (lenenc) | last_insert_id (lenenc) | status (2 LE) | warnings (2 LE)
+func (p *Proxy) sendMockOKWithResult(conn net.Conn, affectedRows, lastInsertID int64) error {
+	payload := make([]byte, 0, 7)
+	payload = append(payload, 0x00) // OK indicator
+	payload = append(payload, encodeLengthInt(affectedRows)...)
+	payload = append(payload, encodeLengthInt(lastInsertID)...)
+	payload = append(payload, 0x02, 0x00) // SERVER_STATUS_AUTOCOMMIT
+	payload = append(payload, 0x00, 0x00) // warnings
 	return p.writePacket(conn, 1, payload)
 }
 
@@ -599,6 +676,15 @@ func (p *Proxy) sendStmtPrepareOK(conn net.Conn, stmtID uint32, sql string, clie
 // The row format uses the MySQL binary result set protocol (0x00 header + null bitmap + values).
 func (p *Proxy) sendBinaryMockResponse(conn net.Conn, mock *types.ExpectStatement, clientCapabilities uint32) error {
 	if mock.Channel == types.WriteMySQL {
+		if mock.ReturnsFile != "" {
+			p.loader.BaseDir = mock.BaseDir
+			r, err := p.loadWriteResult(mock.ReturnsFile)
+			if err != nil {
+				logger.Error("Error loading write result %s: %v", mock.ReturnsFile, err)
+				return p.sendMockOK(conn)
+			}
+			return p.sendMockOKWithResult(conn, r.AffectedRows, r.LastInsertID)
+		}
 		return p.sendMockOK(conn)
 	}
 

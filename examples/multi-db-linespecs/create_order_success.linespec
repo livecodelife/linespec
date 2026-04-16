@@ -5,6 +5,11 @@ WITH {{payloads/create_order_request.yaml}}
 
 EXPECT WRITE:MYSQL orders
 WITH {{payloads/order_insert.yaml}}
+RETURNS {{payloads/order_insert_result.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{payloads/order_status_update.yaml}}
+RETURNS {{payloads/order_update_result.yaml}}
 
 EXPECT WRITE:MONGODB order_events
 WITH {{payloads/order_event.yaml}}

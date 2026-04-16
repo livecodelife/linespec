@@ -913,18 +913,7 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 	}
 
 	// Send CommandComplete
-	rowCount := 1
-	if mock.Channel == types.ReadPostgreSQL {
-		if mock.ReturnsFile != "" {
-			p.loader.BaseDir = mock.BaseDir
-			if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
-				rows := p.extractRowsFromPayload(payload)
-				rowCount = len(rows)
-			}
-		} else if mock.ReturnsEmpty {
-			rowCount = 0
-		}
-	}
+	rowCount := p.resolveRowCount(mock, 1)
 	cmdTag := p.createCommandCompleteTag(query, rowCount)
 	if err := p.result.SendCommandComplete(clientConn, cmdTag); err != nil {
 		return err
@@ -1573,18 +1562,7 @@ afterBind:
 			// Don't send anything to upstream for Execute - we mock the result
 
 			// Determine row count
-			rowCount := 1
-			if mock.Channel == types.ReadPostgreSQL {
-				if mock.ReturnsFile != "" {
-					p.loader.BaseDir = mock.BaseDir
-					if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
-						rows := p.extractRowsFromPayload(payload)
-						rowCount = len(rows)
-					}
-				} else if mock.ReturnsEmpty {
-					rowCount = 0
-				}
-			}
+			rowCount := p.resolveRowCount(mock, 1)
 
 			// For READ operations or WRITE with RETURNING, send result set
 			if mock.Channel == types.ReadPostgreSQL || len(p.extractReturningColumns(query)) > 0 {
@@ -1951,21 +1929,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 
 				// Send CommandComplete (without ReadyForQuery - we'll send that after Sync)
 				p.logDebug("  -> Sending CommandComplete\n")
-				// Determine the correct tag based on SQL operation type
-				rowCount := 1 // Default to 1 row for most operations
-				if mock.Channel == types.ReadPostgreSQL {
-					// For reads, count the actual rows from the payload
-					p.loader.BaseDir = mock.BaseDir
-					if mock.ReturnsFile != "" {
-						if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
-							rows := p.extractRowsFromPayload(payload)
-							rowCount = len(rows)
-						}
-					} else if mock.ReturnsEmpty {
-						rowCount = 0
-					}
-				}
-				// For WRITE operations, we always expect 1 row to be affected
+				rowCount := p.resolveRowCount(mock, 1)
 				cmdTag := p.createCommandCompleteTag(queryToUse, rowCount)
 				p.logDebug("  -> CommandComplete tag: %s\n", cmdTag)
 				if _, err := clientConn.Write(CreateCommandComplete(cmdTag)); err != nil {
@@ -2293,6 +2257,41 @@ func (p *Proxy) extractRowsFromPayload(payload interface{}) []map[string]interfa
 	}
 
 	return rows
+}
+
+// resolveRowCount returns the row count for a CommandComplete tag.
+//   - READ operations: number of rows from the RETURNS payload (0 if RETURNS EMPTY).
+//   - WRITE operations: affected_rows from the RETURNS payload if present, otherwise defaultWrite.
+func (p *Proxy) resolveRowCount(mock *types.ExpectStatement, defaultWrite int) int {
+	if mock.Channel == types.ReadPostgreSQL {
+		if mock.ReturnsFile != "" {
+			p.loader.BaseDir = mock.BaseDir
+			if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
+				return len(p.extractRowsFromPayload(payload))
+			}
+		} else if mock.ReturnsEmpty {
+			return 0
+		}
+		return 1
+	}
+	if mock.Channel == types.WritePostgreSQL && mock.ReturnsFile != "" {
+		p.loader.BaseDir = mock.BaseDir
+		if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
+			if m, ok := payload.(map[string]interface{}); ok {
+				if v, ok := m["affected_rows"]; ok {
+					switch n := v.(type) {
+					case int:
+						return n
+					case int64:
+						return int(n)
+					case float64:
+						return int(n)
+					}
+				}
+			}
+		}
+	}
+	return defaultWrite
 }
 
 // inferColumnsForTable infers column names for a table from cached schema or returns defaults
@@ -2705,18 +2704,7 @@ func (p *Proxy) handleSimpleQuery(conn net.Conn, query string, mock *types.Expec
 	}
 
 	// Send CommandComplete
-	rowCount := 1
-	if mock.Channel == types.ReadPostgreSQL {
-		p.loader.BaseDir = mock.BaseDir
-		if mock.ReturnsFile != "" {
-			if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
-				rows := p.extractRowsFromPayload(payload)
-				rowCount = len(rows)
-			}
-		} else if mock.ReturnsEmpty {
-			rowCount = 0
-		}
-	}
+	rowCount := p.resolveRowCount(mock, 1)
 	cmdTag := p.createCommandCompleteTag(query, rowCount)
 	if err := p.result.SendCommandComplete(conn, cmdTag); err != nil {
 		return fmt.Errorf("error sending CommandComplete: %w", err)
@@ -2846,18 +2834,7 @@ func (p *Proxy) sendMockExecuteResponse(clientConn net.Conn, mock *types.ExpectS
 	}
 
 	// Send CommandComplete
-	rowCount := 1
-	if mock.Channel == types.ReadPostgreSQL {
-		p.loader.BaseDir = mock.BaseDir
-		if mock.ReturnsFile != "" {
-			if payload, err := p.loader.Load(mock.ReturnsFile); err == nil {
-				rows := p.extractRowsFromPayload(payload)
-				rowCount = len(rows)
-			}
-		} else if mock.ReturnsEmpty {
-			rowCount = 0
-		}
-	}
+	rowCount := p.resolveRowCount(mock, 1)
 	cmdTag := p.createCommandCompleteTag(query, rowCount)
 	if _, err := clientConn.Write(CreateCommandComplete(cmdTag)); err != nil {
 		return err

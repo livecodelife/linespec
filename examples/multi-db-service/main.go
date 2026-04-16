@@ -77,6 +77,19 @@ func (h *handler) createOrder(w http.ResponseWriter, r *http.Request) {
 
 	orderID, _ := result.LastInsertId()
 
+	// Update the order status to "processing" now that downstream systems are notified.
+	// This UPDATE uses the lastInsertId from the INSERT — if the proxy returns 0 instead
+	// of the real ID, this UPDATE will target the wrong row and the test will catch it.
+	_, err = h.db.ExecContext(ctx,
+		"UPDATE orders SET status = ? WHERE id = ?",
+		"processing", orderID,
+	)
+	if err != nil {
+		http.Error(w, "failed to update order status", http.StatusInternalServerError)
+		log.Printf("MySQL update error: %v", err)
+		return
+	}
+
 	// Insert event into MongoDB order_events collection
 	event := bson.D{
 		bson.E{Key: "event_type", Value: "order_created"},
@@ -96,7 +109,7 @@ func (h *handler) createOrder(w http.ResponseWriter, r *http.Request) {
 		ProductID:   req.ProductID,
 		Quantity:    req.Quantity,
 		CustomerID:  req.CustomerID,
-		OrderStatus: "pending",
+		OrderStatus: "processing",
 		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 
