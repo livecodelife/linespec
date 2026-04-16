@@ -27,8 +27,16 @@ affected_scope:
   - examples/multi-db-linespecs/payloads/order_insert_result.yaml
   - examples/multi-db-linespecs/payloads/order_status_update.yaml
   - examples/multi-db-linespecs/payloads/order_update_result.yaml
+  - examples/multi-db-linespecs/payloads/created_order.yaml
   - docs/linespec.html
+  - docs/index.html
+  - docs/provenance.html
   - LINESPEC.md
+  - Makefile
+  - VERSION
+  - scripts/bump-version.sh
+  - cmd/linespec/main_beta.go
+  - cmd/linespec/main_stable.go
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

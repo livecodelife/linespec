@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-integration-mysql test-integration-postgres clean
+.PHONY: test test-integration test-integration-mysql test-integration-postgres clean bump-version
 
 # Run all unit tests (fast, no external dependencies)
 test:
@@ -72,6 +72,12 @@ install:
 # Install linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 install-beta:
 	go install ./cmd/linespec
+
+# Bump version across all docs and the doc site
+# Usage: make bump-version NEW=2.1.0
+bump-version:
+	@if [ -z "$(NEW)" ]; then echo "Usage: make bump-version NEW=x.y.z"; exit 1; fi
+	@./scripts/bump-version.sh $(NEW)
 
 # Run linter
 lint:

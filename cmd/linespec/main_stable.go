@@ -1,4 +1,4 @@
-//go:build beta
+//go:build !beta
 
 package main
 
