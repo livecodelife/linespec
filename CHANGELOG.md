@@ -5,6 +5,16 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-16
+
+### Added
+
+- **`install-skill` CLI command** ([prov-2026-940803d3](./provenance/prov-2026-940803d3.yml)) - `linespec provenance install-skill` installs the provenance skill directly into a Claude Code skills directory without requiring the repo to be cloned. Supports `--name` to override the slash command name and `--path` to override the target directory (default: `.claude/skills`). The skill content is embedded in the binary, so it works out of the box for users who only have `linespec` installed.
+
+### Related Provenance Records
+
+- [prov-2026-940803d3](./provenance/prov-2026-940803d3.yml) - Add install-skill CLI command for provenance skill
+
 ## [2.1.0] - 2026-04-16
 
 ### Added

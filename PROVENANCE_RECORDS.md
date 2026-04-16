@@ -29,7 +29,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v2.1.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.2.0
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -55,7 +55,7 @@ brew install linespec
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/cmd/linespec@v2.1.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.2.0
 ```
 
 ### GitHub Releases
@@ -554,6 +554,23 @@ Install git hooks for automatic validation:
 ```bash
 linespec provenance install-hooks
 ```
+
+### Install Skill (Claude Code / AI Agents)
+
+Install the provenance workflow skill into a Claude Code skills directory:
+
+```bash
+# Install to .claude/skills/provenance (default)
+linespec provenance install-skill
+
+# Override the skill name (slash command)
+linespec provenance install-skill --name my-provenance
+
+# Override the target directory
+linespec provenance install-skill --path path/to/skills
+```
+
+Once installed, invoke the skill in Claude Code with `/provenance` (or your chosen name). The skill encodes the full provenance record workflow so AI agents automatically follow the correct create → implement → complete lifecycle.
 
 ---
 

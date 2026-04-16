@@ -13,6 +13,15 @@ affected_scope:
   - pkg/provenance/commands.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
+  - CHANGELOG.md
+  - PROVENANCE_RECORDS.md
+  - README.md
+  - VERSION
+  - docs/index.html
+  - docs/provenance.html
+  - docs/linespec.html
+  - docs/docs.html
+  - LINESPEC.md
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

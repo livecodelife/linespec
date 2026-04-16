@@ -610,6 +610,12 @@ func runProvenance() {
 			logger.Error("Failed to install hooks: %v", err)
 			os.Exit(1)
 		}
+	case "install-skill":
+		opts := parseInstallSkillOptions(args)
+		if err := cmds.InstallSkill(opts); err != nil {
+			logger.Error("Failed to install skill: %v", err)
+			os.Exit(1)
+		}
 	case "--help", "-h":
 		printProvenanceUsage()
 	default:
@@ -691,6 +697,7 @@ Subcommands:
   audit [options]            Audit recent changes against provenance history
   index [options]            Index all implemented records for semantic search
   install-hooks              Install git hooks
+  install-skill [options]    Install the provenance skill for Claude Code
 
 Use "linespec provenance <subcommand> --help" for more information.`)
 }
@@ -738,6 +745,35 @@ Options:
   -i, --id-suffix name       Append service suffix to ID (e.g., user-service)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
+			os.Exit(0)
+		}
+	}
+
+	return opts
+}
+
+func parseInstallSkillOptions(args []string) provenance.InstallSkillOptions {
+	opts := provenance.InstallSkillOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--name":
+			if i+1 < len(args) {
+				opts.Name = args[i+1]
+				i++
+			}
+		case "--path":
+			if i+1 < len(args) {
+				opts.Path = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance install-skill [options]
+
+Options:
+  --name name    Skill name / slash command (default: provenance)
+  --path dir     Target directory relative to repo root (default: .claude/skills)
+  --help         Show this help message`)
 			os.Exit(0)
 		}
 	}

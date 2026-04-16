@@ -81,7 +81,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v2.1.0</div>
+                    <div class="docs-badge stable">Stable v2.2.0</div>
                     <h1>Provenance Records</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a <code>provenance/</code> directory and form a queryable graph of architectural decisions.</p>
                 </header>
@@ -119,7 +119,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v2.1.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.2.0
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -804,6 +804,21 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                         <pre><code>linespec provenance install-hooks</code></pre>
                     </div>
                     <p>This creates both <code>pre-commit</code> and <code>commit-msg</code> hooks.</p>
+
+                    <h3>Install Skill (Claude Code / AI Agents)</h3>
+                    <p>Install the provenance workflow skill into a Claude Code skills directory so AI agents automatically follow the correct record lifecycle:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance install-skill</code></pre>
+                    </div>
+                    <p>Installs to <code>.claude/skills/provenance</code> by default. Use <code>--name</code> to override the slash command name and <code>--path</code> to override the target directory. Once installed, invoke with <code>/provenance</code> in Claude Code.</p>
                 </section>
 
                 <section id="config" class="docs-section">
