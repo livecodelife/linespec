@@ -1,0 +1,23 @@
+TEST create_order_success_missing_expect_test
+
+RECEIVE HTTP:POST /orders
+WITH {{payloads/create_order_request.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{payloads/order_insert.yaml}}
+RETURNS {{payloads/order_insert_result.yaml}}
+
+EXPECT WRITE:MYSQL orders
+USING_SQL """
+UPDATE orders SET status = 'processing' WHERE id = 42
+"""
+RETURNS {{payloads/order_update_result.yaml}}
+
+EXPECT WRITE:MONGODB order_events
+WITH {{payloads/order_event.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/created_order.yaml}}
+NOISE
+  body.id
+  body.created_at

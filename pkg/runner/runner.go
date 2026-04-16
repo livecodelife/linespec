@@ -619,7 +619,7 @@ func (s *TestSuite) truncatePostgreSQLTables(ctx context.Context, dbConfig *conf
 // prepareForReuse reloads registries on all running proxy sidecars and truncates
 // the database, resetting state so the persistent containers are clean for the next test.
 func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceContainers, serviceConfig *config.LineSpecConfig) error {
-	regBytes, err := r.registry.ToBytes()
+	regBytes, err := r.registry.ToBytesForContainer(r.suite.cwd, r.suite.containerNaming.GetProjectMountPath())
 	if err != nil {
 		return fmt.Errorf("failed to serialise registry: %w", err)
 	}
@@ -1152,7 +1152,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// 2. Save Registry to File for Proxy Containers
 	regFile := filepath.Join(r.tempDir, "registry-"+spec.Name+".json")
-	_ = r.registry.SaveToFile(regFile)
+	_ = r.registry.SaveToFileForContainer(regFile, r.suite.cwd, r.suite.containerNaming.GetProjectMountPath())
 
 	// 3. Start Database and Proxy Containers — one per entry in serviceConfig.Databases.
 	// Each database gets a unique network alias derived from db.Host.  The proxy occupies

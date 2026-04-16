@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -673,6 +674,49 @@ func (r *MockRegistry) SaveToFile(path string) error {
 	r.RLock()
 	defer r.RUnlock()
 	data, err := json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// rebaseDir rewrites an absolute BaseDir path from a host filesystem path to
+// its equivalent path inside a Docker container, where the host CWD is mounted
+// at containerMount. If baseDir is not under hostCwd, it is returned unchanged.
+func rebaseDir(baseDir, hostCwd, containerMount string) string {
+	rel, err := filepath.Rel(hostCwd, baseDir)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return baseDir
+	}
+	return filepath.Join(containerMount, rel)
+}
+
+// ToBytesForContainer serialises the registry with all BaseDir fields rewritten
+// from absolute host paths to container-internal paths. hostCwd is the host
+// working directory; containerProjectMount is where it is bind-mounted inside
+// the proxy sidecar container (e.g. "/app/project").
+func (r *MockRegistry) ToBytesForContainer(hostCwd, containerProjectMount string) ([]byte, error) {
+	r.RLock()
+	defer r.RUnlock()
+
+	rebasedMocks := make(map[string][]*types.ExpectStatement, len(r.mocks))
+	for key, mocks := range r.mocks {
+		rebased := make([]*types.ExpectStatement, len(mocks))
+		for i, m := range mocks {
+			cp := *m
+			cp.BaseDir = rebaseDir(m.BaseDir, hostCwd, containerProjectMount)
+			rebased[i] = &cp
+		}
+		rebasedMocks[key] = rebased
+	}
+
+	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds})
+}
+
+// SaveToFileForContainer saves the registry to path with BaseDir fields rewritten
+// for use inside a Docker container. See ToBytesForContainer for parameter docs.
+func (r *MockRegistry) SaveToFileForContainer(path, hostCwd, containerProjectMount string) error {
+	data, err := r.ToBytesForContainer(hostCwd, containerProjectMount)
 	if err != nil {
 		return err
 	}

@@ -137,7 +137,7 @@ func main() {
 		dbName = "todo_api_development"
 	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", dbUser, dbPass, dbHost, dbPort, dbName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&interpolateParams=true", dbUser, dbPass, dbHost, dbPort, dbName)
 	mysqlDB, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("failed to open MySQL: %v", err)
