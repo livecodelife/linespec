@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [prov-2026-ad64db54](./provenance/prov-2026-ad64db54.yml) - Support multiple databases per service in .linespec.yml
 - [prov-2026-91ed882c](./provenance/prov-2026-91ed882c.yml) - Add order-events-service example for multi-database testing
 
+## [1.5.0] - 2026-04-15
+
+### Added
+
+- **Run associated specs on commit** ([prov-2026-2155a00e](./provenance/prov-2026-2155a00e.yml)) - The pre-commit hook can now run a record's `associated_specs` before allowing the commit that marks it as implemented. Opt in with `run_associated_specs_on_complete: true` in `.linespec.yml`. Supported spec types: `linespec`, `rspec`, `pytest`, `jest`. A new optional `run_command` field on each `associated_specs` entry overrides the default command for that type (supports a `{{path}}` placeholder; otherwise the path is appended). Specs with no `type` and no `run_command` are skipped with a warning rather than failing the commit. A new `linespec provenance run-specs --record <id>` subcommand is also exposed for scripts that need to invoke this step manually.
+
+### Related Provenance Records
+
+- [prov-2026-2155a00e](./provenance/prov-2026-2155a00e.yml) - Run associated specs on pre-commit during implementation transition
+
 ## [1.4.3-beta] - 2026-04-14
 
 ### Added (Beta)

@@ -217,7 +217,7 @@ related:
 ### `associated_specs`
 **Type:** []object  
 **Required:** no (enforcement depends on configured lint level)  
-**Format:** List of objects with `path` (required string) and optional `type` (string). The `type` field annotates the kind of proof artifact (e.g., `linespec`, `rspec`, `pytest`, `jest`). If omitted, no type-specific validation is performed.  
+**Format:** List of objects with `path` (required string), optional `type` (string), and optional `run_command` (string). The `type` field annotates the kind of proof artifact (e.g., `linespec`, `rspec`, `pytest`, `jest`). If omitted, no type-specific validation is performed. The `run_command` field overrides the default command for the given `type` when running specs via the pre-commit hook.  
 **Example:**
 ```yaml
 associated_specs:
@@ -227,10 +227,14 @@ associated_specs:
     type: linespec
   - path: spec/models/user_spec.rb
     type: rspec
+  - path: tests/test_auth.py
+    type: pytest
+    run_command: python -m pytest --tb=short  # overrides default "pytest <path>"
 ```
 **Set by:** Author.  
-**Behavior:** The linter checks that each listed path exists on disk. At `strict` enforcement, an `open` record with no entries here is a lint error. At `warn`, it is a warning. At `none`, no check is performed beyond verifying that listed paths exist if any are provided.  
-**Constraints:** Immutable after `implemented`. The linter does not run the referenced specs — it only verifies file existence. Semantic validation by type is a future enhancement.
+**Behavior:** The linter checks that each listed path exists on disk. At `strict` enforcement, an `open` record with no entries here is a lint error. At `warn`, it is a warning. At `none`, no check is performed beyond verifying that listed paths exist if any are provided. When `run_associated_specs_on_complete` is enabled in `.linespec.yml`, the pre-commit hook runs each spec whose `type` or `run_command` is set during the `open` → `implemented` transition.  
+**`run_command` template:** If the command string contains `{{path}}`, it is replaced with `spec.path`. Otherwise `spec.path` is appended as a trailing argument.  
+**Constraints:** Immutable after `implemented`. Specs with no `type` and no `run_command` are skipped (not an error) when the hook runs them.
 
 ---
 
