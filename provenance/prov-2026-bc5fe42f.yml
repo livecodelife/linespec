@@ -1,6 +1,6 @@
 id: prov-2026-bc5fe42f
 title: Fix run_command syntax in prov-2026-2155a00e associated_specs
-status: open
+status: implemented
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -17,7 +17,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-2155a00e
-sealed_at_sha: ""
+sealed_at_sha: 861de2af382ac1140e66b7069b4c92e252e5fd57
 associated_specs:
   - path: pkg/provenance/run_specs_test.go
     type: go-test
