@@ -732,7 +732,8 @@ func (c *Commands) InstallHooks() error {
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
 	preCommitContent := `#!/bin/sh
 # LineSpec provenance pre-commit hook
-# This hook only lints modified provenance records for syntax/validity
+# Supports multi-pack repos (e.g. packwerk): for each staged provenance record,
+# walks up the directory tree to find the nearest .linespec.yml and lints using it.
 
 # Use the local linespec binary if it exists, otherwise fall back to system
 if [ -f "./linespec" ]; then
@@ -741,17 +742,48 @@ else
     LINESPEC="linespec"
 fi
 
-# Get list of modified provenance records
-modified_records=$(git diff --cached --name-only | grep "^provenance/prov-" | sed 's|provenance/||' | sed -E 's|\.ya?ml$||')
+# Get staged files that look like provenance records (prov-YYYY-* pattern)
+staged_prov=$(git diff --cached --name-only | grep -E "prov-[0-9]{4}-" | grep -E "\.ya?ml$")
 
-# Lint modified records
-for record in $modified_records; do
-    $LINESPEC provenance lint --record "$record"
+if [ -z "$staged_prov" ]; then
+    exit 0
+fi
+
+exit_code=0
+
+# Walk up the directory tree from a file path to find the nearest .linespec.yml.
+# Echoes the config path if found; returns 1 if not found.
+find_nearest_config() {
+    dir=$(dirname "$1")
+    while true; do
+        if [ -f "$dir/.linespec.yml" ]; then
+            echo "$dir/.linespec.yml"
+            return 0
+        fi
+        if [ "$dir" = "." ] || [ "$dir" = "/" ]; then
+            return 1
+        fi
+        dir=$(dirname "$dir")
+    done
+}
+
+for file in $staged_prov; do
+    record=$(basename "$file" | sed -E 's/\.ya?ml$//')
+    config=$(find_nearest_config "$file")
+
+    if [ -n "$config" ]; then
+        $LINESPEC provenance lint -c "$config" --record "$record"
+    else
+        $LINESPEC provenance lint --record "$record"
+    fi
+
     if [ $? -ne 0 ]; then
         echo "Commit blocked due to lint errors in $record"
-        exit 1
+        exit_code=1
     fi
 done
+
+exit $exit_code
 `
 
 	if err := os.WriteFile(preCommitPath, []byte(preCommitContent), 0755); err != nil {
@@ -762,7 +794,9 @@ done
 	commitMsgPath := filepath.Join(hooksDir, "commit-msg")
 	commitMsgContent := `#!/bin/sh
 # LineSpec provenance commit-msg hook
-# This hook validates staged files against provenance record scope constraints
+# Supports multi-pack repos (e.g. packwerk): scans for all .linespec.yml files and
+# runs scope-check for each one that is relevant to the staged changes.
+# A non-root config is considered relevant only when staged files exist under its directory.
 
 # Use the local linespec binary if it exists, otherwise fall back to system
 if [ -f "./linespec" ]; then
@@ -771,16 +805,48 @@ else
     LINESPEC="linespec"
 fi
 
-# The commit message file is passed as the first argument
 COMMIT_MSG_FILE="$1"
 
-# Check staged files against scope constraints using the commit message
-$LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE"
-if [ $? -ne 0 ]; then
+# Find all .linespec.yml files in the repo (excluding .git)
+configs=$(find . -name ".linespec.yml" -not -path "./.git/*" 2>/dev/null | sort)
+
+exit_code=0
+
+if [ -z "$configs" ]; then
+    # No config files found; use default (no -c flag)
+    $LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE"
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "Commit blocked due to provenance scope violations"
+        exit 1
+    fi
+    exit 0
+fi
+
+for config in $configs; do
+    config_dir=$(dirname "$config" | sed 's|^\./||')
+
+    # Non-root configs only apply when staged files exist under their directory.
+    # This prevents spurious commit_tag_required failures from unrelated pack configs.
+    if [ "$config_dir" != "." ]; then
+        has_staged=$(git diff --cached --name-only | grep "^$config_dir/" | head -1)
+        if [ -z "$has_staged" ]; then
+            continue
+        fi
+    fi
+
+    $LINESPEC provenance check --staged --message-file "$COMMIT_MSG_FILE" -c "$config"
+    if [ $? -ne 0 ]; then
+        exit_code=1
+    fi
+done
+
+if [ $exit_code -ne 0 ]; then
     echo ""
     echo "Commit blocked due to provenance scope violations"
-    exit 1
 fi
+
+exit $exit_code
 `
 
 	if err := os.WriteFile(commitMsgPath, []byte(commitMsgContent), 0755); err != nil {
@@ -790,10 +856,12 @@ fi
 	fmt.Fprintf(os.Stdout, "\n✓ Installed git hooks to %s\n\n", hooksDir)
 	fmt.Fprintln(os.Stdout, "  pre-commit hook:")
 	fmt.Fprintln(os.Stdout, "    · Lints modified provenance records")
+	fmt.Fprintln(os.Stdout, "    · Uses nearest .linespec.yml for each record (multi-pack aware)")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "  commit-msg hook:")
 	fmt.Fprintln(os.Stdout, "    · Checks staged files against provenance scope")
 	fmt.Fprintln(os.Stdout, "    · Validates provenance IDs in commit message")
+	fmt.Fprintln(os.Stdout, "    · Runs per-pack config for relevant staged changes (multi-pack aware)")
 	fmt.Fprintln(os.Stdout)
 
 	return nil
