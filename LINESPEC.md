@@ -125,6 +125,9 @@ EXPECT <CHANNEL> <resource>
 [USING_SQL """
 <raw-sql-query>
 """]
+[USING_SQL_CONTAINS """
+<sql-fragment>
+"""]
 [WITH {{<request_file>}}]
 [RETURNS {{<response_file>}}]
 [RETURNS EMPTY]
@@ -134,6 +137,45 @@ EXPECT <CHANNEL> <resource>
 ```
 
 The exact format depends on the channel type.
+
+### SQL Matching: USING_SQL vs USING_SQL_CONTAINS
+
+Two keywords control how the proxy matches intercepted SQL queries:
+
+| Keyword | Match mode | When to use |
+|---------|-----------|-------------|
+| `USING_SQL` | Exact match after normalization | You control the exact query and want strict assertions |
+| `USING_SQL_CONTAINS` | Substring match after normalization | ORM or driver may add clauses you can't predict |
+
+**Normalization** (applied to both modes before comparison):
+- Backticks are stripped
+- Whitespace is collapsed to single spaces
+- `table.*` column references are normalized to `*`
+
+**When to use `USING_SQL_CONTAINS`:**
+- Rails 7 `.where(...).first` appends `ORDER BY id ASC` — use a `WHERE` fragment
+- Go MySQL driver uses `COM_STMT_PREPARE` with `?` placeholders — use a table/keyword fragment
+- Any ORM that varies `SELECT` columns or adds `LIMIT` clauses
+
+**Example:**
+
+```
+# Exact match — fails if ORM adds ORDER BY or changes column list
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT * FROM users WHERE id = 42 LIMIT 1
+"""
+RETURNS {{user.yaml}}
+
+# Substring match — stable even if ORM shape changes
+EXPECT READ:MYSQL users
+USING_SQL_CONTAINS """
+WHERE users.id = 42
+"""
+RETURNS {{user.yaml}}
+```
+
+---
 
 ---
 
@@ -172,6 +214,9 @@ EXPECT READ:MYSQL <table_name>
 [USING_SQL """
 <SQL SELECT statement>
 """]
+[USING_SQL_CONTAINS """
+<sql-fragment>
+"""]
 RETURNS {{<response_file>}}
 ```
 
@@ -179,18 +224,28 @@ Or for empty results:
 
 ```
 EXPECT READ:MYSQL <table_name>
-[USING_SQL """
-<SQL SELECT statement that returns no rows>
+[USING_SQL_CONTAINS """
+<sql-fragment>
 """]
 RETURNS EMPTY
 ```
 
-Example:
+Example — exact match:
 
 ```
 EXPECT READ:MYSQL users
 USING_SQL """
-SELECT * FROM users WHERE id = 42
+SELECT * FROM users WHERE token = 'abc' LIMIT 1
+"""
+RETURNS {{user_response.yaml}}
+```
+
+Example — substring match (ORM may add ORDER BY or vary columns):
+
+```
+EXPECT READ:MYSQL users
+USING_SQL_CONTAINS """
+WHERE users.id = 42
 """
 RETURNS {{user_response.yaml}}
 ```
@@ -198,8 +253,10 @@ RETURNS {{user_response.yaml}}
 Rules:
 
 * RETURNS is required (either a file or EMPTY)
-* USING_SQL is optional; if omitted, the proxy matches by table name
-* The proxy matches SELECT queries by table name in the FROM clause
+* `USING_SQL` and `USING_SQL_CONTAINS` are both optional; if omitted, the proxy matches by table name
+* `USING_SQL` performs exact equality after normalization
+* `USING_SQL_CONTAINS` performs substring containment after normalization
+* Only one of `USING_SQL` or `USING_SQL_CONTAINS` may appear per EXPECT block
 * RETURNS EMPTY generates proper MySQL protocol response for zero rows
 
 ---
@@ -210,6 +267,9 @@ Rules:
 EXPECT WRITE:MYSQL <table_name>
 [USING_SQL """
 <SQL INSERT/UPDATE/DELETE statement>
+"""]
+[USING_SQL_CONTAINS """
+<sql-fragment>
 """]
 [WITH {{<input_payload>}}]
 [RETURNS {{<write_result_file>}}]
@@ -272,6 +332,9 @@ EXPECT READ:POSTGRESQL <table_name>
 [USING_SQL """
 <SQL SELECT statement>
 """]
+[USING_SQL_CONTAINS """
+<sql-fragment>
+"""]
 RETURNS {{<response_file>}}
 ```
 
@@ -283,6 +346,9 @@ RETURNS {{<response_file>}}
 EXPECT WRITE:POSTGRESQL <table_name>
 [USING_SQL """
 <SQL INSERT/UPDATE/DELETE statement>
+"""]
+[USING_SQL_CONTAINS """
+<sql-fragment>
 """]
 [WITH {{<input_payload>}}]
 [RETURNS {{<write_result_file>}}]
@@ -587,6 +653,9 @@ Syntax:
 EXPECT_NOT <CHANNEL> <resource>
 [USING_SQL """
 <raw-sql-query>
+"""]
+[USING_SQL_CONTAINS """
+<sql-fragment>
 """]
 ```
 

@@ -5,6 +5,34 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-16
+
+### Added
+
+- **`USING_SQL_CONTAINS` DSL keyword** ([prov-2026-556ce2a7](./provenance/prov-2026-556ce2a7.yml)) - New SQL matching mode for `EXPECT READ/WRITE:MYSQL` and `EXPECT READ/WRITE:POSTGRESQL` that performs a substring match against the normalized query instead of requiring an exact match. Use `USING_SQL_CONTAINS` when the ORM or driver may add clauses (e.g. `ORDER BY`, `LIMIT`, prepared-statement placeholders) that make exact matching fragile. The fragment is normalized with the same rules as `USING_SQL` (backticks stripped, whitespace collapsed, `table.*` → `*`). Both keywords can appear in the same spec file.
+
+### Changed
+
+- **`USING_SQL` is now exact-match only** ([prov-2026-556ce2a7](./provenance/prov-2026-556ce2a7.yml)) - `USING_SQL` performs an exact equality check after normalization. The previous fuzzy fallback (where any SELECT matched a `READ:MYSQL` mock regardless of SQL) has been removed. Tests that relied on the fallback may now fail — migrate those mocks to `USING_SQL_CONTAINS` with an appropriate stable fragment.
+
+### Fixed
+
+- **`USING_SQL_CONTAINS` hit tracking across Docker boundary** ([prov-2026-fe2348ba](./provenance/prov-2026-fe2348ba.yml)) - Proxies were overwriting `mock.SQL` with the actual query text for SQLContains mocks, causing the verification sidecar to emit a wrong key for `/verify` hit counts. Fixed by guarding the assignment: `if mock.SQL == "" && mock.SQLContains == "" { mock.SQL = query }`.
+
+- **Example linespecs updated to reflect real ORM/driver SQL** - Several example linespecs that relied on the old fuzzy fallback were updated to use `USING_SQL_CONTAINS` with accurate stable fragments:
+  - `examples/user-linespecs/get_user_success.linespec` — Rails `find` generates `WHERE users.id = ?`
+  - `examples/user-linespecs/create_user_already_exists.linespec` — Rails `exists?` generates `SELECT 1 AS one FROM users WHERE...`
+  - `examples/todo-linespecs/get_todo_success.linespec`, `delete_todo_success.linespec`, `update_todo_success.linespec` — Rails 7 `.where(...).first` adds `ORDER BY id ASC`
+  - `examples/multi-db-linespecs/create_order_success_missing_expect_test.linespec` — Go MySQL driver sends `COM_STMT_PREPARE` with `?` placeholders
+
+### Related Provenance Records
+
+- [prov-2026-556ce2a7](./provenance/prov-2026-556ce2a7.yml) - Add USING_SQL_CONTAINS DSL keyword and release v2.3.0
+- [prov-2026-782ae9dd](./provenance/prov-2026-782ae9dd.yml) - Fix multi-db-linespecs USING_SQL for prepared statement SQL
+- [prov-2026-b5cbfedf](./provenance/prov-2026-b5cbfedf.yml) - Fix todo-linespecs SQL mocks to use USING_SQL_CONTAINS
+- [prov-2026-543305e3](./provenance/prov-2026-543305e3.yml) - Fix create_user_already_exists linespec
+- [prov-2026-fe2348ba](./provenance/prov-2026-fe2348ba.yml) - Fix USING_SQL_CONTAINS hit tracking
+
 ## [2.2.0] - 2026-04-16
 
 ### Added

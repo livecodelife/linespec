@@ -86,7 +86,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v2.2.0</div>
+                    <div class="docs-badge stable">Stable v2.3.0</div>
                     <h1>LineSpec DSL Reference</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Deterministic domain-specific language for integration testing. Intercepts database and HTTP traffic at the protocol level for language-agnostic, deterministic test execution.</p>
 
@@ -105,7 +105,7 @@
                                 </button>
                             </div>
                             <div class="command-panel" id="go-stable">
-                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.2.0</code>
+                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.3.0</code>
                                 <button class="copy-btn" aria-label="Copy command">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -256,6 +256,9 @@ HEADERS
 [USING_SQL """
 <raw-sql-query>
 """]
+[USING_SQL_CONTAINS """
+<sql-fragment>
+"""]
 [WITH {{<request_file>}}]
 [RETURNS {{<response_file>}}]
 [RETURNS EMPTY]
@@ -263,6 +266,23 @@ HEADERS
 [VERIFY query NOT_CONTAINS '<string>']
 [VERIFY query MATCHES /<regex>/]</code></pre>
                     </div>
+
+                    <h3>SQL Matching: USING_SQL vs USING_SQL_CONTAINS</h3>
+                    <p>Two keywords control how the proxy matches intercepted SQL queries against a mock:</p>
+                    <table>
+                        <thead><tr><th>Keyword</th><th>Match mode</th><th>When to use</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>USING_SQL</code></td><td>Exact match after normalization</td><td>You control the exact query and want strict assertions</td></tr>
+                            <tr><td><code>USING_SQL_CONTAINS</code></td><td>Substring match after normalization</td><td>ORM or driver may add clauses you can't predict</td></tr>
+                        </tbody>
+                    </table>
+                    <p><strong>Normalization</strong> (applied to both modes): backticks stripped, whitespace collapsed, <code>table.*</code> → <code>*</code>.</p>
+                    <p>Use <code>USING_SQL_CONTAINS</code> when:</p>
+                    <ul>
+                        <li>Rails 7 <code>.where(...).first</code> appends <code>ORDER BY id ASC</code> — use a <code>WHERE</code> fragment</li>
+                        <li>Go MySQL driver uses <code>COM_STMT_PREPARE</code> with <code>?</code> placeholders — use a table/keyword fragment</li>
+                        <li>Any ORM that varies <code>SELECT</code> columns or adds <code>LIMIT</code> clauses dynamically</li>
+                    </ul>
 
                     <h3>EXPECT HTTP</h3>
                     <div class="code-block">
@@ -288,19 +308,30 @@ RETURNS {{<response_body>}}</code></pre>
                         <div class="code-header">
                             <span>LineSpec</span>
                         </div>
-                        <pre><code>EXPECT READ:MYSQL <table_name>
+                        <pre><code>EXPECT READ:MYSQL &lt;table_name&gt;
 [USING_SQL """
-<SQL SELECT statement>
+&lt;SQL SELECT statement&gt;
 """]
-RETURNS {{<response_file>}}
+[USING_SQL_CONTAINS """
+&lt;sql-fragment&gt;
+"""]
+RETURNS {{&lt;response_file&gt;}}
 
 # Or for empty results:
-EXPECT READ:MYSQL <table_name>
-[USING_SQL """
-<SQL SELECT statement that returns no rows>
+EXPECT READ:MYSQL &lt;table_name&gt;
+[USING_SQL_CONTAINS """
+&lt;sql-fragment&gt;
 """]
 RETURNS EMPTY</code></pre>
                     </div>
+                    <p><strong>Rules:</strong></p>
+                    <ul>
+                        <li><code>RETURNS</code> is required (either a file or <code>EMPTY</code>)</li>
+                        <li><code>USING_SQL</code> performs exact equality after normalization</li>
+                        <li><code>USING_SQL_CONTAINS</code> performs substring containment after normalization</li>
+                        <li>Only one of <code>USING_SQL</code> or <code>USING_SQL_CONTAINS</code> may appear per <code>EXPECT</code> block</li>
+                        <li>If omitted, the proxy matches by table name</li>
+                    </ul>
 
                     <h3>EXPECT WRITE:MYSQL</h3>
                     <div class="code-block">
@@ -310,6 +341,9 @@ RETURNS EMPTY</code></pre>
                         <pre><code>EXPECT WRITE:MYSQL &lt;table_name&gt;
 [USING_SQL """
 &lt;SQL INSERT/UPDATE/DELETE statement&gt;
+"""]
+[USING_SQL_CONTAINS """
+&lt;sql-fragment&gt;
 """]
 [WITH {{&lt;input_payload&gt;}}]
 [RETURNS {{&lt;write_result_file&gt;}}]
@@ -356,6 +390,9 @@ RETURNS {{order_update_result.yaml}}</code></pre>
                         <pre><code>EXPECT WRITE:POSTGRESQL &lt;table_name&gt;
 [USING_SQL """
 &lt;SQL INSERT/UPDATE/DELETE statement&gt;
+"""]
+[USING_SQL_CONTAINS """
+&lt;sql-fragment&gt;
 """]
 [WITH {{&lt;input_payload&gt;}}]
 [RETURNS {{&lt;write_result_file&gt;}}]
