@@ -1,6 +1,6 @@
 id: prov-2026-05355a33
 title: Update docs for multi-database support
-status: open
+status: implemented
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -22,7 +22,7 @@ superseded_by: ""
 related:
   - prov-2026-ad64db54
   - prov-2026-91ed882c
-sealed_at_sha: ""
+sealed_at_sha: c0dad5f3bc35b75c2873a5ec9fde7666a79d937c
 associated_specs:
   - path: examples/multi-db-linespecs/create_order_success.linespec
     type: linespec
