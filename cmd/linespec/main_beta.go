@@ -1,5 +1,3 @@
-//go:build beta
-
 package main
 
 import (
@@ -251,18 +249,16 @@ func runTestWithCode(path string) int {
 }
 
 func printUsage() {
-	logger.Info(`LineSpec v`+version+`-beta - Provenance Records & Integration Testing
+	logger.Info(`LineSpec v` + version + ` - Provenance Records & Integration Testing
 
 Usage: linespec <command> [options]
 
 Commands:
   provenance <subcommand>    Manage provenance records (alias: -p)
-  test [--debug] <path>      Run .linespec test files [BETA]
-  proxy <type> ...           Start protocol proxy [BETA]
+  test [--debug] <path>      Run .linespec test files
+  proxy <type> ...           Start protocol proxy
 
-Use "linespec <command> --help" for more information about a command.
-
-This is a beta build including LineSpec Testing features.`)
+Use "linespec <command> --help" for more information about a command.`)
 }
 
 func printTestUsage() {

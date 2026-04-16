@@ -57,21 +57,21 @@ clean:
 	@docker stop linespec-test-mysql linespec-test-postgres 2>/dev/null || true
 	@docker rm linespec-test-mysql linespec-test-postgres 2>/dev/null || true
 
-# Build stable version
+# Build linespec (Provenance Records + LineSpec Testing)
 build:
 	go build -o linespec ./cmd/linespec
 
-# Build beta version (includes LineSpec Testing)
+# Build linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 build-beta:
-	go build -tags beta -o linespec-beta ./cmd/linespec
+	go build -o linespec-beta ./cmd/linespec
 
-# Install stable version
+# Install linespec
 install:
 	go install ./cmd/linespec
 
-# Install beta version
+# Install linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 install-beta:
-	go install -tags beta ./cmd/linespec
+	go install ./cmd/linespec
 
 # Run linter
 lint:

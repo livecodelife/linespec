@@ -60,7 +60,7 @@
                 </div>
                 
                 <div class="nav-section">
-                    <h4>LineSpec Testing <span class="beta-tag">Beta</span></h4>
+                    <h4>LineSpec Testing</h4>
                     <ul>
                         <li><a href="#principles" class="active">Design Principles</a></li>
                         <li><a href="#grammar">DSL Grammar</a></li>
@@ -73,7 +73,11 @@
                         <li><a href="#interpolation">Env Interpolation</a></li>
                         <li><a href="#verify">VERIFY</a></li>
                         <li><a href="#config">Configuration</a></li>
+                        <li><a href="#kafka">Kafka Events</a></li>
+                        <li><a href="#grpc">gRPC</a></li>
+                        <li><a href="#timeout">TIMEOUT</a></li>
                         <li><a href="#examples">Examples</a></li>
+                        <li><a href="#cli-usage">CLI Usage</a></li>
                     </ul>
                 </div>
             </nav>
@@ -82,26 +86,26 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge beta">Beta</div>
+                    <div class="docs-badge stable">Stable v2.0.0</div>
                     <h1>LineSpec DSL Reference</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Deterministic domain-specific language for integration testing. Intercepts database and HTTP traffic at the protocol level for language-agnostic, deterministic test execution.</p>
-                    
+
                     <div class="install-commands compact">
                         <div class="command-tabs">
-                            <button class="tab active" data-tab="brew-beta">Homebrew</button>
-                            <button class="tab" data-tab="go-beta">Go Install</button>
+                            <button class="tab active" data-tab="brew-stable">Homebrew</button>
+                            <button class="tab" data-tab="go-stable">Go Install</button>
                         </div>
                         <div class="command-content">
-                            <div class="command-panel active" id="brew-beta">
-                                <code>brew install linespec-beta</code>
+                            <div class="command-panel active" id="brew-stable">
+                                <code>brew tap livecodelife/linespec &amp;&amp; brew install linespec</code>
                                 <button class="copy-btn" aria-label="Copy command">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
                                     </svg>
                                 </button>
                             </div>
-                            <div class="command-panel" id="go-beta">
-                                <code>go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code>
+                            <div class="command-panel" id="go-stable">
+                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.0.0</code>
                                 <button class="copy-btn" aria-label="Copy command">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -126,7 +130,11 @@
                         <li><a href="#interpolation">Env Interpolation</a></li>
                         <li><a href="#verify">VERIFY Clause</a></li>
                         <li><a href="#config">Configuration (.linespec.yml)</a></li>
+                        <li><a href="#kafka">Kafka Events</a></li>
+                        <li><a href="#grpc">gRPC Expectations</a></li>
+                        <li><a href="#timeout">TIMEOUT Directive</a></li>
                         <li><a href="#examples">Complete Examples</a></li>
+                        <li><a href="#cli-usage">CLI Usage</a></li>
                     </ul>
                 </div>
 
@@ -1060,6 +1068,200 @@ database:
 
 infrastructure:
   database: true</code></pre>
+                    </div>
+                </section>
+
+                <section id="kafka" class="docs-section">
+                    <h2>Kafka Events</h2>
+                    <p>LineSpec intercepts Kafka traffic at the wire protocol level. It handles both the producer side (messages the service publishes) and the consumer side (messages the service receives).</p>
+
+                    <p>Enable Kafka in <code>.linespec.yml</code>:</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>.linespec.yml</span></div>
+                        <pre><code>infrastructure:
+  kafka: true
+
+service:
+  environment:
+    KAFKA_BROKERS: kafka:29092</code></pre>
+                    </div>
+
+                    <h3>EXPECT EVENT (Produce)</h3>
+                    <p>Assert that the service publishes a message to a Kafka topic.</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code>EXPECT EVENT:&lt;topic-name&gt;
+[WITH {{&lt;payload_file&gt;}}]</code></pre>
+                    </div>
+                    <ul>
+                        <li><code>WITH</code> is optional; omit it to assert only that a message was produced on the topic</li>
+                        <li>When provided, the payload file is matched against the Kafka message value</li>
+                        <li>Test fails if the expected produce event is not observed</li>
+                    </ul>
+
+                    <h3>RECEIVE EVENT (Consume)</h3>
+                    <p>Trigger the test by injecting a Kafka message into the service's consumer path instead of an HTTP request. Use this to test Kafka consumer handlers.</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code>RECEIVE EVENT:&lt;topic-name&gt;
+WITH {{&lt;message_payload&gt;}}</code></pre>
+                    </div>
+                    <ul>
+                        <li>Exactly one <code>RECEIVE</code> per file — use either <code>RECEIVE HTTP:*</code> or <code>RECEIVE EVENT:*</code>, not both</li>
+                        <li><code>WITH</code> is required; the payload file is the message value injected into the topic</li>
+                    </ul>
+
+                    <h3>Example — Publish on create</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>create_todo_with_event.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST create_todo_publishes_event
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{payloads/todo_request.yaml}}
+
+EXPECT WRITE:MYSQL todos
+WITH {{payloads/todo_insert.yaml}}
+
+EXPECT EVENT:todo-events
+WITH {{payloads/todo_created_event.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/todo_response.yaml}}
+NOISE
+  body.id
+  body.created_at</code></pre>
+                    </div>
+
+                    <h3>Example — Consumer handler</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>process_todo_created_event.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST process_todo_created_event
+
+RECEIVE EVENT:todo-events
+WITH {{payloads/todo_created_event.yaml}}
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}/api/v1/users/42
+RETURNS {{payloads/user_info.yaml}}
+
+EXPECT WRITE:POSTGRESQL notifications
+WITH {{payloads/notification_insert.yaml}}
+
+RESPOND HTTP:200</code></pre>
+                    </div>
+                </section>
+
+                <section id="grpc" class="docs-section">
+                    <h2>gRPC Expectations</h2>
+                    <p>LineSpec intercepts gRPC traffic using an HTTP/2 + JSON proxy. The service under test must point its gRPC client at the proxy host. No code changes to the service are required.</p>
+
+                    <p>Enable gRPC in <code>.linespec.yml</code>:</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>.linespec.yml</span></div>
+                        <pre><code>infrastructure:
+  grpc: true
+
+dependencies:
+  - name: user-grpc-service
+    type: grpc
+    host: user-grpc-service.local
+    port: 50051</code></pre>
+                    </div>
+
+                    <h3>EXPECT GRPC</h3>
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code>EXPECT GRPC:&lt;ServiceName&gt;/&lt;MethodName&gt;
+[WITH {{&lt;request_payload&gt;}}]
+RETURNS {{&lt;response_payload&gt;}}</code></pre>
+                    </div>
+                    <ul>
+                        <li><code>ServiceName/MethodName</code> matches the gRPC route (e.g. <code>UserService/GetUser</code>)</li>
+                        <li>Payloads are JSON — LineSpec serialises to/from the wire format transparently</li>
+                        <li><code>RETURNS</code> is required; the proxy returns it as the gRPC response</li>
+                        <li>Test fails if the expected gRPC call is not observed</li>
+                    </ul>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>get_notification_with_grpc_lookup.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST get_notification_resolves_user_via_grpc
+
+RECEIVE HTTP:GET /api/v1/notifications/42
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+# Cache miss — must call downstream gRPC service for user info
+EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
+RETURNS EMPTY
+
+EXPECT GRPC:UserService/GetUser
+WITH {{payloads/get_user_request.json}}
+RETURNS {{payloads/user_info.json}}
+
+EXPECT READ:POSTGRESQL notifications
+USING_SQL """
+SELECT * FROM notifications WHERE id = $1
+"""
+RETURNS {{payloads/notification.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/notification_response.yaml}}</code></pre>
+                    </div>
+                </section>
+
+                <section id="timeout" class="docs-section">
+                    <h2>TIMEOUT Directive</h2>
+                    <p>By default tests time out after 180 seconds (or the value of <code>timeout_seconds</code> in <code>.linespec.yml</code>). A per-test <code>TIMEOUT</code> directive overrides both defaults for that specific file.</p>
+
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code>TIMEOUT &lt;duration&gt;</code></pre>
+                    </div>
+                    <p>Duration uses Go duration syntax: <code>30s</code>, <code>2m</code>, <code>90s</code>, etc. The directive may appear anywhere before <code>RECEIVE</code>.</p>
+
+                    <h3>Precedence</h3>
+                    <ol>
+                        <li>Per-test <code>TIMEOUT</code> directive (highest)</li>
+                        <li><code>timeout_seconds</code> in <code>.linespec.yml</code></li>
+                        <li>Global default of 180 seconds (lowest)</li>
+                    </ol>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+                        <div class="code-header"><span>slow_report_generation.linespec</span></div>
+                        <pre><code>TEST slow_report_generation
+TIMEOUT 5m
+
+RECEIVE HTTP:POST /api/v1/reports
+WITH {{payloads/report_request.yaml}}
+
+EXPECT WRITE:POSTGRESQL reports
+WITH {{payloads/report_insert.yaml}}
+
+RESPOND HTTP:202
+WITH {{payloads/report_accepted.yaml}}</code></pre>
                     </div>
                 </section>
 

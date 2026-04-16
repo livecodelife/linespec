@@ -31,7 +31,7 @@ builds:
         goarch: arm64
     # No build tags - this is the stable build with provenance only
 
-  # Beta builds (provenance + test + proxy)
+  # Beta builds — identical to stable since v2.0.0; published for backward compat
   - id: linespec-beta
     main: ./cmd/linespec
     binary: linespec
@@ -46,7 +46,6 @@ builds:
       - arm64
     flags:
       - -trimpath
-      - -tags=beta
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     ignore:
@@ -128,16 +127,13 @@ release:
     go install github.com/livecodelife/linespec/cmd/linespec@{{ .Version }}
     ```
     
-    {{ if .Prerelease }}
-    **Note:** This is a beta release including LineSpec Testing features. For the stable version with Provenance Records only, install without the `-beta` suffix.
-    {{ end }}
   
   footer: |
     ### Documentation
-    
+
     - [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md) - Complete provenance reference
-    - [README.md](./README.md) - Installation and quick start{{ if .Prerelease }}
-    - [LINESPEC.md](./LINESPEC.md) - Integration testing reference (beta){{ end }}
+    - [LINESPEC.md](./LINESPEC.md) - Integration testing reference
+    - [README.md](./README.md) - Installation and quick start
     
     ### Full Changelog
     
@@ -158,7 +154,7 @@ brews:
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
     directory: Formula
     homepage: "https://github.com/livecodelife/linespec"
-    description: "Provenance Records - Structured YAML artifacts for documenting architectural decisions"
+    description: "LineSpec - Provenance Records and Integration Testing"
     license: "MIT"
     test: |
       system "#{bin}/linespec", "provenance", "--help"
@@ -182,7 +178,7 @@ brews:
     commit_msg_template: "Brew formula update for {{ .ProjectName }}-beta version {{ .Tag }}"
     directory: Formula
     homepage: "https://github.com/livecodelife/linespec"
-    description: "LineSpec (Beta) - Provenance Records + Integration Testing"
+    description: "LineSpec - backward-compatible alias for the linespec formula (same binary since v2.0.0)"
     license: "MIT"
     test: |
       system "#{bin}/linespec", "provenance", "--help"

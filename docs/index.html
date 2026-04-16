@@ -47,7 +47,7 @@
     <header class="hero">
         <div class="container">
             <div class="hero-content">
-                <div class="badge">v1.3.0 Now Available</div>
+                <div class="badge">v2.0.0 Now Available</div>
                 <h1>Structured decisions.<br><span class="gradient">Deterministic testing.</span></h1>
                 <p class="hero-description">
                     LineSpec captures the <strong>why</strong> behind your code with Provenance Records, 
@@ -73,7 +73,7 @@
                             </button>
                         </div>
                         <div class="command-panel" id="go">
-                            <code>go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0</code>
+                            <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.0.0</code>
                             <button class="copy-btn" aria-label="Copy command">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -113,7 +113,7 @@
                     <a href="provenance.html" class="feature-link">Learn more →</a>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon beta-icon">
+                    <div class="feature-icon">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             <line x1="12" y1="8" x2="12" y2="12"/>
@@ -121,7 +121,7 @@
                         </svg>
                     </div>
                     <h3>LineSpec Testing</h3>
-                    <span class="badge-beta">Beta</span>
+                    <span class="badge-stable">Stable</span>
                     <p>DSL-based integration testing that intercepts database and HTTP traffic at the protocol level. Language-agnostic. Deterministic.</p>
                     <ul class="feature-list">
                         <li>Protocol-level interception</li>
@@ -356,19 +356,15 @@ tags:
     <section id="testing" class="testing-section">
         <div class="container">
             <div class="section-header">
-                <span class="section-badge beta">LineSpec Testing</span>
+                <span class="section-badge">LineSpec Testing</span>
                 <h2>Test at the protocol level.<br>No mocks. No magic.</h2>
                 <p class="section-subtitle">DSL-based integration testing that intercepts traffic deterministically.</p>
             </div>
 
             <div class="testing-intro">
-                <div class="testing-badge-row">
-                    <span class="badge-beta-large">Beta Feature</span>
-                    <span class="beta-note">Build with <code>-tags beta</code> to enable</span>
-                </div>
-                <p class="beta-description">
-                    LineSpec Testing is a DSL-based integration testing framework for containerized services. 
-                    It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic 
+                <p>
+                    LineSpec Testing is a DSL-based integration testing framework for containerized services.
+                    It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic
                     and framework-independent.
                 </p>
             </div>
@@ -460,10 +456,10 @@ brew install linespec</code></pre>
                 </div>
 
                 <div class="install-method">
-                    <h4>Beta Build (All Features)</h4>
+                    <h4>Build from Source</h4>
                     <div class="install-code">
                         <div class="install-code-inner">
-                            <pre><code>go build -tags beta -o linespec ./cmd/linespec</code></pre>
+                            <pre><code>go build -o linespec ./cmd/linespec</code></pre>
                         </div>
                         <button class="copy-btn" aria-label="Copy command">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

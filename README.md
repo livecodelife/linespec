@@ -1,11 +1,11 @@
-# LineSpec v1.3.0
+# LineSpec v2.0.0
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Provenance Records** - Structured YAML artifacts for documenting architectural decisions  
-**LineSpec Testing** - DSL-based integration testing for containerized services (Beta)
+**LineSpec Testing** - DSL-based integration testing for containerized services
 
 ---
 
@@ -13,7 +13,7 @@
 
 LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
 
-The default installation includes only the stable **Provenance Records** functionality. **LineSpec Testing** features are available as a beta opt-in.
+As of v2.0.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
 ---
 
@@ -22,30 +22,21 @@ The default installation includes only the stable **Provenance Records** functio
 ### Homebrew (Recommended)
 
 ```bash
-# Install stable version (Provenance Records only)
 brew tap livecodelife/linespec
 brew install linespec
-
-# Or install beta version (includes LineSpec Testing)
-brew install linespec-beta
 ```
 
 ### Go Install
 
 ```bash
-# Stable version (Provenance Records only)
-go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0
-
-# Beta version (includes LineSpec Testing)
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.3.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.0.0
 ```
 
 ### GitHub Releases
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_1.3.0_*` - Stable version (Provenance only)
-- `linespec-beta_1.3.0_*` - Beta version (All features)
+- `linespec_2.0.0_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
@@ -100,15 +91,12 @@ tags:
 
 ---
 
-## Feature Comparison
+## Feature Overview
 
-| Feature | Provenance Records (v1.0.0) | LineSpec Testing (Beta) |
-|---------|------------------------------|-------------------------|
-| Status | ✅ **Stable** | 🚧 **Beta** |
-| Commands | `provenance` | `test`, `proxy` |
-| Maturity | Production-ready | Active development |
-| Installation | Default | Requires `-tags beta` |
-| Documentation | Complete | In progress |
+| Feature | Commands | Status |
+|---------|----------|--------|
+| **Provenance Records** | `provenance` | ✅ Stable |
+| **LineSpec Testing** | `test`, `proxy` | ✅ Stable |
 
 ---
 
@@ -185,23 +173,11 @@ The SARIF output includes:
 
 ---
 
-## LineSpec Testing (Beta)
-
-> 🚧 **Beta Feature**: LineSpec Testing is in active development. Build with `-tags beta` to enable.
+## LineSpec Testing
 
 LineSpec Testing is a DSL-based integration testing framework for containerized services. It intercepts database and HTTP traffic at the protocol level, making tests language-agnostic and framework-independent.
 
-### Installation (Beta)
-
-```bash
-# Build from source with beta tag
-go build -tags beta -o linespec ./cmd/linespec
-
-# Or install via go install
-go install -tags beta github.com/livecodelife/linespec/cmd/linespec@v1.3.0
-```
-
-### Beta Commands
+### Commands
 
 ```bash
 # Run integration tests
@@ -233,10 +209,10 @@ NOISE
   body.created_at
 ```
 
-### Beta Documentation
+### Documentation
 
-- **[LINESPEC.md](./LINESPEC.md)** - DSL syntax reference (Beta)
-- **[AGENTS.md](./AGENTS.md)** - Testing guidelines (Beta section)
+- **[LINESPEC.md](./LINESPEC.md)** - DSL syntax reference
+- **[AGENTS.md](./AGENTS.md)** - Testing guidelines
 
 ---
 
@@ -338,7 +314,7 @@ make test-integration
 | **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** | ✅ Stable | Complete provenance reference |
 | **[README.md](./README.md)** | ✅ Stable | This file - overview and installation |
 | **[AGENTS.md](./AGENTS.md)** | ✅ Stable | Guidelines for AI agents |
-| **[LINESPEC.md](./LINESPEC.md)** | 🚧 Beta | DSL syntax for integration testing |
+| **[LINESPEC.md](./LINESPEC.md)** | ✅ Stable | DSL syntax for integration testing |
 | **[RELEASE_PLAN.md](./RELEASE_PLAN.md)** | ✅ Stable | v1.0.0 release strategy |
 
 ### Reading Order
@@ -346,29 +322,11 @@ make test-integration
 1. **Start here** (README.md) - Installation and overview
 2. **PROVENANCE_RECORDS.md** - Complete reference for stable features
 3. **AGENTS.md** - If using AI agents with LineSpec
-4. **LINESPEC.md** - If using beta testing features
+4. **LINESPEC.md** - If using LineSpec Testing
 
 ---
 
 ## FAQ
-
-### What's the difference between stable and beta?
-
-**Stable (default):** Includes only Provenance Records - fully tested and production-ready.
-
-**Beta:** Includes Provenance Records + LineSpec Testing - active development, may have bugs.
-
-### Can I install both versions?
-
-Yes! Using Homebrew:
-```bash
-brew install linespec        # Stable
-brew install linespec-beta   # Beta (installed as 'linespec-beta')
-```
-
-### When will LineSpec Testing be stable?
-
-LineSpec Testing will reach v1.0.0 in a future release. The beta is available now for early adopters who want to test and provide feedback.
 
 ### How do I migrate from the old repository?
 
@@ -406,4 +364,4 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
-**LineSpec v1.0.4** - Built with Provenance Records
+**LineSpec v2.0.0** - Built with Provenance Records

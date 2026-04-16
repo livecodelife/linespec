@@ -5,6 +5,16 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-16
+
+### Changed
+
+- **LineSpec Testing is now stable** ([prov-2026-7cc26544](./provenance/prov-2026-7cc26544.yml)) - LineSpec Testing graduates from beta to stable. The `linespec` binary now includes the `test` and `proxy` commands by default. The `-tags beta` build flag is no longer required to access integration testing features. The `linespec-beta` Homebrew formula continues to be published as a backward-compatible alias pointing at the same binary.
+
+### Related Provenance Records
+
+- [prov-2026-7cc26544](./provenance/prov-2026-7cc26544.yml) - Graduate LineSpec Testing from beta to stable (v2.0.0 release)
+
 ## [1.5.0-beta] - 2026-04-15
 
 ### Added (Beta)
