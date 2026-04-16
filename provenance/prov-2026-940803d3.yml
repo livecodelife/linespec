@@ -1,6 +1,6 @@
 id: prov-2026-940803d3
 title: Add install-skill CLI command for provenance skill
-status: open
+status: implemented
 created_at: "2026-04-16"
 author: calebcowen@gmail.com
 intent: "Add a `linespec provenance install-skill` CLI command that embeds the provenance skill content and writes it into a target Claude Code skills directory. Users running AI agents can now set up the skill without cloning the repo or running a separate shell script."
@@ -26,7 +26,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cc1d783dfb17f25647e1d450c0692bbace5c8e7f
 associated_specs:
   - path: pkg/provenance/commands.go
     type: code
