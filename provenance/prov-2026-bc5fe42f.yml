@@ -1,0 +1,27 @@
+id: prov-2026-bc5fe42f
+title: Fix run_command syntax in prov-2026-2155a00e associated_specs
+status: open
+created_at: "2026-04-15"
+author: calebcowen@gmail.com
+intent: >
+  The run_command in prov-2026-2155a00e used a comma to separate test function names
+  in the Go test -run flag. Go test -run takes a regex, so the correct separator is |
+  (alternation), not comma. Fix the command so the tests actually execute when the
+  spec is run via the pre-commit hook.
+constraints:
+  - Only the run_command value changes; no other fields are modified.
+affected_scope:
+  - provenance/prov-2026-2155a00e.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-2155a00e
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/run_specs_test.go
+    type: go-test
+    run_command: go test ./pkg/provenance/... -run "TestBuildSpec|TestRunSpecs"
+associated_traces: []
+monitors: []
+tags: []
