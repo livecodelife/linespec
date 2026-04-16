@@ -1,0 +1,47 @@
+id: prov-2026-3ee4a606
+title: Support RETURNS on WRITE operations for MySQL and PostgreSQL proxies
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: >
+  WRITE mock operations (INSERT, UPDATE, DELETE) currently ignore the RETURNS
+  directive entirely. The MySQL proxy always returns affected_rows=0 and
+  last_insert_id=0 in its OK packet; the PostgreSQL proxy always returns
+  rowCount=1 in the CommandComplete tag. This makes it impossible to test
+  sequences where the result of one write (e.g. lastInsertId from an INSERT)
+  is used in a subsequent write (e.g. UPDATE WHERE id=?). This record governs
+  adding RETURNS support to WRITE channels on both proxies, updating the
+  multi-db example to demonstrate the pattern, and documenting it.
+constraints:
+  - All unit tests must pass (make test)
+  - The multi-db example linespec must pass after the fix
+  - "MySQL: affected_rows and last_insert_id must be read from the RETURNS payload"
+  - "PostgreSQL: affected_rows must be read from the RETURNS payload"
+  - "RETURNS on WRITE remains optional; omitting it preserves current defaults (affected_rows=1, last_insert_id=0)"
+  - Docs must show RETURNS syntax on WRITE operations
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - examples/multi-db-service/main.go
+  - examples/multi-db-linespecs/create_order_success.linespec
+  - examples/multi-db-linespecs/payloads/order_insert_result.yaml
+  - examples/multi-db-linespecs/payloads/order_status_update.yaml
+  - examples/multi-db-linespecs/payloads/order_update_result.yaml
+  - docs/linespec.html
+  - LINESPEC.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7cc26544
+sealed_at_sha: ""
+associated_specs:
+  - path: "examples/multi-db-linespecs/create_order_success.linespec"
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - mysql
+  - postgresql
+  - testing
