@@ -1,0 +1,28 @@
+id: prov-2026-782ae9dd
+title: Fix multi-db-linespecs USING_SQL for prepared statement SQL
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: |
+  The create_order_success_missing_expect_test linespec used USING_SQL
+  with interpolated values ("UPDATE orders SET status = 'processing'
+  WHERE id = 42"), but the Go MySQL driver sends COM_STMT_PREPARE with
+  placeholder SQL ("UPDATE orders SET status = ? WHERE id = ?"). Exact
+  match fails because the proxy sees the placeholder form, not the
+  interpolated form. Switch to USING_SQL_CONTAINS with a stable fragment.
+constraints:
+  - Use USING_SQL_CONTAINS for the status update to match prepared statement form
+affected_scope:
+  - examples/multi-db-linespecs/create_order_success_missing_expect_test.linespec
+  - provenance/prov-2026-b5cbfedf.yml
+forbidden_scope: []
+supersedes: prov-2026-b5cbfedf
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/multi-db-linespecs/create_order_success_missing_expect_test.linespec
+    type: test
+associated_traces: []
+monitors: []
+tags: []
