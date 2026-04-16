@@ -857,6 +857,7 @@ service:
 # ─────────────────────────────────────────────
 # Database (omit if external_db: true)
 # ─────────────────────────────────────────────
+# Single-database form (backward compatible):
 database:
   type: postgresql     # mysql | postgresql | mongodb
   image: postgres:16-alpine
@@ -873,6 +874,48 @@ database:
   # Set to false to disable the protocol-level proxy for this database.
   # Default: true when infrastructure.database is true.
   proxy: true
+
+# Multi-database form — use `databases:` when a service talks to more than
+# one database type at the same time (e.g. MySQL + MongoDB).
+# Each entry gets its own real-DB container and proxy sidecar.
+# The `name:` field is required; `host:` defaults to the entry's name.
+databases:
+  - name: mysql
+    type: mysql
+    image: mysql:8.4
+    port: 3306
+    database: myapp_development
+    username: myuser
+    password: mypassword
+    proxy: true
+    # Network aliases assigned automatically:
+    #   proxy  → "mysql"       (app connects here)
+    #   real   → "real-mysql"  (proxy forwards here)
+
+  - name: mongo
+    type: mongodb
+    image: mongo:7
+    port: 27017
+    database: myapp_events
+    username: myuser
+    password: mypassword
+    proxy: true
+    # Network aliases: proxy → "mongo", real → "real-mongo"
+
+# Environment variables injected per database when using `databases:`:
+#
+#   First database also receives legacy unprefixed names:
+#     DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD          (mysql)
+#     DATABASE_URL                                         (postgresql)
+#     MONGODB_URI                                          (mongodb)
+#
+#   Every database receives a name-prefixed variant:
+#     <NAME>_DB_HOST, <NAME>_DB_PORT, ...                 (mysql)
+#     <NAME>_DATABASE_URL                                  (postgresql)
+#     <NAME>_MONGODB_URI                                   (mongodb)
+#
+# Example: databases: [{name: mysql, ...}, {name: mongo, ...}] injects
+#   DB_HOST=mysql, MYSQL_DB_HOST=mysql, MONGO_MONGODB_URI=mongodb://...
 
 # ─────────────────────────────────────────────
 # Infrastructure Flags

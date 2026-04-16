@@ -897,6 +897,7 @@ user_id: 123</code></pre>
 
                     <h3>Database</h3>
                     <p>Defines the database container. Omit if <code>infrastructure.external_db: true</code>.</p>
+                    <p><strong>Single-database form</strong> (backward compatible):</p>
                     <div class="code-block">
                         <div class="code-header"><span>.linespec.yml</span></div>
                         <pre><code>database:
@@ -911,6 +912,39 @@ user_id: 123</code></pre>
   host: db.internal    # External host (used when external_db: true)
   proxy: true          # Set to false to disable protocol-level interception</code></pre>
                     </div>
+                    <p><strong>Multi-database form</strong> — use <code>databases:</code> when a service talks to more than one database type simultaneously. Each entry gets its own real-DB container and proxy sidecar.</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>.linespec.yml</span></div>
+                        <pre><code>databases:
+  - name: mysql          # required; host defaults to this name
+    type: mysql
+    image: mysql:8.4
+    port: 3306
+    database: myapp_development
+    username: myuser
+    password: mypassword
+    proxy: true
+    # proxy alias → "mysql", real DB alias → "real-mysql"
+
+  - name: mongo
+    type: mongodb
+    image: mongo:7
+    port: 27017
+    database: myapp_events
+    username: myuser
+    password: mypassword
+    proxy: true
+    # proxy alias → "mongo", real DB alias → "real-mongo"</code></pre>
+                    </div>
+                    <p>Environment variables injected when using <code>databases:</code>:</p>
+                    <table>
+                        <thead><tr><th>Type</th><th>Prefixed (all databases)</th><th>Unprefixed (first database only)</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>mysql</code></td><td><code>&lt;NAME&gt;_DB_HOST</code>, <code>&lt;NAME&gt;_DB_PORT</code>, <code>&lt;NAME&gt;_DB_USERNAME</code>, <code>&lt;NAME&gt;_DB_PASSWORD</code></td><td><code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code></td></tr>
+                            <tr><td><code>postgresql</code></td><td><code>&lt;NAME&gt;_DATABASE_URL</code></td><td><code>DATABASE_URL</code></td></tr>
+                            <tr><td><code>mongodb</code></td><td><code>&lt;NAME&gt;_MONGODB_URI</code></td><td><code>MONGODB_URI</code></td></tr>
+                        </tbody>
+                    </table>
 
                     <h3>Infrastructure</h3>
                     <p>Toggles which infrastructure components LineSpec manages.</p>
@@ -1177,6 +1211,73 @@ WITH {{payloads/create_product_response.json}}
 NOISE
   body.id
   body.created_at</code></pre>
+                    </div>
+
+                    <h3>Example 5: Multi-database service (MySQL + MongoDB)</h3>
+                    <p>A service that writes to two different databases in a single request — MySQL for the relational record and MongoDB for an event log. Each database gets its own proxy sidecar; both are asserted in a single spec.</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>create_order_success.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST create_order_success
+
+RECEIVE HTTP:POST /orders
+WITH {{payloads/create_order_request.yaml}}
+
+EXPECT WRITE:MYSQL orders
+WITH {{payloads/order_insert.yaml}}
+
+EXPECT WRITE:MONGODB order_events
+WITH {{payloads/order_event.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/created_order.yaml}}
+NOISE
+  body.id
+  body.created_at</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>.linespec.yml</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>service:
+  name: order-events-service
+  framework: custom
+  port: 3000
+  health_endpoint: /health
+  start_command: ./order-events-service
+
+databases:
+  - name: mysql
+    type: mysql
+    image: mysql:8.4
+    port: 3306
+    database: orders_development
+    username: orders_user
+    password: orders_password
+    proxy: true
+
+  - name: mongo
+    type: mongodb
+    image: mongo:7
+    port: 27017
+    database: order_events
+    username: events_user
+    password: events_password
+    proxy: true
+
+infrastructure:
+  database: true</code></pre>
                     </div>
                 </section>
 

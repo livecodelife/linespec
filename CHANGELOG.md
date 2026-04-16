@@ -5,6 +5,25 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9-beta] - 2026-04-15
+
+### Added (Beta)
+
+- **Multiple databases per service** ([prov-2026-ad64db54](./provenance/prov-2026-ad64db54.yml)) - `.linespec.yml` now accepts a `databases:` list so a service that uses more than one database type simultaneously (e.g. MySQL for relational data and MongoDB for an event log) can be tested end-to-end. Each entry in the list gets its own real-DB container and protocol-level proxy sidecar running in parallel during the test. The existing `database:` singular form is preserved as a backward-compatible alias; all existing `.linespec.yml` files work without modification.
+
+  Key behaviours:
+  - Each entry requires a `name:` field. The `host:` field defaults to the entry name, giving each proxy a unique network alias (e.g. `mysql`, `mongo`).
+  - A single spec can assert `EXPECT WRITE:MYSQL` and `EXPECT WRITE:MONGODB` in the same test, with both proxies intercepting concurrently.
+  - Environment variables are injected with a name prefix for every database (`MYSQL_DB_HOST`, `MONGO_MONGODB_URI`, etc.) plus the legacy unprefixed names for the first database so single-database services need no changes.
+  - The validator rejects configs where two entries share the same `host:` alias.
+
+- **order-events-service example** ([prov-2026-91ed882c](./provenance/prov-2026-91ed882c.yml)) - New example service and linespec suite demonstrating MySQL + MongoDB simultaneously (`examples/multi-db-service/`, `examples/multi-db-linespecs/`).
+
+### Related Provenance Records
+
+- [prov-2026-ad64db54](./provenance/prov-2026-ad64db54.yml) - Support multiple databases per service in .linespec.yml
+- [prov-2026-91ed882c](./provenance/prov-2026-91ed882c.yml) - Add order-events-service example for multi-database testing
+
 ## [1.4.3-beta] - 2026-04-14
 
 ### Added (Beta)
