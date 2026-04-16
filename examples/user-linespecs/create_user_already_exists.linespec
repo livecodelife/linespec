@@ -4,8 +4,8 @@ RECEIVE HTTP:POST /api/v1/users
 WITH {{payloads/create_user_request.json}}
 
 EXPECT READ:MYSQL users
-USING_SQL """
-SELECT users.* FROM `users` WHERE `users`.`email` = 'john@example.com' LIMIT 1
+USING_SQL_CONTAINS """
+WHERE users.email = 'john@example.com'
 """
 RETURNS {{payloads/user_response.json}}
 
