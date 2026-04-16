@@ -112,28 +112,98 @@ func TestMockRegistry_SQLMatching(t *testing.T) {
 
 	reg.Register(spec)
 
-	// Test exact match
+	// Exact match
 	_, found := reg.FindMock("users", "SELECT * FROM users WHERE id = 42 LIMIT 1")
 	if !found {
 		t.Errorf("Expected exact SQL match to work")
 	}
 
-	// Reset hits to test backtick normalization
+	// Backtick normalization: `users` and `id` are stripped
 	reg.ResetHits()
-
-	// Test backtick-normalized match
-	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE id = 42 LIMIT 1")
+	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE `id` = 42 LIMIT 1")
 	if !found {
 		t.Errorf("Expected backtick-normalized SQL match to work")
 	}
 
-	// Reset hits to test table prefix normalization
+	// Table-qualified column (users.id) does NOT match mock that uses bare `id`.
+	// Engineers must write USING_SQL to match what the ORM actually produces, or use
+	// USING_SQL_CONTAINS for a fragment match.
 	reg.ResetHits()
-
-	// Test table prefix match (like `users`.`id` -> users.id)
 	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1")
+	if found {
+		t.Errorf("USING_SQL should not match when mock uses 'id' but query uses 'users.id' — use USING_SQL_CONTAINS for fragment matching")
+	}
+}
+
+func TestMockRegistry_SQLContainsMatching(t *testing.T) {
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "get_user_contains",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:     types.ReadMySQL,
+				Table:       "users",
+				SQLContains: "WHERE users.id = 42",
+				ReturnsFile: "payloads/user.json",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Full ORM-generated query with table prefix and backtick quoting
+	_, found := reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`id` = 42 LIMIT 1")
 	if !found {
-		t.Errorf("Expected table prefix normalized SQL match to work")
+		t.Errorf("USING_SQL_CONTAINS should match when fragment is present in query")
+	}
+
+	// Fragment not present — should not match
+	reg.ResetHits()
+	_, found = reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`token` = 'abc' LIMIT 1")
+	if found {
+		t.Errorf("USING_SQL_CONTAINS should not match when fragment is absent from query")
+	}
+}
+
+func TestMockRegistry_SQLContains_DoesNotMatchSQL(t *testing.T) {
+	// A mock with SQL (exact) and one with SQLContains must not cross-match.
+	reg := NewMockRegistry()
+
+	spec := &types.TestSpec{
+		Name: "disambiguation_test",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:     types.ReadMySQL,
+				Table:       "users",
+				SQL:         "SELECT * FROM users WHERE users.id = 1",
+				ReturnsFile: "payloads/user_one.json",
+			},
+			{
+				Channel:     types.ReadMySQL,
+				Table:       "users",
+				SQLContains: "WHERE users.id = 2",
+				ReturnsFile: "payloads/user_two.json",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Query for id=1 should hit the exact-match mock
+	mock, found := reg.FindMock("users", "SELECT * FROM users WHERE users.id = 1")
+	if !found {
+		t.Fatal("Expected exact SQL mock to match id=1 query")
+	}
+	if mock.ReturnsFile != "payloads/user_one.json" {
+		t.Errorf("Wrong mock returned for id=1: got %q", mock.ReturnsFile)
+	}
+
+	// Query for id=2 should hit the contains mock
+	mock, found = reg.FindMock("users", "SELECT * FROM `users` WHERE `users`.`id` = 2 LIMIT 1")
+	if !found {
+		t.Fatal("Expected USING_SQL_CONTAINS mock to match id=2 query")
+	}
+	if mock.ReturnsFile != "payloads/user_two.json" {
+		t.Errorf("Wrong mock returned for id=2: got %q", mock.ReturnsFile)
 	}
 }
 

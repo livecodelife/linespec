@@ -37,7 +37,8 @@ type ExpectStatement struct {
 	URL           string // For HTTP
 	Table         string // For DB
 	Topic         string // For Kafka
-	SQL           string // For DB (USING_SQL)
+	SQL           string // For DB (USING_SQL) — exact normalized match
+	SQLContains   string // For DB (USING_SQL_CONTAINS) — normalized substring match
 	WithFile      string // For Request Payload
 	ReturnsFile   string // For Response Payload
 	ReturnsEmpty  bool   // For DB (RETURNS EMPTY)

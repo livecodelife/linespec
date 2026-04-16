@@ -1085,3 +1085,71 @@ RESPOND HTTP:200`
 		t.Error("Expected parse error for invalid TIMEOUT value, got nil")
 	}
 }
+
+func TestLexer_UsingSqlContains(t *testing.T) {
+	content := "TEST using_sql_contains_test\nRECEIVE HTTP:GET /api/v1/users/1\nHEADERS\n  Authorization: Bearer token\n\nEXPECT READ:MYSQL users\nUSING_SQL_CONTAINS \"\"\"\nWHERE users.id = 1\n\"\"\"\nRETURNS EMPTY\n\nRESPOND HTTP:200"
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "using_sql_contains_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	// Verify TokenUsingSqlContains is present (not TokenUsingSql)
+	found := false
+	for _, tok := range tokens {
+		if tok.Type == TokenUsingSqlContains {
+			found = true
+		}
+		if tok.Type == TokenUsingSql {
+			t.Errorf("Should not emit TokenUsingSql for USING_SQL_CONTAINS line")
+		}
+	}
+	if !found {
+		t.Errorf("Expected TokenUsingSqlContains token, none found")
+	}
+}
+
+func TestParser_UsingSqlContains(t *testing.T) {
+	content := "TEST using_sql_contains_test\nRECEIVE HTTP:GET /api/v1/users/1\nHEADERS\n  Authorization: Bearer token\n\nEXPECT READ:MYSQL users\nUSING_SQL_CONTAINS \"\"\"\nWHERE users.id = 1\n\"\"\"\nRETURNS EMPTY\n\nRESPOND HTTP:200"
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "using_sql_contains_test.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(spec.Expects) != 1 {
+		t.Fatalf("Expected 1 expect, got %d", len(spec.Expects))
+	}
+
+	expect := spec.Expects[0]
+	if expect.Channel != types.ReadMySQL {
+		t.Errorf("Expected channel READ_MYSQL, got %s", expect.Channel)
+	}
+	if expect.SQL != "" {
+		t.Errorf("Expected SQL to be empty, got %q", expect.SQL)
+	}
+	if expect.SQLContains != "WHERE users.id = 1" {
+		t.Errorf("Expected SQLContains 'WHERE users.id = 1', got %q", expect.SQLContains)
+	}
+	if !expect.ReturnsEmpty {
+		t.Errorf("Expected ReturnsEmpty to be true")
+	}
+}

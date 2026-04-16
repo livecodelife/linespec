@@ -22,9 +22,10 @@ const (
 	TokenNoise         TokenType = "NOISE"
 	TokenHeaders         TokenType = "HEADERS"
 	TokenResponseHeaders TokenType = "RESPONSE_HEADERS"
-	TokenUsingSql      TokenType = "USING_SQL"
-	TokenNoTransaction TokenType = "NO_TRANSACTION"
-	TokenSqlBlock      TokenType = "SQL_BLOCK"
+	TokenUsingSql         TokenType = "USING_SQL"
+	TokenUsingSqlContains TokenType = "USING_SQL_CONTAINS"
+	TokenNoTransaction    TokenType = "NO_TRANSACTION"
+	TokenSqlBlock         TokenType = "SQL_BLOCK"
 	TokenTimeout       TokenType = "TIMEOUT"
 	TokenEOF           TokenType = "EOF"
 )
@@ -96,6 +97,12 @@ func LexFile(filePath string) ([]Token, error) {
 				continue
 			}
 			sqlBuffer.WriteString(line + "\n")
+			continue
+		}
+
+		if strings.Contains(line, `USING_SQL_CONTAINS """`) {
+			inSqlBlock = true
+			tokens = append(tokens, Token{Type: TokenUsingSqlContains, Line: lineNum})
 			continue
 		}
 

@@ -270,6 +270,15 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		expect.SQL = p.resolve(sqlToken.Literal)
 	}
 
+	if p.peek().Type == TokenUsingSqlContains {
+		p.consume() // TokenUsingSqlContains
+		sqlToken, err := p.expect(TokenSqlBlock)
+		if err != nil {
+			return nil, err
+		}
+		expect.SQLContains = p.resolve(sqlToken.Literal)
+	}
+
 	if p.peek().Type == TokenNoTransaction {
 		p.consume()
 		expect.NoTransaction = true

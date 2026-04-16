@@ -254,17 +254,21 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 				if mock.Negative {
 					continue
 				}
+				if r.hits[mock] != 0 {
+					continue
+				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-					if r.hits[mock] == 0 {
-						return mock, true
-					}
+					return mock, true
+				}
+				if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
+					return mock, true
 				}
 			}
 		}
 		return nil, false
 	}
 
-	// 1. Exact SQL Match
+	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS)
 	if query != "" {
 		for _, mock := range mocks {
 			if mock.Negative {
@@ -273,20 +277,25 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 			if r.hits[mock] > 0 {
 				continue
 			}
-			if mock.SQL != "" {
-				if r.matchSQL(mock.SQL, query) {
-					return mock, true
-				}
+			if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+				return mock, true
+			}
+			if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
+				return mock, true
 			}
 		}
 	}
 
-	// 2. Fuzzy Match
+	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
 		if mock.Negative {
 			continue
 		}
 		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.SQL != "" || mock.SQLContains != "" {
+			// Already evaluated above; skip to avoid double-matching.
 			continue
 		}
 		if mock.Channel == types.HTTP || mock.Channel == types.Event {
@@ -328,18 +337,23 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 				if mock.Negative {
 					continue
 				}
+				if r.hits[mock] != 0 {
+					continue
+				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-					if r.hits[mock] == 0 {
-						r.hits[mock]++
-						return mock, true
-					}
+					r.hits[mock]++
+					return mock, true
+				}
+				if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
+					r.hits[mock]++
+					return mock, true
 				}
 			}
 		}
 		return nil, false
 	}
 
-	// 1. Exact SQL Match
+	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS)
 	if query != "" {
 		for _, mock := range mocks {
 			if mock.Negative {
@@ -348,21 +362,27 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 			if r.hits[mock] > 0 {
 				continue
 			}
-			if mock.SQL != "" {
-				if r.matchSQL(mock.SQL, query) {
-					r.hits[mock]++
-					return mock, true
-				}
+			if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+				r.hits[mock]++
+				return mock, true
+			}
+			if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
+				r.hits[mock]++
+				return mock, true
 			}
 		}
 	}
 
-	// 2. Fuzzy Match
+	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
 		if mock.Negative {
 			continue
 		}
 		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.SQL != "" || mock.SQLContains != "" {
+			// Already evaluated above; skip to avoid double-matching.
 			continue
 		}
 		if mock.Channel == types.HTTP || mock.Channel == types.Event {
@@ -507,8 +527,13 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 				continue
 			}
 			if query != "" && mock.SQL != "" {
-				// Explicit SQL constraint: use proper SQL matching.
+				// Explicit exact-match SQL constraint.
 				if r.matchSQL(mock.SQL, query) {
+					r.hits[mock]++
+				}
+			} else if query != "" && mock.SQLContains != "" {
+				// Substring SQL constraint.
+				if r.matchSQLContains(mock.SQLContains, query) {
 					r.hits[mock]++
 				}
 			} else if query != "" {
@@ -551,6 +576,8 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 					continue
 				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
+					r.hits[mock]++
+				} else if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
 					r.hits[mock]++
 				}
 			}
@@ -767,8 +794,13 @@ func (r *MockRegistry) GetHits() map[string]int {
 		case types.HTTP:
 			key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
 		case types.ReadMySQL, types.ReadPostgreSQL:
-			// READ operations: include SQL to distinguish different queries
-			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+			// READ operations: include SQL constraint to distinguish different queries.
+			// Prefix ~ on SQLContains keys to avoid collision with USING_SQL keys.
+			sqlKey := mock.SQL
+			if sqlKey == "" && mock.SQLContains != "" {
+				sqlKey = "~" + mock.SQLContains
+			}
+			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
 		case types.GRPC:
 			key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
 		case types.ReadRedis, types.WriteRedis:
@@ -793,7 +825,11 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 			case types.HTTP:
 				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
 			case types.ReadMySQL, types.ReadPostgreSQL:
-				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, mock.SQL)
+				sqlKey := mock.SQL
+				if sqlKey == "" && mock.SQLContains != "" {
+					sqlKey = "~" + mock.SQLContains
+				}
+				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
 			case types.GRPC:
 				key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
 			case types.ReadRedis, types.WriteRedis:
@@ -808,32 +844,30 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 	}
 }
 
-func (r *MockRegistry) matchSQL(mockSQL string, query string) bool {
-	normMock := strings.ReplaceAll(strings.ToLower(mockSQL), "`", "")
-	normQuery := strings.ReplaceAll(strings.ToLower(query), "`", "")
-
-	// Normalize table prefixes like `users`.`id` to `users.id`
+// normalizeSQL applies canonical transformations to a SQL string so that
+// superficial ORM dialect differences (backtick quoting, table-prefixed column
+// names, table.* wildcards, AS aliases, extra whitespace) do not prevent a match.
+func (r *MockRegistry) normalizeSQL(s string) string {
+	norm := strings.ReplaceAll(strings.ToLower(s), "`", "")
 	reTablePrefix := regexp.MustCompile(`(\w+)\.(\w+)`)
-	normMock = reTablePrefix.ReplaceAllString(normMock, "$1.$2")
-	normQuery = reTablePrefix.ReplaceAllString(normQuery, "$1.$2")
-
+	norm = reTablePrefix.ReplaceAllString(norm, "$1.$2")
 	reSpace := regexp.MustCompile(`\s+`)
-	normMock = strings.TrimSpace(reSpace.ReplaceAllString(normMock, " "))
-	normQuery = strings.TrimSpace(reSpace.ReplaceAllString(normQuery, " "))
+	norm = strings.TrimSpace(reSpace.ReplaceAllString(norm, " "))
 	reTableStar := regexp.MustCompile(`\w+\.\*`)
-	normMock = reTableStar.ReplaceAllString(normMock, "*")
-	normQuery = reTableStar.ReplaceAllString(normQuery, "*")
+	norm = reTableStar.ReplaceAllString(norm, "*")
 	reAsOne := regexp.MustCompile(`(?i)\s+as\s+\w+`)
-	normMock = reAsOne.ReplaceAllString(normMock, "")
-	normQuery = reAsOne.ReplaceAllString(normQuery, "")
+	norm = reAsOne.ReplaceAllString(norm, "")
+	return norm
+}
 
-	if normMock == normQuery {
-		return true
-	}
-	if len(normMock) > 20 && strings.Contains(normQuery, normMock) {
-		return true
-	}
-	return false
+func (r *MockRegistry) matchSQL(mockSQL string, query string) bool {
+	return r.normalizeSQL(mockSQL) == r.normalizeSQL(query)
+}
+
+// matchSQLContains checks whether the normalized fragment from USING_SQL_CONTAINS
+// is a substring of the normalized actual query.
+func (r *MockRegistry) matchSQLContains(fragment string, query string) bool {
+	return strings.Contains(r.normalizeSQL(query), r.normalizeSQL(fragment))
 }
 
 // VerifyPassthroughs logs a warning for every recorded passthrough. If strict is true and
