@@ -1,6 +1,6 @@
 id: prov-2026-4dcca1c0
 title: Add USING_SQL_CONTAINS keyword and make USING_SQL exact-match only
-status: implemented
+status: superseded
 created_at: "2026-04-16"
 author: calebcowen@gmail.com
 intent: |
@@ -28,7 +28,7 @@ affected_scope:
   - pkg/dsl/dsl_test.go
 forbidden_scope: []
 supersedes: ""
-superseded_by: ""
+superseded_by: prov-2026-fe2348ba
 related: []
 sealed_at_sha: 3653f27ffdad184efe5b813176cacb7133b21aac
 associated_specs:

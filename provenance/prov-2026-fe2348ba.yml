@@ -20,6 +20,7 @@ affected_scope:
   - pkg/proxy/postgresql/proxy.go
   - examples/user-linespecs/get_user_success.linespec
   - pkg/dsl/dsl_test.go
+  - provenance/prov-2026-4dcca1c0.yml
 forbidden_scope: []
 supersedes: prov-2026-4dcca1c0
 superseded_by: ""
