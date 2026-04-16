@@ -25,12 +25,13 @@ type Commands struct {
 
 // ProvenanceConfig holds provenance-related configuration
 type ProvenanceConfig struct {
-	Enforcement       string
-	Dir               string
-	SharedRepos       []string
-	CommitTagRequired bool
-	AutoAffectedScope bool
-	Embedding         *config.EmbeddingConfig
+	Enforcement                  string
+	Dir                          string
+	SharedRepos                  []string
+	CommitTagRequired            bool
+	AutoAffectedScope            bool
+	RunAssociatedSpecsOnComplete bool
+	Embedding                    *config.EmbeddingConfig
 }
 
 // NewCommands creates a new commands instance
@@ -724,16 +725,103 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 	return nil
 }
 
+// RunSpecsOptions holds options for the run-specs command
+type RunSpecsOptions struct {
+	RecordID   string
+	ConfigFile string
+}
+
+// RunSpecs runs the associated_specs for a provenance record.
+// It is called by the pre-commit hook when a record transitions from open to implemented.
+// If run_associated_specs_on_complete is not enabled in config, it exits silently.
+func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
+	if !c.Config.RunAssociatedSpecsOnComplete {
+		return nil
+	}
+
+	record, exists := c.Loader.GetRecord(opts.RecordID)
+	if !exists {
+		return fmt.Errorf("record not found: %s", opts.RecordID)
+	}
+
+	if len(record.AssociatedSpecs) == 0 {
+		return nil
+	}
+
+	fmt.Fprintf(os.Stdout, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
+
+	allPassed := true
+	for _, spec := range record.AssociatedSpecs {
+		cmdStr, skip, err := buildSpecCommand(spec)
+		if err != nil {
+			return err
+		}
+		if skip {
+			fmt.Fprintf(os.Stdout, "  · %s  (skipped — no type or run_command)\n", spec.Path)
+			continue
+		}
+
+		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
+		cmd := exec.Command("sh", "-c", cmdStr)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
+			allPassed = false
+		} else {
+			fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+		}
+	}
+
+	if !allPassed {
+		return fmt.Errorf("one or more associated specs failed — commit blocked")
+	}
+
+	fmt.Fprintf(os.Stdout, "All associated specs passed.\n\n")
+	return nil
+}
+
+// buildSpecCommand returns the shell command string to run for a given AssociatedSpec.
+// If the spec has no type and no run_command, skip is true and cmdStr is empty.
+func buildSpecCommand(spec AssociatedSpec) (cmdStr string, skip bool, err error) {
+	if spec.RunCommand != "" {
+		if strings.Contains(spec.RunCommand, "{{path}}") {
+			return strings.ReplaceAll(spec.RunCommand, "{{path}}", spec.Path), false, nil
+		}
+		return spec.RunCommand + " " + spec.Path, false, nil
+	}
+
+	switch spec.Type {
+	case "linespec":
+		if _, statErr := os.Stat("./linespec"); statErr == nil {
+			return "./linespec test " + spec.Path, false, nil
+		}
+		return "linespec test " + spec.Path, false, nil
+	case "rspec":
+		return "bundle exec rspec " + spec.Path, false, nil
+	case "pytest":
+		return "pytest " + spec.Path, false, nil
+	case "jest":
+		return "npx jest " + spec.Path, false, nil
+	default:
+		// Unknown type or no type — skip with a warning rather than hard-fail,
+		// since the user may have non-executable proof artifacts (e.g. type: config).
+		return "", true, nil
+	}
+}
+
 // InstallHooks installs git hooks
 func (c *Commands) InstallHooks() error {
 	hooksDir := filepath.Join(c.RepoRoot, ".git", "hooks")
 
-	// Create pre-commit hook (only lints)
+	// Create pre-commit hook (lints records; runs associated specs on completion transitions)
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
 	preCommitContent := `#!/bin/sh
 # LineSpec provenance pre-commit hook
 # Supports multi-pack repos (e.g. packwerk): for each staged provenance record,
 # walks up the directory tree to find the nearest .linespec.yml and lints using it.
+# When a record transitions open → implemented, runs its associated_specs if
+# run_associated_specs_on_complete is enabled in the nearest .linespec.yml.
 
 # Use the local linespec binary if it exists, otherwise fall back to system
 if [ -f "./linespec" ]; then
@@ -780,6 +868,24 @@ for file in $staged_prov; do
     if [ $? -ne 0 ]; then
         echo "Commit blocked due to lint errors in $record"
         exit_code=1
+    fi
+
+    # Detect open → implemented completion transition.
+    # git show returns non-zero if the file didn't exist at HEAD (new record), so we
+    # default head_status to empty string in that case — the transition won't trigger.
+    staged_status=$(git show ":$file" 2>/dev/null | grep "^status:" | head -1 | awk '{print $2}')
+    head_status=$(git show "HEAD:$file" 2>/dev/null | grep "^status:" | head -1 | awk '{print $2}')
+
+    if [ "$head_status" = "open" ] && [ "$staged_status" = "implemented" ]; then
+        if [ -n "$config" ]; then
+            $LINESPEC provenance run-specs -c "$config" --record "$record"
+        else
+            $LINESPEC provenance run-specs --record "$record"
+        fi
+
+        if [ $? -ne 0 ]; then
+            exit_code=1
+        fi
     fi
 done
 

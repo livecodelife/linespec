@@ -303,12 +303,13 @@ type EmbeddingConfig struct {
 
 // ProvenanceConfig defines provenance record settings
 type ProvenanceConfig struct {
-	Enforcement       string           `yaml:"enforcement"`         // none | warn | strict
-	Dir               string           `yaml:"dir"`                 // relative to repo root
-	SharedRepos       []string         `yaml:"shared_repos"`        // paths or URLs to shared provenance repositories
-	CommitTagRequired bool             `yaml:"commit_tag_required"` // whether commits must reference a prov ID
-	AutoAffectedScope bool             `yaml:"auto_affected_scope"` // whether to auto-populate affected_scope from git diffs
-	Embedding         *EmbeddingConfig `yaml:"embedding,omitempty"` // embedding API configuration
+	Enforcement                  string           `yaml:"enforcement"`                      // none | warn | strict
+	Dir                          string           `yaml:"dir"`                              // relative to repo root
+	SharedRepos                  []string         `yaml:"shared_repos"`                     // paths or URLs to shared provenance repositories
+	CommitTagRequired            bool             `yaml:"commit_tag_required"`              // whether commits must reference a prov ID
+	AutoAffectedScope            bool             `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
+	RunAssociatedSpecsOnComplete bool             `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
+	Embedding                    *EmbeddingConfig `yaml:"embedding,omitempty"`              // embedding API configuration
 }
 
 // DependencyConfig defines external service dependencies

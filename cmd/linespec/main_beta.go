@@ -600,6 +600,15 @@ func runProvenance() {
 		if err := cmds.Index(opts); err != nil {
 			os.Exit(1)
 		}
+	case "run-specs":
+		opts := parseRunSpecsOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.RunSpecs(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -642,6 +651,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			}
 			cfg.CommitTagRequired = fullConfig.Provenance.CommitTagRequired
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
+			cfg.RunAssociatedSpecsOnComplete = fullConfig.Provenance.RunAssociatedSpecsOnComplete
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
 
 			if fullConfig.Provenance.Embedding != nil {
@@ -679,6 +689,7 @@ Subcommands:
   lock-layer [options]       Create a locked layer record
   complete [options]         Mark record as implemented
   deprecate [options]        Mark record as deprecated
+  run-specs [options]        Run associated_specs for a record (used by pre-commit hook)
   context [options]          Show provenance context for files
   search [options]           Search provenance records by semantic similarity
   audit [options]            Audit recent changes against provenance history
@@ -1245,6 +1256,33 @@ func parseLockLayerOptions(args []string) provenance.LockLayerOptions {
 		logger.Error("--title is required")
 		printLockLayerUsage()
 		os.Exit(1)
+	}
+	return opts
+}
+
+func parseRunSpecsOptions(args []string) provenance.RunSpecsOptions {
+	opts := provenance.RunSpecsOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--record", "-r":
+			if i+1 < len(args) {
+				opts.RecordID = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance run-specs --record <id> [options]
+
+Options:
+  --record, -r id            Record ID whose associated_specs to run
+  -c, --config path          Path to custom .linespec.yml file
+  --help                     Show this help message`)
+			os.Exit(0)
+		}
 	}
 	return opts
 }

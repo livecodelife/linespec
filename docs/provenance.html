@@ -377,7 +377,7 @@ tags:
                             <tr>
                                 <td><code>associated_specs</code></td>
                                 <td>array</td>
-                                <td>Proof artifacts validating this decision. Each entry has <code>path</code> (required) and optional <code>type</code></td>
+                                <td>Proof artifacts validating this decision. Each entry has <code>path</code> (required), optional <code>type</code> (e.g. <code>linespec</code>, <code>rspec</code>, <code>pytest</code>, <code>jest</code>), and optional <code>run_command</code> to override the default command for that type. Supports a <code>{{path}}</code> placeholder; otherwise the path is appended.</td>
                             </tr>
                             <tr>
                                 <td><code>associated_traces</code></td>
@@ -830,7 +830,10 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
   
   # Auto-populate affected_scope from git commits (default: true)
   auto_affected_scope: true
-  
+
+  # Run associated_specs before allowing a completion-transition commit (default: false)
+  run_associated_specs_on_complete: false
+
   # Additional directories to load records from (for monorepos)
   shared_repos:
     - examples/user-service/provenance
@@ -957,7 +960,7 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                     <h3>Two-Hook Strategy</h3>
                     <p>The provenance system uses two git hooks that work together:</p>
                     <ol>
-                        <li><strong>pre-commit hook</strong>: Runs first, lints modified provenance records for syntax/validity</li>
+                        <li><strong>pre-commit hook</strong>: Runs first, lints modified provenance records for syntax/validity. When <code>run_associated_specs_on_complete: true</code> is set, also runs <code>associated_specs</code> when a record transitions <code>open</code> → <code>implemented</code>.</li>
                         <li><strong>commit-msg hook</strong>: Runs after you write your message, checks staged files against provenance scope</li>
                     </ol>
 

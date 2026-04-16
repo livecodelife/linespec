@@ -34,8 +34,9 @@ func (s Status) IsValid() bool {
 
 // AssociatedSpec represents a proof artifact with optional type annotation
 type AssociatedSpec struct {
-	Path string `yaml:"path"`
-	Type string `yaml:"type,omitempty"`
+	Path       string `yaml:"path"`
+	Type       string `yaml:"type,omitempty"`
+	RunCommand string `yaml:"run_command,omitempty"`
 }
 
 // Record represents a single Provenance Record

@@ -575,6 +575,9 @@ provenance:
   # Auto-populate affected_scope from git commits (default: true)
   auto_affected_scope: true
   
+  # Run associated_specs before allowing a completion-transition commit (default: false)
+  run_associated_specs_on_complete: false
+  
   # Additional directories to load records from (for monorepos)
   shared_repos:
     - examples/user-service/provenance
@@ -589,6 +592,7 @@ provenance:
 | `enforcement` | string | `warn` | Global enforcement level |
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
+| `run_associated_specs_on_complete` | bool | `false` | Run specs on completion transition |
 | `shared_repos` | array | `[]` | Additional directories |
 
 ### Semantic Search Configuration
@@ -671,10 +675,11 @@ git commit -m "Update user service [prov-2026-a1b2c3d4-user-service]"
 
 ### Pre-commit Hook
 
-The pre-commit hook validates that modified provenance records are well-formed:
+The pre-commit hook validates that modified provenance records are well-formed, and optionally runs specs when a record is completed:
 
 - **Linting**: Checks YAML syntax, required fields, and valid values
 - **Quick validation**: Ensures records can be parsed and loaded
+- **Spec execution** (opt-in): When `run_associated_specs_on_complete: true` is set in `.linespec.yml`, detects `open` → `implemented` status transitions and runs the record's `associated_specs` before allowing the commit. Supported types: `linespec`, `rspec`, `pytest`, `jest`. Use `run_command` on any spec entry to override the default command for that type.
 
 ### Commit-msg Hook
 
@@ -710,7 +715,7 @@ The only exception is the completion transition (when a record's own file change
 linespec provenance install-hooks
 
 # This creates:
-#   .git/hooks/pre-commit  - Lints modified provenance records
+#   .git/hooks/pre-commit  - Lints records; runs associated_specs on completion transitions
 #   .git/hooks/commit-msg  - Checks staged files against scope
 ```
 
