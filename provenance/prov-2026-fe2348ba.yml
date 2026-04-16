@@ -1,0 +1,37 @@
+id: prov-2026-fe2348ba
+title: Fix USING_SQL_CONTAINS hit tracking in MySQL and PostgreSQL proxies
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: |
+  The MySQL and PostgreSQL proxies were clobbering mock.SQL with the
+  actual query text whenever mock.SQL was empty — including for
+  USING_SQL_CONTAINS mocks. This caused GetHits to emit the actual query
+  as the hit key instead of the ~<fragment> format expected by SetHits,
+  so VerifyAll always reported SQLContains mocks as never called.
+  Fix the guard to skip the assignment when mock.SQLContains is set.
+  Also update get_user_success.linespec to use USING_SQL_CONTAINS for
+  the ID lookup and update the dsl_test.go lexer assertion accordingly.
+constraints:
+  - Only set mock.SQL = query when the mock has neither SQL nor SQLContains
+  - Do not change the GetHits/SetHits key format
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - examples/user-linespecs/get_user_success.linespec
+  - pkg/dsl/dsl_test.go
+forbidden_scope: []
+supersedes: prov-2026-4dcca1c0
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/mysql/proxy.go
+    type: implementation
+  - path: pkg/proxy/postgresql/proxy.go
+    type: implementation
+  - path: examples/user-linespecs/get_user_success.linespec
+    type: test
+associated_traces: []
+monitors: []
+tags: []

@@ -647,7 +647,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
 				// Store the actual query in mock.SQL so sendMockExecuteResponse can detect
 				// RETURNING clauses (e.g., INSERT ... RETURNING id) for synthetic result sets
-				if mock.SQL == "" {
+				if mock.SQL == "" && mock.SQLContains == "" {
 					mock.SQL = query
 				}
 
@@ -1297,7 +1297,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		}
 
 		// Store the actual query in the mock for proper hit tracking
-		if mock.SQL == "" {
+		if mock.SQL == "" && mock.SQLContains == "" {
 			mock.SQL = query
 		}
 
@@ -1340,7 +1340,7 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 		p.logDebug("  -> Found mock for table %s, hit count incremented\n", tableName)
 
 		// Store the actual query in the mock for later use
-		if mock.SQL == "" {
+		if mock.SQL == "" && mock.SQLContains == "" {
 			mock.SQL = query
 		}
 
@@ -1698,7 +1698,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		}
 
 		// Store the actual query in the mock for proper hit tracking
-		if mock.SQL == "" {
+		if mock.SQL == "" && mock.SQLContains == "" {
 			mock.SQL = query
 		}
 
@@ -1739,7 +1739,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		p.logDebug("  -> Found mock for table %s (hit count NOT incremented yet)\n", tableName)
 
 		// Store the actual query in the mock for later use (e.g., for RETURNING clause detection)
-		if mock.SQL == "" {
+		if mock.SQL == "" && mock.SQLContains == "" {
 			mock.SQL = query
 		}
 

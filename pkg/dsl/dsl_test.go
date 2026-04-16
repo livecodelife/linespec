@@ -24,7 +24,7 @@ func TestLexer_GetUserSuccess(t *testing.T) {
 		TokenUsingSql, TokenSqlBlock,
 		TokenReturns,
 		TokenExpect,
-		TokenUsingSql, TokenSqlBlock,
+		TokenUsingSqlContains, TokenSqlBlock,
 		TokenReturns,
 		TokenRespond,
 		TokenWith,

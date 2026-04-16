@@ -240,7 +240,8 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					mock, found := p.registry.FindMock(tableName, query)
 					if found {
 						// Store the actual query in the mock for proper hit tracking
-						if mock.SQL == "" {
+						// (only for unconstrained mocks; SQL/SQLContains mocks use their own key)
+						if mock.SQL == "" && mock.SQLContains == "" {
 							mock.SQL = query
 						}
 						// Execute VERIFY rules if any
