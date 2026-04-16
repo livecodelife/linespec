@@ -5,6 +5,20 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-16
+
+### Added
+
+- **Claude Code provenance skill** ([prov-2026-5f02e318](./provenance/prov-2026-5f02e318.yml)) - Introduces `skills/provenance/SKILL.md`, a reusable Claude Code skill that encodes the full provenance record workflow. Install it into any repo with the new `scripts/install-skill` script: `install-skill <target-path> [name]`.
+
+### Changed
+
+- **Pre-commit validation workflow** ([prov-2026-5f02e318](./provenance/prov-2026-5f02e318.yml)) - The provenance workflow now requires explicit pre-commit validation instead of an informal user-review gate. Run `linespec provenance lint` and `linespec provenance check` before every create or complete commit; run `linespec provenance check --staged` before each intra-lifecycle implementation commit. Updated in CLAUDE.md, PROVENANCE_RECORDS.md, and the documentation site.
+
+### Related Provenance Records
+
+- [prov-2026-5f02e318](./provenance/prov-2026-5f02e318.yml) - Add Claude Code provenance skill and pre-commit validation workflow
+
 ## [2.0.0] - 2026-04-16
 
 ### Changed

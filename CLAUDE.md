@@ -34,7 +34,8 @@ Every change must be documented by a provenance record. Records live in `provena
 
 - Create a provenance record before starting work: `linespec provenance create --title "..."`
 - Creating and completing provenance records must be standalone commits
-- Never commit provenance record creation or completion without user review first
+- Before a create or complete commit: run `linespec provenance lint` and `linespec provenance check`
+- Before each intra-lifecycle implementation commit: run `linespec provenance check --staged`
 - Never use `--no-verify` to skip git hooks
 
 **Record lifecycle:** `open` → `implemented` → `superseded|deprecated`

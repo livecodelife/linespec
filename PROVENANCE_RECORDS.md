@@ -29,7 +29,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.1.0
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -55,7 +55,7 @@ brew install linespec
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/cmd/linespec@v1.3.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.1.0
 ```
 
 ### GitHub Releases
@@ -969,17 +969,25 @@ provenance:
 ### Record Lifecycle
 
 ```bash
-# 1. Create (status: open)
-linespec provenance create --title "New feature"
+# 1. Validate, then create (status: open) — standalone commit
+linespec provenance lint
+linespec provenance check
+linespec provenance create --title "New feature" --no-edit
+git commit -m "Create provenance record [prov-2026-deadbeef]"
 
 # 2. Develop (make commits, scope auto-populates)
+#    Run check --staged before each implementation commit
+linespec provenance check --staged
 git commit -m "Implement feature [prov-2026-deadbeef]"
 
 # 3. Lock scope (when feature is complete)
 linespec provenance lock-scope --record prov-2026-deadbeef
 
-# 4. Complete (status: implemented)
+# 4. Validate, then complete (status: implemented) — standalone commit
+linespec provenance lint
+linespec provenance check
 linespec provenance complete --record prov-2026-deadbeef
+git commit -m "Complete provenance record [prov-2026-deadbeef]"
 
 # 5. (Optional) Supersede later
 linespec provenance create --title "Better approach" --supersedes prov-2026-deadbeef

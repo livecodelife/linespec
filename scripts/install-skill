@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# install-skill — copies a LineSpec skill template into a Claude Code skills directory
+#
+# Usage:
+#   install-skill <target-path> [name]
+#
+# Arguments:
+#   target-path   Directory where the skill folder will be created.
+#                 Typically .claude/skills relative to your repo root.
+#                 Will be created if it doesn't exist.
+#   name          Name for the installed skill (default: provenance).
+#                 This becomes the /name slash command in Claude Code.
+#
+# Examples:
+#   install-skill .claude/skills
+#   install-skill /path/to/other-repo/.claude/skills
+#   install-skill ~/.claude/skills my-provenance
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LINESPEC_ROOT="$(dirname "$SCRIPT_DIR")"
+
+usage() {
+  echo "Usage: install-skill <target-path> [name]" >&2
+  echo "" >&2
+  echo "  target-path   Directory where the skill folder will be created" >&2
+  echo "                (e.g. .claude/skills)" >&2
+  echo "  name          Name for the skill directory (default: provenance)" >&2
+  exit 1
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+TARGET_PATH="$1"
+SKILL_NAME="${2:-provenance}"
+
+SOURCE_DIR="$LINESPEC_ROOT/skills/provenance"
+DEST_DIR="$TARGET_PATH/$SKILL_NAME"
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "error: provenance skill not found at $SOURCE_DIR" >&2
+  exit 1
+fi
+
+if [[ -d "$DEST_DIR" ]]; then
+  echo "error: destination already exists: $DEST_DIR" >&2
+  echo "Remove it first or choose a different name." >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET_PATH"
+cp -r "$SOURCE_DIR" "$DEST_DIR"
+
+# Update the name: field in SKILL.md to match the chosen name
+SKILL_FILE="$DEST_DIR/SKILL.md"
+if [[ -f "$SKILL_FILE" && "$SKILL_NAME" != "provenance" ]]; then
+  sed -i.bak "s/^name: .*/name: $SKILL_NAME/" "$SKILL_FILE" && rm -f "$SKILL_FILE.bak"
+fi
+
+echo "Installed skill '$SKILL_NAME' to $DEST_DIR"
+echo ""
+echo "Invoke it in Claude Code with: /$SKILL_NAME"

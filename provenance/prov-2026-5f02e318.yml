@@ -21,7 +21,12 @@ affected_scope:
   - CLAUDE.md
   - PROVENANCE_RECORDS.md
   - docs/provenance.html
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
   - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
   - VERSION
 forbidden_scope: []
 supersedes: ""
