@@ -20,6 +20,7 @@ constraints:
   - run_command supports a path placeholder; if absent, path is appended as a trailing
     argument.
 affected_scope:
+  - .linespec.yml
   - pkg/provenance/types.go
   - pkg/provenance/commands.go
   - pkg/provenance/run_specs_test.go

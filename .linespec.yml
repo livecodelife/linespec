@@ -4,6 +4,7 @@ provenance:
   shared_repos: []            # paths or URLs to shared provenance repositories
   commit_tag_required: true  # whether commits must reference a prov ID
   auto_affected_scope: true   # whether to auto-populate affected_scope from git diffs
+  run_associated_specs_on_complete: true  # run associated_specs before committing a completion transition
   embedding:                  # semantic search and audit configuration
     provider: voyage           # embedding API provider (voyage)
     index_model: voyage-4-large  # high-quality model for indexing (2048 dims)
