@@ -1,0 +1,39 @@
+id: prov-2026-4dcca1c0
+title: Add USING_SQL_CONTAINS keyword and make USING_SQL exact-match only
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: |
+  Add a USING_SQL_CONTAINS keyword to the linespec DSL for partial SQL matching,
+  and change USING_SQL to be exact-match only (removing the implicit substring
+  fallback that was causing wrong mocks to match). Engineers using USING_SQL must
+  provide SQL that normalizes to an exact match; engineers who want fragment-based
+  matching must use USING_SQL_CONTAINS explicitly.
+constraints:
+  - USING_SQL must match only by exact normalized equality after stripping backticks,
+    collapsing whitespace, normalizing table prefixes (table.col), expanding table.*,
+    and removing AS aliases — the substring fallback must be removed entirely
+  - USING_SQL_CONTAINS must apply the same normalizations and then use substring
+    containment, not equality
+  - Both keywords must work in the fallback (orderedMocks) scan path as well as the
+    keyed lookup path in FindMock, PeekMock, and CheckNegativeMocks
+  - GetHits and SetHits must produce distinct keys for USING_SQL vs USING_SQL_CONTAINS
+    mocks on the same table so that hit counts are tracked correctly
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+  - pkg/dsl/dsl_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/registry_test.go
+    type: test
+associated_traces: []
+monitors: []
+tags: []
