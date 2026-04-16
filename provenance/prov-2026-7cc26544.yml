@@ -1,0 +1,52 @@
+id: prov-2026-7cc26544
+title: Graduate LineSpec Testing from beta to stable (v2.0.0 release)
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: >
+  LineSpec Testing has reached sufficient maturity to leave the beta designation.
+  This record governs the v2.0.0 release, which merges the beta build into the
+  stable build: the linespec binary now includes test and proxy commands by default,
+  eliminating the need for the -tags beta build flag. All documentation and the doc
+  site are updated to remove beta language, and the version is bumped to v2.0.0 to
+  signal the milestone clearly.
+constraints:
+  - All unit tests must pass (make test)
+  - All integration tests must pass (make test-integration)
+  - All 4 linespec example suites must pass
+  - All version references in docs and doc site must reflect v2.0.0
+  - No [BETA] labels in user-facing CLI output
+  - The LineSpec Testing doc site page (docs/linespec.html) must be comprehensively
+    reviewed for completeness and accuracy — all beta warnings removed, coverage
+    expanded to match the full feature set now shipping as stable
+affected_scope:
+  - cmd/linespec/main_beta.go
+  - cmd/linespec/main_stable.go
+  - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/docs.html
+  - docs/linespec.html
+  - docs/provenance.html
+  - .goreleaser.yml
+  - Makefile
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/authenticate_user_invalid_token.linespec
+    type: linespec
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - v2.0.0
