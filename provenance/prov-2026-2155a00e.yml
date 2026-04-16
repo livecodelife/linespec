@@ -39,7 +39,7 @@ sealed_at_sha: 0e2c8ac4b806ec2dfc30ff3d0cd7d646d627f867
 associated_specs:
   - path: pkg/provenance/run_specs_test.go
     type: go-test
-    run_command: go test ./pkg/provenance/... -run TestBuildSpec,TestRunSpecs
+    run_command: go test ./pkg/provenance/... -run "TestBuildSpec|TestRunSpecs"
 associated_traces: []
 monitors: []
 tags: []
