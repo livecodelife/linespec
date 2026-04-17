@@ -1,6 +1,6 @@
 id: prov-2026-446d8d6a
 title: Bump version to v2.4.1, add CHANGELOG entry for sealed_at_sha linter fix
-status: open
+status: implemented
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ forbidden_scope: []
 supersedes: prov-2026-464c2105
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8a09677e85321eb24e881b97a115b161b046b337
 associated_specs:
   - path: examples/user-linespecs/get_user_with_vars.linespec
     type: linespec
