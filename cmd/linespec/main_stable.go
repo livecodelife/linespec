@@ -513,6 +513,27 @@ func runProvenance() {
 		}
 	case "lint":
 		opts := parseLintOptions(args)
+		if opts.ConfigFile == "" {
+			if configs := findAllLinespecConfigs("."); len(configs) > 0 {
+				exitCode := 0
+				for _, cfgPath := range configs {
+					localCfg := loadProvenanceConfigFromFile(cfgPath)
+					localCmds, err := provenance.NewCommandsWithEmbedder(localCfg, repoRoot, os.Stdout, true, embedder)
+					if err != nil {
+						logger.Error("Failed to initialize provenance for %s: %v", cfgPath, err)
+						exitCode = 1
+						continue
+					}
+					if err := localCmds.Lint(opts); err != nil {
+						exitCode = 1
+					}
+				}
+				if exitCode != 0 {
+					os.Exit(exitCode)
+				}
+				return
+			}
+		}
 		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
 			logger.Error("Failed to reload config: %v", err)
 			os.Exit(1)
@@ -540,6 +561,47 @@ func runProvenance() {
 		}
 	case "check":
 		opts := parseCheckOptions(args)
+		if opts.ConfigFile == "" {
+			if configs := findAllLinespecConfigs("."); len(configs) > 0 {
+				exitCode := 0
+				var stagedFiles []string
+				if opts.Staged {
+					stagedFiles, _ = cmds.Git.GetStagedFiles()
+				}
+				for _, cfgPath := range configs {
+					if opts.Staged {
+						cfgDir := filepath.Dir(cfgPath)
+						rel, _ := filepath.Rel(".", cfgDir)
+						if rel != "." {
+							hasRelevant := false
+							for _, f := range stagedFiles {
+								if strings.HasPrefix(f, rel+"/") {
+									hasRelevant = true
+									break
+								}
+							}
+							if !hasRelevant {
+								continue
+							}
+						}
+					}
+					localCfg := loadProvenanceConfigFromFile(cfgPath)
+					localCmds, err := provenance.NewCommandsWithEmbedder(localCfg, repoRoot, os.Stdout, true, embedder)
+					if err != nil {
+						logger.Error("Failed to initialize provenance for %s: %v", cfgPath, err)
+						exitCode = 1
+						continue
+					}
+					if err := localCmds.Check(opts); err != nil {
+						exitCode = 1
+					}
+				}
+				if exitCode != 0 {
+					os.Exit(exitCode)
+				}
+				return
+			}
+		}
 		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
 			logger.Error("Failed to reload config: %v", err)
 			os.Exit(1)
@@ -687,6 +749,28 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 	}
 
 	return cfg
+}
+
+// findAllLinespecConfigs returns paths to all .linespec.yml files found under root,
+// excluding .git directories. filepath.Walk visits in lexicographic order.
+func findAllLinespecConfigs(root string) []string {
+	var configs []string
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if info.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.Name() == ".linespec.yml" {
+			configs = append(configs, path)
+		}
+		return nil
+	})
+	return configs
 }
 
 // reloadConfigIfNeeded reloads the config and commands if a custom config file is specified
