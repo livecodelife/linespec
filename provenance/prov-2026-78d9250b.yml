@@ -1,0 +1,29 @@
+id: prov-2026-78d9250b
+title: 'Release v2.3.4: Multi-pack aware lint and check CLI commands'
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: "Bump version to v2.3.4, update CHANGELOG with entry for multi-pack aware lint and check CLI commands, and rebuild the linespec-beta binary."
+constraints:
+  - MUST update VERSION file to 2.3.4
+  - MUST add CHANGELOG entry for v2.3.4
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+  - README.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - linespec-beta
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: VERSION
+    type: code
+associated_traces: []
+monitors: []
+tags: []
