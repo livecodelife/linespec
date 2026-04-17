@@ -5,6 +5,40 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-04-17
+
+### Fixed
+
+- **PostgreSQL extended query protocol: binary UUID encoding** ([prov-2026-1aac1dc7](./provenance/prov-2026-1aac1dc7.yml)) — lib/pq requests binary format (code=1) for UUID columns in its Bind message. The proxy now encodes UUID values as 16 raw bytes when the client requests binary format, and generates proper RFC 4122 v4 UUIDs for interpolation variables named `*_UUID`.
+
+- **PostgreSQL text-mode timestamp format** ([prov-2026-1aac1dc7](./provenance/prov-2026-1aac1dc7.yml)) — lib/pq's internal timestamp parser expects PostgreSQL wire format (`2006-01-02 15:04:05`, space separator). Payload timestamps in ISO 8601 format (`T` separator) would fail with `expected '32' at position 10; got '84'`. Payload files should use space-separated timestamps.
+
+- **JSONB/JSON columns not JSON-encoded in DataRow** ([prov-2026-1aac1dc7](./provenance/prov-2026-1aac1dc7.yml)) — Slice and map values from YAML payloads were formatted with `%v`, producing non-JSON output that `json.Unmarshal` in the service handler would silently reject. They are now properly JSON-marshaled.
+
+### Related Provenance Records
+
+- [prov-2026-1aac1dc7](./provenance/prov-2026-1aac1dc7.yml) - Fix PostgreSQL proxy binary encoding and extended query protocol for lib/pq
+
+## [2.3.2] - 2026-04-17
+
+### Fixed
+
+- **Payload variable consistency across hot-reload** ([prov-2026-59110ab7](./provenance/prov-2026-59110ab7.yml)) — Variables declared in payload files were not being pre-scanned before the resolver was built, causing inconsistent values between the first and subsequent test runs when hot-reload was active.
+
+### Related Provenance Records
+
+- [prov-2026-59110ab7](./provenance/prov-2026-59110ab7.yml) - Fix variable consistency: pre-scan payloads and rebuild resolver on hot-reload
+
+## [2.3.1] - 2026-04-16
+
+### Added
+
+- **`RETURNS` payload interpolation in proxy containers** ([prov-2026-4e4db58e](./provenance/prov-2026-4e4db58e.yml)) — `RETURNS {{payload.yaml}}` now supports `${VAR}` interpolation inside payload files, consistent with how HTTP response payloads work.
+
+### Related Provenance Records
+
+- [prov-2026-4e4db58e](./provenance/prov-2026-4e4db58e.yml) - Implement RETURNS payload interpolation in proxy containers
+
 ## [2.3.0] - 2026-04-16
 
 ### Added
