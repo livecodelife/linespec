@@ -1,0 +1,35 @@
+id: prov-2026-5a3f28a5
+title: Rename install-skill to install-skills, add linespec-testing skill, overwrite existing
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: "Rename `linespec provenance install-skill` to `install-skills` and extend it to install both the provenance skill and the new linespec-testing skill in one command. Change the overwrite behavior so existing skill directories are silently replaced rather than returning an error."
+constraints:
+  - "Command name must be `install-skills` (plural); the old `install-skill` name is removed"
+  - "Both skills (provenance and linespec-testing) must be installed to the target directory every time the command runs"
+  - "Existing skill directories at the target path must be overwritten silently — no error if destination exists"
+  - "Embedded skill content must be kept in sync with skills/provenance/SKILL.md and skills/linespec-testing/SKILL.md"
+  - "--name flag is removed since both skills are always installed together"
+affected_scope:
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-940803d3
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: make test
+  - path: cmd/linespec/main_stable.go
+    type: code
+    run_command: make test
+  - path: cmd/linespec/main_beta.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
