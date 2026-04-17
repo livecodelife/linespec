@@ -51,6 +51,8 @@ A LineSpec file MUST follow this structure:
 Statements MUST appear in this order:
 
 ```
+TEST <name>        (optional)
+VARS               (optional — declare typed variables)
 RECEIVE
 EXPECT (0..n)
 EXPECT_NOT (0..n)
@@ -70,6 +72,67 @@ TEST <test_name>
 ```
 
 If omitted, the filename (without extension) is used as the test name.
+
+## VARS Block (optional)
+
+Declare typed variables before `RECEIVE` to pre-generate values with an explicit type:
+
+```
+VARS
+  VAR_NAME: <type>
+  VAR_NAME: <type>
+  ...
+```
+
+The `VARS` block must appear after `TEST` (if present) and before `RECEIVE`. Each line declares one variable using the format `VAR_NAME: type`.
+
+### Supported types
+
+| Type | Generated value |
+|------|----------------|
+| `uuid` | RFC 4122 v4 UUID, e.g. `550e8400-e29b-41d4-a716-446655440000` |
+| `integer` | Random integer between 1 and 99999 |
+| `string` | `lowercase_varname_` + 8 random hex chars |
+
+### Why use VARS?
+
+Without `VARS`, variable types are inferred from the variable name (a variable ending in `_UUID` gets a UUID; everything else gets a string). `VARS` lets you be explicit — in particular, it is the only way to generate an integer-typed variable that encodes as a JSON number (not a quoted string) in payload files and HTTP responses.
+
+### Resolution order
+
+1. If the variable is already set in the environment, that value is used
+2. Otherwise a random value of the declared type is generated and injected into the test container
+
+### Example
+
+```linespec
+TEST get_user_with_vars
+
+VARS
+  AUTH_TOKEN: string
+  USER_ID: integer
+
+RECEIVE HTTP:GET /api/v1/users/${USER_ID}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT users.* FROM `users` WHERE `users`.`token` = '${AUTH_TOKEN}' LIMIT 1
+"""
+RETURNS {{payloads/user_response.json}}
+
+EXPECT READ:MYSQL users
+USING_SQL_CONTAINS """
+WHERE users.id =
+"""
+RETURNS {{payloads/user_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user_public_response.json}}
+```
+
+`USER_ID` is declared as `integer`, so `${USER_ID}` is replaced by a number (e.g. `42731`) in the URL and in any payload file that references it. The mock registry receives it as a JSON number, so the service's response body encodes `user_id` as `42731`, not `"42731"`.
 
 ---
 

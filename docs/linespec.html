@@ -64,6 +64,7 @@
                     <ul>
                         <li><a href="#principles" class="active">Design Principles</a></li>
                         <li><a href="#grammar">DSL Grammar</a></li>
+                        <li><a href="#vars">VARS</a></li>
                         <li><a href="#receive">RECEIVE</a></li>
                         <li><a href="#expect">EXPECT</a></li>
                         <li><a href="#expect-redis">Redis</a></li>
@@ -121,6 +122,7 @@
                     <ul>
                         <li><a href="#principles">Design Principles</a></li>
                         <li><a href="#grammar">DSL Grammar</a></li>
+                        <li><a href="#vars">VARS Block</a></li>
                         <li><a href="#receive">RECEIVE Statement</a></li>
                         <li><a href="#expect">EXPECT Statement</a></li>
                         <li><a href="#expect-redis">Redis Expectations</a></li>
@@ -174,7 +176,9 @@
                                 </svg>
                             </button>
                         </div>
-                        <pre><code>RECEIVE
+                        <pre><code>TEST &lt;name&gt;        (optional)
+VARS               (optional — declare typed variables)
+RECEIVE
 EXPECT (0..n)
 EXPECT_NOT (0..n)
 RESPOND</code></pre>
@@ -194,6 +198,81 @@ RESPOND</code></pre>
                         <pre><code>TEST <test_name></code></pre>
                     </div>
                     <p>If omitted, the filename (without extension) is used as the test name.</p>
+                </section>
+
+                <section id="vars" class="docs-section">
+                    <h2>VARS Block</h2>
+                    <p>The optional <code>VARS</code> block declares typed variables before <code>RECEIVE</code>. Values are pre-generated once before any payload is loaded, so every occurrence of a variable throughout the spec resolves to the same value.</p>
+
+                    <h3>Syntax</h3>
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code>VARS
+  VAR_NAME: &lt;type&gt;
+  VAR_NAME: &lt;type&gt;
+  ...</code></pre>
+                    </div>
+                    <p>The block must appear after <code>TEST</code> (if present) and before <code>RECEIVE</code>. Each indented line declares one variable: <code>VAR_NAME: type</code>.</p>
+
+                    <h3>Supported types</h3>
+                    <table class="docs-table">
+                        <thead>
+                            <tr><th>Type</th><th>Generated value</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>uuid</code></td><td>RFC 4122 v4 UUID, e.g. <code>550e8400-e29b-41d4-a716-446655440000</code></td></tr>
+                            <tr><td><code>integer</code></td><td>Random integer between 1 and 99 999</td></tr>
+                            <tr><td><code>string</code></td><td><code>lowercase_varname_</code> + 8 random hex chars</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="info-box">
+                        <h4>Why use VARS?</h4>
+                        <p>Without <code>VARS</code>, variable types are inferred from the name (variables ending in <code>_UUID</code> get a UUID; everything else gets a string). <code>VARS</code> lets you be explicit — it is the only way to generate an <strong>integer-typed</strong> variable that encodes as a JSON number (not a quoted string) in payload files and HTTP responses.</p>
+                    </div>
+
+                    <h3>Resolution order</h3>
+                    <ol>
+                        <li>If the variable is already set in the environment, that value is used</li>
+                        <li>Otherwise a random value of the declared type is generated and injected into the test container</li>
+                    </ol>
+
+                    <h3>Example — integer-typed ID flowing through MySQL and HTTP response</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>get_user_with_vars.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST get_user_with_vars
+
+VARS
+  AUTH_TOKEN: string
+  USER_ID: integer
+
+RECEIVE HTTP:GET /api/v1/users/${USER_ID}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT users.* FROM `users` WHERE `users`.`token` = '${AUTH_TOKEN}' LIMIT 1
+"""
+RETURNS {{payloads/user_response.json}}
+
+EXPECT READ:MYSQL users
+USING_SQL_CONTAINS """
+WHERE users.id =
+"""
+RETURNS {{payloads/user_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user_public_response.json}}</code></pre>
+                    </div>
+                    <p><code>USER_ID</code> is declared as <code>integer</code>, so <code>${USER_ID}</code> resolves to a number such as <code>42731</code> in the URL and in any payload file that references it. The mock registry receives it as a JSON number, so the service's response body encodes <code>user_id</code> as <code>42731</code>, not <code>"42731"</code>.</p>
                 </section>
 
                 <section id="receive" class="docs-section">
