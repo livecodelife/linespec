@@ -1,0 +1,22 @@
+id: prov-2026-72e67281
+title: Add WRITE RETURNS interpolation example to update_user_success linespec
+status: open
+created_at: "2026-04-16"
+author: calebcowen@gmail.com
+intent: "Demonstrate that ${VAR} interpolation works in WRITE RETURNS payload files by adding a RETURNS clause to the update_user_success example spec."
+constraints:
+  - The RETURNS payload for the WRITE must use ${AUTH_TOKEN} to show interpolation works in this context
+  - The test must continue to pass after the change
+affected_scope:
+  - examples/user-linespecs/update_user_success.linespec
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/update_user_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []

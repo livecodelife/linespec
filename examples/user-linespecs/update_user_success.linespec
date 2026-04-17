@@ -25,6 +25,7 @@ RETURNS EMPTY
 
 EXPECT WRITE:MYSQL users
 WITH {{payloads/update_user_request.json}}
+RETURNS {{payloads/user_response.json}}
 
 RESPOND HTTP:200
 WITH {{payloads/updated_user_response.json}}
