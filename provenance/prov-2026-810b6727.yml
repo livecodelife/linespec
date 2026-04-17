@@ -1,6 +1,6 @@
 id: prov-2026-810b6727
 title: 'Release v2.3.3: PostgreSQL proxy binary encoding fixes'
-status: open
+status: implemented
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: "Bump version to v2.3.3, update CHANGELOG with entries for v2.3.1/v2.3.2/v2.3.3, and rebuild the linespec-beta binary."
@@ -21,7 +21,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f9dcd974957580b130cccfec2204bb307e29d43e
 associated_specs:
   - path: examples/user-linespecs/get_user_success.linespec
     type: linespec
