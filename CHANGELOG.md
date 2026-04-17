@@ -5,6 +5,16 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-04-17
+
+### Added
+
+- **Multi-pack aware `lint` and `check` CLI commands** ([prov-2026-423a3a9a](./provenance/prov-2026-423a3a9a.yml)) — `linespec provenance lint` and `linespec provenance check` now auto-discover all `.linespec.yml` files under the working directory and run for each config, matching the behavior of the git hooks added in v2.3.3. Running from a packwerk monorepo root without `-c` no longer silently uses only the root config. For `check --staged`, non-root configs are skipped when no staged files exist under their directory, preventing spurious `commit_tag_required` failures from unrelated packs.
+
+### Related Provenance Records
+
+- [prov-2026-423a3a9a](./provenance/prov-2026-423a3a9a.yml) - Multi-pack aware lint and check CLI commands
+
 ## [2.3.3] - 2026-04-17
 
 ### Fixed
