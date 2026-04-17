@@ -1,6 +1,6 @@
 id: prov-2026-4e4db58e
 title: Add interpolation support to RETURNS payload loading in proxy containers
-status: open
+status: implemented
 created_at: "2026-04-16"
 author: calebcowen@gmail.com
 intent: "Wire the interpolate.Resolver through to proxy-container PayloadLoaders so that ${VAR} tokens in RETURNS payload files are resolved using environment variables or auto-generated values, consistent with how DSL field interpolation already works."
@@ -19,11 +19,16 @@ affected_scope:
   - pkg/proxy/redis/interceptor.go
   - pkg/proxy/grpc/interceptor.go
   - cmd/linespec/main_beta.go
+  - examples/user-linespecs/payloads/user_response.json
+  - examples/user-linespecs/get_user_success.linespec
+  - examples/user-linespecs/get_user_not_found.linespec
+  - examples/user-linespecs/delete_user_success.linespec
+  - examples/user-linespecs/update_user_success.linespec
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 92f0c2513d41c4db202bead24e2095b0afc41e13
 associated_specs:
   - path: examples/user-linespecs/get_user_success.linespec
     type: linespec
