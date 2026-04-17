@@ -1,0 +1,41 @@
+id: prov-2026-423a3a9a
+title: Multi-pack aware lint and check CLI commands
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: |
+  The `linespec provenance lint` and `linespec provenance check` CLI commands only
+  use a single .linespec.yml config, even in monorepos where each pack has its own
+  .linespec.yml (e.g. packwerk). The git hooks installed by install-hooks were
+  recently updated (prov-2026-afed8852) to be multi-pack aware, but the CLI commands
+  themselves were not. Running `linespec -p lint` or `linespec -p check` from the
+  repo root without -c only picks up the root config (or defaults), silently missing
+  all pack-level provenance directories.
+
+  Both commands should auto-discover all .linespec.yml files under the working
+  directory (excluding .git) and run against each one, matching the behavior of the
+  git hooks. For `check --staged`, non-root configs should only fire when staged
+  files exist under their directory, to avoid spurious commit_tag_required failures
+  from unrelated packs.
+constraints:
+  - When -c is explicitly provided, auto-discovery must NOT run; use only that config
+  - When no .linespec.yml files are found, fall through to default behavior (no-op, not an error)
+  - For check --staged, non-root configs are skipped when no staged files exist under their directory
+  - For lint and non-staged check, all discovered configs are used regardless of staged state
+  - The fix must be applied to both main_stable.go and main_beta.go identically
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: cmd/linespec/main_stable.go
+    type: code
+  - path: cmd/linespec/main_beta.go
+    type: code
+associated_traces: []
+monitors: []
+tags: []
