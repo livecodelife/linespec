@@ -1,6 +1,6 @@
 id: prov-2026-423a3a9a
 title: Multi-pack aware lint and check CLI commands
-status: open
+status: implemented
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: |
@@ -30,7 +30,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4d6ba9b186e571110ca58ecc59ddba7690c1b8a7
 associated_specs:
   - path: cmd/linespec/main_stable.go
     type: code
