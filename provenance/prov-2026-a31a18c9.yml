@@ -1,6 +1,6 @@
 id: prov-2026-a31a18c9
 title: 'v2.5.0 release: install-skills docs update and version bump'
-status: open
+status: implemented
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: "Update all documentation and the docs site to reflect the renamed install-skills command and new linespec-testing skill, then bump the version to v2.5.0 and tag the release."
@@ -23,7 +23,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-5a3f28a5
-sealed_at_sha: ""
+sealed_at_sha: 8ec47bc14c06d87a5575e640e39e199c1f12b7a9
 associated_specs:
   - path: CHANGELOG.md
     type: documentation
