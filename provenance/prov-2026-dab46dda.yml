@@ -1,0 +1,25 @@
+id: prov-2026-dab46dda
+title: Document VARS block in LINESPEC.md and docs site
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: "Add VARS block documentation to LINESPEC.md and docs/linespec.html. The VARS block (introduced in v2.4.0) allows explicit typed variable declarations (uuid, integer, string) at the top of a spec, pre-generating values before any payload is scanned. Both docs and the docs site sidebar must be updated to cover syntax, supported types, value generation rules, and a complete example."
+constraints:
+  - "LINESPEC.md and docs/linespec.html must document identical content — no drift between the two"
+  - "VARS block must appear in the DSL grammar order section (after TEST, before RECEIVE)"
+  - "Documentation must cover all three supported types: uuid, integer, string"
+  - "An example using VARS with integer-typed USER_ID must be included"
+affected_scope:
+  - LINESPEC.md
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
