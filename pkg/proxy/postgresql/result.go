@@ -2,6 +2,8 @@ package postgresql
 
 import (
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -146,8 +148,72 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	return err
 }
 
-// SendDataRow sends a single DataRow message
+// SendDataRow sends a single DataRow message using name-based heuristics to
+// choose binary vs text format per column (legacy behaviour).
 func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[string]interface{}) error {
+	return r.sendDataRowInternal(conn, columns, values, nil)
+}
+
+// SendDataRowTextOnly sends all column values in text format.
+// Use this when the RowDescription was already sent by the real upstream and
+// you cannot change the per-column format codes.
+func (r *ResultHandler) SendDataRowTextOnly(conn net.Conn, columns []string, values map[string]interface{}) error {
+	return r.sendDataRowInternal(conn, columns, values, []int16{0})
+}
+
+// SendDataRowWithFormats sends a DataRow honouring the per-column result
+// format codes that the client supplied in its Bind message (0=text, 1=binary).
+// A slice with a single entry applies that code to every column; an empty/nil
+// slice falls back to name-based heuristics.
+func (r *ResultHandler) SendDataRowWithFormats(conn net.Conn, columns []string, values map[string]interface{}, resultFormatCodes []int16) error {
+	return r.sendDataRowInternal(conn, columns, values, resultFormatCodes)
+}
+
+// colFormatCode returns the result format code for column index i.
+// Returns -1 to signal "use name-based heuristic", 0 for text, 1 for binary.
+func colFormatCode(codes []int16, i int) int16 {
+	if len(codes) == 0 {
+		return -1
+	}
+	if len(codes) == 1 {
+		return codes[0] // single code applies to all columns
+	}
+	if i < len(codes) {
+		return codes[i]
+	}
+	return 0
+}
+
+// isUUIDString returns true when s is a standard 36-character UUID
+// (8-4-4-4-12 hex groups separated by hyphens).
+func isUUIDString(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return false
+	}
+	for i, c := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// encodeUUIDBinary converts a UUID string to its 16-byte binary representation.
+func encodeUUIDBinary(s string) ([]byte, error) {
+	cleaned := strings.ReplaceAll(s, "-", "")
+	if len(cleaned) != 32 {
+		return nil, fmt.Errorf("invalid UUID string: %q", s)
+	}
+	return hex.DecodeString(cleaned)
+}
+
+func (r *ResultHandler) sendDataRowInternal(conn net.Conn, columns []string, values map[string]interface{}, resultFormatCodes []int16) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
 	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size
@@ -157,61 +223,126 @@ func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[
 	payload = append(payload, fieldCountBytes...)
 
 	// For each column value:
-	// - Length (4 bytes) - -1 for NULL, otherwise length of value
-	// - Value (variable) - binary for INTEGER/TIMESTAMPTZ, text for other types
+	// For each column value:
+	// - Length (4 bytes) — -1 for NULL, otherwise byte-length of the encoded value
+	// - Value (variable) — encoding depends on the per-column result format code
+	//   supplied by the client in its Bind message (0=text, 1=binary).
+	//   When resultFormatCodes is nil we fall back to name-based heuristics for
+	//   backwards compatibility.
 
-	for _, col := range columns {
+	for i, col := range columns {
 		val, ok := values[col]
 		if !ok || val == nil {
-			// NULL value - length = -1
+			// NULL value — length = -1
 			payload = append(payload, 0xFF, 0xFF, 0xFF, 0xFF)
 			continue
 		}
 
+		fmtCode := colFormatCode(resultFormatCodes, i)
 		colLower := strings.ToLower(col)
-		isInteger := colLower == "id" || strings.HasSuffix(colLower, "_id")
-		isTimestamp := strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")
 
-		if isInteger {
-			// Send INTEGER in binary format (4 bytes, big-endian)
-			// RowDescription declares format=1 for INTEGER, so asyncpg expects binary
-			intVal, err := toInt32(val)
-			if err != nil {
-				// Fallback to text format if conversion fails
-				strVal := fmt.Sprintf("%v", val)
-				lenBytes := make([]byte, 4)
-				binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
-				payload = append(payload, lenBytes...)
-				payload = append(payload, []byte(strVal)...)
-			} else {
-				// Binary format: length = 4, value = 4 bytes big-endian
-				payload = append(payload, 0, 0, 0, 4) // length = 4
-				intBytes := make([]byte, 4)
-				binary.BigEndian.PutUint32(intBytes, uint32(intVal))
-				payload = append(payload, intBytes...)
+		appendText := func(v interface{}) {
+			var s string
+			// Slices and maps must be JSON-encoded so the database driver
+			// can scan them into string fields that hold JSONB/JSON values.
+			switch v.(type) {
+			case []interface{}, map[string]interface{}, map[interface{}]interface{}:
+				if b, err := json.Marshal(v); err == nil {
+					s = string(b)
+				} else {
+					s = fmt.Sprintf("%v", v)
+				}
+			default:
+				s = fmt.Sprintf("%v", v)
 			}
-		} else if isTimestamp {
-			// Send TIMESTAMPTZ in binary format (8 bytes, microseconds since 2000-01-01)
-			timestampBytes, err := encodeTimestampBinary(val)
-			if err != nil {
-				// Fallback to text format if encoding fails
-				strVal := fmt.Sprintf("%v", val)
-				lenBytes := make([]byte, 4)
-				binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
-				payload = append(payload, lenBytes...)
-				payload = append(payload, []byte(strVal)...)
-			} else {
-				// Binary format: length = 8, value = 8 bytes big-endian
-				payload = append(payload, 0, 0, 0, 8) // length = 8
-				payload = append(payload, timestampBytes...)
+			lb := make([]byte, 4)
+			binary.BigEndian.PutUint32(lb, uint32(len(s)))
+			payload = append(payload, lb...)
+			payload = append(payload, []byte(s)...)
+		}
+
+		if fmtCode == 1 {
+			// Client explicitly requested binary format for this column.
+			// Detect the value type and encode accordingly.
+			encoded := false
+			switch v := val.(type) {
+			case string:
+				if isUUIDString(v) {
+					// UUID → 16 raw bytes
+					uuidBytes, err := encodeUUIDBinary(v)
+					if err == nil {
+						payload = append(payload, 0, 0, 0, 16)
+						payload = append(payload, uuidBytes...)
+						encoded = true
+					}
+				}
+				if !encoded && (strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")) {
+					tsBytes, err := encodeTimestampBinary(v)
+					if err == nil {
+						payload = append(payload, 0, 0, 0, 8)
+						payload = append(payload, tsBytes...)
+						encoded = true
+					}
+				}
+				if !encoded {
+					// Raw bytes — binary representation of text is just the UTF-8 bytes
+					lb := make([]byte, 4)
+					binary.BigEndian.PutUint32(lb, uint32(len(v)))
+					payload = append(payload, lb...)
+					payload = append(payload, []byte(v)...)
+					encoded = true
+				}
+			case time.Time:
+				tsBytes, err := encodeTimestampBinary(v)
+				if err == nil {
+					payload = append(payload, 0, 0, 0, 8)
+					payload = append(payload, tsBytes...)
+					encoded = true
+				}
+			default:
+				// Try integer conversion
+				intVal, err := toInt32(val)
+				if err == nil {
+					payload = append(payload, 0, 0, 0, 4)
+					ib := make([]byte, 4)
+					binary.BigEndian.PutUint32(ib, uint32(intVal))
+					payload = append(payload, ib...)
+					encoded = true
+				}
 			}
+			if !encoded {
+				appendText(val)
+			}
+		} else if fmtCode == 0 {
+			// Client explicitly requested text format.
+			appendText(val)
 		} else {
-			// Text format for other types (TEXT, VARCHAR, etc.)
-			strVal := fmt.Sprintf("%v", val)
-			lenBytes := make([]byte, 4)
-			binary.BigEndian.PutUint32(lenBytes, uint32(len(strVal)))
-			payload = append(payload, lenBytes...)
-			payload = append(payload, []byte(strVal)...)
+			// fmtCode == -1: no explicit format codes — use name-based heuristics
+			// (legacy behaviour, used when we send our own RowDescription).
+			isInteger := colLower == "id" || strings.HasSuffix(colLower, "_id")
+			isTimestamp := strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")
+
+			if isInteger {
+				intVal, err := toInt32(val)
+				if err != nil {
+					appendText(val)
+				} else {
+					payload = append(payload, 0, 0, 0, 4)
+					ib := make([]byte, 4)
+					binary.BigEndian.PutUint32(ib, uint32(intVal))
+					payload = append(payload, ib...)
+				}
+			} else if isTimestamp {
+				tsBytes, err := encodeTimestampBinary(val)
+				if err != nil {
+					appendText(val)
+				} else {
+					payload = append(payload, 0, 0, 0, 8)
+					payload = append(payload, tsBytes...)
+				}
+			} else {
+				appendText(val)
+			}
 		}
 	}
 

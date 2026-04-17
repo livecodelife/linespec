@@ -54,21 +54,36 @@ type ColumnInfo struct {
 	Comment    string `json:"Comment"`
 }
 
+// MockedPortal pairs a matched mock with the actual SQL query from Parse,
+// so sendMockExecuteResponse can use the real SELECT/INSERT/UPDATE text
+// rather than falling back to a synthetic "INSERT INTO <table>" string.
+// DescribeForwarded records whether a Describe was forwarded for this statement
+// before Bind, meaning the upstream already sent RowDescription to the client —
+// the Execute response must therefore omit RowDescription to avoid a duplicate.
+type MockedPortal struct {
+	Mock              *types.ExpectStatement
+	Query             string  // actual SQL captured at Parse/Bind time
+	DescribeForwarded bool    // true if Describe was forwarded to upstream for this stmt
+	ResultFormatCodes []int16 // per-column result format codes from Bind (0=text, 1=binary)
+}
+
 // ConnectionState tracks prepared statements and mocked portals per connection
 // This is needed for the extended query protocol where we eavesdrop on Parse
 // but only intercept at Bind/Execute
 type ConnectionState struct {
-	preparedStatements map[string]string                 // statement name -> query
-	mockedPortals      map[string]*types.ExpectStatement // portal name -> mock
-	justMockedExecute  bool                              // track if we just mocked an Execute
+	preparedStatements map[string]string          // statement name -> query
+	describedStatements map[string]bool           // statement name -> Describe was forwarded
+	mockedPortals      map[string]*MockedPortal   // portal name -> mock + actual query
+	justMockedExecute  bool                       // track if we just mocked an Execute
 }
 
 // NewConnectionState creates a new connection state
 func NewConnectionState() *ConnectionState {
 	return &ConnectionState{
-		preparedStatements: make(map[string]string),
-		mockedPortals:      make(map[string]*types.ExpectStatement),
-		justMockedExecute:  false,
+		preparedStatements:  make(map[string]string),
+		describedStatements: make(map[string]bool),
+		mockedPortals:       make(map[string]*MockedPortal),
+		justMockedExecute:   false,
 	}
 }
 
@@ -626,7 +641,24 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			}
 
 		case MsgDescribe, MsgClose, MsgFlush:
-			// These always flow through to real DB
+			// These always flow through to real DB.
+			// For Describe, record that the upstream will send RowDescription to the client;
+			// Execute for the same statement must then skip sending its own RowDescription.
+			if msgType == MsgDescribe && len(payload) > 0 {
+				// payload[0] == 'S' (DescribeStatement) or 'P' (DescribePortal)
+				// We only care about DescribeStatement ('S') since that triggers RowDescription.
+				if payload[0] == 'S' {
+					stmtName := ""
+					if len(payload) > 1 {
+						nullIdx := 1
+						for nullIdx < len(payload) && payload[nullIdx] != 0 {
+							nullIdx++
+						}
+						stmtName = string(payload[1:nullIdx])
+					}
+					state.describedStatements[stmtName] = true
+				}
+			}
 			p.logDebug("  -> Forwarding message type %c to upstream\n", msgType)
 			if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 				p.logDebug("  -> Error forwarding: %v\n", err)
@@ -652,8 +684,10 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			p.registry.CheckNegativeMocks(tableName, query)
 			if mock, found := p.registry.FindMock(tableName, query); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
-				// Store the actual query in mock.SQL so sendMockExecuteResponse can detect
-				// RETURNING clauses (e.g., INSERT ... RETURNING id) for synthetic result sets
+				// Back-fill mock.SQL only when neither SQL nor SQLContains was specified,
+				// e.g. a bare EXPECT WRITE:POSTGRESQL without USING_SQL.
+				// For USING_SQL_CONTAINS mocks mock.SQLContains is set, so we skip this
+				// — the actual query is passed separately via MockedPortal.Query.
 				if mock.SQL == "" && mock.SQLContains == "" {
 					mock.SQL = query
 				}
@@ -671,7 +705,13 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 					p.logDebug("  -> All VERIFY rules passed\n")
 				}
 
-				state.mockedPortals[portalName] = mock
+				resultFmts := p.extractBindResultFormats(payload)
+				state.mockedPortals[portalName] = &MockedPortal{
+					Mock:              mock,
+					Query:             query,
+					DescribeForwarded: state.describedStatements[stmtName],
+					ResultFormatCodes: resultFmts,
+				}
 				// Send BindComplete ourselves, don't forward to upstream
 				if err := p.writeMessage(clientConn, MsgBindComplete, nil); err != nil {
 					p.logDebug("  -> Error sending BindComplete: %v\n", err)
@@ -689,10 +729,11 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		case MsgExecute:
 			// Check if this portal is mocked
 			portalName := p.extractExecuteInfo(payload)
-			if mock, exists := state.mockedPortals[portalName]; exists {
-				p.logDebug("  -> Intercepting Execute for mocked portal '%s'\n", portalName)
-				// Send mock result
-				if err := p.sendMockExecuteResponse(clientConn, mock); err != nil {
+			if mp, exists := state.mockedPortals[portalName]; exists {
+				p.logDebug("  -> Intercepting Execute for mocked portal '%s' (describeForwarded=%v)\n", portalName, mp.DescribeForwarded)
+				// Send mock result; skip RowDescription if Describe was already forwarded to upstream
+				// (the upstream's RowDescription was already relayed to the client).
+				if err := p.sendMockExecuteResponse(clientConn, mp.Mock, mp.Query, mp.DescribeForwarded, mp.ResultFormatCodes); err != nil {
 					p.logDebug("  -> Error sending mock result: %v\n", err)
 					return
 				}
@@ -1574,7 +1615,7 @@ afterBind:
 			// For READ operations or WRITE with RETURNING, send result set
 			if mock.Channel == types.ReadPostgreSQL || len(p.extractReturningColumns(query)) > 0 {
 				p.logDebug("  -> Sending mock result set\n")
-				if err := p.sendMockResultSetForExtended(clientConn, mock, query); err != nil {
+				if err := p.sendMockResultSetForExtended(clientConn, mock, query, false, nil); err != nil {
 					return fmt.Errorf("error sending mock result: %w", err)
 				}
 			}
@@ -1919,7 +1960,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 					if hasReturning {
 						// Send result set for RETURNING clause
 						p.logDebug("  -> Sending mock result set for RETURNING clause\n")
-						if err := p.sendMockResultSetForExtended(clientConn, mock, queryToUse); err != nil {
+						if err := p.sendMockResultSetForExtended(clientConn, mock, queryToUse, false, nil); err != nil {
 							p.logDebug("  -> Error sending mock result: %v\n", err)
 							return fmt.Errorf("error sending mock result: %w", err)
 						}
@@ -1928,7 +1969,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 				} else {
 					// For READ operations, send result set
 					p.logDebug("  -> Sending mock result set for READ operation\n")
-					if err := p.sendMockResultSetForExtended(clientConn, mock, queryToUse); err != nil {
+					if err := p.sendMockResultSetForExtended(clientConn, mock, queryToUse, false, nil); err != nil {
 						p.logDebug("  -> Error sending mock result: %v\n", err)
 						return fmt.Errorf("error sending mock result: %w", err)
 					}
@@ -2137,9 +2178,13 @@ func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
 	return p.writeMessage(conn, MsgErrorResponse, payload)
 }
 
-// sendMockResultSetForExtended sends a mock result set for extended query protocol
-// This includes RowDescription and DataRow messages
-func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectStatement, actualQuery string) error {
+// sendMockResultSetForExtended sends a mock result set for extended query protocol.
+// It sends RowDescription + DataRow messages, unless skipRowDescription is true —
+// that flag must be set when the client already received RowDescription via a
+// forwarded Describe, to avoid sending it a second time.
+// resultFormatCodes are the per-column result format codes extracted from the
+// Bind message; they control how each DataRow value is encoded (0=text, 1=binary).
+func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectStatement, actualQuery string, skipRowDescription bool, resultFormatCodes []int16) error {
 	// Determine columns from mock or use defaults
 	columns := []string{"id", "name", "email"}
 	if mock.Table != "" {
@@ -2225,14 +2270,20 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 		}
 	}
 
-	// Send RowDescription
-	if err := p.result.SendRowDescription(conn, columns); err != nil {
-		return fmt.Errorf("error sending RowDescription: %w", err)
+	// Send RowDescription unless the client already received it via a forwarded Describe.
+	if !skipRowDescription {
+		if err := p.result.SendRowDescription(conn, columns); err != nil {
+			return fmt.Errorf("error sending RowDescription: %w", err)
+		}
+	} else {
+		p.logDebug("  -> Skipping RowDescription (already sent via Describe)\n")
 	}
 
-	// Send DataRow for each row
+	// Send DataRow for each row, honouring the per-column result format codes
+	// from the client's Bind message (0=text, 1=binary).  When resultFormatCodes
+	// is nil and we own the RowDescription we fall back to name-based heuristics.
 	for _, row := range rows {
-		if err := p.result.SendDataRow(conn, columns, row); err != nil {
+		if err := p.result.SendDataRowWithFormats(conn, columns, row, resultFormatCodes); err != nil {
 			return fmt.Errorf("error sending DataRow: %w", err)
 		}
 	}
@@ -2706,7 +2757,7 @@ func (p *Proxy) handleSimpleQuery(conn net.Conn, query string, mock *types.Expec
 	}
 
 	// Send mock result set
-	if err := p.sendMockResultSetForExtended(conn, mock, query); err != nil {
+	if err := p.sendMockResultSetForExtended(conn, mock, query, false, nil); err != nil {
 		return fmt.Errorf("error sending mock result: %w", err)
 	}
 
@@ -2793,6 +2844,97 @@ func (p *Proxy) extractBindInfo(payload []byte) (portalName, stmtName string) {
 	return portalName, stmtName
 }
 
+// extractBindResultFormats parses the Bind message payload and returns the
+// per-column result format codes requested by the client.
+// Bind layout (after portal\0 stmt\0):
+//   int16  numParamFmts
+//   int16  paramFmt[numParamFmts]
+//   int16  numParamValues
+//   for each param: int32 len, []byte value  (len=-1 → NULL)
+//   int16  numResultFmts
+//   int16  resultFmt[numResultFmts]
+//
+// Returns nil when the codes cannot be parsed.
+func (p *Proxy) extractBindResultFormats(payload []byte) []int16 {
+	if len(payload) == 0 {
+		return nil
+	}
+	pos := 0
+
+	// Skip portal name (null-terminated)
+	for pos < len(payload) && payload[pos] != 0 {
+		pos++
+	}
+	if pos >= len(payload) {
+		return nil
+	}
+	pos++ // skip null
+
+	// Skip statement name (null-terminated)
+	for pos < len(payload) && payload[pos] != 0 {
+		pos++
+	}
+	if pos >= len(payload) {
+		return nil
+	}
+	pos++ // skip null
+
+	// Number of parameter format codes
+	if pos+2 > len(payload) {
+		return nil
+	}
+	numParamFmts := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+	pos += 2
+	pos += numParamFmts * 2
+	if pos > len(payload) {
+		return nil
+	}
+
+	// Number of parameter values
+	if pos+2 > len(payload) {
+		return nil
+	}
+	numParams := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+	pos += 2
+
+	// Skip each parameter value
+	for i := 0; i < numParams; i++ {
+		if pos+4 > len(payload) {
+			return nil
+		}
+		length := int(int32(binary.BigEndian.Uint32(payload[pos : pos+4])))
+		pos += 4
+		if length == -1 {
+			continue // NULL parameter
+		}
+		pos += length
+		if pos > len(payload) {
+			return nil
+		}
+	}
+
+	// Number of result format codes
+	if pos+2 > len(payload) {
+		return nil
+	}
+	numResultFmts := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+	pos += 2
+
+	if numResultFmts == 0 {
+		return nil
+	}
+
+	codes := make([]int16, numResultFmts)
+	for i := 0; i < numResultFmts; i++ {
+		if pos+2 > len(payload) {
+			return nil
+		}
+		codes[i] = int16(binary.BigEndian.Uint16(payload[pos : pos+2]))
+		pos += 2
+	}
+	return codes
+}
+
 // extractExecuteInfo extracts portal name from an Execute message
 // Execute format: [portal]\0 [max_rows (int32)]
 func (p *Proxy) extractExecuteInfo(payload []byte) string {
@@ -2811,9 +2953,19 @@ func (p *Proxy) extractExecuteInfo(payload []byte) string {
 	return ""
 }
 
-// sendMockExecuteResponse sends the mock result for an Execute message
-func (p *Proxy) sendMockExecuteResponse(clientConn net.Conn, mock *types.ExpectStatement) error {
-	query := mock.SQL
+// sendMockExecuteResponse sends the mock result for an Execute message.
+// actualQuery is the real SQL from the Parse phase; it takes precedence over
+// mock.SQL so that USING_SQL_CONTAINS mocks (where mock.SQL is empty) still
+// receive a properly shaped result set instead of falling back to a synthetic
+// "INSERT INTO <table>" string.
+// skipRowDescription must be true when a Describe was forwarded to the upstream
+// before this Execute — the upstream already sent RowDescription to the client,
+// so including it again in the Execute response would violate the protocol.
+func (p *Proxy) sendMockExecuteResponse(clientConn net.Conn, mock *types.ExpectStatement, actualQuery string, skipRowDescription bool, resultFormatCodes []int16) error {
+	query := actualQuery
+	if query == "" {
+		query = mock.SQL
+	}
 	if query == "" {
 		query = fmt.Sprintf("INSERT INTO %s", mock.Table)
 	}
@@ -2828,14 +2980,14 @@ func (p *Proxy) sendMockExecuteResponse(clientConn net.Conn, mock *types.ExpectS
 
 		if hasReturning {
 			// Send result set for RETURNING clause
-			if err := p.sendMockResultSetForExtended(clientConn, mock, query); err != nil {
+			if err := p.sendMockResultSetForExtended(clientConn, mock, query, skipRowDescription, resultFormatCodes); err != nil {
 				return err
 			}
 		}
 		// For WRITE without RETURNING, just send CommandComplete
 	} else {
 		// For READ operations, send result set
-		if err := p.sendMockResultSetForExtended(clientConn, mock, query); err != nil {
+		if err := p.sendMockResultSetForExtended(clientConn, mock, query, skipRowDescription, resultFormatCodes); err != nil {
 			return err
 		}
 	}

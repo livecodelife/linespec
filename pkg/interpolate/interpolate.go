@@ -95,6 +95,21 @@ func generateRandomValue(varName string) string {
 		return fmt.Sprintf("%s_%d", strings.ToLower(varName), os.Getpid())
 	}
 
+	// For UUID-named variables, generate a proper RFC 4122 v4 UUID string so that
+	// database drivers that expect binary UUID encoding (e.g. lib/pq) can decode it.
+	upper := strings.ToUpper(varName)
+	if upper == "UUID" || strings.HasSuffix(upper, "_UUID") {
+		b[6] = (b[6] & 0x0f) | 0x40 // version 4
+		b[8] = (b[8] & 0x3f) | 0x80 // RFC 4122 variant
+		return fmt.Sprintf("%s-%s-%s-%s-%s",
+			hex.EncodeToString(b[0:4]),
+			hex.EncodeToString(b[4:6]),
+			hex.EncodeToString(b[6:8]),
+			hex.EncodeToString(b[8:10]),
+			hex.EncodeToString(b[10:16]),
+		)
+	}
+
 	// Create a readable prefix based on variable name
 	prefix := strings.ToLower(varName)
 	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(b[:8]))
