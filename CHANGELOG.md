@@ -5,6 +5,18 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-04-17
+
+### Fixed
+
+- **Linter false positives for `sealed_at_sha` on superseded/deprecated records** ([prov-2026-755704af](./provenance/prov-2026-755704af.yml)) — The linter incorrectly warned when `sealed_at_sha` was present on `superseded` or `deprecated` records. Those terminal states can only be reached after a record has been implemented, so carrying a `sealed_at_sha` is correct and expected. Only `open` records are now flagged.
+
+### Related Provenance Records
+
+- [prov-2026-755704af](./provenance/prov-2026-755704af.yml) - Fix linter to allow sealed_at_sha on superseded and deprecated records
+
+---
+
 ## [2.4.0] - 2026-04-17
 
 ### Added

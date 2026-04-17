@@ -13,6 +13,12 @@ constraints:
 affected_scope:
   - VERSION
   - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
   - provenance/prov-2026-464c2105.yml
 forbidden_scope: []
 supersedes: prov-2026-464c2105
