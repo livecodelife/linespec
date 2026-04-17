@@ -1,0 +1,34 @@
+id: prov-2026-cfcd95a9
+title: Fix notification linespecs missing WRITE:REDIS step and deprecated associated_linespecs fields
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: >
+  Two notification linespecs (get_notification_not_found and list_notifications_success) were
+  missing the EXPECT WRITE:REDIS SET step that follows the READ:REDIS cache miss. This caused
+  test failures because the service writes to Redis after a cache miss. Also fixes deprecated
+  associated_linespecs fields in example service provenance records — prov-2026-001-notification-service,
+  prov-2026-001-user-service, and prov-2026-002-user-service — renaming them to associated_specs
+  with the correct path/type structure.
+constraints:
+  - MUST NOT break any existing passing notification or user linespec tests
+  - All example service provenance records must use associated_specs (not associated_linespecs)
+affected_scope:
+  - examples/notification-linespecs/get_notification_not_found.linespec
+  - examples/notification-linespecs/list_notifications_success.linespec
+  - examples/notification-service/provenance/prov-2026-001-notification-service.yml
+  - examples/user-service/provenance/prov-2026-001-user-service.yml
+  - examples/user-service/provenance/prov-2026-002-user-service.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/notification-linespecs/get_notification_not_found.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
