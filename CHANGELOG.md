@@ -5,6 +5,20 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-04-17
+
+### Added
+
+- **VARS block for typed variable declarations** ([prov-2026-935c1716](./provenance/prov-2026-935c1716.yml)) — Linespecs can now declare an explicit `VARS` block before `RECEIVE` to pre-generate typed variables before any payload is loaded. Supported types: `uuid` (RFC 4122 v4), `integer` (1–99999), `string` (random alphanumeric). Variables without a VARS declaration continue to use name-based inference (UUID suffix → uuid, otherwise string).
+
+- **Failure output includes resolved variable map** ([prov-2026-935c1716](./provenance/prov-2026-935c1716.yml)) — When a test fails, the error message now appends the full resolved variable map showing each variable name, type, and generated value. Makes it easy to reproduce failures by knowing exactly what values were used.
+
+- **Channel-aware integer type correction** ([prov-2026-935c1716](./provenance/prov-2026-935c1716.yml)) — Variables declared with `integer` type in the VARS block are rendered as JSON numbers (not quoted strings) in HTTP response payloads. VarTypes flow through the registry JSON so proxy containers receive them alongside variable values.
+
+### Related Provenance Records
+
+- [prov-2026-935c1716](./provenance/prov-2026-935c1716.yml) - Add VARS block, typed variable generation, failure variable output, and channel-aware formatting
+
 ## [2.3.4] - 2026-04-17
 
 ### Added
