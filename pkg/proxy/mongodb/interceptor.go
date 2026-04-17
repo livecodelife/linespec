@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
@@ -43,6 +44,12 @@ func NewInterceptor(addr, upstreamAddr string, reg *registry.MockRegistry) *Inte
 		registry:     reg,
 		loader:       dsl.NewPayloadLoader(""),
 	}
+}
+
+// SetResolver wires an interpolate.Resolver into the payload loader so that
+// ${VAR} tokens in RETURNS payload files are resolved at runtime.
+func (p *Interceptor) SetResolver(resolver *interpolate.Resolver) {
+	p.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
 }
 
 // Start begins accepting connections. It blocks until ctx is cancelled.

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
@@ -27,6 +28,12 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 		registry: reg,
 		loader:   dsl.NewPayloadLoader(""), // BaseDir will be set per-request from mock.BaseDir
 	}
+}
+
+// SetResolver wires an interpolate.Resolver into the payload loader so that
+// ${VAR} tokens in RETURNS payload files are resolved at runtime.
+func (i *Interceptor) SetResolver(resolver *interpolate.Resolver) {
+	i.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
 }
 
 func (i *Interceptor) Start(ctx context.Context) error {

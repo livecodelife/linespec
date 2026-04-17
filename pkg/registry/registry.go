@@ -21,6 +21,7 @@ type MockRegistry struct {
 	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
 	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
 	verifyErrors []string                            // VERIFY rule failures recorded by proxies
+	variables    map[string]string                   // Resolved interpolation variables, forwarded to proxy containers
 }
 
 func NewMockRegistry() *MockRegistry {
@@ -30,7 +31,27 @@ func NewMockRegistry() *MockRegistry {
 		hits:         make(map[*types.ExpectStatement]int),
 		seeds:        make(map[string][][]byte),
 		passthroughs: make([]string, 0),
+		variables:    make(map[string]string),
 	}
+}
+
+// SetVariables stores resolved interpolation variables so they are included when
+// the registry is serialised for proxy containers.
+func (r *MockRegistry) SetVariables(vars map[string]string) {
+	r.Lock()
+	defer r.Unlock()
+	r.variables = vars
+}
+
+// GetVariables returns a copy of the resolved interpolation variables.
+func (r *MockRegistry) GetVariables() map[string]string {
+	r.RLock()
+	defer r.RUnlock()
+	out := make(map[string]string, len(r.variables))
+	for k, v := range r.variables {
+		out[k] = v
+	}
+	return out
 }
 
 // SeedTopic adds a raw payload to be served to Kafka consumers on a given topic.
@@ -94,6 +115,9 @@ func (r *MockRegistry) LoadFromBytes(data []byte) error {
 	}
 	if rf.Seeds != nil {
 		r.seeds = rf.Seeds
+	}
+	if rf.Variables != nil {
+		r.variables = rf.Variables
 	}
 	r.orderedMocks = make([]*types.ExpectStatement, 0)
 	for _, mocksList := range r.mocks {
@@ -693,8 +717,9 @@ func (r *MockRegistry) CheckNegativeRedisMocks(command, key string) {
 }
 
 type registryFile struct {
-	Mocks map[string][]*types.ExpectStatement `json:"mocks"`
-	Seeds map[string][][]byte                 `json:"seeds,omitempty"`
+	Mocks     map[string][]*types.ExpectStatement `json:"mocks"`
+	Seeds     map[string][][]byte                 `json:"seeds,omitempty"`
+	Variables map[string]string                   `json:"variables,omitempty"`
 }
 
 func (r *MockRegistry) SaveToFile(path string) error {
@@ -737,7 +762,7 @@ func (r *MockRegistry) ToBytesForContainer(hostCwd, containerProjectMount string
 		rebasedMocks[key] = rebased
 	}
 
-	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds})
+	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds, Variables: r.variables})
 }
 
 // SaveToFileForContainer saves the registry to path with BaseDir fields rewritten
@@ -772,6 +797,9 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	}
 	if rf.Seeds != nil {
 		r.seeds = rf.Seeds
+	}
+	if rf.Variables != nil {
+		r.variables = rf.Variables
 	}
 	r.orderedMocks = make([]*types.ExpectStatement, 0)
 	for _, mocksList := range r.mocks {

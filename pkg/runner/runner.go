@@ -519,6 +519,27 @@ func persistenceKey(serviceConfig *config.LineSpecConfig) string {
 	return serviceConfig.BaseDir
 }
 
+// commonAncestor returns the deepest directory that is a prefix of both a and b.
+// Both paths should be absolute. If one is not under the other, walks up until a
+// shared ancestor is found (worst case: filesystem root).
+func commonAncestor(a, b string) string {
+	// Normalize
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	for {
+		rel, err := filepath.Rel(a, b)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return a
+		}
+		parent := filepath.Dir(a)
+		if parent == a {
+			// Reached root
+			return a
+		}
+		a = parent
+	}
+}
+
 // canUsePersistentContainers returns true when the suite can keep containers alive across
 // tests for this spec. Kafka consumer tests are excluded because their trigger mechanism
 // (seeding + polling) requires a fresh interceptor per test.
@@ -619,7 +640,7 @@ func (s *TestSuite) truncatePostgreSQLTables(ctx context.Context, dbConfig *conf
 // prepareForReuse reloads registries on all running proxy sidecars and truncates
 // the database, resetting state so the persistent containers are clean for the next test.
 func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceContainers, serviceConfig *config.LineSpecConfig) error {
-	regBytes, err := r.registry.ToBytesForContainer(r.suite.cwd, r.suite.containerNaming.GetProjectMountPath())
+	regBytes, err := r.registry.ToBytesForContainer(r.projectRoot, r.suite.containerNaming.GetProjectMountPath())
 	if err != nil {
 		return fmt.Errorf("failed to serialise registry: %w", err)
 	}
@@ -956,16 +977,26 @@ func (s *TestSuite) RunTest(ctx context.Context, specPath string) error {
 }
 
 type testRunner struct {
-	suite    *TestSuite
-	registry *registry.MockRegistry
-	config   *config.LineSpecConfig
-	tempDir  string                // Temp directory for registry and other test artifacts
-	resolver *interpolate.Resolver // Resolver for environment variable substitution
+	suite       *TestSuite
+	registry    *registry.MockRegistry
+	config      *config.LineSpecConfig
+	tempDir     string                // Temp directory for registry and other test artifacts
+	resolver    *interpolate.Resolver // Resolver for environment variable substitution
+	projectRoot string                // Common ancestor of cwd and spec BaseDir; used as the proxy volume mount source
 }
 
 func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// Create resolver for environment variable substitution
 	r.resolver = interpolate.NewResolver()
+
+	// Ensure specPath is absolute so that spec.BaseDir (filepath.Dir(specPath)) is also
+	// absolute. This is required for rebaseDir to correctly remap paths when the spec
+	// directory is outside r.suite.cwd (e.g. ../user-linespecs/ relative to user-service/).
+	if !filepath.IsAbs(specPath) {
+		if abs, err := filepath.Abs(specPath); err == nil {
+			specPath = abs
+		}
+	}
 
 	// Load Service Configuration FIRST (before parsing, so we can populate resolver)
 	specDir := filepath.Dir(specPath)
@@ -999,6 +1030,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		return err
 	}
 	r.registry.Register(spec)
+	r.registry.SetVariables(r.resolver.Variables)
+
+	// Compute the common ancestor of cwd and spec BaseDir so proxy containers can
+	// access payload files that live outside the service directory (e.g. a shared
+	// linespecs directory at the same level as the service).
+	r.projectRoot = commonAncestor(r.suite.cwd, spec.BaseDir)
 
 	// For Kafka consumer tests, seed the trigger payload into the registry so the
 	// interceptor can serve it as a Fetch response.
@@ -1152,7 +1189,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// 2. Save Registry to File for Proxy Containers
 	regFile := filepath.Join(r.tempDir, "registry-"+spec.Name+".json")
-	_ = r.registry.SaveToFileForContainer(regFile, r.suite.cwd, r.suite.containerNaming.GetProjectMountPath())
+	_ = r.registry.SaveToFileForContainer(regFile, r.projectRoot, r.suite.containerNaming.GetProjectMountPath())
 
 	// 3. Start Database and Proxy Containers — one per entry in serviceConfig.Databases.
 	// Each database gets a unique network alias derived from db.Host.  The proxy occupies
@@ -1248,7 +1285,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 						},
 					}, &container.HostConfig{
 						Binds: []string{
-							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 						},
 						PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1307,7 +1344,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 						},
 					}, &container.HostConfig{
 						Binds: []string{
-							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 						},
 						PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1425,7 +1462,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 						},
 					}, &container.HostConfig{
 						Binds: []string{
-							r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 						},
 						PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1519,7 +1556,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			Cmd:   httpProxyCmd,
 		}, &container.HostConfig{
 			Binds: []string{
-				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 			PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1605,7 +1642,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			Cmd:   kafkaProxyCmd,
 		}, &container.HostConfig{
 			Binds: []string{
-				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 		}, &network.NetworkingConfig{
@@ -1667,7 +1704,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			},
 		}, &container.HostConfig{
 			Binds: []string{
-				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 			PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1733,7 +1770,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			},
 		}, &container.HostConfig{
 			Binds: []string{
-				r.suite.cwd + ":" + r.suite.containerNaming.GetProjectMountPath(),
+				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 			PortBindings: map[nat.Port][]nat.PortBinding{

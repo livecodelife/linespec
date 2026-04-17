@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/verify"
@@ -29,6 +30,7 @@ var readCommands = map[string]bool{
 type Interceptor struct {
 	addr     string
 	registry *registry.MockRegistry
+	resolver *interpolate.Resolver
 }
 
 // NewInterceptor creates a new Redis interceptor listening on addr.
@@ -37,6 +39,12 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 		addr:     addr,
 		registry: reg,
 	}
+}
+
+// SetResolver stores a resolver so that ${VAR} tokens in RETURNS payload files
+// are resolved at runtime.
+func (i *Interceptor) SetResolver(resolver *interpolate.Resolver) {
+	i.resolver = resolver
 }
 
 // Start begins listening for Redis connections. It blocks until ctx is cancelled.
@@ -167,7 +175,7 @@ func (i *Interceptor) handleCommand(cmd, key string, args []string) []byte {
 
 	// Load and return the mock response payload.
 	if mock.ReturnsFile != "" {
-		loader := dsl.NewPayloadLoader(mock.BaseDir)
+		loader := dsl.NewPayloadLoaderWithResolver(mock.BaseDir, i.resolver)
 		raw, _, err := loader.LoadRaw(mock.ReturnsFile)
 		if err != nil {
 			logger.Debug("Redis Interceptor: Failed to load payload: %v", err)

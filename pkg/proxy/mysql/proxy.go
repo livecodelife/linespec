@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/proxy/base"
 	"github.com/livecodelife/linespec/pkg/registry"
@@ -71,6 +72,12 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 // SetDatabaseName sets the database name for schema responses
 func (p *Proxy) SetDatabaseName(name string) {
 	p.dbConfig.SetDatabaseName(name)
+}
+
+// SetResolver wires an interpolate.Resolver into the payload loader so that
+// ${VAR} tokens in RETURNS payload files are resolved at runtime.
+func (p *Proxy) SetResolver(resolver *interpolate.Resolver) {
+	p.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
 }
 
 // GetDatabaseName returns the current database name

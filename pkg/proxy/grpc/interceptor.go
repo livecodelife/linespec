@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/verify"
@@ -23,6 +24,7 @@ import (
 type Interceptor struct {
 	addr     string
 	registry *registry.MockRegistry
+	resolver *interpolate.Resolver
 }
 
 // NewInterceptor creates a new gRPC interceptor listening on addr.
@@ -31,6 +33,12 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 		addr:     addr,
 		registry: reg,
 	}
+}
+
+// SetResolver stores a resolver so that ${VAR} tokens in RETURNS payload files
+// are resolved at runtime.
+func (i *Interceptor) SetResolver(resolver *interpolate.Resolver) {
+	i.resolver = resolver
 }
 
 // Start begins listening for gRPC connections. It blocks until ctx is cancelled.
@@ -123,7 +131,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Load the response payload.
 	var responseBody []byte
 	if mock.ReturnsFile != "" {
-		loader := dsl.NewPayloadLoader(mock.BaseDir)
+		loader := dsl.NewPayloadLoaderWithResolver(mock.BaseDir, i.resolver)
 		raw, _, err := loader.LoadRaw(mock.ReturnsFile)
 		if err != nil {
 			writeGRPCError(w, 2, fmt.Sprintf("failed to load response payload: %v", err))

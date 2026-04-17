@@ -20,6 +20,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/config"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/embeddings"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
@@ -121,7 +122,13 @@ func runTestWithCode(path string) int {
 	}()
 	defer signal.Stop(sigCh)
 
-	fileInfo, err := os.Stat(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		logger.Error("Error resolving path: %v", err)
+		return 1
+	}
+
+	fileInfo, err := os.Stat(absPath)
 	if err != nil {
 		logger.Error("Error: %v", err)
 		return 1
@@ -129,7 +136,7 @@ func runTestWithCode(path string) int {
 
 	var testFiles []string
 	if fileInfo.IsDir() {
-		err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		err := filepath.Walk(absPath, func(p string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -144,7 +151,7 @@ func runTestWithCode(path string) int {
 			return 1
 		}
 	} else {
-		testFiles = append(testFiles, path)
+		testFiles = append(testFiles, absPath)
 	}
 
 	if len(testFiles) == 0 {
@@ -338,6 +345,13 @@ func runProxy() {
 		logger.Debug("Registry file size: %d bytes", len(data))
 	}
 
+	// Build a resolver from the variables stored in the registry so that
+	// ${VAR} tokens in RETURNS payload files are interpolated at runtime.
+	resolver := interpolate.NewResolver()
+	for k, v := range reg.GetVariables() {
+		resolver.Variables[k] = v
+	}
+
 	// Start a sidecar HTTP server for verification and registry hot-reload
 	mux := http.NewServeMux()
 	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort, Handler: mux}
@@ -413,12 +427,15 @@ func runProxy() {
 				logger.Error("Invalid transparent duration: %v", err)
 			}
 		}
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "postgresql":
 		p := postgresql.NewProxy(addr, upstream, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "kafka":
 		p := kafka.NewInterceptor(addr, reg)
@@ -428,12 +445,15 @@ func runProxy() {
 		proxyErr = p.Start(ctx)
 	case "grpc":
 		p := grpcproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "redis":
 		p := redisproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "mongodb":
 		p := mongodbproxy.NewInterceptor(addr, upstream, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	default:
 		logger.Error("Unknown proxy type: %s", pType)
