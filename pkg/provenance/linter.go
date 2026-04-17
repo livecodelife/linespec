@@ -818,18 +818,19 @@ func (l *Linter) patternHasMatches(pattern string, isRegex bool) bool {
 	return len(matches) > 0
 }
 
-// validateSealedAtSHA checks that sealed_at_sha is only present on implemented records and has valid format
+// validateSealedAtSHA checks that sealed_at_sha is only present on implemented/superseded/deprecated records and has valid format
 func (l *Linter) validateSealedAtSHA(record *Record, result *LintResult) {
 	if record.SealedAtSHA == "" {
 		return // Not set, that's fine
 	}
 
-	// sealed_at_sha should only be set for implemented records
-	if record.Status != StatusImplemented {
+	// sealed_at_sha should only be set for records that have been implemented (including those
+	// subsequently superseded or deprecated, since they must have been implemented first)
+	if record.Status != StatusImplemented && record.Status != StatusSuperseded && record.Status != StatusDeprecated {
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "sealed_at_sha",
-			Message:  fmt.Sprintf("sealed_at_sha is set but record status is %s (should only be set for implemented records)", record.Status),
+			Message:  fmt.Sprintf("sealed_at_sha is set but record status is %s (should only be set for implemented, superseded, or deprecated records)", record.Status),
 			Severity: SeverityWarning,
 		})
 	}
