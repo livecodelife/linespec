@@ -1,0 +1,31 @@
+id: prov-2026-464c2105
+title: Bump version to v2.4.0, add CHANGELOG entries for VARS block and interpolation improvements
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: >
+  Release v2.4.0. Bump VERSION from 2.3.4 to 2.4.0 and add CHANGELOG entries for the VARS
+  block feature and interpolation improvements shipped in prov-2026-935c1716: typed variable
+  declarations (uuid, integer, string), failure output showing resolved variable map, and
+  channel-aware JSON type correction for integer variables in HTTP responses.
+constraints:
+  - VERSION must be exactly "2.4.0"
+  - CHANGELOG entry must appear above the [2.3.4] entry
+  - All existing example linespecs must continue to pass after the version bump
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-935c1716
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
