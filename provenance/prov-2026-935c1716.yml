@@ -1,0 +1,42 @@
+id: prov-2026-935c1716
+title: Add VARS block, typed variable generation, failure variable output, and channel-aware formatting
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: >
+  Add three interpolation improvements: (1) VARS block in DSL for explicit typed variable
+  declarations (uuid, integer, string) that pre-generate values before any payload is loaded;
+  (2) failure output that appends the full resolved variable map to test error messages so users
+  can see exactly what values were used; (3) channel-aware type correction that converts
+  integer-typed variable values from quoted strings to JSON numbers in HTTP response payloads.
+  VarTypes flow through the registry JSON so proxy containers receive them alongside variable
+  values.
+constraints:
+  - MUST NOT break any existing example test suites (user, notification, order, multi-db)
+  - MUST preserve existing name-based UUID inference for variables without a VARS declaration
+  - VARS block must be optional — all existing linespecs without VARS must continue to work
+  - Integer variables declared in VARS must render as JSON numbers (not strings) in HTTP responses
+affected_scope:
+  - pkg/interpolate/interpolate.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/dsl/payload.go
+  - pkg/registry/registry.go
+  - pkg/runner/runner.go
+  - examples/user-linespecs/get_user_with_vars.linespec
+  - examples/user-linespecs/payloads/user_with_vars_response.json
+  - examples/user-linespecs/payloads/user_with_vars_public_response.json
+  - examples/notification-linespecs/get_notification_success.linespec
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
