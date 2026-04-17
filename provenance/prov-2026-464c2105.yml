@@ -17,7 +17,7 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 supersedes: ""
-superseded_by: ""
+superseded_by: prov-2026-446d8d6a
 related:
   - prov-2026-935c1716
 sealed_at_sha: d014bc8c9e9c073b07e77d174739a4b8b7c6c3bc

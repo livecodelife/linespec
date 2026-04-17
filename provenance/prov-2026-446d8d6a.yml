@@ -1,0 +1,29 @@
+id: prov-2026-446d8d6a
+title: Bump version to v2.4.1, add CHANGELOG entry for sealed_at_sha linter fix
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: >
+  Release v2.4.1. Bump VERSION from 2.4.0 to 2.4.1 and add CHANGELOG entry for the
+  sealed_at_sha linter fix shipped in prov-2026-755704af: the linter now correctly
+  allows sealed_at_sha on superseded and deprecated records.
+constraints:
+  - VERSION must be exactly "2.4.1"
+  - CHANGELOG entry must appear above the [2.4.0] entry
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+  - provenance/prov-2026-464c2105.yml
+forbidden_scope: []
+supersedes: prov-2026-464c2105
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
