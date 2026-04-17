@@ -1,0 +1,29 @@
+id: prov-2026-755704af
+title: Fix linter to allow sealed_at_sha on superseded and deprecated records
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: |
+  The linter's validateSealedAtSHA function incorrectly rejected sealed_at_sha on
+  superseded and deprecated records, producing spurious warnings. Records in those
+  terminal states must have previously passed through implemented, so it is correct
+  and expected for them to carry a sealed_at_sha. The fix expands the allowed set
+  from {implemented} to {implemented, superseded, deprecated}.
+constraints:
+  - The linter MUST allow sealed_at_sha on records with status implemented, superseded, or deprecated
+  - The linter MUST still reject sealed_at_sha on open records
+  - The error message MUST list all three valid statuses
+affected_scope:
+  - pkg/provenance/linter.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
