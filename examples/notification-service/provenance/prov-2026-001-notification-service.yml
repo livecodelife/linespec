@@ -19,7 +19,7 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: 2aa44aed6ffb9c098f52fe7cb313db23b9b3c9fd
-associated_linespecs: []
+associated_specs: []
 associated_traces: []
 monitors: []
 tags: []
