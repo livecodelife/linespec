@@ -1,6 +1,6 @@
 id: prov-2026-1aac1dc7
 title: Fix PostgreSQL proxy binary encoding and extended query protocol for lib/pq
-status: open
+status: implemented
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: "Fix PostgreSQL proxy to correctly handle lib/pq's extended query protocol: extract
@@ -18,7 +18,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 506d64e7fed4e0ad2b6f476b8bed01516f15d77c
 associated_specs:
   - path: examples/user-linespecs/get_user_success.linespec
     type: linespec
