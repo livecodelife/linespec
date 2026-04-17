@@ -1,0 +1,33 @@
+id: prov-2026-1aac1dc7
+title: Fix PostgreSQL proxy binary encoding and extended query protocol for lib/pq
+status: open
+created_at: "2026-04-17"
+author: calebcowen@gmail.com
+intent: "Fix PostgreSQL proxy to correctly handle lib/pq's extended query protocol: extract
+  per-column result format codes from Bind messages, encode UUID columns as binary (16 bytes),
+  JSON-encode slice/map values for JSONB columns, generate proper RFC 4122 UUIDs for *_UUID
+  interpolation variables, and use PostgreSQL wire timestamp format for text-mode timestamps."
+constraints:
+  - MUST NOT break existing example test suites (user, notification, order, multi-db)
+  - MUST correctly handle binary UUID encoding for lib/pq extended query protocol
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result.go
+  - pkg/interpolate/interpolate.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/create_user_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
