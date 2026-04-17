@@ -1030,6 +1030,36 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		return err
 	}
 	r.registry.Register(spec)
+
+	// Pre-scan all payload files for ${VAR} tokens and generate values now, before
+	// serializing the variable map into the registry. Without this, variables that
+	// appear only in RETURNS or RESPOND payload files (never in DSL fields like
+	// USING_SQL or HEADERS) would be absent from the registry, causing proxy
+	// containers and the runner to independently generate different random values for
+	// the same variable.
+	var payloadFilesToScan []string
+	if spec.Receive.WithFile != "" {
+		payloadFilesToScan = append(payloadFilesToScan, filepath.Join(spec.BaseDir, spec.Receive.WithFile))
+	}
+	for _, expect := range append(spec.Expects, spec.ExpectsNot...) {
+		if expect.ReturnsFile != "" {
+			payloadFilesToScan = append(payloadFilesToScan, filepath.Join(spec.BaseDir, expect.ReturnsFile))
+		}
+		if expect.WithFile != "" {
+			payloadFilesToScan = append(payloadFilesToScan, filepath.Join(spec.BaseDir, expect.WithFile))
+		}
+	}
+	if spec.Respond.WithFile != "" {
+		payloadFilesToScan = append(payloadFilesToScan, filepath.Join(spec.BaseDir, spec.Respond.WithFile))
+	}
+	for _, path := range payloadFilesToScan {
+		if data, err := os.ReadFile(path); err == nil {
+			for _, varName := range interpolate.ExtractVariables(string(data)) {
+				r.resolver.Resolve("${" + varName + "}")
+			}
+		}
+	}
+
 	r.registry.SetVariables(r.resolver.Variables)
 
 	// Compute the common ancestor of cwd and spec BaseDir so proxy containers can

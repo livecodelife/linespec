@@ -20,6 +20,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/config"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/embeddings"
+	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
@@ -338,6 +339,13 @@ func runProxy() {
 		logger.Debug("Registry file size: %d bytes", len(data))
 	}
 
+	// Build a resolver from the variables stored in the registry so that
+	// ${VAR} tokens in RETURNS payload files are interpolated at runtime.
+	resolver := interpolate.NewResolver()
+	for k, v := range reg.GetVariables() {
+		resolver.Variables[k] = v
+	}
+
 	// Start a sidecar HTTP server for verification and registry hot-reload
 	mux := http.NewServeMux()
 	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort, Handler: mux}
@@ -371,6 +379,16 @@ func runProxy() {
 			return
 		}
 		reg.ClearState()
+		// Rebuild the resolver from the new registry's variables so that ${VAR}
+		// tokens in RETURNS payload files resolve to the current test's values.
+		// Without this, persistent proxy containers would keep resolving variables
+		// with values generated during the very first test they served.
+		newVars := reg.GetVariables()
+		resolver.Variables = make(map[string]string, len(newVars))
+		resolver.Generated = make(map[string]bool)
+		for k, v := range newVars {
+			resolver.Variables[k] = v
+		}
 		logger.Debug("Registry hot-reloaded (%d bytes)", len(body))
 		w.WriteHeader(http.StatusOK)
 	})
@@ -413,12 +431,15 @@ func runProxy() {
 				logger.Error("Invalid transparent duration: %v", err)
 			}
 		}
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "postgresql":
 		p := postgresql.NewProxy(addr, upstream, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "kafka":
 		p := kafka.NewInterceptor(addr, reg)
@@ -428,12 +449,15 @@ func runProxy() {
 		proxyErr = p.Start(ctx)
 	case "grpc":
 		p := grpcproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "redis":
 		p := redisproxy.NewInterceptor(addr, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "mongodb":
 		p := mongodbproxy.NewInterceptor(addr, upstream, reg)
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	default:
 		logger.Error("Unknown proxy type: %s", pType)

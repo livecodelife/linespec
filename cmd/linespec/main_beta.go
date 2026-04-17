@@ -385,6 +385,16 @@ func runProxy() {
 			return
 		}
 		reg.ClearState()
+		// Rebuild the resolver from the new registry's variables so that ${VAR}
+		// tokens in RETURNS payload files resolve to the current test's values.
+		// Without this, persistent proxy containers would keep resolving variables
+		// with values generated during the very first test they served.
+		newVars := reg.GetVariables()
+		resolver.Variables = make(map[string]string, len(newVars))
+		resolver.Generated = make(map[string]bool)
+		for k, v := range newVars {
+			resolver.Variables[k] = v
+		}
 		logger.Debug("Registry hot-reloaded (%d bytes)", len(body))
 		w.WriteHeader(http.StatusOK)
 	})
