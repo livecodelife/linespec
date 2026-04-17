@@ -165,7 +165,15 @@ func (l *PayloadLoader) Load(filePath string) (interface{}, error) {
 	// Find appropriate parser
 	for _, parser := range l.Parsers {
 		if parser.CanParse(ext) {
-			return parser.Parse(content)
+			parsed, err := parser.Parse(content)
+			if err != nil {
+				return nil, err
+			}
+			// Apply type corrections (e.g. integer variables → JSON numbers)
+			if l.Resolver != nil {
+				parsed = interpolate.ApplyTypeCorrections(parsed, l.Resolver)
+			}
+			return parsed, nil
 		}
 	}
 

@@ -27,6 +27,7 @@ const (
 	TokenNoTransaction    TokenType = "NO_TRANSACTION"
 	TokenSqlBlock         TokenType = "SQL_BLOCK"
 	TokenTimeout       TokenType = "TIMEOUT"
+	TokenVars          TokenType = "VARS"
 	TokenEOF           TokenType = "EOF"
 )
 
@@ -145,6 +146,12 @@ func LexFile(filePath string) ([]Token, error) {
 		if strings.ToUpper(trimmedLine) == "NOISE" {
 			inIndentedBlock = true
 			currentBlockType = TokenNoise
+			continue
+		}
+
+		if strings.ToUpper(trimmedLine) == "VARS" {
+			inIndentedBlock = true
+			currentBlockType = TokenVars
 			continue
 		}
 

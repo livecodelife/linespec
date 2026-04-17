@@ -22,6 +22,7 @@ type MockRegistry struct {
 	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
 	verifyErrors []string                            // VERIFY rule failures recorded by proxies
 	variables    map[string]string                   // Resolved interpolation variables, forwarded to proxy containers
+	varTypes     map[string]string                   // Declared variable types from VARS block, forwarded to proxy containers
 }
 
 func NewMockRegistry() *MockRegistry {
@@ -32,6 +33,7 @@ func NewMockRegistry() *MockRegistry {
 		seeds:        make(map[string][][]byte),
 		passthroughs: make([]string, 0),
 		variables:    make(map[string]string),
+		varTypes:     make(map[string]string),
 	}
 }
 
@@ -49,6 +51,25 @@ func (r *MockRegistry) GetVariables() map[string]string {
 	defer r.RUnlock()
 	out := make(map[string]string, len(r.variables))
 	for k, v := range r.variables {
+		out[k] = v
+	}
+	return out
+}
+
+// SetVarTypes stores declared variable types so they are included when the registry
+// is serialised for proxy containers.
+func (r *MockRegistry) SetVarTypes(types map[string]string) {
+	r.Lock()
+	defer r.Unlock()
+	r.varTypes = types
+}
+
+// GetVarTypes returns a copy of the declared variable types.
+func (r *MockRegistry) GetVarTypes() map[string]string {
+	r.RLock()
+	defer r.RUnlock()
+	out := make(map[string]string, len(r.varTypes))
+	for k, v := range r.varTypes {
 		out[k] = v
 	}
 	return out
@@ -118,6 +139,9 @@ func (r *MockRegistry) LoadFromBytes(data []byte) error {
 	}
 	if rf.Variables != nil {
 		r.variables = rf.Variables
+	}
+	if rf.VarTypes != nil {
+		r.varTypes = rf.VarTypes
 	}
 	r.orderedMocks = make([]*types.ExpectStatement, 0)
 	for _, mocksList := range r.mocks {
@@ -720,6 +744,7 @@ type registryFile struct {
 	Mocks     map[string][]*types.ExpectStatement `json:"mocks"`
 	Seeds     map[string][][]byte                 `json:"seeds,omitempty"`
 	Variables map[string]string                   `json:"variables,omitempty"`
+	VarTypes  map[string]string                   `json:"var_types,omitempty"`
 }
 
 func (r *MockRegistry) SaveToFile(path string) error {
@@ -762,7 +787,7 @@ func (r *MockRegistry) ToBytesForContainer(hostCwd, containerProjectMount string
 		rebasedMocks[key] = rebased
 	}
 
-	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds, Variables: r.variables})
+	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds, Variables: r.variables, VarTypes: r.varTypes})
 }
 
 // SaveToFileForContainer saves the registry to path with BaseDir fields rewritten
@@ -800,6 +825,9 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	}
 	if rf.Variables != nil {
 		r.variables = rf.Variables
+	}
+	if rf.VarTypes != nil {
+		r.varTypes = rf.VarTypes
 	}
 	r.orderedMocks = make([]*types.ExpectStatement, 0)
 	for _, mocksList := range r.mocks {

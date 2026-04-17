@@ -1061,6 +1061,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	r.registry.SetVariables(r.resolver.Variables)
+	r.registry.SetVarTypes(r.resolver.VarTypes)
 
 	// Compute the common ancestor of cwd and spec BaseDir so proxy containers can
 	// access payload files that live outside the service directory (e.g. a shared
@@ -2237,9 +2238,9 @@ func (r *testRunner) runTestPhase(
 				r.collectHits("localhost:" + redisVerifyPort)
 			}
 			if errs := r.registry.GetVerifyErrors(); len(errs) > 0 {
-				return fmt.Errorf("%s", errs[0])
+				return r.withVarContext(fmt.Errorf("%s", errs[0]))
 			}
-			return fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode)
+			return r.withVarContext(fmt.Errorf("expected status %d, got %d", spec.Respond.StatusCode, resp.StatusCode))
 		}
 
 		if spec.Respond.WithFile != "" {
@@ -2255,7 +2256,7 @@ func (r *testRunner) runTestPhase(
 
 			if err := r.comparePayloads(expected, actual, spec.Respond.Noise); err != nil {
 				logger.Debug("Response body mismatch: %v", err)
-				return err
+				return r.withVarContext(err)
 			}
 		}
 	}
@@ -2283,7 +2284,7 @@ func (r *testRunner) runTestPhase(
 			logger.Debug("Fetching app logs for debugging")
 			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
 		}
-		return err
+		return r.withVarContext(err)
 	}
 
 	// Check for passthrough requests (requests that bypassed the mock layer).
@@ -2295,6 +2296,22 @@ func (r *testRunner) runTestPhase(
 
 	logger.Debug("Test passed")
 	return nil
+}
+
+// withVarContext appends the resolved variable map to a test failure error so that
+// users can immediately see what values were generated during the failing run.
+func (r *testRunner) withVarContext(err error) error {
+	if err == nil {
+		return nil
+	}
+	if r.resolver == nil {
+		return err
+	}
+	varMap := r.resolver.FormatVarMap()
+	if varMap == "" {
+		return err
+	}
+	return fmt.Errorf("%w\n\n%s", err, varMap)
 }
 
 func (r *testRunner) collectHits(addr string) {

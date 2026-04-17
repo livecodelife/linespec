@@ -1,10 +1,17 @@
 TEST get_notification_success
 
+VARS
+  AUTH_TOKEN: string
+  USER_SERVICE_URL: string
+
 RECEIVE HTTP:GET /api/v1/notifications/1
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
 
 EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
+RETURNS EMPTY
+
+EXPECT WRITE:REDIS SET auth:cache:${AUTH_TOKEN}
 RETURNS EMPTY
 
 EXPECT HTTP:GET ${USER_SERVICE_URL}

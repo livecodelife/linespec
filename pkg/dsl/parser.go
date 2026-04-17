@@ -134,6 +134,13 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		spec.Name = strings.TrimSuffix(filepath.Base(filename), ".linespec")
 	}
 
+	if p.peek().Type == TokenVars {
+		varsToken := p.consume()
+		if err := p.parseVars(varsToken.Literal); err != nil {
+			return nil, fmt.Errorf("invalid VARS block at line %d: %w", varsToken.Line, err)
+		}
+	}
+
 	receiveToken, err := p.expect(TokenReceive)
 	if err != nil {
 		return nil, err
@@ -218,6 +225,33 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	}
 
 	return spec, nil
+}
+
+// parseVars processes the indented body of a VARS block.
+// Each line has the form "VAR_NAME: type" where type is uuid, integer, or string.
+// Declarations are applied directly to the resolver so subsequent DSL fields and
+// payload files use the pre-generated typed values.
+func (p *Parser) parseVars(literal string) error {
+	lines := strings.Split(strings.TrimSpace(literal), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("expected \"VAR_NAME: type\", got %q", line)
+		}
+		name := strings.TrimSpace(parts[0])
+		varType := strings.TrimSpace(parts[1])
+		if name == "" || varType == "" {
+			return fmt.Errorf("expected \"VAR_NAME: type\", got %q", line)
+		}
+		if p.Resolver != nil {
+			p.Resolver.DeclareVariable(name, varType)
+		}
+	}
+	return nil
 }
 
 // resolve applies variable substitution if a resolver is configured

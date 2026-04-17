@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -18,6 +19,8 @@ type Resolver struct {
 	Variables map[string]string
 	// Generated tracks which variables were auto-generated (not from env)
 	Generated map[string]bool
+	// VarTypes holds declared types for variables from a VARS block ("uuid", "integer", "string")
+	VarTypes map[string]string
 }
 
 // NewResolver creates a new Resolver with empty variable sets
@@ -25,6 +28,7 @@ func NewResolver() *Resolver {
 	return &Resolver{
 		Variables: make(map[string]string),
 		Generated: make(map[string]bool),
+		VarTypes:  make(map[string]string),
 	}
 }
 
@@ -65,6 +69,44 @@ func (r *Resolver) ResolveMap(m map[string]string) map[string]string {
 	return result
 }
 
+// DeclareVariable records a type declaration for a variable and pre-generates its value.
+// Called by the DSL parser when it processes a VARS block.
+func (r *Resolver) DeclareVariable(name, varType string) {
+	r.VarTypes[name] = strings.ToLower(varType)
+	if _, exists := r.Variables[name]; exists {
+		return
+	}
+	if envVal := os.Getenv(name); envVal != "" {
+		r.Variables[name] = envVal
+		return
+	}
+	r.Variables[name] = generateTypedValue(name, varType)
+	r.Generated[name] = true
+}
+
+// FormatVarMap returns a human-readable summary of all resolved variables, suitable
+// for appending to a test failure message to aid debugging.
+func (r *Resolver) FormatVarMap() string {
+	if len(r.Variables) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(r.Variables))
+	for k := range r.Variables {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	var sb strings.Builder
+	sb.WriteString("Resolved variables:\n")
+	for _, name := range names {
+		typeHint := ""
+		if t, ok := r.VarTypes[name]; ok {
+			typeHint = fmt.Sprintf(" (%s)", t)
+		}
+		sb.WriteString(fmt.Sprintf("  %s%s = %q\n", name, typeHint, r.Variables[name]))
+	}
+	return sb.String()
+}
+
 // getOrGenerateValue returns the value for a variable, generating one if needed
 func (r *Resolver) getOrGenerateValue(varName string) string {
 	// Check if already resolved
@@ -78,27 +120,24 @@ func (r *Resolver) getOrGenerateValue(varName string) string {
 		return value
 	}
 
-	// Generate random value
-	value := generateRandomValue(varName)
+	// Generate using declared type if available, otherwise infer from name
+	varType := r.VarTypes[varName]
+	value := generateTypedValue(varName, varType)
 	r.Variables[varName] = value
 	r.Generated[varName] = true
 	return value
 }
 
-// generateRandomValue creates a random value based on the variable name
-// This helps make the values somewhat predictable for debugging
-func generateRandomValue(varName string) string {
-	// Generate 16 bytes of random data
+// generateTypedValue creates a random value for the given type.
+// varType may be "uuid", "integer", "string", or empty (falls back to name-based inference).
+func generateTypedValue(varName, varType string) string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based value if crypto/rand fails
 		return fmt.Sprintf("%s_%d", strings.ToLower(varName), os.Getpid())
 	}
 
-	// For UUID-named variables, generate a proper RFC 4122 v4 UUID string so that
-	// database drivers that expect binary UUID encoding (e.g. lib/pq) can decode it.
-	upper := strings.ToUpper(varName)
-	if upper == "UUID" || strings.HasSuffix(upper, "_UUID") {
+	switch strings.ToLower(varType) {
+	case "uuid":
 		b[6] = (b[6] & 0x0f) | 0x40 // version 4
 		b[8] = (b[8] & 0x3f) | 0x80 // RFC 4122 variant
 		return fmt.Sprintf("%s-%s-%s-%s-%s",
@@ -108,11 +147,75 @@ func generateRandomValue(varName string) string {
 			hex.EncodeToString(b[8:10]),
 			hex.EncodeToString(b[10:16]),
 		)
+	case "integer", "int":
+		// Produce a small positive integer (1–99999) that renders unambiguously.
+		n := (int(b[0])<<8|int(b[1]))%99999 + 1
+		return fmt.Sprintf("%d", n)
+	default:
+		// Fall back to name-based inference so existing behaviour is unchanged.
+		upper := strings.ToUpper(varName)
+		if upper == "UUID" || strings.HasSuffix(upper, "_UUID") {
+			b[6] = (b[6] & 0x0f) | 0x40
+			b[8] = (b[8] & 0x3f) | 0x80
+			return fmt.Sprintf("%s-%s-%s-%s-%s",
+				hex.EncodeToString(b[0:4]),
+				hex.EncodeToString(b[4:6]),
+				hex.EncodeToString(b[6:8]),
+				hex.EncodeToString(b[8:10]),
+				hex.EncodeToString(b[10:16]),
+			)
+		}
+		return fmt.Sprintf("%s_%s", strings.ToLower(varName), hex.EncodeToString(b[:8]))
 	}
+}
 
-	// Create a readable prefix based on variable name
-	prefix := strings.ToLower(varName)
-	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(b[:8]))
+// ApplyTypeCorrections walks a parsed JSON/YAML value and converts string values
+// that were produced by integer-typed variable interpolation back to Go integers,
+// ensuring they encode as JSON numbers rather than quoted strings.
+func ApplyTypeCorrections(data interface{}, r *Resolver) interface{} {
+	if r == nil || len(r.VarTypes) == 0 {
+		return data
+	}
+	// Build a reverse map: resolved_value → varType (only for integer variables)
+	intValues := make(map[string]bool)
+	for name, typ := range r.VarTypes {
+		if typ == "integer" || typ == "int" {
+			if val, ok := r.Variables[name]; ok {
+				intValues[val] = true
+			}
+		}
+	}
+	if len(intValues) == 0 {
+		return data
+	}
+	return applyCorrections(data, intValues)
+}
+
+func applyCorrections(data interface{}, intValues map[string]bool) interface{} {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(v))
+		for k, val := range v {
+			out[k] = applyCorrections(val, intValues)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		for i, val := range v {
+			out[i] = applyCorrections(val, intValues)
+		}
+		return out
+	case string:
+		if intValues[v] {
+			var n int
+			if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
+				return n
+			}
+		}
+		return v
+	default:
+		return v
+	}
 }
 
 // GetGeneratedEnv returns environment variable assignments for all generated values
