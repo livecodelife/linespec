@@ -5,6 +5,20 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-17
+
+### Added
+
+- **`install-skills` command installs both Claude Code skills** ([prov-2026-5a3f28a5](./provenance/prov-2026-5a3f28a5.yml)) — `linespec provenance install-skill` has been renamed to `install-skills` (plural) and now installs both the `provenance` skill and the new `linespec-testing` skill in one command. Existing skill directories are overwritten silently. The `--name` flag is removed since both skills are always installed together.
+
+- **`linespec-testing` Claude Code skill** ([prov-2026-5a3f28a5](./provenance/prov-2026-5a3f28a5.yml)) — A new embedded skill covering how to run, write, and debug LineSpec integration tests. Includes the mental model, CLI usage, DSL structure, all channel types, variable interpolation, payload files, and a debugging guide for common failure patterns. Invoke with `/linespec-testing` in Claude Code after running `install-skills`.
+
+### Related Provenance Records
+
+- [prov-2026-5a3f28a5](./provenance/prov-2026-5a3f28a5.yml) - Rename install-skill to install-skills, add linespec-testing skill, overwrite existing
+
+---
+
 ## [2.4.1] - 2026-04-17
 
 ### Fixed

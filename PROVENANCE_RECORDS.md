@@ -555,22 +555,24 @@ Install git hooks for automatic validation:
 linespec provenance install-hooks
 ```
 
-### Install Skill (Claude Code / AI Agents)
+### Install Skills (Claude Code / AI Agents)
 
-Install the provenance workflow skill into a Claude Code skills directory:
+Install all LineSpec Claude Code skills into a skills directory:
 
 ```bash
-# Install to .claude/skills/provenance (default)
-linespec provenance install-skill
-
-# Override the skill name (slash command)
-linespec provenance install-skill --name my-provenance
+# Install to .claude/skills/ (default)
+linespec provenance install-skills
 
 # Override the target directory
-linespec provenance install-skill --path path/to/skills
+linespec provenance install-skills --path path/to/skills
 ```
 
-Once installed, invoke the skill in Claude Code with `/provenance` (or your chosen name). The skill encodes the full provenance record workflow so AI agents automatically follow the correct create → implement → complete lifecycle.
+This installs two skills:
+
+- **`provenance`** — encodes the full provenance record workflow so AI agents automatically follow the correct create → implement → complete lifecycle. Invoke with `/provenance` in Claude Code.
+- **`linespec-testing`** — covers running, writing, and debugging LineSpec integration tests. Invoke with `/linespec-testing` in Claude Code.
+
+Existing skill directories are overwritten silently. Both skills are always installed together.
 
 ---
 
