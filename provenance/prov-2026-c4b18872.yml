@@ -1,0 +1,32 @@
+id: prov-2026-c4b18872
+title: Document VARS block typed constraints in LINESPEC.md and docs site
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  Update LINESPEC.md and docs/linespec.html to document the typed constraint
+  syntax added to the VARS block in v2.6.0. Neither file currently mentions
+  constraints at all. Constraints include integer min/max, string
+  length/charset/pattern, and the new enum type. Also update the
+  linespec-testing skill to reflect the same information.
+constraints:
+  - LINESPEC.md VARS section MUST document all constraint keys for each type
+  - docs/linespec.html VARS section MUST match LINESPEC.md content in HTML form
+  - The linespec-testing skill VARS section MUST be updated to match
+affected_scope:
+  - LINESPEC.md
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a8304063
+sealed_at_sha: ""
+associated_specs:
+  - path: LINESPEC.md
+    type: documentation
+  - path: docs/linespec.html
+    type: documentation
+associated_traces: []
+monitors: []
+tags: []
