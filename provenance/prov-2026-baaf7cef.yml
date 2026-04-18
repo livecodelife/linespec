@@ -1,0 +1,33 @@
+id: prov-2026-baaf7cef
+title: Fix Kafka readiness check to use exposed port 9092
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  waitForContainerPort polls NetworkSettings.Ports for 29092/tcp, but the cp-kafka
+  Dockerfile only EXPOSEs port 9092. Docker reliably populates NetworkSettings.Ports
+  for image-exposed ports; non-exposed ports may not appear even when a PortBinding is
+  specified. Additionally, the 29092 PLAINTEXT listener is bound to the container
+  hostname (PLAINTEXT://kafka:29092), not 0.0.0.0, so Docker's NAT cannot proxy it
+  from the host. Port 9092 uses PLAINTEXT_HOST://0.0.0.0:9092 — it IS exposed by the
+  image and binds on all interfaces, making it the correct port for host-side readiness
+  checks. This does not affect inter-service communication, which always uses kafka:29092
+  within the Docker network.
+constraints:
+  - The Kafka readiness port check must use 9092/tcp (PLAINTEXT_HOST, exposed, 0.0.0.0)
+  - The duplicate WaitTCPInternal call must be removed (there are currently two identical consecutive calls)
+  - KAFKA_BROKERS env var for app containers remains kafka:29092 — this change does not affect it
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: pkg/runner/runner.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
