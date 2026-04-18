@@ -1,0 +1,34 @@
+id: prov-2026-d019b9ee
+title: Add CI workflow for unit tests and example linespec suites
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  Add a CI workflow that runs on every push to main and every pull request.
+  The workflow has two jobs: unit tests (go test ./...) covering all packages
+  including the new interpolate constraint tests, and example tests that run
+  all four proven example suites (user, todo, order, multi-db) using the
+  locally built linespec binary and real Docker containers. Also tighten the
+  release workflow's test step from the narrow pkg/provenance scope to the
+  full go test ./... suite.
+constraints:
+  - CI MUST run on push to main and on pull_request targeting main
+  - Unit test job MUST run go test for all packages
+  - Example test job MUST run all four proven suites (user, todo, order, multi-db)
+  - Each example suite MUST be a separate named step so failures are identifiable
+  - release.yml test step MUST be broadened from the narrow provenance package to all packages
+affected_scope:
+  - .github/workflows/ci.yml
+  - .github/workflows/release.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .github/workflows/ci.yml
+    type: code
+    run_command: "true"
+associated_traces: []
+monitors: []
+tags: []

@@ -32,7 +32,7 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test ./pkg/provenance/...
+        run: go test ./...
 
       - name: Test stable build
         run: go build -v ./cmd/linespec
