@@ -16,10 +16,12 @@ affected_scope:
   - CHANGELOG.md
   - VERSION
   - README.md
+  - LINESPEC.md
   - docs/index.html
   - docs/provenance.html
   - docs/docs.html
   - docs/linespec.html
+  - provenance/prov-2026-dab46dda.yml
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

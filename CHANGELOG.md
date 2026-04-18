@@ -5,6 +5,26 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-04-18
+
+### Added
+
+- **VARS block typed constraints** ([prov-2026-a8304063](./provenance/prov-2026-a8304063.yml)) — The `VARS` block now accepts inline `key=value` constraints after the type token. `integer` supports `min=N max=N` for range-bounded generation. `string` supports `length=N`, `charset=alpha|alphanumeric|numeric|hex|uppercase`, and `pattern=[A-Z]{3}[0-9]{4}`-style character-class patterns (stdlib only, no new dependencies). A new `enum` type accepts `values=a,b,c` and picks randomly at test time. All existing VARS lines with no constraints continue to work exactly as before. Unknown constraint keys for a type produce a parse-time error.
+
+- **CI workflow** ([prov-2026-d019b9ee](./provenance/prov-2026-d019b9ee.yml)) — A new `.github/workflows/ci.yml` runs on every push to `main` and every pull request. Two parallel jobs: `unit-tests` runs `go test ./...` across all packages; `example-tests` builds the binary and runs all four proven example suites (user, todo, order, multi-db) as separate named steps against live Docker containers.
+
+### Fixed
+
+- **SARIF lint output produced invalid JSON when example services are present** ([prov-2026-d3b0abe0](./provenance/prov-2026-d3b0abe0.yml)) — `linespec provenance lint --format sarif` without `--config` discovered all `.linespec.yml` files in the repo tree and wrote one complete SARIF JSON document per file to stdout, producing concatenated JSON that GitHub Code Scanning rejected. The multi-config loop is now skipped when format is `sarif`; only the root provenance records are linted. Human and JSON formats are unaffected. Also bumped `codeql-action` from v3 to v4.
+
+### Related Provenance Records
+
+- [prov-2026-a8304063](./provenance/prov-2026-a8304063.yml) - Extend VARS block with typed constraints
+- [prov-2026-d019b9ee](./provenance/prov-2026-d019b9ee.yml) - Add CI workflow for unit tests and example linespec suites
+- [prov-2026-d3b0abe0](./provenance/prov-2026-d3b0abe0.yml) - Fix SARIF lint output multi-config bug
+
+---
+
 ## [2.5.0] - 2026-04-17
 
 ### Added

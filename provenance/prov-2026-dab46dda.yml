@@ -19,7 +19,8 @@ related: []
 sealed_at_sha: c0af1feaec6e69a28fd47f725d363198a00e2a7d
 associated_specs:
   - path: examples/user-linespecs/get_user_with_vars.linespec
-    type: linespec
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
