@@ -376,12 +376,13 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	// Get Kafka host port for direct connection from host (with retry)
-	kafkaHostPort, err := s.waitForContainerPort(ctx, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}), "29092/tcp", 30*time.Second)
+	// Use port 9092 (PLAINTEXT_HOST, 0.0.0.0): cp-kafka EXPOSEs 9092 in its Dockerfile
+	// so it reliably appears in NetworkSettings.Ports. Port 29092 is the internal broker
+	// listener bound to the container hostname, not 0.0.0.0, so it is not reliably
+	// published by Docker's NAT. Services inside the Docker network still use kafka:29092.
+	kafkaHostPort, err := s.waitForContainerPort(ctx, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}), "9092/tcp", 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to get Kafka host port: %w", err)
-	}
-	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+kafkaHostPort, 60*time.Second); err != nil {
-		return fmt.Errorf("Kafka not ready: %w", err)
 	}
 
 	// Wait for Kafka to be ready (actual TCP connection check)
