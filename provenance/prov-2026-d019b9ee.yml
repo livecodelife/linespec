@@ -1,6 +1,6 @@
 id: prov-2026-d019b9ee
 title: Add CI workflow for unit tests and example linespec suites
-status: open
+status: implemented
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2f81e906e44a7e6311425ceec920fd751f7413b9
 associated_specs:
   - path: .github/workflows/ci.yml
     type: code
