@@ -1,0 +1,29 @@
+id: prov-2026-6c7c0ab9
+title: Auto-pull Docker images when not found locally
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  When the Docker daemon does not have a required image cached locally (common in CI
+  environments), ContainerCreate fails immediately with "No such image". The fix makes
+  StartContainer in DockerOrchestrator automatically pull the image before retrying when
+  this error is detected, so test runs in fresh CI environments succeed without requiring
+  pre-pulled images or manual docker pull steps in CI configuration.
+constraints:
+  - Image pull must only be attempted when the error is specifically "No such image" — other ContainerCreate errors must not trigger a pull
+  - Pull must log at info level so CI logs show which images are being fetched and why
+  - After a successful pull, ContainerCreate must be retried exactly once — no infinite retry loop
+affected_scope:
+  - pkg/docker/orchestrator.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: pkg/docker/orchestrator.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
