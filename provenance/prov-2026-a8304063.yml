@@ -1,0 +1,38 @@
+id: prov-2026-a8304063
+title: 'Extend VARS block with typed constraints: integer range, string charset/length/pattern, enum'
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  Extend the VARS block DSL syntax to accept inline key=value constraints after
+  the type token, enabling richer value generation without requiring external
+  environment variable overrides. Supported additions: integer min/max range,
+  string with charset (alpha, alphanumeric, numeric, hex) and/or fixed length,
+  string with a simple character-class pattern ([A-Z]{3}[0-9]{4} style), and a
+  new enum type that randomly picks from a comma-separated values list. UUID
+  stays unchanged. All constraints are parsed at DSL parse time and stored on
+  the Resolver so generated values are stable within a test run.
+constraints:
+  - Constraint syntax MUST be inline on the VARS line after the type token as space-separated key=value pairs with no multi-line sub-blocks
+  - Unknown constraint keys for a given type MUST produce a parse-time error and MUST NOT be silently ignored
+  - Existing VARS lines with no constraints MUST continue to work exactly as before with no breaking change
+  - The pattern constraint MUST be implemented using only stdlib with no new third-party dependencies
+  - The pattern implementation MUST support character classes with exact-count quantifiers at minimum
+  - Constraints MUST be stored on the Resolver but do NOT need to be propagated to proxy containers since generation happens before registry commit
+  - ApplyTypeCorrections MUST treat enum as a string type with no numeric coercion
+affected_scope:
+  - pkg/interpolate/interpolate.go
+  - pkg/interpolate/interpolate_test.go
+  - pkg/dsl/parser.go
+  - examples/user-linespecs/get_user_with_vars.linespec
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
