@@ -1,8 +1,8 @@
 TEST get_user_with_vars
 
 VARS
-  AUTH_TOKEN: string
-  USER_ID: integer
+  AUTH_TOKEN: string length=32 charset=alphanumeric
+  USER_ID: integer min=1 max=9999
 
 RECEIVE HTTP:GET /api/v1/users/${USER_ID}
 HEADERS

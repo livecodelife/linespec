@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -19,16 +21,19 @@ type Resolver struct {
 	Variables map[string]string
 	// Generated tracks which variables were auto-generated (not from env)
 	Generated map[string]bool
-	// VarTypes holds declared types for variables from a VARS block ("uuid", "integer", "string")
+	// VarTypes holds declared types for variables from a VARS block ("uuid", "integer", "string", "enum")
 	VarTypes map[string]string
+	// VarConstraints holds per-variable key=value constraint maps from a VARS block
+	VarConstraints map[string]map[string]string
 }
 
 // NewResolver creates a new Resolver with empty variable sets
 func NewResolver() *Resolver {
 	return &Resolver{
-		Variables: make(map[string]string),
-		Generated: make(map[string]bool),
-		VarTypes:  make(map[string]string),
+		Variables:      make(map[string]string),
+		Generated:      make(map[string]bool),
+		VarTypes:       make(map[string]string),
+		VarConstraints: make(map[string]map[string]string),
 	}
 }
 
@@ -69,19 +74,29 @@ func (r *Resolver) ResolveMap(m map[string]string) map[string]string {
 	return result
 }
 
-// DeclareVariable records a type declaration for a variable and pre-generates its value.
-// Called by the DSL parser when it processes a VARS block.
-func (r *Resolver) DeclareVariable(name, varType string) {
-	r.VarTypes[name] = strings.ToLower(varType)
+// DeclareVariable records a type declaration and optional constraints for a variable
+// and pre-generates its value. Called by the DSL parser when it processes a VARS block.
+func (r *Resolver) DeclareVariable(name, varType string, constraints map[string]string) error {
+	ltype := strings.ToLower(varType)
+	r.VarTypes[name] = ltype
+	if constraints != nil {
+		r.VarConstraints[name] = constraints
+	}
+
+	if err := validateConstraints(ltype, constraints); err != nil {
+		return fmt.Errorf("variable %s: %w", name, err)
+	}
+
 	if _, exists := r.Variables[name]; exists {
-		return
+		return nil
 	}
 	if envVal := os.Getenv(name); envVal != "" {
 		r.Variables[name] = envVal
-		return
+		return nil
 	}
-	r.Variables[name] = generateTypedValue(name, varType)
+	r.Variables[name] = generateTypedValue(name, ltype, constraints)
 	r.Generated[name] = true
+	return nil
 }
 
 // FormatVarMap returns a human-readable summary of all resolved variables, suitable
@@ -101,6 +116,18 @@ func (r *Resolver) FormatVarMap() string {
 		typeHint := ""
 		if t, ok := r.VarTypes[name]; ok {
 			typeHint = fmt.Sprintf(" (%s)", t)
+			if c, ok := r.VarConstraints[name]; ok && len(c) > 0 {
+				keys := make([]string, 0, len(c))
+				for k := range c {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				parts := make([]string, 0, len(c))
+				for _, k := range keys {
+					parts = append(parts, k+"="+c[k])
+				}
+				typeHint = fmt.Sprintf(" (%s %s)", t, strings.Join(parts, " "))
+			}
 		}
 		sb.WriteString(fmt.Sprintf("  %s%s = %q\n", name, typeHint, r.Variables[name]))
 	}
@@ -122,15 +149,48 @@ func (r *Resolver) getOrGenerateValue(varName string) string {
 
 	// Generate using declared type if available, otherwise infer from name
 	varType := r.VarTypes[varName]
-	value := generateTypedValue(varName, varType)
+	constraints := r.VarConstraints[varName]
+	value := generateTypedValue(varName, varType, constraints)
 	r.Variables[varName] = value
 	r.Generated[varName] = true
 	return value
 }
 
-// generateTypedValue creates a random value for the given type.
-// varType may be "uuid", "integer", "string", or empty (falls back to name-based inference).
-func generateTypedValue(varName, varType string) string {
+// validConstraintKeys defines the allowed constraint keys for each type.
+var validConstraintKeys = map[string]map[string]bool{
+	"uuid":    {},
+	"integer": {"min": true, "max": true},
+	"int":     {"min": true, "max": true},
+	"string":  {"length": true, "charset": true, "pattern": true},
+	"enum":    {"values": true},
+	"":        {}, // undeclared / name-inferred — no constraints
+}
+
+// validateConstraints checks that the provided constraint keys are valid for the given type.
+func validateConstraints(varType string, constraints map[string]string) error {
+	allowed, known := validConstraintKeys[varType]
+	if !known {
+		// Unknown types (future-proofing): reject any constraints
+		if len(constraints) > 0 {
+			return fmt.Errorf("unknown type %q does not support constraints", varType)
+		}
+		return nil
+	}
+	for k := range constraints {
+		if !allowed[k] {
+			return fmt.Errorf("type %q does not support constraint %q", varType, k)
+		}
+	}
+	if varType == "enum" {
+		if _, ok := constraints["values"]; !ok {
+			return fmt.Errorf("type \"enum\" requires a values= constraint")
+		}
+	}
+	return nil
+}
+
+// generateTypedValue creates a random value for the given type and constraints.
+func generateTypedValue(varName, varType string, constraints map[string]string) string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return fmt.Sprintf("%s_%d", strings.ToLower(varName), os.Getpid())
@@ -147,10 +207,16 @@ func generateTypedValue(varName, varType string) string {
 			hex.EncodeToString(b[8:10]),
 			hex.EncodeToString(b[10:16]),
 		)
+
 	case "integer", "int":
-		// Produce a small positive integer (1–99999) that renders unambiguously.
-		n := (int(b[0])<<8|int(b[1]))%99999 + 1
-		return fmt.Sprintf("%d", n)
+		return generateInteger(constraints)
+
+	case "string":
+		return generateString(varName, constraints)
+
+	case "enum":
+		return generateEnum(constraints)
+
 	default:
 		// Fall back to name-based inference so existing behaviour is unchanged.
 		upper := strings.ToUpper(varName)
@@ -167,6 +233,181 @@ func generateTypedValue(varName, varType string) string {
 		}
 		return fmt.Sprintf("%s_%s", strings.ToLower(varName), hex.EncodeToString(b[:8]))
 	}
+}
+
+// generateInteger produces a random integer in [min, max] (default 1–99999).
+func generateInteger(constraints map[string]string) string {
+	minVal := 1
+	maxVal := 99999
+
+	if v, ok := constraints["min"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			minVal = n
+		}
+	}
+	if v, ok := constraints["max"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxVal = n
+		}
+	}
+	if minVal >= maxVal {
+		return strconv.Itoa(minVal)
+	}
+
+	rangeSize := big.NewInt(int64(maxVal - minVal + 1))
+	n, err := rand.Int(rand.Reader, rangeSize)
+	if err != nil {
+		return strconv.Itoa(minVal)
+	}
+	return strconv.Itoa(int(n.Int64()) + minVal)
+}
+
+// charsets maps charset names to their character pools.
+var charsets = map[string]string{
+	"alpha":        "abcdefghijklmnopqrstuvwxyz",
+	"uppercase":    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	"alphanumeric": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+	"numeric":      "0123456789",
+	"hex":          "0123456789abcdef",
+}
+
+// generateString produces a random string using charset/length or pattern constraints.
+// If neither is provided it falls back to the legacy varname_hexsuffix format.
+func generateString(varName string, constraints map[string]string) string {
+	pattern, hasPattern := constraints["pattern"]
+	if hasPattern {
+		result, err := generateFromPattern(pattern)
+		if err == nil {
+			return result
+		}
+		// Fall through to charset/length on pattern parse failure
+	}
+
+	cs, hasCharset := constraints["charset"]
+	lengthStr, hasLength := constraints["length"]
+
+	if !hasCharset && !hasLength {
+		// Legacy default
+		b := make([]byte, 8)
+		rand.Read(b) //nolint:errcheck
+		return fmt.Sprintf("%s_%s", strings.ToLower(varName), hex.EncodeToString(b))
+	}
+
+	pool := charsets["alphanumeric"] // default pool when only length is given
+	if hasCharset {
+		if p, ok := charsets[cs]; ok {
+			pool = p
+		}
+	}
+
+	length := 16
+	if hasLength {
+		if n, err := strconv.Atoi(lengthStr); err == nil && n > 0 {
+			length = n
+		}
+	}
+
+	return randomStringFromPool(pool, length)
+}
+
+// generateEnum picks a random value from a comma-separated values= constraint.
+func generateEnum(constraints map[string]string) string {
+	raw := constraints["values"]
+	parts := strings.Split(raw, ",")
+	var options []string
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			options = append(options, s)
+		}
+	}
+	if len(options) == 0 {
+		return ""
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(options))))
+	if err != nil {
+		return options[0]
+	}
+	return options[int(n.Int64())]
+}
+
+// randomStringFromPool generates a string of length n using characters from pool.
+func randomStringFromPool(pool string, n int) string {
+	poolSize := big.NewInt(int64(len(pool)))
+	result := make([]byte, n)
+	for i := range result {
+		idx, err := rand.Int(rand.Reader, poolSize)
+		if err != nil {
+			result[i] = pool[0]
+			continue
+		}
+		result[i] = pool[idx.Int64()]
+	}
+	return string(result)
+}
+
+// patternSegmentRe matches one segment of a simple character-class pattern:
+//
+//	[chars]{N}  or  [chars]  (count defaults to 1)
+//	literal text (no brackets)
+var patternSegmentRe = regexp.MustCompile(`\[([^\]]+)\](?:\{(\d+)\})?|([^\[{]+)`)
+
+// generateFromPattern produces a string matching a simplified regex pattern.
+// Supported syntax: character classes [A-Z], [a-z], [0-9], literals, {N} exact-count quantifiers.
+func generateFromPattern(pattern string) (string, error) {
+	matches := patternSegmentRe.FindAllStringSubmatch(pattern, -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("pattern %q contains no recognisable segments", pattern)
+	}
+
+	var sb strings.Builder
+	for _, m := range matches {
+		charClass := m[1] // content inside [...]
+		countStr := m[2]  // content inside {...}, may be empty
+		literal := m[3]   // plain text outside brackets
+
+		if literal != "" {
+			sb.WriteString(literal)
+			continue
+		}
+
+		pool, err := expandCharClass(charClass)
+		if err != nil {
+			return "", err
+		}
+
+		count := 1
+		if countStr != "" {
+			if n, err := strconv.Atoi(countStr); err == nil && n > 0 {
+				count = n
+			}
+		}
+		sb.WriteString(randomStringFromPool(pool, count))
+	}
+	return sb.String(), nil
+}
+
+// expandCharClass converts a character class string (e.g. "A-Z0-9_") to its full character pool.
+func expandCharClass(class string) (string, error) {
+	var pool []byte
+	runes := []rune(class)
+	for i := 0; i < len(runes); i++ {
+		if i+2 < len(runes) && runes[i+1] == '-' {
+			lo, hi := runes[i], runes[i+2]
+			if lo > hi {
+				return "", fmt.Errorf("invalid character range %c-%c in pattern", lo, hi)
+			}
+			for c := lo; c <= hi; c++ {
+				pool = append(pool, byte(c))
+			}
+			i += 2
+		} else {
+			pool = append(pool, byte(runes[i]))
+		}
+	}
+	if len(pool) == 0 {
+		return "", fmt.Errorf("empty character class")
+	}
+	return string(pool), nil
 }
 
 // ApplyTypeCorrections walks a parsed JSON/YAML value and converts string values

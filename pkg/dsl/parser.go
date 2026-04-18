@@ -228,7 +228,8 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 }
 
 // parseVars processes the indented body of a VARS block.
-// Each line has the form "VAR_NAME: type" where type is uuid, integer, or string.
+// Each line has the form "VAR_NAME: type [key=value ...]" where type is uuid, integer, string, or enum.
+// Optional inline key=value constraints follow the type, separated by spaces.
 // Declarations are applied directly to the resolver so subsequent DSL fields and
 // payload files use the pre-generated typed values.
 func (p *Parser) parseVars(literal string) error {
@@ -243,12 +244,27 @@ func (p *Parser) parseVars(literal string) error {
 			return fmt.Errorf("expected \"VAR_NAME: type\", got %q", line)
 		}
 		name := strings.TrimSpace(parts[0])
-		varType := strings.TrimSpace(parts[1])
-		if name == "" || varType == "" {
+		rest := strings.TrimSpace(parts[1])
+		if name == "" || rest == "" {
 			return fmt.Errorf("expected \"VAR_NAME: type\", got %q", line)
 		}
+
+		// First token is the type; remaining tokens are key=value constraints.
+		tokens := strings.Fields(rest)
+		varType := tokens[0]
+		constraints := map[string]string{}
+		for _, tok := range tokens[1:] {
+			kv := strings.SplitN(tok, "=", 2)
+			if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+				return fmt.Errorf("variable %s: invalid constraint %q (expected key=value)", name, tok)
+			}
+			constraints[kv[0]] = kv[1]
+		}
+
 		if p.Resolver != nil {
-			p.Resolver.DeclareVariable(name, varType)
+			if err := p.Resolver.DeclareVariable(name, varType, constraints); err != nil {
+				return fmt.Errorf("line %q: %w", line, err)
+			}
 		}
 	}
 	return nil
