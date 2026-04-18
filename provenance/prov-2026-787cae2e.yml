@@ -1,0 +1,38 @@
+id: prov-2026-787cae2e
+title: 'v2.6.0 release: VARS constraints, CI pipeline, SARIF fix'
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  Bump version to v2.6.0. This release adds typed constraints to the VARS block
+  (integer min/max, string charset/length/pattern, enum), adds a CI workflow
+  that runs unit tests and all four example linespec suites on every PR and push
+  to main, and fixes the SARIF lint output bug where multiple JSON documents were
+  concatenated causing GitHub Code Scanning to reject the upload.
+constraints:
+  - Version string MUST be updated to v2.6.0 in all files
+  - CHANGELOG.md MUST include an entry for v2.6.0 covering all three areas
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - docs/index.html
+  - docs/provenance.html
+  - docs/docs.html
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a8304063
+  - prov-2026-d019b9ee
+  - prov-2026-d3b0abe0
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: documentation
+  - path: VERSION
+    type: documentation
+associated_traces: []
+monitors: []
+tags: []
