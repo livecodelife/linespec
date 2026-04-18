@@ -1,6 +1,6 @@
 id: prov-2026-d3b0abe0
 title: 'Fix SARIF lint output: skip multi-config loop when format is sarif'
-status: open
+status: implemented
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ccce3456750ff97fc1e7f885b73aebdf46cd3c5a
 associated_specs:
   - path: cmd/linespec/main_stable.go
     type: code
