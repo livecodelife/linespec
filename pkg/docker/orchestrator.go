@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/logger"
@@ -51,21 +50,22 @@ func (d *DockerOrchestrator) PullImage(ctx context.Context, imageName string) er
 	return nil
 }
 
+// EnsureImage pulls imageName if it is not present in the local Docker image cache.
+// Call this explicitly for infrastructure images before starting their containers.
+// Do NOT call this for app/migration images — those must be built locally.
+func (d *DockerOrchestrator) EnsureImage(ctx context.Context, imageName string) error {
+	_, _, err := d.cli.ImageInspectWithRaw(ctx, imageName)
+	if err == nil {
+		return nil // already present
+	}
+	logger.Info("Image %s not found locally, pulling...", imageName)
+	return d.PullImage(ctx, imageName)
+}
+
 func (d *DockerOrchestrator) StartContainer(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, containerName string) (string, error) {
 	resp, err := d.cli.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
 	if err != nil {
-		if strings.Contains(err.Error(), "No such image") {
-			logger.Info("Image %s not found locally, pulling...", config.Image)
-			if pullErr := d.PullImage(ctx, config.Image); pullErr != nil {
-				return "", fmt.Errorf("failed to pull image %s: %w", config.Image, pullErr)
-			}
-			resp, err = d.cli.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
-			if err != nil {
-				return "", err
-			}
-		} else {
-			return "", err
-		}
+		return "", err
 	}
 
 	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {

@@ -235,6 +235,9 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		// Get database configuration from first MySQL service or use defaults
 		dbConfig := s.getSharedDatabaseConfig()
 
+		if err = s.orch.EnsureImage(ctx, "mysql:8.4"); err != nil {
+			return fmt.Errorf("failed to pull MySQL image: %w", err)
+		}
 		_, err = s.orch.StartContainer(ctx, &container.Config{
 			Image: "mysql:8.4",
 			Env: []string{
@@ -335,6 +338,9 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}
 
 	// Start shared Kafka
+	if err = s.orch.EnsureImage(ctx, "confluentinc/cp-kafka:latest"); err != nil {
+		return fmt.Errorf("failed to pull Kafka image: %w", err)
+	}
 	_, err = s.orch.StartContainer(ctx, &container.Config{
 		Image:    "confluentinc/cp-kafka:latest",
 		Hostname: "kafka",
@@ -353,7 +359,8 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 			"KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092",
 			"KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT",
 			"KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
-			"CLUSTER_ID=linespec-cluster",
+			// cp-kafka 7.x+ KRaft mode requires a base64url-encoded UUID; a plain string causes the broker to crash on startup
+			"CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk",
 		},
 	}, &container.HostConfig{
 		PortBindings: map[nat.Port][]nat.PortBinding{
@@ -1256,6 +1263,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					}
 				}
 
+				if err = r.suite.orch.EnsureImage(ctx, db.Image); err != nil {
+					return fmt.Errorf("failed to pull PostgreSQL image %s: %w", db.Image, err)
+				}
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 					Image: db.Image,
 					Env: []string{
@@ -1438,6 +1448,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					mongoEnv = append(mongoEnv, fmt.Sprintf("MONGO_INITDB_DATABASE=%s", db.Database))
 				}
 
+				if err = r.suite.orch.EnsureImage(ctx, db.Image); err != nil {
+					return fmt.Errorf("failed to pull MongoDB image %s: %w", db.Image, err)
+				}
 				_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 					Image: db.Image,
 					Env:   mongoEnv,
