@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/logger"
@@ -53,7 +54,18 @@ func (d *DockerOrchestrator) PullImage(ctx context.Context, imageName string) er
 func (d *DockerOrchestrator) StartContainer(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, containerName string) (string, error) {
 	resp, err := d.cli.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
 	if err != nil {
-		return "", err
+		if strings.Contains(err.Error(), "No such image") {
+			logger.Info("Image %s not found locally, pulling...", config.Image)
+			if pullErr := d.PullImage(ctx, config.Image); pullErr != nil {
+				return "", fmt.Errorf("failed to pull image %s: %w", config.Image, pullErr)
+			}
+			resp, err = d.cli.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
 	}
 
 	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
