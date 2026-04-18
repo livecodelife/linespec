@@ -513,7 +513,7 @@ func runProvenance() {
 		}
 	case "lint":
 		opts := parseLintOptions(args)
-		if opts.ConfigFile == "" {
+		if opts.ConfigFile == "" && opts.Format != "sarif" {
 			if configs := findAllLinespecConfigs("."); len(configs) > 0 {
 				exitCode := 0
 				for _, cfgPath := range configs {
