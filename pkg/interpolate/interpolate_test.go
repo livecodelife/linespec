@@ -391,6 +391,27 @@ func TestGenerateFromPattern_MultipleSegments(t *testing.T) {
 	}
 }
 
+func TestDeclareVariable_StringPattern_ProvenanceID(t *testing.T) {
+	// prov-[0-9]{4}-[a-f0-9]{8} matches the provenance IDPattern:
+	//   ^prov-(\d{4})-(\d{3}|[a-f0-9]{8})(?:-[a-z0-9-]+)?$
+	// This exercises literal text segments, numeric ranges, and hex ranges in one pattern.
+	idPattern := regexp.MustCompile(`^prov-\d{4}-[a-f0-9]{8}$`)
+
+	for i := 0; i < 200; i++ {
+		r := NewResolver()
+		name := fmt.Sprintf("PROV_ID_%d", i)
+		if err := r.DeclareVariable(name, "string", map[string]string{
+			"pattern": "prov-[0-9]{4}-[a-f0-9]{8}",
+		}); err != nil {
+			t.Fatalf("DeclareVariable error: %v", err)
+		}
+		val := r.Variables[name]
+		if !idPattern.MatchString(val) {
+			t.Errorf("iteration %d: value %q does not match provenance ID pattern", i, val)
+		}
+	}
+}
+
 func TestDeclareVariable_IntegerRange_StressTest(t *testing.T) {
 	// Run many times to ensure all values land in range
 	for i := 0; i < 200; i++ {
