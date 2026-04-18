@@ -1,0 +1,24 @@
+TEST get_user_with_pattern_token
+
+VARS
+  AUTH_TOKEN: string pattern=prov-[0-9]{4}-[a-f0-9]{8}
+  USER_ID: integer min=1 max=9999
+
+RECEIVE HTTP:GET /api/v1/users/${USER_ID}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+EXPECT READ:MYSQL users
+USING_SQL """
+SELECT users.* FROM `users` WHERE `users`.`token` = '${AUTH_TOKEN}' LIMIT 1
+"""
+RETURNS {{payloads/user_with_vars_response.json}}
+
+EXPECT READ:MYSQL users
+USING_SQL_CONTAINS """
+WHERE users.id =
+"""
+RETURNS {{payloads/user_with_vars_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user_with_vars_public_response.json}}
