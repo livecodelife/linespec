@@ -43,6 +43,9 @@ jobs:
       - name: Build LineSpec
         run: go build -o linespec ./cmd/linespec
 
+      - name: Build LineSpec Docker image
+        run: docker build -f Dockerfile.linespec -t linespec:latest .
+
       - name: Test user-linespecs
         run: ./linespec test examples/user-linespecs/
 

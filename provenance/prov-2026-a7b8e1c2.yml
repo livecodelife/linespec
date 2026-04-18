@@ -1,0 +1,28 @@
+id: prov-2026-a7b8e1c2
+title: Build linespec Docker image in CI before example tests
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  The linespec proxy containers (MySQL proxy, PostgreSQL proxy, etc.) run as Docker
+  containers using the linespec:latest image. In CI that image doesn't exist because
+  only the binary is built (go build), not the Docker image. Add a docker build step
+  after go build so linespec:latest is available in the local Docker daemon before
+  any linespec test commands run.
+constraints:
+  - The docker build step must use Dockerfile.linespec and tag the image linespec:latest
+  - The build step must come after go build and before any linespec test steps
+affected_scope:
+  - .github/workflows/ci.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: .github/workflows/ci.yml
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
