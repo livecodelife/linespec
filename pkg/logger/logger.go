@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// isTTY returns true if stdout is an interactive terminal.
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 // Level represents the logging level
 type Level int
 
@@ -118,12 +127,20 @@ func Summary(total, passed, failed int) {
 	fmt.Fprintf(globalErrorOut, "Failed: %d\n", failed)
 }
 
-// ShowSpinner displays an animated spinner with a message
-// Returns a handle that can be used to stop the spinner
+// ShowSpinner displays an animated spinner with a message in TTY environments.
+// In non-TTY environments (CI, piped output) it prints the message once as a
+// plain line and returns without starting the animation goroutine.
+// Returns a handle that can be used to stop the spinner.
 func ShowSpinner(message string) *SpinnerHandle {
 	handle := &SpinnerHandle{
 		stopChan: make(chan bool),
 		doneChan: make(chan bool),
+	}
+
+	if !isTTY() {
+		fmt.Fprintf(globalOutput, "%s\n", message)
+		close(handle.doneChan)
+		return handle
 	}
 
 	go func() {
@@ -162,8 +179,9 @@ func SetupComplete() {
 	mu.RLock()
 	defer mu.RUnlock()
 	if globalLevel >= InfoLevel {
-		// Clear the spinner line and print completion
-		fmt.Fprint(globalOutput, "\r\033[K")
+		if isTTY() {
+			fmt.Fprint(globalOutput, "\r\033[K")
+		}
 		fmt.Fprintf(globalOutput, "✅ Setup complete\n")
 	}
 }
