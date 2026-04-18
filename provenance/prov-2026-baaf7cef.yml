@@ -1,6 +1,6 @@
 id: prov-2026-baaf7cef
 title: Fix Kafka readiness check to use exposed port 9092
-status: open
+status: implemented
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 353ae8cf730a057ca8f55529b7dd6fd1cf6e749c
 associated_specs:
   - type: code
     path: pkg/runner/runner.go
