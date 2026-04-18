@@ -1,0 +1,29 @@
+id: prov-2026-5a298272
+title: Add pattern constraint test for provenance ID format
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  Add a unit test that exercises the string pattern= constraint using the exact
+  format that a provenance record ID must satisfy. This validates that the
+  pattern generator correctly handles mixed literal text and character-class
+  segments with quantifiers in a real-world format.
+constraints:
+  - The test pattern MUST be prov-[0-9]{4}-[a-f0-9]{8} matching the provenance IDPattern
+  - The test MUST verify the generated value matches the same regex as IDPattern
+  - The test MUST run many iterations to catch character-class boundary issues
+affected_scope:
+  - pkg/interpolate/interpolate_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a8304063
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/interpolate/interpolate_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
