@@ -1,6 +1,6 @@
 id: prov-2026-5a298272
 title: Add pattern constraint test for provenance ID format
-status: open
+status: implemented
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -19,7 +19,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-a8304063
-sealed_at_sha: ""
+sealed_at_sha: 518a56470bdc47995f1d1f9b6a4d7c13c8676706
 associated_specs:
   - path: pkg/interpolate/interpolate_test.go
     type: code
