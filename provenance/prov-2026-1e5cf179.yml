@@ -1,6 +1,6 @@
 id: prov-2026-1e5cf179
 title: 'Diagnose infra container failures: exit detection and log capture in port wait'
-status: open
+status: implemented
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 20e3a894bbedebd17ee87aff71e769aced92ac51
 associated_specs:
   - type: code
     path: pkg/runner/runner.go
