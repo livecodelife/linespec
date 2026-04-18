@@ -75,24 +75,42 @@ If omitted, the filename (without extension) is used as the test name.
 
 ## VARS Block (optional)
 
-Declare typed variables before `RECEIVE` to pre-generate values with an explicit type:
+Declare typed variables before `RECEIVE` to pre-generate values with an explicit type and optional constraints:
 
 ```
 VARS
-  VAR_NAME: <type>
-  VAR_NAME: <type>
+  VAR_NAME: <type> [constraint=value ...]
+  VAR_NAME: <type> [constraint=value ...]
   ...
 ```
 
-The `VARS` block must appear after `TEST` (if present) and before `RECEIVE`. Each line declares one variable using the format `VAR_NAME: type`.
+The `VARS` block must appear after `TEST` (if present) and before `RECEIVE`. Each line declares one variable using the format `VAR_NAME: type` followed by zero or more `key=value` constraint pairs.
 
 ### Supported types
 
-| Type | Generated value |
-|------|----------------|
-| `uuid` | RFC 4122 v4 UUID, e.g. `550e8400-e29b-41d4-a716-446655440000` |
-| `integer` | Random integer between 1 and 99999 |
-| `string` | `lowercase_varname_` + 8 random hex chars |
+| Type | Default generated value | Supported constraints |
+|------|------------------------|-----------------------|
+| `uuid` | RFC 4122 v4 UUID, e.g. `550e8400-e29b-41d4-a716-446655440000` | _(none)_ |
+| `integer` | Random integer between 1 and 99999 | `min=N`, `max=N` |
+| `string` | `lowercase_varname_` + 8 random hex chars | `length=N`, `charset=<set>`, `pattern=<regex-like>` |
+| `enum` | _(required: must provide `values`)_ | `values=a,b,c` |
+
+### Constraints reference
+
+**`integer`**
+
+- `min=N` — lower bound (inclusive). Default: 1.
+- `max=N` — upper bound (inclusive). Default: 99999.
+
+**`string`**
+
+- `length=N` — exact character count of the generated string.
+- `charset=<set>` — character pool. Supported values: `alphanumeric`, `alpha`, `numeric`, `hex`, `lowercase`, `uppercase`. Default: `hex`.
+- `pattern=<regex-like>` — generate a string matching a simplified regex. Supports character classes (`[a-z]`, `[A-Z0-9]`), repetition counts (`{N}`), and literal text. For example, `pattern=prov-[0-9]{4}-[a-f0-9]{8}` generates strings like `prov-2026-dab46dda`.
+
+**`enum`**
+
+- `values=a,b,c` — comma-separated list of allowed values. One is chosen at random each run.
 
 ### Why use VARS?
 
@@ -103,14 +121,16 @@ Without `VARS`, variable types are inferred from the variable name (a variable e
 1. If the variable is already set in the environment, that value is used
 2. Otherwise a random value of the declared type is generated and injected into the test container
 
-### Example
+### Examples
+
+**Integer with bounds, string with charset:**
 
 ```linespec
 TEST get_user_with_vars
 
 VARS
-  AUTH_TOKEN: string
-  USER_ID: integer
+  AUTH_TOKEN: string length=32 charset=alphanumeric
+  USER_ID: integer min=1 max=9999
 
 RECEIVE HTTP:GET /api/v1/users/${USER_ID}
 HEADERS
@@ -132,7 +152,25 @@ RESPOND HTTP:200
 WITH {{payloads/user_public_response.json}}
 ```
 
-`USER_ID` is declared as `integer`, so `${USER_ID}` is replaced by a number (e.g. `42731`) in the URL and in any payload file that references it. The mock registry receives it as a JSON number, so the service's response body encodes `user_id` as `42731`, not `"42731"`.
+`USER_ID` is declared as `integer`, so `${USER_ID}` is replaced by a number (e.g. `4271`) in the URL and in any payload file that references it. The mock registry receives it as a JSON number, so the service's response body encodes `user_id` as `4271`, not `"4271"`.
+
+**String with pattern (provenance ID format):**
+
+```linespec
+VARS
+  AUTH_TOKEN: string pattern=prov-[0-9]{4}-[a-f0-9]{8}
+```
+
+Generates values like `prov-2026-dab46dda` — useful when the service expects a token in a specific structured format.
+
+**Enum:**
+
+```linespec
+VARS
+  ORDER_STATUS: enum values=pending,active,cancelled
+```
+
+Picks one of the three values at random each run.
 
 ---
 
