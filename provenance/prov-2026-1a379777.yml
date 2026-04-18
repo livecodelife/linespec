@@ -1,0 +1,33 @@
+id: prov-2026-1a379777
+title: Fix HTTP proxy ExposedPorts missing — sidecar port unreachable in CI
+status: open
+created_at: "2026-04-18"
+author: calebcowen@gmail.com
+intent: >
+  The HTTP proxy container was started without ExposedPorts set in container.Config,
+  unlike all other proxy types (PostgreSQL, MySQL, MongoDB, gRPC, Redis) which
+  explicitly set ExposedPorts for their sidecar port. Without ExposedPorts, Docker
+  Engine on Linux does not populate NetworkSettings.Ports for the sidecar port (19081)
+  in the container inspect response, so httpVerifyPort is empty. This causes collectHits
+  to be skipped entirely, leaving all HTTP mock hit counts at zero. VerifyAll then
+  reports "expectation failed: [HTTP]... was never called" even though the proxy
+  correctly served the request. The fix is to add ExposedPorts for the sidecar port
+  (httpSidecarNatPort) to the HTTP proxy container config, matching the pattern used
+  by all other proxy types.
+constraints:
+  - ExposedPorts must be set for the HTTP sidecar port (19081/tcp) in the HTTP proxy container.Config
+  - The fix must match the pattern used by other proxy types (PostgreSQL, gRPC, etc.)
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: pkg/runner/runner.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
