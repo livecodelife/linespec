@@ -1600,6 +1600,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: proxyImage,
 			Cmd:   httpProxyCmd,
+			ExposedPorts: map[nat.Port]struct{}{
+				httpSidecarNatPort: {},
+			},
 		}, &container.HostConfig{
 			Binds: []string{
 				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
