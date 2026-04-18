@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -359,8 +360,8 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 			"KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092",
 			"KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT",
 			"KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
-			// cp-kafka 7.x+ KRaft mode requires a base64url-encoded UUID; a plain string causes the broker to crash on startup
-			"CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk",
+			// cp-kafka 7.x+ KRaft mode requires a base64url-encoded UUID (22 chars, RawURLEncoding)
+			"CLUSTER_ID=" + kafkaClusterID(),
 		},
 	}, &container.HostConfig{
 		PortBindings: map[nat.Port][]nat.PortBinding{
@@ -2575,7 +2576,21 @@ func expBackoff(attempt int, base, max time.Duration) time.Duration {
 	return d
 }
 
-// waitForContainerPort polls until a container's port binding is available
+// kafkaClusterID generates a valid Kafka KRaft cluster ID: a 22-character base64url
+// string (URL-safe, no padding) encoding 16 random bytes. cp-kafka 7.x+ rejects plain
+// strings as cluster IDs; the format must match what kafka-storage random-uuid produces.
+func kafkaClusterID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// fallback: fixed known-good value generated offline
+		return "4L6g3nShT-eMCtK--X86sw"
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// waitForContainerPort polls until a container's port binding is available.
+// If the container exits before the port binding appears, it fails immediately
+// and captures the container logs to surface the actual crash reason.
 func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, port string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	var attempt int
@@ -2590,6 +2605,12 @@ func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, por
 			attempt++
 			continue
 		}
+		// Fail fast if the container already exited — the port binding will never appear
+		if inspect.State.Status == "exited" || inspect.State.Status == "dead" {
+			logs := s.captureContainerLogs(containerName)
+			return "", fmt.Errorf("container %s exited (code %d) before port %s was bound\n%s",
+				containerName, inspect.State.ExitCode, port, logs)
+		}
 		if p, ok := inspect.NetworkSettings.Ports[nat.Port(port)]; ok && len(p) > 0 && p[0].HostPort != "" {
 			return p[0].HostPort, nil
 		}
@@ -2601,6 +2622,24 @@ func (s *TestSuite) waitForContainerPort(ctx context.Context, containerName, por
 		attempt++
 	}
 	return "", fmt.Errorf("timeout waiting for container %s port %s binding", containerName, port)
+}
+
+// captureContainerLogs fetches the last lines of a container's combined stdout/stderr.
+// Used to surface crash reasons when a container exits unexpectedly.
+func (s *TestSuite) captureContainerLogs(containerName string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var buf bytes.Buffer
+	if err := s.orch.StreamLogs(ctx, containerName, &buf, &buf); err != nil {
+		return fmt.Sprintf("(could not capture logs: %v)", err)
+	}
+	out := buf.String()
+	// Trim to last 50 lines to keep error messages readable
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) > 50 {
+		lines = lines[len(lines)-50:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // waitForMySQL polls until MySQL is accepting connections using actual MySQL driver
