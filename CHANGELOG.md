@@ -5,6 +5,41 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-04-18
+
+### Added
+
+- **Auto-pull Docker images when not found locally** ([prov-2026-6c7c0ab9](./provenance/prov-2026-6c7c0ab9.yml)) — `StartContainer` automatically pulls the image before retrying when "No such image" error is detected, so test runs in fresh CI environments succeed without requiring pre-pulled images.
+
+- **CI Docker image build step** ([prov-2026-a7b8e1c2](./provenance/prov-2026-a7b8e1c2.yml)) — The `linespec:latest` Docker image is now built in CI before running any linespec test commands, matching the expected environment for proxy containers.
+
+- **CI example service image builds** ([prov-2026-ff23779d](./provenance/prov-2026-ff23779d.yml)) — Each example service image (user-service:latest, todo-api:latest, etc.) is built immediately before its corresponding test suite step in CI, so tests use locally-built images instead of expecting pre-pulled ones.
+
+- **Spinner suppression in non-TTY environments** ([prov-2026-778d2362](./provenance/prov-2026-778d2362.yml)) — The spinner animation is suppressed in non-TTY environments (CI, piped output), printing the message once as a plain line to avoid log bloat.
+
+### Fixed
+
+- **HTTP proxy ExposedPorts missing** ([prov-2026-1a379777](./provenance/prov-2026-1a379777.yml)) — HTTP proxy container config now sets ExposedPorts for the sidecar port (19081/tcp), matching the pattern used by all other proxy types. Without this, Docker Engine on Linux does not populate NetworkSettings.Ports, causing HTTP mock verification to fail with "was never called" even when the proxy correctly served the request.
+
+- **Kafka readiness check uses wrong port** ([prov-2026-baaf7cef](./provenance/prov-2026-baaf7cef.yml)) — The Kafka readiness check was polling for port 29092/tcp, but the cp-kafka Dockerfile only EXPOSEs port 9092. Additionally, 29092 binds to the container hostname, not 0.0.0.0, so Docker's NAT cannot proxy it. Now correctly uses port 9092/tcp (PLAINTEXT_HOST) which IS exposed and binds on all interfaces.
+
+- **Infra container exit detection and log capture** ([prov-2026-1e5cf179](./provenance/prov-2026-1e5cf179.yml)) — `waitForContainerPort` now detects container exit inside the poll loop and fails immediately with the container's stdout/stderr logs captured, so CI output shows the actual crash reason instead of a 30-second timeout.
+
+- **CI image pull and Kafka cluster ID fixes** ([prov-2026-86f3243a](./provenance/prov-2026-86f3243a.yml)) — Two CI fixes: (1) Explicit image pull is now done only for known infrastructure images (MySQL, Kafka, PostgreSQL, MongoDB), not app/migration containers which should fail fast if not built. (2) Kafka CLUSTER_ID now uses a valid base64url UUID format required by cp-kafka 7.x+ in KRaft mode.
+
+### Related Provenance Records
+
+- [prov-2026-6c7c0ab9](./provenance/prov-2026-6c7c0ab9.yml) - Auto-pull Docker images when not found locally
+- [prov-2026-a7b8e1c2](./provenance/prov-2026-a7b8e1c2.yml) - Build linespec Docker image in CI before example tests
+- [prov-2026-ff23779d](./provenance/prov-2026-ff23779d.yml) - Build example service images in CI before each test suite
+- [prov-2026-778d2362](./provenance/prov-2026-778d2362.yml) - Suppress spinner animation in non-TTY environments
+- [prov-2026-1a379777](./provenance/prov-2026-1a379777.yml) - Fix HTTP proxy ExposedPorts missing — sidecar port unreachable in CI
+- [prov-2026-baaf7cef](./provenance/prov-2026-baaf7cef.yml) - Fix Kafka readiness check to use exposed port 9092
+- [prov-2026-1e5cf179](./provenance/prov-2026-1e5cf179.yml) - Diagnose infra container failures: exit detection and log capture in port wait
+- [prov-2026-86f3243a](./provenance/prov-2026-86f3243a.yml) - Fix CI: explicit infrastructure image pull, valid Kafka cluster ID
+
+---
+
 ## [2.6.0] - 2026-04-18
 
 ### Added
