@@ -409,18 +409,33 @@ func goBuildForLinux(srcRoot, pkg, outPath, goarch string) error {
 // goInstallForLinux runs `go install MOD@VERSION` with GOOS=linux and moves
 // the result to outPath.
 func goInstallForLinux(modulePath, version, outPath, goarch string) error {
-	gobin := filepath.Dir(outPath)
+	// go install refuses to install cross-compiled binaries when GOBIN is set.
+	// Use a temp GOPATH instead; cross-compiled output lands in
+	// $GOPATH/bin/linux_<GOARCH>/ rather than $GOPATH/bin/.
+	tmpGopath, err := os.MkdirTemp("", "linespec-gopath-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpGopath)
+
+	// Strip any existing GOBIN or GOPATH so they don't interfere.
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, "GOBIN=") && !strings.HasPrefix(e, "GOPATH=") {
+			filtered = append(filtered, e)
+		}
+	}
+	filtered = append(filtered, "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0", "GOPATH="+tmpGopath)
+
 	cmd := exec.Command("go", "install", modulePath+"@"+version)
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0", "GOBIN="+gobin)
+	cmd.Env = filtered
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-	// `go install` puts the binary at GOBIN/<binaryname>; rename to outPath.
-	installed := filepath.Join(gobin, "linespec")
-	if installed == outPath {
-		return nil
-	}
+	// Cross-compiled binaries land in $GOPATH/bin/<GOOS>_<GOARCH>/.
+	installed := filepath.Join(tmpGopath, "bin", "linux_"+goarch, "linespec")
 	return os.Rename(installed, outPath)
 }
 
