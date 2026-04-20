@@ -37,7 +37,7 @@ affected_scope:
   - VERSION
 forbidden_scope: []
 supersedes: ""
-superseded_by: ""
+superseded_by: prov-2026-a6456485
 related:
   - prov-2026-6c7c0ab9
   - prov-2026-a7b8e1c2

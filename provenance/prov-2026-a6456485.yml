@@ -1,0 +1,38 @@
+id: prov-2026-a6456485
+title: Fix linespec build cross-compile for non-Linux hosts
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: >
+  The `linespec build` command copies the host binary into an Alpine Docker
+  image. On macOS (darwin), the binary is Mach-O format; Linux containers
+  require ELF format. The result is `exec format error` when the proxy
+  sidecar starts, silently breaking all non-PostgreSQL proxy types (MySQL,
+  MongoDB, Redis) because the proxy container exits immediately. The fix
+  cross-compiles a Linux binary before building the Docker image when the
+  host OS is not Linux, using `go build` with `GOOS=linux` from the source
+  root. The source root is located by walking up from the current working
+  directory then from the executable path, looking for a `go.mod` containing
+  `module github.com/livecodelife/linespec`.
+constraints:
+  - On Linux hosts the current binary is used as-is — no cross-compile step
+  - On non-Linux hosts a fresh `go build` with GOOS=linux GOARCH=<host-arch>
+    is run; if no source root can be found the command exits with a clear error
+    describing how to obtain a Linux binary
+  - The cross-compiled binary is placed in the existing tmpDir alongside the
+    Dockerfile so no additional temp directories are created
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - provenance/prov-2026-0e5c82e4.yml
+forbidden_scope: []
+supersedes: prov-2026-0e5c82e4
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: cmd/linespec/main_stable.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
