@@ -1,0 +1,35 @@
+id: prov-2026-c8585133
+title: 'Fix docker build: probe DOCKER_HOST socket on macOS in post_install'
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: >
+  Homebrew post_install does not source the user's shell dotfiles (~/.zshrc etc.),
+  so DOCKER_HOST is never set in that environment. Docker Desktop on macOS sets
+  DOCKER_HOST (pointing to ~/.docker/run/docker.sock) only via shell integration.
+  With DOCKER_BUILDKIT=0 (legacy builder), the Docker CLI does not probe alternate
+  socket paths — it only tries /var/run/docker.sock as the fallback, which may not
+  be accessible in Homebrew's restricted environment. As a result, linespec build
+  fails silently during post_install with a connection error while working fine in
+  interactive shells where DOCKER_HOST is set. The fix probes ~/.docker/run/docker.sock
+  and /var/run/docker.sock on macOS and injects DOCKER_HOST into the docker subprocess
+  environment when it is not already present.
+constraints:
+  - Only probe on darwin; Linux and Windows have different socket conventions
+  - Only inject DOCKER_HOST when os.Getenv("DOCKER_HOST") is empty — do not override a user-set value
+  - "Probe in order: ~/.docker/run/docker.sock first (Docker Desktop default), then /var/run/docker.sock"
+affected_scope:
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-336ba2a8
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: cmd/linespec/main_stable.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
