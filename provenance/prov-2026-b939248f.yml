@@ -1,0 +1,23 @@
+id: prov-2026-b939248f
+title: Version bump to v2.8.1
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: Patch release v2.8.1 for the cross-compile bug fix in linespec build.
+constraints: []
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a6456485
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: VERSION
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []

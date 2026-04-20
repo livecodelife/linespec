@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-04-20
+
+### Fixed
+
+- **`linespec build` cross-compile on non-Linux hosts** ([prov-2026-a6456485](./provenance/prov-2026-a6456485.yml)) — On macOS and Windows, `linespec build` was copying the host binary (Mach-O/PE format) directly into the Alpine Docker image, causing `exec format error` when proxy sidecar containers tried to start. MySQL, MongoDB, and Redis proxies silently failed as a result. `linespec build` now detects non-Linux hosts and cross-compiles a Linux ELF binary using `go build GOOS=linux` before building the image, finding the source root by walking up from the current directory.
+
 ## [2.8.0] - 2026-04-20
 
 ### Added
