@@ -1,0 +1,51 @@
+id: prov-2026-0e5c82e4
+title: Add linespec build command and Homebrew post_install to build proxy Docker image
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: >
+  Users who install linespec via Homebrew receive only the binary — no Docker image is
+  built or pulled as part of installation. The proxy sidecar containers (PostgreSQL, MySQL,
+  HTTP, Kafka, etc.) require a local linespec:latest Docker image, which defaults to true
+  for all database dependencies. This means any project with a database in .linespec.yml
+  will immediately fail with "No such image: linespec:latest" on a fresh brew install.
+
+  The fix has two parts: (1) a `linespec build` CLI command that builds the linespec:latest
+  Docker image from the installed binary using a minimal embedded Dockerfile, and (2) a
+  post_install hook in the Homebrew formula (via .goreleaser.yml) that calls `linespec build`
+  automatically after installation. If Docker is not running at install time, post_install
+  prints a warning and succeeds — the user can run `linespec build` manually later.
+
+  All documentation (README.md, LINESPEC.md, docs/linespec.html) must be updated to
+  describe the `linespec build` command and when it is needed.
+constraints:
+  - "`linespec build` must use the currently installed binary (os.Executable) as the Docker image content — it must not require the source repo to be present"
+  - "The Dockerfile embedded in `linespec build` must produce an image functionally identical to stage 2 of Dockerfile.linespec (alpine:latest base, ca-certificates, /app/linespec entrypoint)"
+  - "If Docker is not running or the build fails, `linespec build` must print a clear error message and exit non-zero — it must not silently succeed"
+  - "The Homebrew post_install must be graceful: if `linespec build` exits non-zero (Docker not running), post_install must print an opoo warning and not fail the brew install"
+  - "The `linespec build` command must appear in the main usage output alongside test, proxy, and provenance"
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - .goreleaser.yml
+  - README.md
+  - LINESPEC.md
+  - docs/linespec.html
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-6c7c0ab9
+  - prov-2026-a7b8e1c2
+  - prov-2026-557f393c
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: cmd/linespec/main_stable.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - dx
+  - installation
+  - docker
