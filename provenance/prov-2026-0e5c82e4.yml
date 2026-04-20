@@ -30,7 +30,11 @@ affected_scope:
   - README.md
   - LINESPEC.md
   - docs/linespec.html
+  - docs/index.html
+  - docs/docs.html
+  - docs/provenance.html
   - CHANGELOG.md
+  - VERSION
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""

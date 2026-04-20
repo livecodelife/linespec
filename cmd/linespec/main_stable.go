@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	debugpkg "runtime/debug"
@@ -52,6 +53,8 @@ func main() {
 		runProxy()
 	case "test":
 		runTest()
+	case "build":
+		runBuild()
 	case "provenance", "-p":
 		runProvenance()
 	default:
@@ -251,6 +254,75 @@ func runTestWithCode(path string) int {
 	return 0
 }
 
+func runBuild() {
+	args := os.Args[2:]
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			logger.Info(`Usage: linespec build
+
+Builds the linespec:latest Docker image using the currently installed binary.
+This image is required by protocol proxy sidecars when running linespec tests
+against services with database or HTTP dependencies.
+
+Run this once after installation, or any time the Docker image is missing:
+
+  linespec build
+
+Docker must be running. If Docker is not available, start it and re-run.`)
+			os.Exit(0)
+		}
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		logger.Error("Failed to locate linespec executable: %v", err)
+		os.Exit(1)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		logger.Error("Failed to resolve executable path: %v", err)
+		os.Exit(1)
+	}
+
+	tmpDir, err := os.MkdirTemp("", "linespec-build-*")
+	if err != nil {
+		logger.Error("Failed to create temp directory: %v", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	data, err := os.ReadFile(execPath)
+	if err != nil {
+		logger.Error("Failed to read linespec binary: %v", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "linespec"), data, 0755); err != nil {
+		logger.Error("Failed to stage linespec binary: %v", err)
+		os.Exit(1)
+	}
+
+	dockerfile := "FROM alpine:latest\n" +
+		"RUN apk --no-cache add ca-certificates\n" +
+		"WORKDIR /app\n" +
+		"COPY linespec /app/linespec\n" +
+		"ENTRYPOINT [\"/app/linespec\"]\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "Dockerfile"), []byte(dockerfile), 0644); err != nil {
+		logger.Error("Failed to write Dockerfile: %v", err)
+		os.Exit(1)
+	}
+
+	logger.Info("Building linespec:latest Docker image...")
+	cmd := exec.Command("docker", "build", "-t", "linespec:latest", tmpDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		logger.Error("Docker build failed: %v", err)
+		logger.Error("Make sure Docker is running and try again: linespec build")
+		os.Exit(1)
+	}
+	logger.Info("Successfully built linespec:latest")
+}
+
 func printUsage() {
 	logger.Info(`LineSpec v` + version + ` - Provenance Records & Integration Testing
 
@@ -259,6 +331,7 @@ Usage: linespec <command> [options]
 Commands:
   provenance <subcommand>    Manage provenance records (alias: -p)
   test [--debug] <path>      Run .linespec test files
+  build                      Build the linespec:latest Docker image
   proxy <type> ...           Start protocol proxy
 
 Use "linespec <command> --help" for more information about a command.`)

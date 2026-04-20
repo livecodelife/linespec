@@ -11,6 +11,22 @@ The goal of LineSpec is to:
 
 ---
 
+# Setup
+
+Before running `linespec test`, the `linespec:latest` Docker image must exist in your local Docker daemon. This image is used by all protocol proxy sidecars (PostgreSQL, MySQL, HTTP, Kafka, etc.).
+
+**Homebrew installs** build the image automatically during `brew install linespec`. If Docker was not running at install time, run:
+
+```bash
+linespec build
+```
+
+**Go install / manual binary** installs must always run `linespec build` once after installation.
+
+If you see `Error response from daemon: No such image: linespec:latest`, run `linespec build` to fix it.
+
+---
+
 # Core Design Principles
 
 1. Deterministic parsing — no NLP, no guessing.

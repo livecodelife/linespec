@@ -160,6 +160,10 @@ brews:
       system "#{bin}/linespec", "provenance", "--help"
     install: |
       bin.install "linespec"
+    post_install: |
+      unless system("#{bin}/linespec", "build")
+        opoo "Could not build linespec:latest Docker image. Docker may not be running. Run `linespec build` manually after starting Docker."
+      end
     # Only publish stable builds to the main formula
     ids:
       - linespec-stable

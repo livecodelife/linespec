@@ -1,4 +1,4 @@
-# LineSpec v2.7.0
+# LineSpec v2.8.0
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
@@ -13,7 +13,7 @@
 
 LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
 
-As of v2.7.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
+As of v2.8.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
 ---
 
@@ -26,10 +26,16 @@ brew tap livecodelife/linespec
 brew install linespec
 ```
 
+The Homebrew formula automatically builds the `linespec:latest` Docker image after installation. If Docker was not running at install time, run it manually once Docker is started:
+
+```bash
+linespec build
+```
+
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/cmd/linespec@v2.7.0
+go install github.com/livecodelife/linespec/cmd/linespec@v2.8.0
 ```
 
 ### GitHub Releases
@@ -181,6 +187,9 @@ LineSpec Testing is a DSL-based integration testing framework for containerized 
 ### Commands
 
 ```bash
+# Build the linespec:latest Docker image (required for proxy sidecars)
+linespec build
+
 # Run integration tests
 linespec test <path-to-linespec-files>
 
@@ -365,4 +374,4 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
-**LineSpec v2.7.0** - Built with Provenance Records
+**LineSpec v2.8.0** - Built with Provenance Records

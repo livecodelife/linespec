@@ -87,7 +87,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v2.7.0</div>
+                    <div class="docs-badge stable">Stable v2.8.0</div>
                     <h1>LineSpec DSL Reference</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Deterministic domain-specific language for integration testing. Intercepts database and HTTP traffic at the protocol level for language-agnostic, deterministic test execution.</p>
 
@@ -106,7 +106,7 @@
                                 </button>
                             </div>
                             <div class="command-panel" id="go-stable">
-                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.7.0</code>
+                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v2.8.0</code>
                                 <button class="copy-btn" aria-label="Copy command">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -114,6 +114,9 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div class="install-note" style="margin-top:1rem;padding:0.75rem 1rem;background:var(--bg-secondary,#f6f8fa);border-left:3px solid var(--accent,#4f8ef7);border-radius:4px;font-size:0.9rem;">
+                        <strong>After installation:</strong> run <code>linespec build</code> to build the <code>linespec:latest</code> Docker image required by proxy sidecars. Homebrew does this automatically; Go install and manual installs must run it once.
                     </div>
                 </header>
 
@@ -1707,7 +1710,8 @@ infrastructure:
                                 </svg>
                             </button>
                         </div>
-                        <pre><code>linespec test create_todo_success.linespec
+                        <pre><code>linespec build                                 # Build linespec:latest Docker image (run once after install)
+linespec test create_todo_success.linespec
 linespec test /path/to/linespecs/</code></pre>
                     </div>
                 </section>
