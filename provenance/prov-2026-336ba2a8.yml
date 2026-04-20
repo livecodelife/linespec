@@ -1,6 +1,6 @@
 id: prov-2026-336ba2a8
 title: Fix docker build DOCKER_BUILDKIT=0 for Homebrew post_install
-status: open
+status: implemented
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: >
@@ -21,7 +21,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-0e5c82e4
-sealed_at_sha: ""
+sealed_at_sha: 89c2d01ee411e2b1d9f83b35824804c818b38e44
 associated_specs:
   - type: code
     path: cmd/linespec/main_stable.go
