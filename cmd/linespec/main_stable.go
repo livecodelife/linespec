@@ -333,7 +333,27 @@ Docker must be running. If Docker is not available, start it and re-run.`)
 	cmd := exec.Command("docker", "build", "-t", "linespec:latest", tmpDir)
 	// Disable BuildKit so docker build doesn't try to write to ~/.docker/buildx/activity/,
 	// which fails in restricted environments such as Homebrew post_install on macOS.
-	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=0")
+	dockerEnv := append(os.Environ(), "DOCKER_BUILDKIT=0")
+	// On macOS, DOCKER_HOST is set by Docker Desktop's shell integration (via ~/.zshrc
+	// or similar). Homebrew post_install does not source shell dotfiles, so DOCKER_HOST
+	// is absent. The legacy builder (DOCKER_BUILDKIT=0) does not fall back to
+	// ~/.docker/run/docker.sock automatically — it only tries /var/run/docker.sock, which
+	// may not be accessible in Homebrew's restricted environment. Probe known socket paths
+	// and inject DOCKER_HOST when it is not already set.
+	if runtime.GOOS == "darwin" && os.Getenv("DOCKER_HOST") == "" {
+		home, _ := os.UserHomeDir()
+		for _, sock := range []string{
+			filepath.Join(home, ".docker/run/docker.sock"),
+			"/var/run/docker.sock",
+		} {
+			if _, statErr := os.Stat(sock); statErr == nil {
+				dockerEnv = append(dockerEnv, "DOCKER_HOST=unix://"+sock)
+				logger.Info("Using Docker socket: %s", sock)
+				break
+			}
+		}
+	}
+	cmd.Env = dockerEnv
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
