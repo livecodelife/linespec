@@ -331,6 +331,9 @@ Docker must be running. If Docker is not available, start it and re-run.`)
 
 	logger.Info("Building linespec:latest Docker image...")
 	cmd := exec.Command("docker", "build", "-t", "linespec:latest", tmpDir)
+	// Disable BuildKit so docker build doesn't try to write to ~/.docker/buildx/activity/,
+	// which fails in restricted environments such as Homebrew post_install on macOS.
+	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
