@@ -1,6 +1,6 @@
 id: prov-2026-1687368b
 title: 'Fix Homebrew post_install: use rescue BuildError instead of unless system'
-status: open
+status: implemented
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: >
@@ -22,7 +22,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-0e5c82e4
-sealed_at_sha: ""
+sealed_at_sha: c0ce7c44a926c77d1ac035472c716be0f85b00f3
 associated_specs:
   - type: code
     path: .goreleaser.yml
