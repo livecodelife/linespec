@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-04-20
+
+### Fixed
+
+- **`linespec build` go install cross-compile on Homebrew installs** ([prov-2026-04141669](./provenance/prov-2026-04141669.yml)) — When the source repo is not present (e.g. Homebrew install), `linespec build` falls back to `go install` to cross-compile a Linux binary. Setting `GOBIN` caused Go to reject cross-compiled installs with "cannot install cross-compiled binaries when GOBIN is set". The fix uses a temporary `GOPATH` instead and reads the binary from `$GOPATH/bin/linux_<GOARCH>/`.
+
 ## [2.8.1] - 2026-04-20
 
 ### Fixed
