@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3] - 2026-04-20
+
+### Fixed
+
+- **`linespec build` fails during Homebrew post_install on macOS** ([prov-2026-336ba2a8](./provenance/prov-2026-336ba2a8.yml)) — Docker BuildKit writes an activity timestamp to `~/.docker/buildx/activity/` on every build. Homebrew's post_install hook runs in a restricted environment where this write is blocked with "operation not permitted". `linespec build` now sets `DOCKER_BUILDKIT=0` for the `docker build` subprocess, using the classic builder which does not touch that path.
+
 ## [2.8.2] - 2026-04-20
 
 ### Fixed
