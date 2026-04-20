@@ -513,7 +513,7 @@ Examples:
 
 func runProxy() {
 	if len(os.Args) < 5 {
-		logger.Error("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [--schema-data <base64>]")
+		logger.Error("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [--schema-file <path>]")
 		os.Exit(1)
 	}
 
@@ -527,8 +527,8 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
-	// Extract --db-name, --host, --schema-data, --sidecar-port, and --debug flags from remaining args
-	var dbName, kafkaHost, schemaDataB64 string
+	// Extract --db-name, --host, --schema-data, --schema-file, --sidecar-port, and --debug flags from remaining args
+	var dbName, kafkaHost, schemaDataB64, schemaFile string
 	sidecarPort := "8081"
 	var filteredArgs []string
 	for i := 5; i < len(os.Args); i++ {
@@ -542,6 +542,11 @@ func runProxy() {
 			i++
 		} else if strings.HasPrefix(os.Args[i], "--host=") {
 			kafkaHost = strings.TrimPrefix(os.Args[i], "--host=")
+		} else if os.Args[i] == "--schema-file" && i+1 < len(os.Args) {
+			schemaFile = os.Args[i+1]
+			i++
+		} else if strings.HasPrefix(os.Args[i], "--schema-file=") {
+			schemaFile = strings.TrimPrefix(os.Args[i], "--schema-file=")
 		} else if os.Args[i] == "--schema-data" && i+1 < len(os.Args) {
 			schemaDataB64 = os.Args[i+1]
 			i++
@@ -646,8 +651,14 @@ func runProxy() {
 		}
 		p := mysql.NewProxy(addr, upstream, reg)
 		p.SetDatabaseName(dbName)
-		// Load schema from inline base64 data if provided via --schema-data flag
-		if schemaDataB64 != "" {
+		// Load schema from file if provided via --schema-file flag
+		if schemaFile != "" {
+			if err := p.LoadSchema(schemaFile); err != nil {
+				logger.Error("Failed to load schema from --schema-file: %v", err)
+				// Don't exit - schema is optional
+			}
+		} else if schemaDataB64 != "" {
+			// Fallback: load from inline base64 data via --schema-data flag
 			schemaBytes, err := base64.StdEncoding.DecodeString(schemaDataB64)
 			if err != nil {
 				logger.Debug("Failed to decode --schema-data: %v", err)

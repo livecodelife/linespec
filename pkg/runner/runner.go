@@ -69,7 +69,7 @@ type TestSuite struct {
 	serviceConfigs  map[string]*config.LineSpecConfig // Discovered service configurations
 	defaultDBConfig *config.DatabaseConfig            // Default database configuration for shared infrastructure
 	containerNaming    *config.ContainerNaming           // Container naming configuration
-	sharedSchemaBase64 string                           // Compact base64 JSON schema passed to MySQL proxies via --schema-data
+	sharedSchemaJSON []byte // Raw JSON schema written to per-test tempDir and passed to MySQL proxies via --schema-file
 	persistentContainers map[string]*persistentServiceContainers
 	persistentMu         sync.Mutex
 }
@@ -331,8 +331,8 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 				if schemaData, encErr := json.Marshal(schemaCache); encErr != nil {
 					logger.Debug("Failed to marshal schema: %v", encErr)
 				} else {
-					s.sharedSchemaBase64 = base64.StdEncoding.EncodeToString(schemaData)
-					logger.Debug("Shared schema encoded (%d tables, %d bytes base64)", len(schemaCache), len(s.sharedSchemaBase64))
+					s.sharedSchemaJSON = schemaData
+					logger.Debug("Shared schema cached (%d tables, %d bytes JSON)", len(schemaCache), len(s.sharedSchemaJSON))
 				}
 			}
 		}
@@ -1373,8 +1373,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				if db.Proxy != nil && *db.Proxy {
 					logger.Debug("Starting MySQL proxy (host=%s)", db.Host)
 					mysqlProxyCmd := []string{"proxy", "mysql", "0.0.0.0:" + dbPort, r.suite.containerNaming.NetworkAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", db.Database}
-					if r.suite.sharedSchemaBase64 != "" {
-						mysqlProxyCmd = append(mysqlProxyCmd, "--schema-data", r.suite.sharedSchemaBase64)
+					if len(r.suite.sharedSchemaJSON) > 0 {
+						schemaFile := filepath.Join(r.tempDir, "schema.json")
+						if err := os.WriteFile(schemaFile, r.suite.sharedSchemaJSON, 0600); err != nil {
+							logger.Debug("Failed to write schema file: %v", err)
+						} else {
+							mysqlProxyCmd = append(mysqlProxyCmd, "--schema-file", r.suite.containerNaming.GetRegistryMountPath()+"/schema.json")
+						}
 					}
 					if logger.IsDebug() {
 						mysqlProxyCmd = append(mysqlProxyCmd, "--debug")
