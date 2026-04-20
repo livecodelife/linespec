@@ -1,6 +1,6 @@
 id: prov-2026-f0384a57
 title: Pass MySQL schema via file instead of --schema-data CLI arg to avoid ARG_MAX limit
-status: open
+status: implemented
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-a4a1063d
-sealed_at_sha: ""
+sealed_at_sha: babda73b83b1aac21b5106ad6faaa64b0c7cd875
 associated_specs:
   - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
     type: code
