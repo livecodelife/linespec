@@ -1,0 +1,23 @@
+id: prov-2026-4235c96d
+title: Version bump to v2.8.2
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: Patch release v2.8.2 for the go install GOBIN cross-compile fix.
+constraints: []
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-04141669
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: VERSION
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
