@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.5] - 2026-04-20
+
+### Fixed
+
+- **Homebrew post_install always shows warning even on success** ([prov-2026-1687368b](./provenance/prov-2026-1687368b.yml)) — Homebrew's `Formula#system` raises `BuildError` on failure and returns `nil` on success. The formula used `unless system(...)` which evaluates to `unless nil` — always truthy — so the "Could not build" warning fired on every install regardless of outcome. The formula now uses `rescue BuildError` which is the correct Homebrew idiom: the warning only appears when `linespec build` actually fails.
+
 ## [2.8.4] - 2026-04-20
 
 ### Fixed
