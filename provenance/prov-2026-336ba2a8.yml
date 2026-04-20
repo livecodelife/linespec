@@ -1,0 +1,31 @@
+id: prov-2026-336ba2a8
+title: Fix docker build DOCKER_BUILDKIT=0 for Homebrew post_install
+status: open
+created_at: "2026-04-20"
+author: calebcowen@gmail.com
+intent: >
+  During `brew upgrade`, Homebrew's post_install hook runs `linespec build`.
+  Docker BuildKit (the default builder in modern Docker Desktop) writes an
+  activity timestamp to ~/.docker/buildx/activity/ on every build. In the
+  restricted environment that Homebrew post_install runs under on macOS, this
+  write is blocked with "operation not permitted", causing the entire build to
+  fail. Setting DOCKER_BUILDKIT=0 in the docker build subprocess environment
+  forces the classic builder, which does not touch that path.
+constraints:
+  - Only DOCKER_BUILDKIT=0 is injected into the subprocess env — the rest of os.Environ() is preserved
+  - This does not affect `linespec build` when run manually by the user (they can override with their own env)
+affected_scope:
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-0e5c82e4
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: cmd/linespec/main_stable.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
