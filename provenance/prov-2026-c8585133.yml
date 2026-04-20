@@ -1,6 +1,6 @@
 id: prov-2026-c8585133
 title: 'Fix docker build: probe DOCKER_HOST socket on macOS in post_install'
-status: open
+status: implemented
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: >
@@ -25,7 +25,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-336ba2a8
-sealed_at_sha: ""
+sealed_at_sha: 5b98cb26bf4d6b770592ea9dc21df0fc3792f505
 associated_specs:
   - type: code
     path: cmd/linespec/main_stable.go
