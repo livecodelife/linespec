@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	debugpkg "runtime/debug"
 	"strings"
 	"syscall"
@@ -291,7 +292,24 @@ Docker must be running. If Docker is not available, start it and re-run.`)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	data, err := os.ReadFile(execPath)
+	// The Docker image runs Linux. On non-Linux hosts the host binary is the
+	// wrong format (Mach-O on macOS, PE on Windows) and will fail with
+	// "exec format error" inside the Alpine container. Cross-compile a Linux
+	// binary before building the image.
+	linuxBinaryPath := execPath
+	if runtime.GOOS != "linux" {
+		compiled, err := crossCompileLinuxBinary(execPath, tmpDir)
+		if err != nil {
+			logger.Error("Failed to build a Linux binary for the Docker image: %v", err)
+			logger.Error("Ensure `go` is in PATH and one of the following is true:")
+			logger.Error("  • Run `linespec build` from within the linespec source directory")
+			logger.Error("  • Or install via: go install github.com/livecodelife/linespec/cmd/linespec@VERSION")
+			os.Exit(1)
+		}
+		linuxBinaryPath = compiled
+	}
+
+	data, err := os.ReadFile(linuxBinaryPath)
 	if err != nil {
 		logger.Error("Failed to read linespec binary: %v", err)
 		os.Exit(1)
@@ -321,6 +339,111 @@ Docker must be running. If Docker is not available, start it and re-run.`)
 		os.Exit(1)
 	}
 	logger.Info("Successfully built linespec:latest")
+}
+
+// crossCompileLinuxBinary produces a linux/GOARCH binary at outPath.
+// It tries two strategies in order:
+//  1. Find the linespec source root (go.mod) by walking up from CWD or the
+//     executable directory, then run `go build GOOS=linux`.
+//  2. Run `go install github.com/livecodelife/linespec/cmd/linespec@VERSION`
+//     with GOOS=linux, using the version embedded in the current binary.
+func crossCompileLinuxBinary(execPath, tmpDir string) (string, error) {
+	goarch := runtime.GOARCH
+	outPath := filepath.Join(tmpDir, "linespec-linux")
+	const modulePrefix = "module github.com/livecodelife/linespec"
+
+	// Strategy 1a: walk up from the current working directory.
+	if cwd, err := os.Getwd(); err == nil {
+		if srcRoot := findGoModRoot(cwd, modulePrefix); srcRoot != "" {
+			logger.Info("Cross-compiling Linux/%s binary from source: %s", goarch, srcRoot)
+			if err := goBuildForLinux(srcRoot, "./cmd/linespec", outPath, goarch); err == nil {
+				return outPath, nil
+			}
+		}
+	}
+
+	// Strategy 1b: walk up from the executable's directory.
+	if srcRoot := findGoModRoot(filepath.Dir(execPath), modulePrefix); srcRoot != "" {
+		logger.Info("Cross-compiling Linux/%s binary from source: %s", goarch, srcRoot)
+		if err := goBuildForLinux(srcRoot, "./cmd/linespec", outPath, goarch); err == nil {
+			return outPath, nil
+		}
+	}
+
+	// Strategy 2: go install from the module proxy using the embedded version.
+	moduleVersion := embeddedModuleVersion()
+	logger.Info("Cross-compiling Linux/%s binary via go install @%s", goarch, moduleVersion)
+	return outPath, goInstallForLinux("github.com/livecodelife/linespec/cmd/linespec", moduleVersion, outPath, goarch)
+}
+
+// findGoModRoot walks up from startDir looking for a go.mod file that contains
+// the given module prefix. Returns the directory containing go.mod, or "".
+func findGoModRoot(startDir, modulePrefix string) string {
+	dir := startDir
+	for {
+		gomod := filepath.Join(dir, "go.mod")
+		if data, err := os.ReadFile(gomod); err == nil {
+			if strings.Contains(string(data), modulePrefix) {
+				return dir
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
+}
+
+// goBuildForLinux runs `go build` with GOOS=linux from srcRoot and writes the
+// binary to outPath.
+func goBuildForLinux(srcRoot, pkg, outPath, goarch string) error {
+	cmd := exec.Command("go", "build", "-o", outPath, "-ldflags", "-s -w", pkg)
+	cmd.Dir = srcRoot
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0")
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// goInstallForLinux runs `go install MOD@VERSION` with GOOS=linux and moves
+// the result to outPath.
+func goInstallForLinux(modulePath, version, outPath, goarch string) error {
+	gobin := filepath.Dir(outPath)
+	cmd := exec.Command("go", "install", modulePath+"@"+version)
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0", "GOBIN="+gobin)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	// `go install` puts the binary at GOBIN/<binaryname>; rename to outPath.
+	installed := filepath.Join(gobin, "linespec")
+	if installed == outPath {
+		return nil
+	}
+	return os.Rename(installed, outPath)
+}
+
+// embeddedModuleVersion returns a module version suitable for `go install`.
+// It reads the version from the current binary's build info, stripping any
+// +dirty or local-only suffixes that the module proxy would reject.
+func embeddedModuleVersion() string {
+	info, ok := debugpkg.ReadBuildInfo()
+	if !ok {
+		return "latest"
+	}
+	v := info.Main.Version
+	if v == "" || v == "(devel)" {
+		return "latest"
+	}
+	// Strip +dirty or other local suffixes.
+	if idx := strings.Index(v, "+"); idx >= 0 {
+		v = v[:idx]
+	}
+	if v == "" {
+		return "latest"
+	}
+	return v
 }
 
 func printUsage() {
