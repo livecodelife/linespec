@@ -1,6 +1,6 @@
 id: prov-2026-27f77e7a
 title: Version bump to v2.8.5
-status: open
+status: implemented
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: Patch release v2.8.5 for the Homebrew post_install rescue BuildError fix.
@@ -13,7 +13,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-1687368b
-sealed_at_sha: ""
+sealed_at_sha: 13cefe0429978fc35e7badcf500ccc646d7b4117
 associated_specs:
   - type: code
     path: VERSION
