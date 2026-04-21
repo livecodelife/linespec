@@ -610,6 +610,47 @@ Rules:
 
 ---
 
+### EXPECT GRPC
+
+```
+EXPECT GRPC:<ServiceName>/<MethodName>
+[WITH {{<request_payload>}}]
+RETURNS {{<response_payload>}}
+```
+
+LineSpec intercepts outbound gRPC calls using an HTTP/2 + JSON proxy. The service under test must point its gRPC client at the proxy host — no code changes to the service are required.
+
+Enable the proxy in `.linespec.yml`:
+
+```yaml
+infrastructure:
+  grpc: true
+
+dependencies:
+  - name: user-grpc-service
+    type: grpc
+    host: user-grpc-service.local
+    port: 50051
+```
+
+Example:
+
+```
+EXPECT GRPC:users.UserService/GetUser
+WITH {{payloads/get_user_grpc_request.yaml}}
+RETURNS {{payloads/get_user_grpc_response.json}}
+```
+
+Rules:
+
+* `ServiceName/MethodName` matches the gRPC route (e.g. `UserService/GetUser` or `users.UserService/GetUser`)
+* Payloads are JSON — LineSpec serialises to/from the wire format transparently
+* `WITH` is optional; omit it to match any request body for that method
+* `RETURNS` is required; the proxy returns it as the gRPC response
+* Test fails if the expected gRPC call is not observed
+
+---
+
 ### VERIFY (Validation Rules)
 
 The `VERIFY` clause validates the actual query or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, and Redis EXPECT statements.
@@ -1277,7 +1318,6 @@ linespec test /path/to/linespecs/
 # Future Extensions (Planned)
 
 * MATCH and IGNORE rules for fuzzy matching
-* gRPC support
 * JSON Schema validation
 * Snapshot diffing
 * Spec linting mode
