@@ -37,8 +37,15 @@ type ExpectStatement struct {
 	URL           string // For HTTP
 	Table         string // For DB
 	Topic         string // For Kafka
-	SQL           string // For DB (USING_SQL) — exact normalized match
-	SQLContains   string // For DB (USING_SQL_CONTAINS) — normalized substring match
+	SQL           string // For DB (USING_SQL) — exact normalized match (deprecated: use ACCESSING_TABLES)
+	SQLContains   string // For DB (USING_SQL_CONTAINS) — normalized substring match (deprecated: use ACCESSING_TABLES)
+	// Semantic SQL matching (replaces USING_SQL / USING_SQL_CONTAINS)
+	AccessingTables    []string          // ACCESSING_TABLES — exact set of tables referenced in the query
+	VerifyOperation    string            // VERIFY_OPERATION — SELECT, INSERT, UPDATE, DELETE
+	VerifyWhereColumns []string          // VERIFY_WHERE_COLUMNS — column names that must appear in WHERE clause
+	VerifyWhere        map[string]string // VERIFY_WHERE — column-value pairs in WHERE clause (wire-resolved)
+	VerifyWrittenValues map[string]string // VERIFY_WRITTEN_VALUES — column-value pairs for INSERT/UPDATE
+	CallN              int               // CALL N — sequential ordering tiebreaker (0 = unset)
 	WithFile      string // For Request Payload
 	ReturnsFile   string // For Response Payload
 	ReturnsEmpty  bool   // For DB (RETURNS EMPTY)

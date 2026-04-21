@@ -29,6 +29,12 @@ const (
 	TokenTimeout       TokenType = "TIMEOUT"
 	TokenVars          TokenType = "VARS"
 	TokenEOF           TokenType = "EOF"
+	// Semantic SQL matching tokens
+	TokenAccessingTables    TokenType = "ACCESSING_TABLES"
+	TokenVerifyOperation    TokenType = "VERIFY_OPERATION"
+	TokenVerifyWhereColumns TokenType = "VERIFY_WHERE_COLUMNS"
+	TokenVerifyWhere        TokenType = "VERIFY_WHERE"
+	TokenVerifyWrittenValues TokenType = "VERIFY_WRITTEN_VALUES"
 )
 
 type Token struct {
@@ -155,8 +161,46 @@ func LexFile(filePath string) ([]Token, error) {
 			continue
 		}
 
+		if strings.ToUpper(trimmedLine) == "VERIFY_WHERE" {
+			inIndentedBlock = true
+			currentBlockType = TokenVerifyWhere
+			continue
+		}
+
+		if strings.ToUpper(trimmedLine) == "VERIFY_WRITTEN_VALUES" {
+			inIndentedBlock = true
+			currentBlockType = TokenVerifyWrittenValues
+			continue
+		}
+
 		if strings.ToUpper(trimmedLine) == "NO TRANSACTION" {
 			tokens = append(tokens, Token{Type: TokenNoTransaction, Line: lineNum})
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(trimmedLine), "ACCESSING_TABLES") {
+			// ACCESSING_TABLES [users, orders] — capture bracket contents as literal
+			inner := strings.TrimPrefix(trimmedLine, "ACCESSING_TABLES")
+			inner = strings.TrimPrefix(inner, "accessing_tables")
+			inner = strings.TrimSpace(inner)
+			inner = strings.TrimPrefix(inner, "[")
+			inner = strings.TrimSuffix(inner, "]")
+			tokens = append(tokens, Token{Type: TokenAccessingTables, Literal: inner, Line: lineNum})
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(trimmedLine), "VERIFY_OPERATION") {
+			val := strings.TrimSpace(trimmedLine[len("VERIFY_OPERATION"):])
+			tokens = append(tokens, Token{Type: TokenVerifyOperation, Literal: strings.ToUpper(val), Line: lineNum})
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(trimmedLine), "VERIFY_WHERE_COLUMNS") {
+			// VERIFY_WHERE_COLUMNS [id, status] — capture bracket contents as literal
+			inner := strings.TrimSpace(trimmedLine[len("VERIFY_WHERE_COLUMNS"):])
+			inner = strings.TrimPrefix(inner, "[")
+			inner = strings.TrimSuffix(inner, "]")
+			tokens = append(tokens, Token{Type: TokenVerifyWhereColumns, Literal: inner, Line: lineNum})
 			continue
 		}
 

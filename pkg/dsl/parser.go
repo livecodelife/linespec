@@ -15,8 +15,9 @@ import (
 // Package-level compiled regex patterns — compiled once at program startup.
 var (
 	// parseExpectStatement patterns
-	reExpectHTTP = regexp.MustCompile(`^HTTP:(\w+)$`)
+	reExpectHTTP     = regexp.MustCompile(`^HTTP:(\w+)$`)
 	reExpectMySQLWriteOp = regexp.MustCompile(`(?i)^(INSERT|UPDATE|DELETE)\s+(.+)$`)
+	reExpectCallN    = regexp.MustCompile(`(?i)\s+CALL\s+(\d+)$`)
 
 	// parseVerifyRule patterns — query
 	reVerifyQueryContains    = regexp.MustCompile(`(?i)^query\s+CONTAINS\s+['"](.+?)['"]$`)
@@ -288,10 +289,21 @@ func (p *Parser) resolveHeaders(headers map[string]string) map[string]string {
 
 func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 	token := p.consume()
-	expect, err := parseExpectChannel(token.Literal, token.Line)
+
+	// Strip CALL N suffix before channel parsing
+	literal := token.Literal
+	callN := 0
+	if m := reExpectCallN.FindStringSubmatchIndex(literal); m != nil {
+		n, _ := strconv.Atoi(literal[m[2]:m[3]])
+		callN = n
+		literal = literal[:m[0]]
+	}
+
+	expect, err := parseExpectChannel(literal, token.Line)
 	if err != nil {
 		return nil, err
 	}
+	expect.CallN = callN
 
 	// Apply variable substitution to channel-specific fields
 	if expect.Channel == types.HTTP && expect.URL != "" {
@@ -311,6 +323,32 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		expect.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
 	}
 
+	// Semantic SQL matching directives (new)
+	if p.peek().Type == TokenAccessingTables {
+		t := p.consume()
+		expect.AccessingTables = parseCommaSeparatedList(t.Literal)
+	}
+
+	if p.peek().Type == TokenVerifyOperation {
+		expect.VerifyOperation = p.consume().Literal
+	}
+
+	if p.peek().Type == TokenVerifyWhereColumns {
+		t := p.consume()
+		expect.VerifyWhereColumns = parseCommaSeparatedList(t.Literal)
+	}
+
+	if p.peek().Type == TokenVerifyWhere {
+		t := p.consume()
+		expect.VerifyWhere = p.resolveKVBlock(parseKVBlock(t.Literal))
+	}
+
+	if p.peek().Type == TokenVerifyWrittenValues {
+		t := p.consume()
+		expect.VerifyWrittenValues = p.resolveKVBlock(parseKVBlock(t.Literal))
+	}
+
+	// Legacy SQL matching (deprecated)
 	if p.peek().Type == TokenUsingSql {
 		p.consume() // TokenUsingSql
 		sqlToken, err := p.expect(TokenSqlBlock)
@@ -389,6 +427,56 @@ func (p *Parser) parseExpectNot() (*types.ExpectStatement, error) {
 	return expect, nil
 }
 
+// parseCommaSeparatedList splits a comma-separated string and trims whitespace from each item.
+func parseCommaSeparatedList(s string) []string {
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// parseKVBlock parses an indented key: value block into a map.
+// Values may be quoted ("active") or unquoted (PRESENT).
+// Quoted values have surrounding quotes stripped.
+func parseKVBlock(literal string) map[string]string {
+	m := make(map[string]string)
+	for _, line := range strings.Split(literal, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		// Strip surrounding quotes if present
+		if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+			val = val[1 : len(val)-1]
+		}
+		m[key] = val
+	}
+	return m
+}
+
+// resolveKVBlock applies variable substitution to all values in a KV map.
+func (p *Parser) resolveKVBlock(m map[string]string) map[string]string {
+	if p.Resolver == nil {
+		return m
+	}
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = p.resolve(v)
+	}
+	return result
+}
+
 func parseHeaders(literal string) map[string]string {
 	headers := make(map[string]string)
 	lines := strings.Split(literal, "\n")
@@ -419,12 +507,19 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 	}
 
 	parts := strings.SplitN(value, " ", 2)
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("Invalid EXPECT channel format at line %d: %s", line, value)
+	channelPart := strings.ToUpper(parts[0])
+	rest := ""
+	if len(parts) == 2 {
+		rest = parts[1]
 	}
 
-	channelPart := strings.ToUpper(parts[0])
-	rest := parts[1]
+	// DB channels allow an empty table name when ACCESSING_TABLES will be used instead.
+	isDBChannel := channelPart == "WRITE:MYSQL" || channelPart == "READ:MYSQL" ||
+		channelPart == "WRITE:POSTGRESQL" || channelPart == "READ:POSTGRESQL" ||
+		channelPart == "WRITE:MONGODB" || channelPart == "READ:MONGODB"
+	if len(parts) < 2 && !isDBChannel {
+		return nil, fmt.Errorf("Invalid EXPECT channel format at line %d: %s", line, value)
+	}
 
 	if m := reExpectHTTP.FindStringSubmatch(channelPart); m != nil {
 		return &types.ExpectStatement{
