@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -228,6 +229,10 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 	if expect.URL != "" {
 		return expect.URL
 	}
+	// Semantic SQL matching: index by sorted table-set key
+	if len(expect.AccessingTables) > 0 {
+		return tableSetKey(expect.AccessingTables)
+	}
 	if expect.Table != "" {
 		return expect.Table
 	}
@@ -241,6 +246,14 @@ func (r *MockRegistry) getExpectKey(expect types.ExpectStatement) string {
 		return expect.Command + ":" + expect.RedisKey
 	}
 	return "unknown"
+}
+
+// tableSetKey produces a canonical, stable registry key from a set of table names.
+func tableSetKey(tables []string) string {
+	sorted := make([]string, len(tables))
+	copy(sorted, tables)
+	sort.Strings(sorted)
+	return strings.Join(sorted, "|")
 }
 
 // GetEventTopics returns all distinct Kafka topic names from EVENT channel mocks.
@@ -262,19 +275,27 @@ func (r *MockRegistry) GetEventTopics() []string {
 	return topics
 }
 
-// GetTables returns a list of unique table names registered in the registry
+// GetTables returns a list of unique table names registered in the registry.
+// For semantic mocks (ACCESSING_TABLES), each individual table name is returned
+// so that proxy table-detection logic can match them.
 func (r *MockRegistry) GetTables() []string {
 	r.RLock()
 	defer r.RUnlock()
 
 	tableSet := make(map[string]bool)
 	for key, mocks := range r.mocks {
-		// Check if any mock for this key is a database operation
 		for _, mock := range mocks {
 			if mock.Channel == types.ReadMySQL || mock.Channel == types.WriteMySQL ||
 				mock.Channel == types.ReadPostgreSQL || mock.Channel == types.WritePostgreSQL ||
 				mock.Channel == types.ReadMongoDB || mock.Channel == types.WriteMongoDB {
-				tableSet[key] = true
+				if len(mock.AccessingTables) > 0 {
+					// Expose individual table names from the set
+					for _, t := range mock.AccessingTables {
+						tableSet[t] = true
+					}
+				} else {
+					tableSet[key] = true
+				}
 				break
 			}
 		}
@@ -285,6 +306,246 @@ func (r *MockRegistry) GetTables() []string {
 		tables = append(tables, table)
 	}
 	return tables
+}
+
+// semanticSpecificity returns how many VERIFY_ constraints a mock declares.
+// Higher scores take priority over lower ones in FindMockByTables.
+func semanticSpecificity(mock *types.ExpectStatement) int {
+	score := 0
+	if mock.VerifyOperation != "" {
+		score++
+	}
+	if len(mock.VerifyWhereColumns) > 0 {
+		score++
+	}
+	if len(mock.VerifyWhere) > 0 {
+		score++
+	}
+	if len(mock.VerifyWrittenValues) > 0 {
+		score++
+	}
+	return score
+}
+
+// matchesSemanticConstraints reports whether all declared VERIFY_ clauses on mock
+// pass for the provided query information. An empty constraint always passes.
+func matchesSemanticConstraints(
+	mock *types.ExpectStatement,
+	operation string,
+	whereColumns []string,
+	whereValues map[string]string,
+	writtenValues map[string]string,
+) bool {
+	if mock.VerifyOperation != "" && !strings.EqualFold(mock.VerifyOperation, operation) {
+		return false
+	}
+	if len(mock.VerifyWhereColumns) > 0 {
+		colSet := make(map[string]struct{}, len(whereColumns))
+		for _, c := range whereColumns {
+			colSet[strings.ToLower(c)] = struct{}{}
+		}
+		for _, required := range mock.VerifyWhereColumns {
+			if _, ok := colSet[strings.ToLower(required)]; !ok {
+				return false
+			}
+		}
+	}
+	if len(mock.VerifyWhere) > 0 {
+		for col, expectedVal := range mock.VerifyWhere {
+			colKey := strings.ToLower(col)
+			if strings.EqualFold(expectedVal, "PRESENT") {
+				if _, ok := whereValues[colKey]; !ok {
+					return false
+				}
+			} else {
+				if actualVal, ok := whereValues[colKey]; !ok || actualVal != expectedVal {
+					return false
+				}
+			}
+		}
+	}
+	if len(mock.VerifyWrittenValues) > 0 {
+		for col, expectedVal := range mock.VerifyWrittenValues {
+			colKey := strings.ToLower(col)
+			if strings.EqualFold(expectedVal, "PRESENT") {
+				if _, ok := writtenValues[colKey]; !ok {
+					return false
+				}
+			} else {
+				if actualVal, ok := writtenValues[colKey]; !ok || actualVal != expectedVal {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// FindMockByTables finds the best-matching mock for a SQL query using the semantic
+// matching system (ACCESSING_TABLES + VERIFY_ clauses). Returns nil, false if no
+// semantic mock matches; callers should then fall back to FindMock for legacy mocks.
+//
+// Matching algorithm:
+//  1. Candidate set: mocks where AccessingTables exactly equals tables (sorted) and 0 hits
+//  2. Filter: all declared VERIFY_ constraints must pass (AND logic)
+//  3. Score by specificity (number of declared VERIFY_ clauses)
+//  4. Tiebreak: prefer CALL N ordering (lowest N with 0 hits); then declaration order
+func (r *MockRegistry) FindMockByTables(
+	tables []string,
+	operation string,
+	whereColumns []string,
+	whereValues map[string]string,
+	writtenValues map[string]string,
+) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	key := tableSetKey(tables)
+	mocks, ok := r.mocks[key]
+	if !ok {
+		return nil, false
+	}
+
+	// Collect candidates that pass all constraints and have 0 hits
+	type candidate struct {
+		mock        *types.ExpectStatement
+		specificity int
+	}
+	var candidates []candidate
+	for _, mock := range mocks {
+		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
+			continue
+		}
+		if !matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+			continue
+		}
+		candidates = append(candidates, candidate{mock, semanticSpecificity(mock)})
+	}
+	if len(candidates) == 0 {
+		return nil, false
+	}
+
+	// Find the highest specificity among candidates
+	best := -1
+	for _, c := range candidates {
+		if c.specificity > best {
+			best = c.specificity
+		}
+	}
+
+	// Among highest-specificity candidates, prefer CALL N ordering
+	var topCandidates []*types.ExpectStatement
+	for _, c := range candidates {
+		if c.specificity == best {
+			topCandidates = append(topCandidates, c.mock)
+		}
+	}
+
+	// Pick: lowest non-zero CallN first, then CallN==0 (declaration order)
+	var chosen *types.ExpectStatement
+	for _, mock := range topCandidates {
+		if mock.CallN > 0 {
+			if chosen == nil || (chosen.CallN == 0) || (mock.CallN < chosen.CallN) {
+				chosen = mock
+			}
+		}
+	}
+	if chosen == nil {
+		// No CallN mocks; take first declared
+		chosen = topCandidates[0]
+	}
+
+	r.hits[chosen]++
+	return chosen, true
+}
+
+// PeekMockByTables is like FindMockByTables but does not increment hit counts.
+func (r *MockRegistry) PeekMockByTables(
+	tables []string,
+	operation string,
+	whereColumns []string,
+	whereValues map[string]string,
+	writtenValues map[string]string,
+) (*types.ExpectStatement, bool) {
+	r.RLock()
+	defer r.RUnlock()
+
+	key := tableSetKey(tables)
+	mocks, ok := r.mocks[key]
+	if !ok {
+		return nil, false
+	}
+
+	type candidate struct {
+		mock        *types.ExpectStatement
+		specificity int
+	}
+	var candidates []candidate
+	for _, mock := range mocks {
+		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
+			continue
+		}
+		if !matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+			continue
+		}
+		candidates = append(candidates, candidate{mock, semanticSpecificity(mock)})
+	}
+	if len(candidates) == 0 {
+		return nil, false
+	}
+
+	best := -1
+	for _, c := range candidates {
+		if c.specificity > best {
+			best = c.specificity
+		}
+	}
+
+	var topCandidates []*types.ExpectStatement
+	for _, c := range candidates {
+		if c.specificity == best {
+			topCandidates = append(topCandidates, c.mock)
+		}
+	}
+
+	var chosen *types.ExpectStatement
+	for _, mock := range topCandidates {
+		if mock.CallN > 0 {
+			if chosen == nil || chosen.CallN == 0 || mock.CallN < chosen.CallN {
+				chosen = mock
+			}
+		}
+	}
+	if chosen == nil {
+		chosen = topCandidates[0]
+	}
+	return chosen, true
+}
+
+// CheckNegativeMocksByTables checks semantic negative expectations against an incoming query.
+func (r *MockRegistry) CheckNegativeMocksByTables(
+	tables []string,
+	operation string,
+	whereColumns []string,
+	whereValues map[string]string,
+	writtenValues map[string]string,
+) {
+	r.Lock()
+	defer r.Unlock()
+
+	key := tableSetKey(tables)
+	mocks, ok := r.mocks[key]
+	if !ok {
+		return
+	}
+	for _, mock := range mocks {
+		if !mock.Negative || len(mock.AccessingTables) == 0 {
+			continue
+		}
+		if matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+			r.hits[mock]++
+		}
+	}
 }
 
 // PeekMock checks if a mock exists without incrementing hit count (used for testing intercept)
@@ -836,36 +1097,46 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	return nil
 }
 
+// mockHitKey returns the stable string key used to exchange hit counts between
+// the runner and proxy sidecar containers. It must be identical in GetHits and SetHits.
+func mockHitKey(mock *types.ExpectStatement) string {
+	// Semantic SQL mocks: key by channel + table set + verify clauses + call N
+	if len(mock.AccessingTables) > 0 {
+		cols := make([]string, len(mock.VerifyWhereColumns))
+		copy(cols, mock.VerifyWhereColumns)
+		sort.Strings(cols)
+		return fmt.Sprintf("%s-SEMANTIC-%s-%s-%s-%d",
+			mock.Channel,
+			tableSetKey(mock.AccessingTables),
+			mock.VerifyOperation,
+			strings.Join(cols, ","),
+			mock.CallN,
+		)
+	}
+	switch mock.Channel {
+	case types.HTTP:
+		return fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+	case types.ReadMySQL, types.ReadPostgreSQL:
+		sqlKey := mock.SQL
+		if sqlKey == "" && mock.SQLContains != "" {
+			sqlKey = "~" + mock.SQLContains
+		}
+		return fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
+	case types.GRPC:
+		return fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
+	case types.ReadRedis, types.WriteRedis:
+		return fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
+	default:
+		return fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+	}
+}
+
 func (r *MockRegistry) GetHits() map[string]int {
 	r.RLock()
 	defer r.RUnlock()
 	res := make(map[string]int)
 	for mock, count := range r.hits {
-		// Use consistent key format:
-		// For HTTP: Channel-URL (Table/Topic/SQL are empty)
-		// For DB: Channel-Table-SQL (only for READ operations with explicit SQL)
-		// For WRITE: Channel-Table only (SQL is auto-generated at runtime)
-		var key string
-		switch mock.Channel {
-		case types.HTTP:
-			key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-		case types.ReadMySQL, types.ReadPostgreSQL:
-			// READ operations: include SQL constraint to distinguish different queries.
-			// Prefix ~ on SQLContains keys to avoid collision with USING_SQL keys.
-			sqlKey := mock.SQL
-			if sqlKey == "" && mock.SQLContains != "" {
-				sqlKey = "~" + mock.SQLContains
-			}
-			key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
-		case types.GRPC:
-			key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
-		case types.ReadRedis, types.WriteRedis:
-			key = fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
-		default:
-			// WRITE and other operations: use Channel-Table only
-			key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
-		}
-		res[key] = count
+		res[mockHitKey(mock)] = count
 	}
 	return res
 }
@@ -875,25 +1146,7 @@ func (r *MockRegistry) SetHits(hostHits map[string]int) {
 	defer r.Unlock()
 	for _, mocks := range r.mocks {
 		for _, mock := range mocks {
-			// Use same key format as GetHits
-			var key string
-			switch mock.Channel {
-			case types.HTTP:
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-			case types.ReadMySQL, types.ReadPostgreSQL:
-				sqlKey := mock.SQL
-				if sqlKey == "" && mock.SQLContains != "" {
-					sqlKey = "~" + mock.SQLContains
-				}
-				key = fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
-			case types.GRPC:
-				key = fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
-			case types.ReadRedis, types.WriteRedis:
-				key = fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
-			default:
-				key = fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
-			}
-			if count, ok := hostHits[key]; ok {
+			if count, ok := hostHits[mockHitKey(mock)]; ok {
 				r.hits[mock] += count
 			}
 		}
