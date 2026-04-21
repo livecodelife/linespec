@@ -1,0 +1,31 @@
+id: prov-2026-5250ce07
+title: 'Fix provenance lint warnings: superseded_by and dead scope path'
+status: open
+created_at: "2026-04-21"
+author: calebcowen@gmail.com
+intent: >
+  Two provenance lint warnings needed fixing: (1) prov-2026-6c7c0ab9 was missing its
+  superseded_by field — prov-2026-86f3243a already declared supersedes: 6c7c0ab9 but the
+  back-reference was blank and the status was still "implemented" instead of "superseded".
+  (2) prov-2026-001-user-service in the examples/user-service directory had an affected_scope
+  path of db/migrate/... which resolves relative to the repo root and was therefore treated as
+  a dead record — the path needed to be prefixed with examples/user-service/.
+constraints:
+  - superseded_by must be set on any record whose id appears in another record's supersedes field
+  - status must be set to superseded on any record that has been superseded
+  - affected_scope paths must be resolvable from the repo root
+affected_scope:
+  - provenance/prov-2026-6c7c0ab9.yml
+  - examples/user-service/provenance/prov-2026-001-user-service.yml
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: provenance/prov-2026-6c7c0ab9.yml
+    run_command: linespec provenance lint
+associated_traces: []
+monitors: []
+tags: []
