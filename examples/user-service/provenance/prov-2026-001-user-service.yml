@@ -13,7 +13,7 @@ constraints:
     - User creation must not fail with HTTP 500 errors due to schema incompatibility
     - Existing user accounts and their data must remain intact after the schema change
 affected_scope:
-    - db/migrate/20260225000001_create_users.rb
+    - examples/user-service/db/migrate/20260225000001_create_users.rb
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
