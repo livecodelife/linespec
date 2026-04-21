@@ -1,6 +1,6 @@
 id: prov-2026-0078db41
 title: Disable dependabot scanning for examples/ directory
-status: open
+status: implemented
 created_at: "2026-04-21"
 author: calebcowen@gmail.com
 intent: "Add a .github/dependabot.yml configuration that scopes dependabot to only the root Go module. Without this file, GitHub auto-discovers all go.mod and requirements.txt files in the repository, which generates dependency alerts for the examples/ directory — sample services used only for testing LineSpec itself, not distributed as part of the tool."
@@ -12,7 +12,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2c646ebd152b3381344066b42f3466c400860a08
 associated_specs:
   - type: code
     path: .github/dependabot.yml
