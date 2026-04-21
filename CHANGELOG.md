@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.6] - 2026-04-21
+
+### Fixed
+
+- **MySQL proxy container fails with "argument list too long" on large schemas** ([prov-2026-f0384a57](./provenance/prov-2026-f0384a57.yml)) — The MySQL proxy was receiving the full base64-encoded database schema as a `--schema-data` CLI argument. On large schemas (many tables/columns), the combined argument size exceeds the Linux kernel's `ARG_MAX` limit (~2MB), causing `exec /app/linespec: argument list too long`. The schema JSON is now written to a file in the per-test temp directory (already bind-mounted into the proxy container) and passed via `--schema-file` instead. The `--schema-data` flag is retained as a fallback for backward compatibility.
+
 ## [2.8.5] - 2026-04-20
 
 ### Fixed
