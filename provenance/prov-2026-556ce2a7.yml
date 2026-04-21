@@ -26,7 +26,7 @@ affected_scope:
   - provenance/prov-2026-782ae9dd.yml
 forbidden_scope: []
 supersedes: prov-2026-782ae9dd
-superseded_by: ""
+superseded_by: prov-2026-ae2a4514
 related: []
 sealed_at_sha: 866c8b037b28f38cf77d4dc09c9ffa967be4bae5
 associated_specs:

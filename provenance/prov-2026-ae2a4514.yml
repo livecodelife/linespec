@@ -1,0 +1,99 @@
+id: prov-2026-ae2a4514
+title: 'Replace USING_SQL/USING_SQL_CONTAINS with semantic SQL matching: ACCESSING_TABLES,
+  VERIFY_WHERE, VERIFY_WRITTEN_VALUES'
+status: open
+created_at: "2026-04-21"
+author: calebcowen@gmail.com
+intent: |
+  USING_SQL and USING_SQL_CONTAINS are brittle because they require knowing the
+  exact SQL an ORM will generate. Column ordering in SELECT is non-deterministic,
+  ORMs differ in how they bind parameters ($1 vs ? vs inlined literals), and
+  complex queries (JOINs, CTEs, UNIONs, recursive queries) make text-based
+  matching fundamentally unworkable.
+
+  This work replaces both keywords with a semantic matching system that operates
+  at the level of intent rather than SQL text. The new system separates two
+  concerns that USING_SQL conflated:
+
+    1. Routing — which mock response should be returned for this query?
+       Solved by ACCESSING_TABLES [table1, table2, ...], which matches based on
+       the exact set of tables referenced anywhere in the query (FROM, JOIN, CTE,
+       subquery). This is always an exact match — users_archive will never match
+       a [users] expectation.
+
+    2. Verification — did the service query or write correctly?
+       Solved by VERIFY_OPERATION, VERIFY_WHERE_COLUMNS, VERIFY_WHERE, and
+       VERIFY_WRITTEN_VALUES. The proxy resolves bound parameters at the wire
+       level (from the Bind message for prepared statements, or inline for
+       literal values), so users always write column-value pairs in resolved
+       terms regardless of ORM parameter style.
+
+  Disambiguation when multiple expectations match the same table set is handled
+  by a specificity-wins algorithm: the expectation with the most VERIFY_ clauses
+  that all match wins. CALL N is the last-resort tiebreaker for structurally
+  identical queries.
+
+  All existing example linespecs must be migrated from USING_SQL / USING_SQL_CONTAINS
+  to the new syntax, and each new statement must be exercised by at least one
+  passing example linespec test.
+constraints:
+  - ACCESSING_TABLES must match the exact set of tables referenced anywhere in
+    the query (FROM, JOIN, CTE, subquery, UNION branches) — not a subset, not fuzzy
+  - ACCESSING_TABLES [users] must NOT match a query that touches users_archive
+  - VERIFY_OPERATION must accept SELECT, INSERT, UPDATE, DELETE
+  - VERIFY_WHERE_COLUMNS must match on column name presence in the WHERE clause only;
+    JOIN ON conditions are not included
+  - VERIFY_WHERE must resolve parameter values at the wire level before matching —
+    $1/$2 positional, ?, :name, and inlined literals must all be handled transparently
+  - VERIFY_WHERE column names must support optional table qualification (users.id)
+    for disambiguation when the same column name exists in multiple joined tables
+  - VERIFY_WRITTEN_VALUES must capture values from INSERT/UPDATE statements and
+    support PRESENT as a value assertion (non-null, any value)
+  - VERIFY_WRITTEN_VALUES and VERIFY_WHERE must both support template interpolation
+    from request context (e.g. "{{request.path.userId}}")
+  - CALL N must be a valid suffix on any EXPECT statement for sequential ordering
+  - Matching algorithm must be specificity-wins — more VERIFY_ clauses satisfied
+    means higher score; all declared clauses must match (AND logic); CALL N is tiebreaker
+  - All existing example linespecs using USING_SQL or USING_SQL_CONTAINS must be
+    migrated to the new syntax
+  - At least one example linespec must exercise each new statement — ACCESSING_TABLES
+    alone, VERIFY_OPERATION, VERIFY_WHERE_COLUMNS, VERIFY_WHERE, VERIFY_WRITTEN_VALUES,
+    CALL N, and a JOIN scenario with table-qualified column names
+  - USING_SQL and USING_SQL_CONTAINS must be marked deprecated in docs but remain
+    parseable for backward compatibility
+  - LINESPEC.md, docs/linespec.html, and the linespec-testing skill must all be
+    updated to document the new syntax and deprecate the old
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/dsl/dsl_test.go
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/proxy_extract_table_test.go
+  - pkg/proxy/mysql/proxy.go
+  - examples/todo-linespecs/**
+  - examples/user-linespecs/**
+  - examples/multi-db-linespecs/**
+  - examples/order-linespecs/**
+  - examples/catalog-linespecs/**
+  - examples/notification-linespecs/**
+  - provenance/prov-2026-556ce2a7.yml
+  - LINESPEC.md
+  - docs/linespec.html
+forbidden_scope: []
+supersedes: prov-2026-556ce2a7
+superseded_by: ""
+related:
+  - prov-2026-030
+  - prov-2026-4dcca1c0
+sealed_at_sha: ""
+associated_specs:
+  - path: LINESPEC.md
+    type: docs
+  - path: docs/linespec.html
+    type: docs
+associated_traces: []
+monitors: []
+tags: []
