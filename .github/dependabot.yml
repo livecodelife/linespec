@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Only scan the root Go module (the actual tool).
+  # examples/ contains sample services for testing and is intentionally excluded.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
