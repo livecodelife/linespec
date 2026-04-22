@@ -1,0 +1,47 @@
+id: prov-2026-ce3ba028
+title: 'Extend gRPC support: upstream passthrough, content-type echo, protobuf descriptor mocks'
+status: open
+created_at: "2026-04-22"
+author: calebcowen@gmail.com
+intent: "Extend the gRPC proxy beyond JSON-only pure-mock mode to support real upstream passthrough, content-type echo, and protobuf descriptor-driven JSON-to-protobuf conversion. This enables testing async workflow systems (e.g. Temporal) behind webhooks where gRPC calls to the workflow engine need to be either mocked or forwarded to a real backend. Three gaps are addressed: (1) unmocked gRPC calls currently return UNIMPLEMENTED instead of forwarding to an upstream, (2) the response content-type is hardcoded to application/grpc+json instead of echoing the request's content-type, and (3) users cannot write protobuf-shaped RETURNS payloads without hand-encoding binary bytes. The fix adds HTTP/2 reverse proxy forwarding for unmocked calls, content-type echo, and a descriptor-driven JSON-to-protobuf conversion path. Config is extended to support type: grpc dependencies with optional grpc_descriptor_set fields at both service-level (default) and per-dependency (override) scope."
+constraints:
+  - "Backward compatibility is mandatory - existing .linespec.yml configs with infrastructure.grpc: true must continue working as pure-mock JSON-only proxies"
+  - "When upstream is empty or unset, the proxy must behave identically to today (return UNIMPLEMENTED for unmocked calls)"
+  - "Content-type echo must default to application/grpc+json when the request does not specify a content-type"
+  - "Descriptor loading is optional - if no grpc_descriptor_set is configured, payloads are served as raw bytes unchanged"
+  - "gRPC streaming remains out of scope - only unary RPCs are supported"
+  - "h2c (HTTP/2 cleartext) transport only; TLS is not needed for container-internal traffic"
+  - "The proxy must use HTTP/2 reverse proxy forwarding for unmocked calls (not raw TCP relay), fitting the existing h2c handler architecture"
+  - "Per-dependency grpc_descriptor_set overrides service-level; the runner merges all descriptor sets into one FileDescriptorSet before passing to the proxy container"
+  - "All existing unit tests and example test suites must continue to pass"
+affected_scope:
+  - pkg/proxy/grpc/interceptor.go
+  - pkg/proxy/grpc/interceptor_test.go
+  - pkg/config/types.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_beta.go
+  - cmd/linespec/main_stable.go
+  - go.mod
+  - go.sum
+forbidden_scope:
+  - pkg/proxy/postgresql/**
+  - pkg/proxy/mysql/**
+  - pkg/proxy/http/**
+  - pkg/proxy/kafka/**
+  - pkg/proxy/redis/**
+  - pkg/proxy/mongodb/**
+  - pkg/provenance/**
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9f50db3c
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/grpc/interceptor_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - grpc
+  - proxy
+  - protobuf
