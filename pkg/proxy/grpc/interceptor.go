@@ -225,10 +225,12 @@ func (i *Interceptor) forwardToUpstream(w http.ResponseWriter, r *http.Request, 
 	logger.Debug("gRPC Interceptor: Forwarded %s/%s to upstream (status %d)", service, method, resp.StatusCode)
 }
 
+const maxGRPCMessageSize = 1<<30 - 1 // 1 GB - 1, safe for all int sizes
+
 func encodeGRPCFrame(msg []byte) []byte {
 	msgLen := len(msg)
-	if msgLen > (1<<32)-1-5 {
-		msgLen = (1 << 32) - 1 - 5
+	if msgLen > maxGRPCMessageSize {
+		msgLen = maxGRPCMessageSize
 	}
 	frame := make([]byte, 5+msgLen)
 	frame[0] = 0
