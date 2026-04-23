@@ -11,6 +11,8 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -181,12 +183,10 @@ func (p *Proxy) handleClientMessages(clientConn, upstreamConn net.Conn) error {
 
 // handleQueryMessage handles a simple Query message (type 'Q')
 func (p *Proxy) handleQueryMessage(query string, msg []byte, clientConn, upstreamConn net.Conn) error {
-	tableName := p.extractTable(query)
-
 	// Check if we should mock this query
-	p.registry.CheckNegativeMocks(tableName, query)
-	if mock, found := p.registry.FindMock(tableName, query); found {
-		logger.Debug("PostgreSQL Proxy: Mocking simple query for table %s", tableName)
+	p.checkNegativeMocksForQuery(query, nil)
+	if mock, found := p.findMock(query, nil); found {
+		logger.Debug("PostgreSQL Proxy: Mocking simple query for table %s", p.extractTable(query))
 
 		// Send mock response
 		if err := p.sendMockResponse(clientConn, mock, MsgQuery, query); err != nil {
@@ -206,12 +206,10 @@ func (p *Proxy) handleQueryMessage(query string, msg []byte, clientConn, upstrea
 
 // handleParseMessage handles an extended query Parse message (type 'P')
 func (p *Proxy) handleParseMessage(query string, msg []byte, clientConn, upstreamConn net.Conn) error {
-	tableName := p.extractTable(query)
-
 	// Check if we should mock this query
-	p.registry.CheckNegativeMocks(tableName, query)
-	if mock, found := p.registry.FindMock(tableName, query); found {
-		logger.Debug("PostgreSQL Proxy: Mocking extended query for table %s", tableName)
+	p.checkNegativeMocksForQuery(query, nil)
+	if mock, found := p.findMock(query, nil); found {
+		logger.Debug("PostgreSQL Proxy: Mocking extended query for table %s", p.extractTable(query))
 
 		// For extended protocol, we need to handle the full flow:
 		// 1. Send ParseComplete
@@ -678,17 +676,13 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				continue
 			}
 
-			// Check if this query is mocked
-			tableName := p.extractTable(query)
-			// Use FindMock to increment hit count - this is the actual execution
-			p.registry.CheckNegativeMocks(tableName, query)
-			if mock, found := p.registry.FindMock(tableName, query); found {
+			// Check if this query is mocked — extract bind params for semantic matching
+			bindParams := p.extractBindParams(payload)
+			p.checkNegativeMocksForQuery(query, bindParams)
+			if mock, found := p.findMock(query, bindParams); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
-				// Back-fill mock.SQL only when neither SQL nor SQLContains was specified,
-				// e.g. a bare EXPECT WRITE:POSTGRESQL without USING_SQL.
-				// For USING_SQL_CONTAINS mocks mock.SQLContains is set, so we skip this
-				// — the actual query is passed separately via MockedPortal.Query.
-				if mock.SQL == "" && mock.SQLContains == "" {
+				// Back-fill mock.SQL for legacy mocks without explicit SQL constraint.
+				if mock.SQL == "" && mock.SQLContains == "" && len(mock.AccessingTables) == 0 {
 					mock.SQL = query
 				}
 
@@ -772,10 +766,9 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		case MsgQuery:
 			// Simple query protocol - check if we should mock
 			query := string(payload)
-			tableName := p.extractTable(query)
-			p.registry.CheckNegativeMocks(tableName, query)
-			if mock, found := p.registry.FindMock(tableName, query); found {
-				p.logDebug("  -> Mocking simple query for table %s\n", tableName)
+			p.checkNegativeMocksForQuery(query, nil)
+			if mock, found := p.findMock(query, nil); found {
+				p.logDebug("  -> Mocking simple query for table %s\n", p.extractTable(query))
 				if err := p.sendMockResponse(clientConn, mock, MsgQuery, query); err != nil {
 					p.logDebug("  -> Error sending mock response: %v\n", err)
 					return
@@ -923,6 +916,20 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 
 	// For reads, send RowDescription + DataRows
 	if mock.Channel == types.ReadPostgreSQL {
+		if mock.ReturnsError {
+			// RETURNS ERROR: send PostgreSQL ErrorResponse to simulate a DB error
+			code := "42601" // default: syntax_error
+			msg := "error"
+			if mock.ReturnsErrorCode != "" {
+				msg = mock.ReturnsErrorCode
+				// Map common error codes to SQLSTATE
+				switch mock.ReturnsErrorCode {
+				case "cycle_detected":
+					code = "55000" // program_limit_exceeded
+				}
+			}
+			return p.sendErrorResponseWithCode(clientConn, code, msg)
+		}
 		if mock.ReturnsEmpty {
 			// Empty result: RowDescription + CommandComplete + ReadyForQuery
 			if err := p.result.SendRowDescription(clientConn, columns); err != nil {
@@ -937,7 +944,15 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 			}
 
 			rows := p.extractRowsFromPayload(payload)
-			if len(rows) > 0 {
+			// Extract columns from SQL SELECT clause to maintain consistent order
+			// This ensures RowDescription and DataRow have matching column orders
+			// (same logic as the extended query path in sendMockResultSetForExtended)
+			if query != "" {
+				sqlColumns := p.extractSelectColumns(query)
+				if len(sqlColumns) > 0 {
+					columns = sqlColumns
+				}
+			} else if len(rows) > 0 {
 				columns = make([]string, 0, len(rows[0]))
 				for col := range rows[0] {
 					columns = append(columns, col)
@@ -1333,10 +1348,9 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 	switch msg.Type {
 	case MsgQuery:
 		query := string(msg.Payload)
-		tableName := p.extractTable(query)
-		logger.Debug("Simple query for table %s: %s", tableName, query[:min(50, len(query))])
-		p.registry.CheckNegativeMocks(tableName, query)
-		mock, found := p.registry.FindMock(tableName, query)
+		logger.Debug("Simple query for table %s: %s", p.extractTable(query), query[:min(50, len(query))])
+		p.checkNegativeMocksForQuery(query, nil)
+		mock, found := p.findMock(query, nil)
 
 		if !found {
 			p.logDebug("  -> Mock not found, forwarding to upstream\n")
@@ -1344,8 +1358,8 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		// Store the actual query in the mock for proper hit tracking
-		if mock.SQL == "" && mock.SQLContains == "" {
+		// Store the actual query in the mock for proper hit tracking (legacy mocks only)
+		if mock.SQL == "" && mock.SQLContains == "" && len(mock.AccessingTables) == 0 {
 			mock.SQL = query
 		}
 
@@ -1376,16 +1390,15 @@ func (p *Proxy) handleInterceptedMessageWithUpstreamDrain(msg *Message, clientRe
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		tableName := p.extractTable(query)
-		p.registry.CheckNegativeMocks(tableName, query)
-		mock, found := p.registry.FindMock(tableName, query)
+		p.checkNegativeMocksForQuery(query, nil)
+		mock, found := p.findMock(query, nil)
 		if !found {
-			p.logDebug("  -> Mock not found for table %s, forwarding to upstream\n", tableName)
+			p.logDebug("  -> Mock not found, forwarding to upstream\n")
 			p.registry.RecordPassthrough("PostgreSQL extended query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		p.logDebug("  -> Found mock for table %s, hit count incremented\n", tableName)
+		p.logDebug("  -> Found mock, hit count incremented\n")
 
 		// Store the actual query in the mock for later use
 		if mock.SQL == "" && mock.SQLContains == "" {
@@ -1694,9 +1707,8 @@ func (p *Proxy) shouldIntercept(msg *Message) bool {
 			p.logDebug("Simple query WHITELISTED: %s\n", query[:min(100, len(query))])
 			return false // Don't intercept whitelisted queries
 		}
-		tableName := p.extractTable(query)
-		mock, found := p.registry.PeekMock(tableName, query) // Use PeekMock to not increment hits
-		p.logDebug("Simple query: table=%s, found=%v, query=%s\n", tableName, found, query[:min(100, len(query))])
+		mock, found := p.peekMock(query, nil) // Use PeekMock to not increment hits
+		p.logDebug("Simple query: table=%s, found=%v, query=%s\n", p.extractTable(query), found, query[:min(100, len(query))])
 		if found && mock != nil {
 			p.logDebug("  -> Mock SQL: %s\n", mock.SQL[:min(100, len(mock.SQL))])
 		}
@@ -1713,9 +1725,8 @@ func (p *Proxy) shouldIntercept(msg *Message) bool {
 			p.logDebug("Extended query WHITELISTED: %s\n", query[:min(100, len(query))])
 			return false
 		}
-		tableName := p.extractTable(query)
-		mock, found := p.registry.PeekMock(tableName, query) // Use PeekMock to not increment hits
-		p.logDebug("Extended query: table=%s, found=%v, query=%s\n", tableName, found, query[:min(100, len(query))])
+		mock, found := p.peekMock(query, nil) // Use PeekMock to not increment hits
+		p.logDebug("Extended query: table=%s, found=%v, query=%s\n", p.extractTable(query), found, query[:min(100, len(query))])
 		if found && mock != nil {
 			p.logDebug("  -> Mock SQL: %s\n", mock.SQL[:min(100, len(mock.SQL))])
 		}
@@ -1734,10 +1745,9 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 	switch msg.Type {
 	case MsgQuery:
 		query := string(msg.Payload)
-		tableName := p.extractTable(query)
-		logger.Debug("Simple query for table %s: %s", tableName, query[:min(50, len(query))])
-		p.registry.CheckNegativeMocks(tableName, query)
-		mock, found := p.registry.FindMock(tableName, query)
+		logger.Debug("Simple query for table %s: %s", p.extractTable(query), query[:min(50, len(query))])
+		p.checkNegativeMocksForQuery(query, nil)
+		mock, found := p.findMock(query, nil)
 
 		if !found {
 			p.logDebug("  -> Mock not found, forwarding to upstream\n")
@@ -1745,8 +1755,8 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		// Store the actual query in the mock for proper hit tracking
-		if mock.SQL == "" && mock.SQLContains == "" {
+		// Store the actual query in the mock for proper hit tracking (legacy mocks only)
+		if mock.SQL == "" && mock.SQLContains == "" && len(mock.AccessingTables) == 0 {
 			mock.SQL = query
 		}
 
@@ -1760,7 +1770,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			p.logDebug("  -> All VERIFY rules passed\n")
 		}
 
-		p.logDebug("  -> Mocking query for table %s\n", tableName)
+		p.logDebug("  -> Mocking query for table %s\n", mock.Table)
 		return p.sendMockResponse(clientConn, mock, MsgQuery, query)
 
 	case MsgParse:
@@ -1774,17 +1784,16 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		tableName := p.extractTable(query)
 		// Use PeekMock here - don't increment hit count yet for extended query protocol
 		// The hit count will be incremented when we actually execute (Bind/Execute)
-		mock, found := p.registry.PeekMock(tableName, query)
+		mock, found := p.peekMock(query, nil)
 		if !found {
-			p.logDebug("  -> Mock not found for table %s, forwarding to upstream\n", tableName)
+			p.logDebug("  -> Mock not found, forwarding to upstream\n")
 			p.registry.RecordPassthrough("PostgreSQL extended query: " + query[:min(80, len(query))])
 			return p.writeMessage(upstreamConn, msg.Type, msg.Payload)
 		}
 
-		p.logDebug("  -> Found mock for table %s (hit count NOT incremented yet)\n", tableName)
+		p.logDebug("  -> Found mock (hit count NOT incremented yet)\n")
 
 		// Store the actual query in the mock for later use (e.g., for RETURNING clause detection)
 		if mock.SQL == "" && mock.SQLContains == "" {
@@ -1801,7 +1810,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			p.logDebug("  -> All VERIFY rules passed\n")
 		}
 
-		p.logDebug("  -> Intercepting extended query for table %s\n", tableName)
+		p.logDebug("  -> Intercepting extended query for table %s\n", mock.Table)
 
 		// Send ParseComplete to client
 		p.logDebug("  -> Sending ParseComplete\n")
@@ -2150,6 +2159,11 @@ func (p *Proxy) writeMessage(conn net.Conn, msgType byte, payload []byte) error 
 
 // sendErrorResponse sends a PostgreSQL error response to the client
 func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
+	return p.sendErrorResponseWithCode(conn, "42601", message)
+}
+
+// sendErrorResponseWithCode sends a PostgreSQL error response with a specific SQLSTATE code
+func (p *Proxy) sendErrorResponseWithCode(conn net.Conn, sqlState, message string) error {
 	// PostgreSQL ErrorResponse message format
 	// 'E' message type, followed by length, then a series of null-terminated field pairs
 	// Common fields:
@@ -2165,8 +2179,8 @@ func (p *Proxy) sendErrorResponse(conn net.Conn, message string) error {
 	payload = append(payload, []byte("ERROR")...)
 	payload = append(payload, 0)
 
-	payload = append(payload, 'C')                // SQLSTATE code
-	payload = append(payload, []byte("42601")...) // syntax_error
+	payload = append(payload, 'C') // SQLSTATE code
+	payload = append(payload, []byte(sqlState)...)
 	payload = append(payload, 0)
 
 	payload = append(payload, 'M') // Message field
@@ -2195,6 +2209,19 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 
 	switch mock.Channel {
 	case types.ReadPostgreSQL:
+		if mock.ReturnsError {
+			// RETURNS ERROR: send PostgreSQL ErrorResponse to simulate a DB error
+			code := "42601"
+			msg := "error"
+			if mock.ReturnsErrorCode != "" {
+				msg = mock.ReturnsErrorCode
+				switch mock.ReturnsErrorCode {
+				case "cycle_detected":
+					code = "55000"
+				}
+			}
+			return p.sendErrorResponseWithCode(conn, code, msg)
+		}
 		if mock.ReturnsEmpty {
 			// For empty results, we need to send RowDescription with a dummy NULL row
 			// SQLAlchemy ORM requires at least one row to properly set up the result processing
@@ -2811,6 +2838,231 @@ func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string) {
 		query = string(payload[queryStart:pos])
 	}
 	return stmtName, query
+}
+
+// --- Semantic SQL matching helpers ---
+
+// extractAllTables returns all registered table names that appear as word-boundary
+// matches in the query, covering FROM, JOIN, INTO, UPDATE, and CTE references.
+func (p *Proxy) extractAllTables(query string) []string {
+	var found []string
+	for _, t := range p.registry.GetTables() {
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(t) + `\b`)
+		if re.MatchString(query) {
+			found = append(found, t)
+		}
+	}
+	sort.Strings(found)
+	return found
+}
+
+// extractQueryOperation returns SELECT, INSERT, UPDATE, or DELETE from the first
+// SQL keyword. WITH is treated as SELECT.
+func extractQueryOperation(query string) string {
+	re := regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b`)
+	if m := re.FindStringSubmatch(query); m != nil {
+		op := strings.ToUpper(m[1])
+		if op == "WITH" {
+			return "SELECT"
+		}
+		return op
+	}
+	return ""
+}
+
+// extractBindParams reads actual parameter values from a PostgreSQL Bind message payload.
+// Returns a slice of strings in $1, $2, … order. NULL params are represented as "".
+func (p *Proxy) extractBindParams(payload []byte) []string {
+	if len(payload) == 0 {
+		return nil
+	}
+	pos := 0
+	for pos < len(payload) && payload[pos] != 0 { pos++ } // skip portal name
+	if pos >= len(payload) { return nil }
+	pos++
+	for pos < len(payload) && payload[pos] != 0 { pos++ } // skip statement name
+	if pos >= len(payload) { return nil }
+	pos++
+	if pos+2 > len(payload) { return nil }
+	numParamFmts := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+	pos += 2 + numParamFmts*2
+	if pos+2 > len(payload) { return nil }
+	numParams := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+	pos += 2
+	params := make([]string, 0, numParams)
+	for i := 0; i < numParams; i++ {
+		if pos+4 > len(payload) { break }
+		length := int(int32(binary.BigEndian.Uint32(payload[pos : pos+4])))
+		pos += 4
+		if length == -1 {
+			params = append(params, "")
+			continue
+		}
+		if pos+length > len(payload) { break }
+		params = append(params, string(payload[pos:pos+length]))
+		pos += length
+	}
+	return params
+}
+
+// reWhereCondition matches "col = $N", "table.col = $N", "col = 'literal'", "col = number"
+// following WHERE, AND, or OR.
+var reWhereCondition = regexp.MustCompile(
+	`(?i)(?:WHERE|AND|OR)\s+((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
+)
+
+// reInsertCols matches the column list in "INSERT INTO table (col1, col2, ...)"
+var reInsertCols = regexp.MustCompile(`(?i)INSERT\s+INTO\s+[a-z_][a-z0-9_]*\s*\(([^)]+)\)`)
+
+// reInsertVals matches the value list in "VALUES (val1, val2, ...)"
+var reInsertVals = regexp.MustCompile(`(?i)\bVALUES\s*\(([^)]+)\)`)
+
+// reUpdateSet matches the SET clause body up to WHERE or end-of-string
+var reUpdateSet = regexp.MustCompile(`(?i)\bSET\s+(.+?)(?:\s+WHERE\b|$)`)
+
+// reSetItem matches "col = $N", "col = 'literal'", or "col = number" in a SET clause
+var reSetItem = regexp.MustCompile(
+	`(?i)((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
+)
+
+// extractWhereInfo returns column names and resolved column-value pairs from the
+// WHERE clause. $N references are resolved from bindParams (1-indexed → index N-1).
+func extractWhereInfo(query string, bindParams []string) (columns []string, values map[string]string) {
+	values = make(map[string]string)
+	seen := make(map[string]struct{})
+	for _, m := range reWhereCondition.FindAllStringSubmatch(query, -1) {
+		col := strings.ToLower(m[1])
+		if _, ok := seen[col]; !ok {
+			seen[col] = struct{}{}
+			columns = append(columns, col)
+		}
+		switch {
+		case m[2] != "":
+			if idx, err := strconv.Atoi(m[2]); err == nil && idx >= 1 && idx <= len(bindParams) {
+				values[col] = bindParams[idx-1]
+			}
+		case m[3] != "":
+			values[col] = m[3]
+		case m[4] != "":
+			values[col] = m[4]
+		}
+	}
+	return
+}
+
+// extractWrittenValuesFromSQL extracts column-value pairs from INSERT or UPDATE statements.
+func extractWrittenValuesFromSQL(query, operation string, bindParams []string) map[string]string {
+	result := make(map[string]string)
+	switch strings.ToUpper(operation) {
+	case "INSERT":
+		cm := reInsertCols.FindStringSubmatch(query)
+		vm := reInsertVals.FindStringSubmatch(query)
+		if cm == nil || vm == nil {
+			return result
+		}
+		cols := splitCommaTrimmed(cm[1])
+		vals := splitCommaTrimmed(vm[1])
+		for i, col := range cols {
+			if i >= len(vals) { break }
+			result[strings.ToLower(col)] = resolveValue(vals[i], bindParams)
+		}
+	case "UPDATE":
+		sm := reUpdateSet.FindStringSubmatch(query)
+		if sm == nil { return result }
+		for _, item := range reSetItem.FindAllStringSubmatch(sm[1], -1) {
+			col := strings.ToLower(item[1])
+			result[col] = resolveValueFromCaptures(item[2], item[3], item[4], bindParams)
+		}
+	}
+	return result
+}
+
+// resolveValue converts a raw SQL value token to a string.
+func resolveValue(v string, bindParams []string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, "$") {
+		if idx, err := strconv.Atoi(v[1:]); err == nil && idx >= 1 && idx <= len(bindParams) {
+			return bindParams[idx-1]
+		}
+		return v
+	}
+	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
+		return v[1 : len(v)-1]
+	}
+	return v
+}
+
+// resolveValueFromCaptures resolves from regex submatch groups: $N ref, quoted literal, numeric literal.
+func resolveValueFromCaptures(paramIdx, quotedLit, numLit string, bindParams []string) string {
+	switch {
+	case paramIdx != "":
+		if idx, err := strconv.Atoi(paramIdx); err == nil && idx >= 1 && idx <= len(bindParams) {
+			return bindParams[idx-1]
+		}
+	case quotedLit != "":
+		return quotedLit
+	case numLit != "":
+		return numLit
+	}
+	return ""
+}
+
+// splitCommaTrimmed splits a comma-separated string and trims whitespace.
+func splitCommaTrimmed(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// extractSemanticInfo derives all information needed for FindMockByTables from a
+// query and optional bound parameters.
+func (p *Proxy) extractSemanticInfo(query string, bindParams []string) (
+	tables []string, operation string,
+	whereColumns []string, whereValues map[string]string,
+	writtenValues map[string]string,
+) {
+	tables = p.extractAllTables(query)
+	operation = extractQueryOperation(query)
+	whereColumns, whereValues = extractWhereInfo(query, bindParams)
+	writtenValues = extractWrittenValuesFromSQL(query, operation, bindParams)
+	return
+}
+
+// findMock tries semantic matching (ACCESSING_TABLES) first, then falls back to
+// legacy USING_SQL matching. Pass nil bindParams for simple queries with inlined values.
+func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
+	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
+	if len(tables) > 0 {
+		if mock, found := p.registry.FindMockByTables(tables, op, whereCols, whereVals, writtenVals); found {
+			return mock, true
+		}
+	}
+	return p.registry.FindMock(p.extractTable(query), query)
+}
+
+// peekMock is like findMock but does not increment hit counts.
+func (p *Proxy) peekMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
+	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
+	if len(tables) > 0 {
+		if mock, found := p.registry.PeekMockByTables(tables, op, whereCols, whereVals, writtenVals); found {
+			return mock, true
+		}
+	}
+	return p.registry.PeekMock(p.extractTable(query), query)
+}
+
+// checkNegativeMocksForQuery fires both semantic and legacy negative expectation checks.
+func (p *Proxy) checkNegativeMocksForQuery(query string, bindParams []string) {
+	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
+	if len(tables) > 0 {
+		p.registry.CheckNegativeMocksByTables(tables, op, whereCols, whereVals, writtenVals)
+	}
+	p.registry.CheckNegativeMocks(p.extractTable(query), query)
 }
 
 // extractBindInfo extracts portal name and statement name from a Bind message
