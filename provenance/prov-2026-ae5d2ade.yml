@@ -14,7 +14,7 @@ affected_scope:
   - pkg/proxy/grpc/interceptor.go
 forbidden_scope: []
 supersedes: ""
-superseded_by: ""
+superseded_by: "prov-2026-710251c7"
 related:
   - prov-2026-ce3ba028
 sealed_at_sha: daee8e14c0b93747f93c02bad1cd391c8b2f3d8c
