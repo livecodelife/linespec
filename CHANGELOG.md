@@ -5,6 +5,23 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-04-23
+
+### Added
+
+- **Semantic SQL matching** ([prov-2026-ae2a4514](./provenance/prov-2026-ae2a4514.yml)) — New ORM-agnostic SQL routing system for MySQL and PostgreSQL. Instead of brittle literal SQL matching, write `ACCESSING_TABLES [table1, table2]` to route a mock by which tables a query touches. Optional verification clauses (`VERIFY_OPERATION`, `VERIFY_WHERE_COLUMNS`, `VERIFY_WHERE`, `VERIFY_WRITTEN_VALUES`) assert the DML type and specific column values without caring about query shape, column order, aliases, or ORM dialect. `CALL N` provides an ordered tiebreaker when two mocks on the same table set are otherwise indistinguishable. A specificity-wins algorithm ensures the most constrained mock is always preferred. For PostgreSQL, the proxy resolves actual Bind message parameter values (`$1` → `42`) so `VERIFY_WHERE id: 42` matches parameterized and inline queries identically. The legacy `USING_SQL` / `USING_SQL_CONTAINS` keywords remain functional but are deprecated.
+
+- **`RETURNS ERROR` / `RETURNS HTTP:NNN` for HTTP expectations** ([prov-2026-6165b458](./provenance/prov-2026-6165b458.yml)) — HTTP `EXPECT` blocks can now simulate dependency failures without adding mock payloads. `RETURNS ERROR` causes the HTTP proxy to close the TCP connection immediately so the service sees an `io.EOF`. `RETURNS ERROR <code>` does the same and labels the failure for test readability. `RETURNS HTTP:NNN` instructs the proxy to respond with an explicit HTTP status code (useful for rate-limit, auth, gateway timeout scenarios); combine with `WITH {{file}}` to include a response body.
+
+### Fixed
+
+- **PostgreSQL type OID heuristics caused schema-mismatch errors** ([prov-2026-6165b458](./provenance/prov-2026-6165b458.yml)) — The PostgreSQL proxy inferred column types from name patterns (`id` → `INT4`, `*_at` → `TIMESTAMPTZ`). When the actual schema used `UUID` for `*_id` columns or `TIMESTAMP WITHOUT TIME ZONE` for `*_at` columns the driver received binary-encoded data with the wrong OID and raised a type-mismatch error. The proxy now always sends `TEXT` (OID 25) in text format for all mock result columns, which every PostgreSQL driver can decode regardless of the schema's actual type.
+
+### Related Provenance Records
+
+- [prov-2026-ae2a4514](./provenance/prov-2026-ae2a4514.yml) - Semantic SQL matching (ACCESSING_TABLES, VERIFY_ clauses, CALL N, specificity-wins)
+- [prov-2026-6165b458](./provenance/prov-2026-6165b458.yml) - RETURNS ERROR / RETURNS HTTP:NNN + PostgreSQL OID fix
+
 ## [2.8.7] - 2026-04-23
 
 ### Added
