@@ -1,6 +1,6 @@
 id: prov-2026-6165b458
 title: Add RETURNS ERROR and RETURNS HTTP:NNN for simulating dependency failures
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: |
@@ -40,7 +40,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 9aeab2b6e0eb7d32894ab9698b081be28a2b2c00
 associated_specs:
   - path: pkg/proxy/http/interceptor.go
     type: code
