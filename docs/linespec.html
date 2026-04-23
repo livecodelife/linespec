@@ -393,22 +393,82 @@ HEADERS
 [VERIFY query MATCHES /<regex>/]</code></pre>
                     </div>
 
-                    <h3>SQL Matching: USING_SQL vs USING_SQL_CONTAINS</h3>
-                    <p>Two keywords control how the proxy matches intercepted SQL queries against a mock:</p>
+                    <h3>SQL Matching: Semantic (Recommended) vs Legacy Text Matching</h3>
+
+                    <h4>Semantic Matching (Recommended)</h4>
+                    <p>Semantic matching routes by <strong>which tables a query touches</strong> and lets you add optional verification constraints. It is ORM-agnostic — it does not care whether your ORM uses <code>$1</code>, <code>?</code>, or inline literals, or whether it adds <code>ORDER BY</code>, <code>LIMIT</code>, or varies column order. For PostgreSQL, the proxy reads actual Bind message parameter values, so <code>WHERE id = $1</code> and <code>WHERE id = 42</code> match identically when <code>$1</code> is bound to <code>42</code>.</p>
+
                     <table>
-                        <thead><tr><th>Keyword</th><th>Match mode</th><th>When to use</th></tr></thead>
+                        <thead><tr><th>Keyword</th><th>Purpose</th></tr></thead>
                         <tbody>
-                            <tr><td><code>USING_SQL</code></td><td>Exact match after normalization</td><td>You control the exact query and want strict assertions</td></tr>
-                            <tr><td><code>USING_SQL_CONTAINS</code></td><td>Substring match after normalization</td><td>ORM or driver may add clauses you can't predict</td></tr>
+                            <tr><td><code>ACCESSING_TABLES [t1, t2, ...]</code></td><td>Route this mock to queries touching exactly these tables (exact set)</td></tr>
+                            <tr><td><code>VERIFY_OPERATION SELECT|INSERT|UPDATE|DELETE</code></td><td>Assert the DML type</td></tr>
+                            <tr><td><code>VERIFY_WHERE_COLUMNS [col1, col2, ...]</code></td><td>Assert that all listed columns appear in the WHERE clause</td></tr>
+                            <tr><td><code>VERIFY_WHERE</code> (indented block)</td><td>Assert specific column values in WHERE (<code>PRESENT</code> = any value)</td></tr>
+                            <tr><td><code>VERIFY_WRITTEN_VALUES</code> (indented block)</td><td>Assert column values in INSERT column list or UPDATE SET clause</td></tr>
+                            <tr><td><code>CALL N</code> (on the EXPECT line)</td><td>Tiebreaker: consumed in ascending N order when multiple mocks match</td></tr>
                         </tbody>
                     </table>
-                    <p><strong>Normalization</strong> (applied to both modes): backticks stripped, whitespace collapsed, <code>table.*</code> → <code>*</code>.</p>
-                    <p>Use <code>USING_SQL_CONTAINS</code> when:</p>
-                    <ul>
-                        <li>Rails 7 <code>.where(...).first</code> appends <code>ORDER BY id ASC</code> — use a <code>WHERE</code> fragment</li>
-                        <li>Go MySQL driver uses <code>COM_STMT_PREPARE</code> with <code>?</code> placeholders — use a table/keyword fragment</li>
-                        <li>Any ORM that varies <code>SELECT</code> columns or adds <code>LIMIT</code> clauses dynamically</li>
-                    </ul>
+
+                    <p><strong>Specificity-wins:</strong> the mock with the most declared VERIFY_ clauses wins. <code>CALL N</code> breaks ties by ordering (lowest N first).</p>
+                    <p>When <code>ACCESSING_TABLES</code> is used the table name on the EXPECT line may be omitted.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>LineSpec</span></div>
+                        <pre><code># Disambiguate two SELECTs on the same table by WHERE value
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  token: PRESENT
+RETURNS {{user.yaml}}
+
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  id: 42
+RETURNS {{user.yaml}}
+
+# Verify written INSERT values
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: john@example.com
+  name: John Doe
+WITH {{user_write.yaml}}
+
+# CALL N — three SELECTs on users with no distinguishing WHERE
+EXPECT READ:MYSQL CALL 1
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{user.yaml}}
+
+EXPECT READ:MYSQL CALL 2
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{user.yaml}}
+
+EXPECT READ:MYSQL CALL 3
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS EMPTY
+
+# JOIN: route by both tables
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [orders, users]
+VERIFY_OPERATION SELECT
+RETURNS {{orders_with_user.yaml}}</code></pre>
+                    </div>
+
+                    <h4>Legacy Text Matching (Deprecated)</h4>
+                    <p><code>USING_SQL</code> and <code>USING_SQL_CONTAINS</code> are still functional but deprecated in favour of semantic matching.</p>
+                    <table>
+                        <thead><tr><th>Keyword</th><th>Match mode</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>USING_SQL</code></td><td>Exact match after normalization (backticks stripped, whitespace collapsed, <code>table.*</code> → <code>*</code>)</td></tr>
+                            <tr><td><code>USING_SQL_CONTAINS</code></td><td>Substring match after normalization</td></tr>
+                        </tbody>
+                    </table>
 
                     <h3>EXPECT HTTP</h3>
                     <div class="code-block">
@@ -432,7 +492,20 @@ RETURNS {{<response_body>}}</code></pre>
                     <h3>EXPECT READ:MYSQL</h3>
                     <div class="code-block">
                         <div class="code-header">
-                            <span>LineSpec</span>
+                            <span>LineSpec — Semantic (recommended)</span>
+                        </div>
+                        <pre><code>EXPECT READ:MYSQL [&lt;table_name&gt;] [CALL N]
+[ACCESSING_TABLES [&lt;table1&gt;, &lt;table2&gt;, ...]]
+[VERIFY_OPERATION SELECT]
+[VERIFY_WHERE_COLUMNS [&lt;col1&gt;, &lt;col2&gt;, ...]]
+[VERIFY_WHERE
+  &lt;col&gt;: &lt;value&gt;
+  ...]
+RETURNS {{&lt;response_file&gt;}}</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec — Legacy text matching (deprecated)</span>
                         </div>
                         <pre><code>EXPECT READ:MYSQL &lt;table_name&gt;
 [USING_SQL """
@@ -441,28 +514,37 @@ RETURNS {{<response_body>}}</code></pre>
 [USING_SQL_CONTAINS """
 &lt;sql-fragment&gt;
 """]
-RETURNS {{&lt;response_file&gt;}}
-
-# Or for empty results:
-EXPECT READ:MYSQL &lt;table_name&gt;
-[USING_SQL_CONTAINS """
-&lt;sql-fragment&gt;
-"""]
-RETURNS EMPTY</code></pre>
+RETURNS {{&lt;response_file&gt;}}</code></pre>
                     </div>
                     <p><strong>Rules:</strong></p>
                     <ul>
                         <li><code>RETURNS</code> is required (either a file or <code>EMPTY</code>)</li>
-                        <li><code>USING_SQL</code> performs exact equality after normalization</li>
-                        <li><code>USING_SQL_CONTAINS</code> performs substring containment after normalization</li>
-                        <li>Only one of <code>USING_SQL</code> or <code>USING_SQL_CONTAINS</code> may appear per <code>EXPECT</code> block</li>
-                        <li>If omitted, the proxy matches by table name</li>
+                        <li>When <code>ACCESSING_TABLES</code> is used the table name on the EXPECT line may be omitted</li>
+                        <li><code>ACCESSING_TABLES</code> requires an exact match on the full set of referenced tables</li>
+                        <li>RETURNS EMPTY generates a proper MySQL zero-row response</li>
                     </ul>
 
                     <h3>EXPECT WRITE:MYSQL</h3>
                     <div class="code-block">
                         <div class="code-header">
-                            <span>LineSpec</span>
+                            <span>LineSpec — Semantic (recommended)</span>
+                        </div>
+                        <pre><code>EXPECT WRITE:MYSQL [&lt;table_name&gt;] [CALL N]
+[ACCESSING_TABLES [&lt;table1&gt;, &lt;table2&gt;, ...]]
+[VERIFY_OPERATION INSERT|UPDATE|DELETE]
+[VERIFY_WRITTEN_VALUES
+  &lt;col&gt;: &lt;value&gt;
+  ...]
+[WITH {{&lt;input_payload&gt;}}]
+[RETURNS {{&lt;write_result_file&gt;}}]
+[NO TRANSACTION]
+[VERIFY query CONTAINS '&lt;string&gt;']
+[VERIFY query NOT_CONTAINS '&lt;string&gt;']
+[VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec — Legacy text matching (deprecated)</span>
                         </div>
                         <pre><code>EXPECT WRITE:MYSQL &lt;table_name&gt;
 [USING_SQL """
@@ -487,7 +569,7 @@ RETURNS EMPTY</code></pre>
 last_insert_id: 42</code></pre>
                     </div>
 
-                    <p>Multiple <code>WRITE:MYSQL</code> expectations on the same table are consumed in declaration order — the first declared mock matches the first matching query, enabling INSERT + UPDATE sequences:</p>
+                    <p>Multiple <code>WRITE:MYSQL</code> expectations on the same table can be disambiguated with <code>VERIFY_OPERATION</code> or <code>CALL N</code>. For legacy mocks, they are consumed in declaration order:</p>
 
                     <div class="code-block">
                         <div class="code-header"><span>create_order.linespec</span></div>

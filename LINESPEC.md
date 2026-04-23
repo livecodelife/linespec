@@ -255,36 +255,122 @@ EXPECT <CHANNEL> <resource>
 
 The exact format depends on the channel type.
 
-### SQL Matching: USING_SQL vs USING_SQL_CONTAINS
+### SQL Matching: Semantic vs Legacy Text Matching
 
-Two keywords control how the proxy matches intercepted SQL queries:
+LineSpec supports two approaches to matching SQL queries. **Semantic matching** (recommended) is stable across ORM differences; **text matching** (`USING_SQL` / `USING_SQL_CONTAINS`) is legacy and deprecated.
 
-| Keyword | Match mode | When to use |
-|---------|-----------|-------------|
-| `USING_SQL` | Exact match after normalization | You control the exact query and want strict assertions |
-| `USING_SQL_CONTAINS` | Substring match after normalization | ORM or driver may add clauses you can't predict |
+---
 
-**Normalization** (applied to both modes before comparison):
-- Backticks are stripped
-- Whitespace is collapsed to single spaces
-- `table.*` column references are normalized to `*`
+#### Semantic Matching (Recommended)
 
-**When to use `USING_SQL_CONTAINS`:**
-- Rails 7 `.where(...).first` appends `ORDER BY id ASC` — use a `WHERE` fragment
-- Go MySQL driver uses `COM_STMT_PREPARE` with `?` placeholders — use a table/keyword fragment
-- Any ORM that varies `SELECT` columns or adds `LIMIT` clauses
+Semantic matching routes by **which tables a query touches** and lets you add optional verification constraints. This approach is ORM-agnostic: it does not care whether your ORM uses `$1`, `?`, or inline literals, or whether it adds `ORDER BY`, `LIMIT`, or varies column order.
 
-**Example:**
+**Keywords:**
+
+| Keyword | Purpose |
+|---------|---------|
+| `ACCESSING_TABLES [t1, t2, ...]` | Route this mock to queries that reference exactly these tables (exact set, no extras) |
+| `VERIFY_OPERATION SELECT\|INSERT\|UPDATE\|DELETE` | Assert the query type |
+| `VERIFY_WHERE_COLUMNS [col1, col2, ...]` | Assert that all listed columns appear in the WHERE clause |
+| `VERIFY_WHERE` (indented block) | Assert specific column values in the WHERE clause |
+| `VERIFY_WRITTEN_VALUES` (indented block) | Assert column values in INSERT columns list or UPDATE SET clause |
+| `CALL N` (on the EXPECT line) | Tiebreaker: consumed in ascending N order when multiple mocks match the same query |
+
+**When ACCESSING_TABLES is used, the table name on the EXPECT line is optional:**
+```
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+...
+```
+
+**VERIFY_WHERE and VERIFY_WRITTEN_VALUES values:**
+- Literal: `email: john@example.com` — must match exactly
+- Quoted: `email: "john@example.com"` — quotes are stripped
+- Sentinel: `token: PRESENT` — column must exist in the clause with any value
+- Variables: `id: ${USER_ID}` — resolved at parse time via the test's variable system
+
+**Wire-level parameter resolution:** For PostgreSQL extended query protocol, the proxy reads actual parameter values from the Bind message. This means `WHERE id = $1` and `WHERE id = 42` match identically when `$1` is bound to `42`. You never need to know whether your ORM uses `$1` placeholders or inline literals.
+
+**Specificity-wins algorithm:** When multiple mocks could match a query, the mock with the most declared VERIFY_ constraints wins. If there is still a tie, `CALL N` ordering is used (lowest N first). This allows general and specific expectations to coexist safely.
+
+**Examples:**
 
 ```
-# Exact match — fails if ORM adds ORDER BY or changes column list
+# Route by table only — one mock per table, no further verification needed
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{user.yaml}}
+
+# Verify a specific WHERE value — stable even if ORM adds ORDER BY or LIMIT
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  id: 42
+RETURNS {{user.yaml}}
+
+# Verify WHERE column presence without caring about the value (e.g. auth token)
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  token: PRESENT
+RETURNS {{user.yaml}}
+
+# Verify columns in the WHERE clause — for multi-column conditions
+EXPECT READ:MYSQL
+ACCESSING_TABLES [todos]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [id, user_id]
+RETURNS {{todo.yaml}}
+
+# Verify written values for INSERT
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: john@example.com
+  name: John Doe
+WITH {{user_write.yaml}}
+
+# CALL N — disambiguate multiple identical queries by ordering
+EXPECT READ:MYSQL CALL 1
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{user.yaml}}
+
+EXPECT READ:MYSQL CALL 2
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS EMPTY
+
+# JOIN: two tables in ACCESSING_TABLES — matches queries that touch both
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [orders, users]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [user_id]
+RETURNS {{orders_with_user.yaml}}
+```
+
+---
+
+#### Legacy Text Matching (Deprecated)
+
+`USING_SQL` and `USING_SQL_CONTAINS` are still parsed and functional but deprecated in favour of semantic matching.
+
+| Keyword | Match mode |
+|---------|-----------|
+| `USING_SQL` | Exact match after normalization (backticks stripped, whitespace collapsed) |
+| `USING_SQL_CONTAINS` | Substring match after normalization |
+
+```
+# Exact match — fragile against ORM column-order or LIMIT changes
 EXPECT READ:MYSQL users
 USING_SQL """
 SELECT * FROM users WHERE id = 42 LIMIT 1
 """
 RETURNS {{user.yaml}}
 
-# Substring match — stable even if ORM shape changes
+# Substring match — still fragile against parameter binding style ($1 vs ?)
 EXPECT READ:MYSQL users
 USING_SQL_CONTAINS """
 WHERE users.id = 42
@@ -326,6 +412,21 @@ Rules:
 
 ### EXPECT READ:MYSQL
 
+**Semantic matching (recommended):**
+
+```
+EXPECT READ:MYSQL [<table_name>] [CALL N]
+[ACCESSING_TABLES [<table1>, <table2>, ...]]
+[VERIFY_OPERATION SELECT]
+[VERIFY_WHERE_COLUMNS [<col1>, <col2>, ...]]
+[VERIFY_WHERE
+  <col>: <value>
+  ...]
+RETURNS {{<response_file>}}
+```
+
+**Legacy text matching (deprecated):**
+
 ```
 EXPECT READ:MYSQL <table_name>
 [USING_SQL """
@@ -337,48 +438,64 @@ EXPECT READ:MYSQL <table_name>
 RETURNS {{<response_file>}}
 ```
 
-Or for empty results:
+Example — semantic, verify by WHERE value:
 
 ```
-EXPECT READ:MYSQL <table_name>
-[USING_SQL_CONTAINS """
-<sql-fragment>
-"""]
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  id: 42
+RETURNS {{user_response.yaml}}
+```
+
+Example — semantic, verify WHERE column presence:
+
+```
+EXPECT READ:MYSQL
+ACCESSING_TABLES [todos]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [id, user_id]
+RETURNS {{todo.yaml}}
+```
+
+Example — empty result (uniqueness check):
+
+```
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
 RETURNS EMPTY
-```
-
-Example — exact match:
-
-```
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM users WHERE token = 'abc' LIMIT 1
-"""
-RETURNS {{user_response.yaml}}
-```
-
-Example — substring match (ORM may add ORDER BY or vary columns):
-
-```
-EXPECT READ:MYSQL users
-USING_SQL_CONTAINS """
-WHERE users.id = 42
-"""
-RETURNS {{user_response.yaml}}
 ```
 
 Rules:
 
 * RETURNS is required (either a file or EMPTY)
-* `USING_SQL` and `USING_SQL_CONTAINS` are both optional; if omitted, the proxy matches by table name
-* `USING_SQL` performs exact equality after normalization
-* `USING_SQL_CONTAINS` performs substring containment after normalization
-* Only one of `USING_SQL` or `USING_SQL_CONTAINS` may appear per EXPECT block
+* When `ACCESSING_TABLES` is used the table name on the EXPECT line may be omitted
+* `ACCESSING_TABLES` requires an exact match on the full set of referenced tables — no partial matches
 * RETURNS EMPTY generates proper MySQL protocol response for zero rows
 
 ---
 
 ### EXPECT WRITE:MYSQL
+
+**Semantic matching (recommended):**
+
+```
+EXPECT WRITE:MYSQL [<table_name>] [CALL N]
+[ACCESSING_TABLES [<table1>, <table2>, ...]]
+[VERIFY_OPERATION INSERT|UPDATE|DELETE]
+[VERIFY_WRITTEN_VALUES
+  <col>: <value>
+  ...]
+[WITH {{<input_payload>}}]
+[RETURNS {{<write_result_file>}}]
+[NO TRANSACTION]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]
+```
+
+**Legacy text matching (deprecated):**
 
 ```
 EXPECT WRITE:MYSQL <table_name>
@@ -396,22 +513,31 @@ EXPECT WRITE:MYSQL <table_name>
 [VERIFY query MATCHES /<regex>/]
 ```
 
-Example — simple write:
+Example — semantic write with written value verification:
 
 ```
-EXPECT WRITE:MYSQL users
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: john@example.com
+  name: John Doe
 WITH {{user_create.yaml}}
-VERIFY query CONTAINS 'password_digest'
+VERIFY query MATCHES /\bpassword_digest\b/
 ```
 
-Example — INSERT followed by UPDATE using the inserted ID:
+Example — INSERT + UPDATE on the same table, disambiguated by CALL N:
 
 ```
-EXPECT WRITE:MYSQL orders
+EXPECT WRITE:MYSQL CALL 1
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION INSERT
 WITH {{order_insert.yaml}}
 RETURNS {{order_insert_result.yaml}}
 
-EXPECT WRITE:MYSQL orders
+EXPECT WRITE:MYSQL CALL 2
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION UPDATE
 WITH {{order_status_update.yaml}}
 RETURNS {{order_update_result.yaml}}
 ```
@@ -432,9 +558,9 @@ affected_rows: 1
 Rules:
 
 * WITH is optional for write operations
-* USING_SQL is optional; if omitted, the proxy matches by table name and operation type
+* When `ACCESSING_TABLES` is used the table name on the EXPECT line may be omitted
 * RETURNS is optional. When present, the payload must be a YAML object with optional `affected_rows` and `last_insert_id` fields. Omitting RETURNS defaults to `affected_rows=0, last_insert_id=0`.
-* Multiple WRITE mocks on the same table are matched in declaration order (first declared, first consumed). This is how INSERT + UPDATE sequences are distinguished.
+* Multiple WRITE mocks on the same table can be disambiguated by `VERIFY_OPERATION` or `CALL N`
 * NO TRANSACTION is parsed but has no effect (transactions always pass through)
 * VERIFY clauses validate the actual SQL executed at runtime
 
@@ -442,7 +568,34 @@ Rules:
 
 ### EXPECT READ:POSTGRESQL
 
-Same syntax as READ:MYSQL:
+Same semantic matching keywords as READ:MYSQL. PostgreSQL-specific advantage: the proxy reads actual Bind message parameter values, so `WHERE id = $1` is resolved to the bound value before matching.
+
+**Semantic matching (recommended):**
+
+```
+EXPECT READ:POSTGRESQL [<table_name>] [CALL N]
+[ACCESSING_TABLES [<table1>, <table2>, ...]]
+[VERIFY_OPERATION SELECT]
+[VERIFY_WHERE_COLUMNS [<col1>, <col2>, ...]]
+[VERIFY_WHERE
+  <col>: <value>
+  ...]
+RETURNS {{<response_file>}}
+```
+
+Example — match a parameterized query without knowing the ORM's binding style:
+
+```
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [notifications]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [recipient]
+RETURNS {{notifications.yaml}}
+```
+
+This matches `WHERE notifications.recipient = $1` (extended protocol) and `WHERE recipient = 42` (simple query) identically.
+
+**Legacy text matching (deprecated):**
 
 ```
 EXPECT READ:POSTGRESQL <table_name>
@@ -458,6 +611,24 @@ RETURNS {{<response_file>}}
 ---
 
 ### EXPECT WRITE:POSTGRESQL
+
+**Semantic matching (recommended):**
+
+```
+EXPECT WRITE:POSTGRESQL [<table_name>] [CALL N]
+[ACCESSING_TABLES [<table1>, <table2>, ...]]
+[VERIFY_OPERATION INSERT|UPDATE|DELETE]
+[VERIFY_WRITTEN_VALUES
+  <col>: <value>
+  ...]
+[WITH {{<input_payload>}}]
+[RETURNS {{<write_result_file>}}]
+[VERIFY query CONTAINS '<string>']
+[VERIFY query NOT_CONTAINS '<string>']
+[VERIFY query MATCHES /<regex>/]
+```
+
+**Legacy text matching (deprecated):**
 
 ```
 EXPECT WRITE:POSTGRESQL <table_name>
