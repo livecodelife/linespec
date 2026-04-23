@@ -640,3 +640,273 @@ func TestMockRegistry_GetHits_Redis(t *testing.T) {
 		t.Errorf("Expected hit count 1 for key %q, got %d", key, hits[key])
 	}
 }
+
+// ── Semantic SQL matching registry tests ─────────────────────────────────────
+
+func TestSemanticRegistry_BasicAccessingTables(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_basic",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:        types.ReadMySQL,
+				AccessingTables: []string{"users"},
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Should match a SELECT on users
+	mock, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected FindMockByTables to find a mock")
+	}
+	if mock.Channel != types.ReadMySQL {
+		t.Errorf("Expected READ_MYSQL channel, got %s", mock.Channel)
+	}
+
+	// Second call should not match (already consumed)
+	_, ok = reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if ok {
+		t.Error("Expected no mock on second call (already consumed)")
+	}
+}
+
+func TestSemanticRegistry_VerifyOperationFilter(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_op_filter",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+				VerifyOperation: "SELECT",
+			},
+			{
+				Channel:         types.WriteMySQL,
+				AccessingTables: []string{"users"},
+				VerifyOperation: "INSERT",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// SELECT should match the first mock
+	mock, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected SELECT mock to match")
+	}
+	if mock.VerifyOperation != "SELECT" {
+		t.Errorf("Expected SELECT mock, got %s", mock.VerifyOperation)
+	}
+
+	// INSERT should match the second mock
+	mock, ok = reg.FindMockByTables([]string{"users"}, "INSERT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected INSERT mock to match")
+	}
+	if mock.VerifyOperation != "INSERT" {
+		t.Errorf("Expected INSERT mock, got %s", mock.VerifyOperation)
+	}
+}
+
+func TestSemanticRegistry_VerifyWhereDisambiguation(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_where",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+				VerifyWhere:     map[string]string{"token": "PRESENT"},
+			},
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+				VerifyWhere:     map[string]string{"id": "42"},
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Auth query: WHERE token = '...' → matches first mock
+	mock, ok := reg.FindMockByTables(
+		[]string{"users"}, "SELECT",
+		[]string{"token"}, map[string]string{"token": "abc123"},
+		nil,
+	)
+	if !ok {
+		t.Fatal("Expected token mock to match")
+	}
+	if mock.VerifyWhere["token"] != "PRESENT" {
+		t.Errorf("Expected token:PRESENT mock, got %v", mock.VerifyWhere)
+	}
+
+	// Get-by-id query: WHERE id = 42 → matches second mock
+	mock, ok = reg.FindMockByTables(
+		[]string{"users"}, "SELECT",
+		[]string{"id"}, map[string]string{"id": "42"},
+		nil,
+	)
+	if !ok {
+		t.Fatal("Expected id mock to match")
+	}
+	if mock.VerifyWhere["id"] != "42" {
+		t.Errorf("Expected id:42 mock, got %v", mock.VerifyWhere)
+	}
+}
+
+func TestSemanticRegistry_VerifyWrittenValues(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_written",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:             types.WriteMySQL,
+				AccessingTables:     []string{"users"},
+				VerifyOperation:     "INSERT",
+				VerifyWrittenValues: map[string]string{"email": "john@example.com", "name": "John Doe"},
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Should match when written values match
+	_, ok := reg.FindMockByTables(
+		[]string{"users"}, "INSERT",
+		nil, nil,
+		map[string]string{"email": "john@example.com", "name": "John Doe"},
+	)
+	if !ok {
+		t.Fatal("Expected mock to match with correct written values")
+	}
+}
+
+func TestSemanticRegistry_CallNOrdering(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_call_n",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+				VerifyOperation: "SELECT",
+				CallN:           1,
+			},
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+				VerifyOperation: "SELECT",
+				CallN:           2,
+				ReturnsEmpty:    true,
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// First call should consume CALL 1
+	mock1, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected first mock (CALL 1)")
+	}
+	if mock1.CallN != 1 {
+		t.Errorf("Expected CallN=1, got %d", mock1.CallN)
+	}
+
+	// Second call should consume CALL 2
+	mock2, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected second mock (CALL 2)")
+	}
+	if mock2.CallN != 2 {
+		t.Errorf("Expected CallN=2, got %d", mock2.CallN)
+	}
+	if !mock2.ReturnsEmpty {
+		t.Error("Expected CALL 2 mock to have ReturnsEmpty=true")
+	}
+
+	// Third call should find nothing
+	_, ok = reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	if ok {
+		t.Error("Expected no mock on third call")
+	}
+}
+
+func TestSemanticRegistry_SpecificityWins(t *testing.T) {
+	reg := NewMockRegistry()
+	// Mock 1: lower specificity (only table set)
+	// Mock 2: higher specificity (table set + VERIFY_OPERATION)
+	spec := &types.TestSpec{
+		Name: "semantic_specificity",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"orders"},
+			},
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"orders"},
+				VerifyOperation: "SELECT",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Should prefer the more specific mock (VerifyOperation=SELECT)
+	mock, ok := reg.FindMockByTables([]string{"orders"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected mock to match")
+	}
+	if mock.VerifyOperation != "SELECT" {
+		t.Errorf("Specificity-wins should prefer SELECT mock, got %q", mock.VerifyOperation)
+	}
+}
+
+func TestSemanticRegistry_JoinTwoTables(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_join",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadPostgreSQL,
+				AccessingTables: []string{"orders", "users"},
+				VerifyOperation: "SELECT",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Both tables must match (exact set)
+	_, ok := reg.FindMockByTables([]string{"orders", "users"}, "SELECT", nil, nil, nil)
+	if !ok {
+		t.Fatal("Expected JOIN mock to match")
+	}
+
+	// Single-table queries should NOT match the two-table mock
+	reg2 := NewMockRegistry()
+	reg2.Register(spec)
+	_, ok2 := reg2.FindMockByTables([]string{"orders"}, "SELECT", nil, nil, nil)
+	if ok2 {
+		t.Error("Single-table query should not match two-table ACCESSING_TABLES mock")
+	}
+}
+
+func TestSemanticRegistry_ExactTableSetRequired(t *testing.T) {
+	reg := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "semantic_exact_tables",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:         types.ReadMySQL,
+				AccessingTables: []string{"users"},
+			},
+		},
+	}
+	reg.Register(spec)
+
+	// Query touching users AND orders should NOT match the users-only mock
+	_, ok := reg.FindMockByTables([]string{"users", "orders"}, "SELECT", nil, nil, nil)
+	if ok {
+		t.Error("Multi-table query should not match single-table ACCESSING_TABLES mock")
+	}
+}

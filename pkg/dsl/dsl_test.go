@@ -1153,3 +1153,288 @@ func TestParser_UsingSqlContains(t *testing.T) {
 		t.Errorf("Expected ReturnsEmpty to be true")
 	}
 }
+
+// ── Semantic SQL matching DSL tests ──────────────────────────────────────────
+
+func TestParser_SemanticAccessingTables(t *testing.T) {
+	content := `TEST semantic-read
+RECEIVE HTTP:GET http://localhost:3000/users/42
+
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [id, email]
+RETURNS {{payloads/user.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "semantic.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(spec.Expects) != 1 {
+		t.Fatalf("Expected 1 expect, got %d", len(spec.Expects))
+	}
+	e := spec.Expects[0]
+	if e.Channel != types.ReadMySQL {
+		t.Errorf("Expected READ_MYSQL, got %s", e.Channel)
+	}
+	if len(e.AccessingTables) != 1 || e.AccessingTables[0] != "users" {
+		t.Errorf("Expected AccessingTables=[users], got %v", e.AccessingTables)
+	}
+	if e.VerifyOperation != "SELECT" {
+		t.Errorf("Expected VerifyOperation=SELECT, got %q", e.VerifyOperation)
+	}
+	if len(e.VerifyWhereColumns) != 2 || e.VerifyWhereColumns[0] != "id" || e.VerifyWhereColumns[1] != "email" {
+		t.Errorf("Expected VerifyWhereColumns=[id email], got %v", e.VerifyWhereColumns)
+	}
+}
+
+func TestParser_SemanticVerifyWhere(t *testing.T) {
+	content := `TEST semantic-verify-where
+RECEIVE HTTP:GET http://localhost:3000/users/42
+
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  id: 42
+  status: active
+RETURNS {{payloads/user.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "verify_where.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	e := spec.Expects[0]
+	if e.VerifyWhere["id"] != "42" {
+		t.Errorf("Expected VerifyWhere[id]=42, got %q", e.VerifyWhere["id"])
+	}
+	if e.VerifyWhere["status"] != "active" {
+		t.Errorf("Expected VerifyWhere[status]=active, got %q", e.VerifyWhere["status"])
+	}
+}
+
+func TestParser_SemanticVerifyWrittenValues(t *testing.T) {
+	content := `TEST semantic-insert
+RECEIVE HTTP:POST http://localhost:3000/users
+
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: john@example.com
+  name: John Doe
+WITH {{payloads/user_write.json}}
+
+RESPOND HTTP:201
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "verify_written.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	e := spec.Expects[0]
+	if e.Channel != types.WriteMySQL {
+		t.Errorf("Expected WRITE_MYSQL, got %s", e.Channel)
+	}
+	if e.VerifyOperation != "INSERT" {
+		t.Errorf("Expected VerifyOperation=INSERT, got %q", e.VerifyOperation)
+	}
+	if e.VerifyWrittenValues["email"] != "john@example.com" {
+		t.Errorf("Expected VerifyWrittenValues[email]=john@example.com, got %q", e.VerifyWrittenValues["email"])
+	}
+	if e.VerifyWrittenValues["name"] != "John Doe" {
+		t.Errorf("Expected VerifyWrittenValues[name]=John Doe, got %q", e.VerifyWrittenValues["name"])
+	}
+}
+
+func TestParser_SemanticCallN(t *testing.T) {
+	content := `TEST semantic-call-n
+RECEIVE HTTP:GET http://localhost:3000/users/42
+
+EXPECT READ:MYSQL CALL 1
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user.json}}
+
+EXPECT READ:MYSQL CALL 2
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS EMPTY
+
+RESPOND HTTP:200
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "call_n.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(spec.Expects) != 2 {
+		t.Fatalf("Expected 2 expects, got %d", len(spec.Expects))
+	}
+	if spec.Expects[0].CallN != 1 {
+		t.Errorf("Expected CallN=1 on first expect, got %d", spec.Expects[0].CallN)
+	}
+	if spec.Expects[1].CallN != 2 {
+		t.Errorf("Expected CallN=2 on second expect, got %d", spec.Expects[1].CallN)
+	}
+	if !spec.Expects[1].ReturnsEmpty {
+		t.Errorf("Expected second expect to have ReturnsEmpty=true")
+	}
+}
+
+func TestParser_SemanticJoinMultipleTables(t *testing.T) {
+	content := `TEST semantic-join
+RECEIVE HTTP:GET http://localhost:3000/orders
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [orders, users]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [user_id]
+RETURNS {{payloads/orders.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/orders.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "join.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	e := spec.Expects[0]
+	if e.Channel != types.ReadPostgreSQL {
+		t.Errorf("Expected READ_POSTGRESQL, got %s", e.Channel)
+	}
+	if len(e.AccessingTables) != 2 {
+		t.Errorf("Expected 2 tables, got %v", e.AccessingTables)
+	}
+	// Tables should be sorted: orders, users
+	if e.AccessingTables[0] != "orders" || e.AccessingTables[1] != "users" {
+		t.Errorf("Expected [orders users], got %v", e.AccessingTables)
+	}
+	if e.VerifyOperation != "SELECT" {
+		t.Errorf("Expected VerifyOperation=SELECT, got %q", e.VerifyOperation)
+	}
+	if len(e.VerifyWhereColumns) != 1 || e.VerifyWhereColumns[0] != "user_id" {
+		t.Errorf("Expected VerifyWhereColumns=[user_id], got %v", e.VerifyWhereColumns)
+	}
+}
+
+func TestParser_SemanticPresentSentinel(t *testing.T) {
+	content := `TEST semantic-present
+RECEIVE HTTP:GET http://localhost:3000/users/auth
+
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  token: PRESENT
+RETURNS {{payloads/user.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user.json}}`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "present.linespec")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	tokens, err := LexFile(tmpFile)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(tmpFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	e := spec.Expects[0]
+	if e.VerifyWhere["token"] != "PRESENT" {
+		t.Errorf("Expected VerifyWhere[token]=PRESENT, got %q", e.VerifyWhere["token"])
+	}
+}
+
+func TestParser_SemanticExampleLinespecs(t *testing.T) {
+	// Verify all new semantic example linespecs parse without error
+	files := []string{
+		"../../examples/user-linespecs/get_user_semantic.linespec",
+		"../../examples/user-linespecs/create_user_semantic.linespec",
+		"../../examples/user-linespecs/update_user_semantic.linespec",
+		"../../examples/todo-linespecs/get_todo_semantic.linespec",
+		"../../examples/notification-linespecs/list_notifications_semantic.linespec",
+	}
+	for _, f := range files {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			tokens, err := LexFile(f)
+			if err != nil {
+				t.Fatalf("LexFile failed: %v", err)
+			}
+			parser := NewParser(tokens)
+			_, err = parser.Parse(f)
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+		})
+	}
+}
+
+// Ensure time import is used (it was imported for pre-existing tests)
+var _ = time.Second
