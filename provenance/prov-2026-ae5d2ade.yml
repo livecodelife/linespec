@@ -1,6 +1,6 @@
 id: prov-2026-ae5d2ade
 title: Fix integer overflow in gRPC interceptor frame handling
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -17,7 +17,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-ce3ba028
-sealed_at_sha: ""
+sealed_at_sha: daee8e14c0b93747f93c02bad1cd391c8b2f3d8c
 associated_specs:
   - path: pkg/proxy/grpc/interceptor_test.go
     type: go-test
