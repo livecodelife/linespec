@@ -46,10 +46,13 @@ type ExpectStatement struct {
 	VerifyWhere        map[string]string // VERIFY_WHERE — column-value pairs in WHERE clause (wire-resolved)
 	VerifyWrittenValues map[string]string // VERIFY_WRITTEN_VALUES — column-value pairs for INSERT/UPDATE
 	CallN              int               // CALL N — sequential ordering tiebreaker (0 = unset)
-	WithFile      string // For Request Payload
-	ReturnsFile   string // For Response Payload
-	ReturnsEmpty  bool   // For DB (RETURNS EMPTY)
-	NoTransaction bool   // For WRITE:MYSQL
+	WithFile         string // For Request Payload
+	ReturnsFile      string // For Response Payload
+	ReturnsEmpty     bool   // For DB (RETURNS EMPTY)
+	ReturnsError     bool   // For RETURNS ERROR (simulate connection/network failure)
+	ReturnsErrorCode string // For RETURNS ERROR <code> (e.g. "cycle_detected")
+	ReturnsHTTPStatus int  // For RETURNS HTTP:NNN (return non-200 HTTP status from dependency)
+	NoTransaction    bool   // For WRITE:MYSQL
 	Verify        []VerifyRule
 	Negative        bool              // If true, this should NOT be called
 	BaseDir         string            // To resolve payload files

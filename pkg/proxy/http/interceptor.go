@@ -140,7 +140,49 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Load payload if needed
+	// 3. Handle RETURNS ERROR (simulate network/connection failure)
+	if mock.ReturnsError {
+		logger.Debug("RETURNS ERROR: simulating connection failure for %s %s", method, path)
+		// Hijack the connection to simulate a network failure
+		if hijacker, ok := w.(http.Hijacker); ok {
+			conn, _, err := hijacker.Hijack()
+			if err == nil {
+				conn.Close()
+				return
+			}
+		}
+		// Fallback: return 503 Service Unavailable if hijack fails
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	// 4. Handle RETURNS HTTP:NNN (return specific HTTP status from dependency)
+	if mock.ReturnsHTTPStatus > 0 {
+		for k, v := range mock.ResponseHeaders {
+			w.Header().Set(k, v)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(mock.ReturnsHTTPStatus)
+		// If there's also a ReturnsFile, serve its body
+		if mock.ReturnsFile != "" {
+			i.loader.BaseDir = mock.BaseDir
+			rawData, inferredContentType, err := i.loader.LoadRaw(mock.ReturnsFile)
+			if err == nil {
+				responseBody := rawData
+				if inferredContentType == "application/json" || inferredContentType == "application/yaml" {
+					if payload, loadErr := i.loader.Load(mock.ReturnsFile); loadErr == nil {
+						if encoded, encErr := json.Marshal(payload); encErr == nil {
+							responseBody = encoded
+						}
+					}
+				}
+				w.Write(responseBody)
+			}
+		}
+		return
+	}
+
+	// 5. Load payload if needed
 	if mock.ReturnsFile != "" {
 		i.loader.BaseDir = mock.BaseDir
 

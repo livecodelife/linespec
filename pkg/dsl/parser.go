@@ -378,12 +378,21 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 
 	if p.peek().Type == TokenReturns {
 		returnsToken := p.consume()
-		if strings.ToUpper(returnsToken.Literal) == "EMPTY" {
+		literal := returnsToken.Literal
+		upper := strings.ToUpper(literal)
+		if upper == "EMPTY" {
 			expect.ReturnsEmpty = true
-		} else if m := reReturnsPayload.FindStringSubmatch(returnsToken.Literal); m != nil {
+		} else if upper == "ERROR" {
+			expect.ReturnsError = true
+		} else if strings.HasPrefix(upper, "ERROR ") {
+			expect.ReturnsError = true
+			expect.ReturnsErrorCode = strings.TrimSpace(literal[6:])
+		} else if m := regexp.MustCompile(`(?i)^HTTP:(\d+)$`).FindStringSubmatch(literal); m != nil {
+			expect.ReturnsHTTPStatus, _ = strconv.Atoi(m[1])
+		} else if m := reReturnsPayload.FindStringSubmatch(literal); m != nil {
 			expect.ReturnsFile = m[1]
 		} else {
-			expect.ReturnsFile = returnsToken.Literal
+			expect.ReturnsFile = literal
 		}
 	}
 

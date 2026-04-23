@@ -98,10 +98,6 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	// - Format code (2 bytes) - 1 for binary (INTEGER, TIMESTAMPTZ), 0 for text (others)
 
 	for _, col := range columns {
-		colLower := strings.ToLower(col)
-		isInteger := colLower == "id" || strings.HasSuffix(colLower, "_id")
-		isTimestamp := strings.Contains(colLower, "_at") || strings.Contains(colLower, "time")
-
 		// Field name
 		payload = append(payload, []byte(col)...)
 		payload = append(payload, 0) // null terminator
@@ -112,15 +108,13 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		// Column number
 		payload = append(payload, 0, 0)
 
-		// Type OID - use proper types
+		// Type OID - always TEXT (25) for mock results
+		// Mock proxy sends text-format values which every driver can decode.
+		// Name-based heuristics (id→INT4, *_at→TIMESTAMPTZ) break when the
+		// actual schema uses UUID/VARCHAR for *_id columns or TIMESTAMP
+		// WITHOUT time zone for *_at columns.
 		typeOID := make([]byte, 4)
-		oid := uint32(25) // Default TEXT
-		if isTimestamp {
-			oid = 1184 // TIMESTAMPTZ
-		} else if isInteger {
-			oid = 23 // INTEGER
-		}
-		binary.BigEndian.PutUint32(typeOID, oid)
+		binary.BigEndian.PutUint32(typeOID, 25) // TEXT
 		payload = append(payload, typeOID...)
 
 		// Type size - -1 for variable
@@ -133,14 +127,9 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		binary.BigEndian.PutUint32(typeMod, 0xFFFFFFFF) // -1 as uint32
 		payload = append(payload, typeMod...)
 
-		// Format code: 0 = text, 1 = binary
-		// Use binary format for INTEGER and TIMESTAMPTZ (need proper binary encoding)
-		// Use text format for other types
-		if isInteger || isTimestamp {
-			payload = append(payload, 0, 1) // Binary format
-		} else {
-			payload = append(payload, 0, 0) // Text format
-		}
+		// Format code: 0 = text
+		// Always use text format — matches the TEXT OID declared above.
+		payload = append(payload, 0, 0) // Text format
 	}
 
 	msg := CreateMessage(MsgRowDescription, payload)
