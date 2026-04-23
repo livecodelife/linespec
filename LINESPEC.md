@@ -618,7 +618,7 @@ EXPECT GRPC:<ServiceName>/<MethodName>
 RETURNS {{<response_payload>}}
 ```
 
-LineSpec intercepts outbound gRPC calls using an HTTP/2 + JSON proxy. The service under test must point its gRPC client at the proxy host — no code changes to the service are required.
+LineSpec intercepts outbound gRPC calls using an HTTP/2 proxy. The service under test must point its gRPC client at the proxy host — no code changes to the service are required.
 
 Enable the proxy in `.linespec.yml`:
 
@@ -627,10 +627,10 @@ infrastructure:
   grpc: true
 
 dependencies:
-  - name: user-grpc-service
-    type: grpc
-    host: user-grpc-service.local
-    port: 50051
+- name: user-grpc-service
+  type: grpc
+  host: user-grpc-service.local
+  port: 50051
 ```
 
 Example:
@@ -644,10 +644,58 @@ RETURNS {{payloads/get_user_grpc_response.json}}
 Rules:
 
 * `ServiceName/MethodName` matches the gRPC route (e.g. `UserService/GetUser` or `users.UserService/GetUser`)
-* Payloads are JSON — LineSpec serialises to/from the wire format transparently
 * `WITH` is optional; omit it to match any request body for that method
 * `RETURNS` is required; the proxy returns it as the gRPC response
 * Test fails if the expected gRPC call is not observed
+
+#### Content-Type handling
+
+The gRPC proxy echoes the request's `Content-Type` in its response:
+
+* `application/grpc+json` (default) — payloads are JSON. The 5-byte gRPC length-prefixed frame contains a JSON body. This is the original mode and remains the default when no Content-Type is specified.
+* `application/grpc` — payloads are binary protobuf. When a protobuf descriptor set is configured (see below), `RETURNS` payloads written as JSON are automatically converted to binary protobuf on the wire. Without a descriptor, the raw bytes from the payload file are sent as-is.
+
+#### Upstream passthrough
+
+When a `type: grpc` dependency specifies a `host` and `port`, the proxy forwards any **unmocked** gRPC calls to that upstream backend via HTTP/2 reverse proxy. This lets you mix mocked and real gRPC backends in a single test — methods you `EXPECT` are intercepted; all others are forwarded transparently.
+
+When no upstream is configured (or `infrastructure.grpc: true` is used without gRPC dependencies), unmocked calls return `UNIMPLEMENTED` — preserving backward compatibility with the original pure-mock behavior.
+
+#### Protobuf descriptor mocks
+
+When the service under test uses native gRPC clients (not JSON), the proxy needs a compiled protobuf descriptor set (`.pb` file) to convert JSON `RETURNS` payloads into binary protobuf on the wire.
+
+Configure the descriptor set in `.linespec.yml`:
+
+```yaml
+# Service-level default — applies to all gRPC dependencies
+grpc_descriptor_set: proto/workflow.pb
+
+dependencies:
+- name: workflow-service
+  type: grpc
+  host: temporal
+  port: 7233
+
+# Per-dependency override — takes precedence over the service-level default
+- name: user-grpc-service
+  type: grpc
+  host: user-grpc-service.local
+  port: 50051
+  grpc_descriptor_set: proto/user.pb
+```
+
+The descriptor set is a `FileDescriptorSet` compiled with `protoc`:
+
+```bash
+protoc --include_imports --descriptor_set_out=workflow.proto workflow.proto
+```
+
+Behavior:
+
+* When a descriptor is loaded and the request `Content-Type` is `application/grpc`, the proxy converts JSON `RETURNS` payloads to binary protobuf using the descriptor's message definitions
+* When no descriptor is configured, or when the request `Content-Type` is `application/grpc+json`, payloads are served as-is (JSON or raw bytes)
+* The runner merges all descriptor sets (service-level + per-dependency) into a single `FileDescriptorSet` before passing it to the proxy container
 
 ---
 
@@ -1185,17 +1233,32 @@ infrastructure:
   proxy_image: linespec:latest
 
 # ─────────────────────────────────────────────
-# External HTTP / service dependencies
+# Protobuf descriptor set (optional — gRPC)
+# ─────────────────────────────────────────────
+# Path to a compiled FileDescriptorSet (.pb) for JSON-to-protobuf conversion.
+# When set, RETURNS payloads for gRPC mocks are converted from JSON to binary
+# protobuf when the request Content-Type is application/grpc.
+# Per-dependency grpc_descriptor_set overrides this value.
+grpc_descriptor_set: proto/workflow.pb
+
+# ─────────────────────────────────────────────
+# External HTTP / gRPC / service dependencies
 # ─────────────────────────────────────────────
 dependencies:
-  - name: user-service
-    type: http
-    host: user-service.local   # Hostname the SUT dials
-    port: 3001
-    proxy: true                # Intercept calls to this host
-    host_alias: user-svc       # Optional DNS alias inside the test network
-    headers:                   # Default headers added to all matched requests
-      X-Internal-Token: secret
+- name: user-service
+  type: http
+  host: user-service.local # Hostname the SUT dials
+  port: 3001
+  proxy: true # Intercept calls to this host
+  host_alias: user-svc # Optional DNS alias inside the test network
+  headers: # Default headers added to all matched requests
+    X-Internal-Token: secret
+
+- name: workflow-service
+  type: grpc
+  host: temporal # gRPC upstream hostname (unmocked calls are forwarded here)
+  port: 7233
+  grpc_descriptor_set: proto/workflow.pb # Optional: overrides service-level default
 
 # ─────────────────────────────────────────────
 # Provenance (optional — enables git hooks)

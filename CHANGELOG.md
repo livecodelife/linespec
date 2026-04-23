@@ -5,6 +5,22 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.7] - 2026-04-23
+
+### Added
+
+- **gRPC upstream passthrough** ([prov-2026-ce3ba028](./provenance/prov-2026-ce3ba028.yml)) — Unmocked gRPC calls are now forwarded to a real upstream backend via HTTP/2 reverse proxy when a `type: grpc` dependency is configured with a `host` and `port`. This lets you mix mocked and real gRPC backends in a single test — methods you `EXPECT` are intercepted; all others are forwarded transparently. When no upstream is configured, unmocked calls return `UNIMPLEMENTED` as before.
+
+- **gRPC content-type echo** ([prov-2026-ce3ba028](./provenance/prov-2026-ce3ba028.yml)) — The gRPC proxy now echoes the request's `Content-Type` in its response instead of hardcoding `application/grpc+json`. Requests with `application/grpc` content-type receive binary protobuf responses; `application/grpc+json` (the default) receives JSON. Falls back to `application/grpc+json` when no content-type is specified.
+
+- **Protobuf descriptor mocks for gRPC** ([prov-2026-ce3ba028](./provenance/prov-2026-ce3ba028.yml)) — New `grpc_descriptor_set` field in `.linespec.yml` (at both service-level and per-dependency scope) allows you to write `RETURNS` payloads as JSON and have the proxy convert them to binary protobuf on the wire. Requires a compiled `FileDescriptorSet` (`.pb` file) produced by `protoc --descriptor_set_out`. The runner merges all descriptor sets before passing them to the proxy container.
+
+- **`type: grpc` dependency support** ([prov-2026-ce3ba028](./provenance/prov-2026-ce3ba028.yml)) — The `dependencies` section in `.linespec.yml` now accepts `type: grpc` entries alongside `type: http`. Each gRPC dependency gets its own network alias, upstream address, and optional descriptor set override.
+
+### Related Provenance Records
+
+- [prov-2026-ce3ba028](./provenance/prov-2026-ce3ba028.yml) - gRPC upstream passthrough, content-type echo, protobuf descriptor mocks
+
 ## [2.8.6] - 2026-04-21
 
 ### Fixed

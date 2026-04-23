@@ -198,6 +198,7 @@ linespec proxy mysql <listen> <upstream>
 linespec proxy postgresql <listen> <upstream>
 linespec proxy http <listen> <upstream>
 linespec proxy kafka <listen> <upstream>
+linespec proxy grpc <listen> <upstream>
 ```
 
 ### Example LineSpec Test
@@ -270,7 +271,12 @@ database:
 infrastructure:
   database: true
   kafka: false
-  proxy_image: "linespec:latest"  # Docker image for protocol proxies (default: linespec:latest)
+  grpc: false # Start a gRPC proxy sidecar
+  redis: false # Start a Redis proxy sidecar
+  proxy_image: "linespec:latest" # Docker image for protocol proxies (default: linespec:latest)
+
+# Protobuf descriptor set for gRPC binary protobuf mocks (optional)
+grpc_descriptor_set: proto/workflow.pb
 
 # Container naming configuration (optional)
 container_naming:
