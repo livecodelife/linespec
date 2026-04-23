@@ -1,0 +1,55 @@
+id: prov-2026-6165b458
+title: Add RETURNS ERROR and RETURNS HTTP:NNN for simulating dependency failures
+status: open
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: |
+  Tests need to verify how a service behaves when a dependency fails — either by closing
+  the connection entirely (network failure) or by returning an explicit non-200 HTTP status
+  (rate limit, gateway timeout, auth error, etc.).
+
+  RETURNS ERROR causes the HTTP proxy to close the TCP connection immediately, simulating
+  a network-level failure before any response is sent.
+
+  RETURNS ERROR <code> closes the connection and records a named error code (e.g.
+  "cycle_detected") so tests can assert the service handled a specific error condition.
+
+  RETURNS HTTP:NNN instructs the HTTP proxy to respond with the given HTTP status code
+  instead of the normal 200 OK mock. An optional payload body can follow via WITH.
+
+  The PostgreSQL proxy also supports RETURNS ERROR / RETURNS ERROR <code> to simulate
+  database-level errors (sent as PostgreSQL ErrorResponse packets with SQLSTATE codes).
+
+  Additionally fixes a PostgreSQL type OID heuristic bug: the proxy previously inferred
+  column types from name patterns (id->INT4, *_at->TIMESTAMPTZ) which broke when the
+  schema used UUID or TIMESTAMP WITHOUT TIME ZONE. Now always sends TEXT (OID 25).
+constraints:
+  - RETURNS ERROR must close the client connection without sending any response body
+  - RETURNS HTTP:NNN must send exactly the specified status code
+  - RETURNS ERROR and RETURNS HTTP:NNN are mutually exclusive with RETURNS {{file}}
+  - The PostgreSQL proxy always sends TEXT (OID 25) for all mock result columns
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/parser.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: LINESPEC.md
+    type: docs
+  - path: docs/linespec.html
+    type: docs
+  - path: pkg/proxy/http/interceptor.go
+    type: code
+    run_command: make test
+  - path: pkg/proxy/postgresql/result.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
