@@ -1,0 +1,11 @@
+TEST get_workflow_result_success
+
+RECEIVE HTTP:POST /result
+WITH {{payloads/get_result_http_req.json}}
+
+EXPECT GRPC:workflow.v1.WorkflowService/GetWorkflowResult
+WITH {{payloads/get_result_request.yaml}}
+RETURNS {{payloads/get_result_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/get_result_http_resp.json}}

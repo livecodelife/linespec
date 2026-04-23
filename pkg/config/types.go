@@ -275,20 +275,21 @@ type InfrastructureConfig struct {
 
 // LineSpecConfig is the root configuration structure
 type LineSpecConfig struct {
-	Service         ServiceConfig          `yaml:"service"`
-	Database        *DatabaseConfig        `yaml:"database,omitempty"`  // Single-database form (backward compat). Normalised into Databases by applyDefaults.
-	Databases       []DatabaseConfig       `yaml:"databases,omitempty"` // Multi-database form. Takes precedence over Database when both are set.
-	Infrastructure  InfrastructureConfig   `yaml:"infrastructure"`
-	Dependencies    []DependencyConfig     `yaml:"dependencies,omitempty"`
-	Provenance      *ProvenanceConfig      `yaml:"provenance,omitempty"`
-	ContainerNaming *ContainerNaming       `yaml:"container_naming,omitempty"`
-	PortConfig      *PortConfig            `yaml:"ports,omitempty"`
-	SchemaDiscovery *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
-	Payload         *PayloadConfig         `yaml:"payload,omitempty"`
-	TestTimeoutSeconds int                    `yaml:"timeout_seconds,omitempty"`
-	StrictPassthrough  bool                   `yaml:"strict_passthrough,omitempty"`
-	Created            time.Time              `yaml:"-"`
-	BaseDir            string                 `yaml:"-"`
+	Service             ServiceConfig       `yaml:"service"`
+	Database            *DatabaseConfig     `yaml:"database,omitempty"` // Single-database form (backward compat). Normalised into Databases by applyDefaults.
+	Databases           []DatabaseConfig    `yaml:"databases,omitempty"` // Multi-database form. Takes precedence over Database when both are set.
+	Infrastructure      InfrastructureConfig `yaml:"infrastructure"`
+	Dependencies        []DependencyConfig  `yaml:"dependencies,omitempty"`
+	Provenance          *ProvenanceConfig   `yaml:"provenance,omitempty"`
+	ContainerNaming     *ContainerNaming    `yaml:"container_naming,omitempty"`
+	PortConfig          *PortConfig         `yaml:"ports,omitempty"`
+	SchemaDiscovery     *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
+	Payload             *PayloadConfig      `yaml:"payload,omitempty"`
+	TestTimeoutSeconds  int                 `yaml:"timeout_seconds,omitempty"`
+	StrictPassthrough   bool                `yaml:"strict_passthrough,omitempty"`
+	GRPCDescriptorSet   string              `yaml:"grpc_descriptor_set,omitempty"`
+	Created             time.Time           `yaml:"-"`
+	BaseDir             string              `yaml:"-"`
 }
 
 // EmbeddingConfig defines the embedding API configuration
@@ -314,13 +315,14 @@ type ProvenanceConfig struct {
 
 // DependencyConfig defines external service dependencies
 type DependencyConfig struct {
-	Name      string            `yaml:"name"`
-	Type      string            `yaml:"type"` // http, database
-	Host      string            `yaml:"host"`
-	Port      int               `yaml:"port"`
-	Proxy     bool              `yaml:"proxy"`      // Whether to mock this dependency
-	HostAlias string            `yaml:"host_alias"` // Custom hostname alias for the service
-	Headers   map[string]string `yaml:"headers,omitempty"`
+	Name              string            `yaml:"name"`
+	Type              string            `yaml:"type"` // http, grpc, database
+	Host              string            `yaml:"host"`
+	Port              int               `yaml:"port"`
+	Proxy             bool              `yaml:"proxy"`
+	HostAlias         string            `yaml:"host_alias"`
+	Headers           map[string]string `yaml:"headers,omitempty"`
+	GRPCDescriptorSet string            `yaml:"grpc_descriptor_set,omitempty"`
 }
 
 // DefaultConfig returns baseline config defaults for a given framework name.

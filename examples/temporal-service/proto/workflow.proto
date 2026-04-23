@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package workflow.v1;
+
+option go_package = "github.com/livecodelife/linespec/examples/temporal-service/proto/workflowv1";
+
+service WorkflowService {
+  rpc StartWorkflow(StartWorkflowRequest) returns (StartWorkflowResponse);
+  rpc GetWorkflowResult(GetWorkflowResultRequest) returns (GetWorkflowResultResponse);
+}
+
+message StartWorkflowRequest {
+  string workflow_id = 1;
+  string task_queue = 2;
+  bytes input = 3;
+}
+
+message StartWorkflowResponse {
+  string run_id = 1;
+}
+
+message GetWorkflowResultRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message GetWorkflowResultResponse {
+  string result = 1;
+  bool completed = 2;
+}

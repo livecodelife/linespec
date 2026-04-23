@@ -299,8 +299,8 @@ func runProxy() {
 	addr := os.Args[3]
 	upstream := os.Args[4]
 
-	// Extract --db-name, --host, --schema-data, --schema-file, --sidecar-port, and --debug flags from remaining args
-	var dbName, kafkaHost, schemaDataB64, schemaFile string
+	// Extract --db-name, --host, --schema-data, --schema-file, --sidecar-port, --grpc-descriptor-set, and --debug flags from remaining args
+	var dbName, kafkaHost, schemaDataB64, schemaFile, grpcDescriptorSet string
 	sidecarPort := "8081"
 	var filteredArgs []string
 	for i := 5; i < len(os.Args); i++ {
@@ -327,9 +327,14 @@ func runProxy() {
 		} else if os.Args[i] == "--sidecar-port" && i+1 < len(os.Args) {
 			sidecarPort = os.Args[i+1]
 			i++
-		} else if strings.HasPrefix(os.Args[i], "--sidecar-port=") {
-			sidecarPort = strings.TrimPrefix(os.Args[i], "--sidecar-port=")
-		} else if os.Args[i] == "--debug" || os.Args[i] == "-d" {
+	} else if strings.HasPrefix(os.Args[i], "--sidecar-port=") {
+		sidecarPort = strings.TrimPrefix(os.Args[i], "--sidecar-port=")
+	} else if os.Args[i] == "--grpc-descriptor-set" && i+1 < len(os.Args) {
+		grpcDescriptorSet = os.Args[i+1]
+		i++
+	} else if strings.HasPrefix(os.Args[i], "--grpc-descriptor-set=") {
+		grpcDescriptorSet = strings.TrimPrefix(os.Args[i], "--grpc-descriptor-set=")
+	} else if os.Args[i] == "--debug" || os.Args[i] == "-d" {
 			logger.SetLevel(logger.DebugLevel)
 		} else {
 			filteredArgs = append(filteredArgs, os.Args[i])
@@ -465,8 +470,17 @@ func runProxy() {
 		}
 		proxyErr = p.Start(ctx)
 	case "grpc":
-		p := grpcproxy.NewInterceptor(addr, reg)
+		p := grpcproxy.NewInterceptor(addr, upstream, reg)
 		p.SetResolver(resolver)
+		if grpcDescriptorSet != "" {
+			desc, err := grpcproxy.LoadDescriptorSet(grpcDescriptorSet)
+			if err != nil {
+				logger.Error("Failed to load gRPC descriptor set: %v", err)
+				os.Exit(1)
+			}
+			p.SetDescriptor(desc)
+			logger.Debug("Loaded gRPC descriptor set from %s", grpcDescriptorSet)
+		}
 		proxyErr = p.Start(ctx)
 	case "redis":
 		p := redisproxy.NewInterceptor(addr, reg)

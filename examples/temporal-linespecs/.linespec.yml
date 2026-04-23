@@ -1,0 +1,25 @@
+service:
+  name: temporal-client-service
+  service_dir: temporal-service
+  type: web
+  framework: fastapi
+  port: 3003
+  health_endpoint: /health
+  start_command: uvicorn app.main:app --host 0.0.0.0 --port 3003
+  environment:
+    WORKFLOW_SERVICE_HOST: workflow-service
+    WORKFLOW_SERVICE_PORT: "50051"
+    WORKFLOW_CONTENT_TYPE: application/grpc+json
+
+infrastructure:
+  grpc: true
+
+grpc_descriptor_set: examples/temporal-service/proto/workflow.pb
+
+dependencies:
+  - name: workflow-service
+    type: grpc
+    host: temporal
+    port: 7233
+    proxy: true
+    host_alias: workflow-service
