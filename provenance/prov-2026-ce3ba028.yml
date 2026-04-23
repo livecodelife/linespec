@@ -1,6 +1,6 @@
 id: prov-2026-ce3ba028
 title: 'Extend gRPC support: upstream passthrough, content-type echo, protobuf descriptor mocks'
-status: open
+status: implemented
 created_at: "2026-04-22"
 author: calebcowen@gmail.com
 intent: "Extend the gRPC proxy beyond JSON-only pure-mock mode to support real upstream passthrough, content-type echo, and protobuf descriptor-driven JSON-to-protobuf conversion. This enables testing async workflow systems (e.g. Temporal) behind webhooks where gRPC calls to the workflow engine need to be either mocked or forwarded to a real backend. Three gaps are addressed: (1) unmocked gRPC calls currently return UNIMPLEMENTED instead of forwarding to an upstream, (2) the response content-type is hardcoded to application/grpc+json instead of echoing the request's content-type, and (3) users cannot write protobuf-shaped RETURNS payloads without hand-encoding binary bytes. The fix adds HTTP/2 reverse proxy forwarding for unmocked calls, content-type echo, and a descriptor-driven JSON-to-protobuf conversion path. Config is extended to support type: grpc dependencies with optional grpc_descriptor_set fields at both service-level (default) and per-dependency (override) scope."
@@ -56,7 +56,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-9f50db3c
-sealed_at_sha: ""
+sealed_at_sha: 199b458f7b73cb77f3a4a4beeb2bc0b82947c7c2
 associated_specs:
   - path: pkg/proxy/grpc/interceptor_test.go
     type: go-test
