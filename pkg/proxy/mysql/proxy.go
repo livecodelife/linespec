@@ -981,7 +981,12 @@ func (p *Proxy) extractWhereInfo(query string) (columns []string, values map[str
 	values = make(map[string]string)
 	matches := mysqlReWhereCondition.FindAllStringSubmatch(wherePart, -1)
 	for _, m := range matches {
-		col := strings.ToLower(m[1])
+		raw := strings.ToLower(m[1])
+		// Strip optional "table." prefix: "users.id" → "id"
+		col := raw
+		if dot := strings.LastIndex(raw, "."); dot >= 0 {
+			col = raw[dot+1:]
+		}
 		val := strings.Trim(m[2], "'")
 		if val == "?" {
 			val = "PRESENT"
@@ -1115,9 +1120,9 @@ func (p *Proxy) extractTable(query string) string {
 	return "unknown"
 }
 
-// getKnownTables returns the list of known tables from schema cache or defaults
+// getKnownTables returns the list of known tables from schema cache, falling
+// back to the registry's registered tables when the schema cache is empty.
 func (p *Proxy) getKnownTables() []string {
-	// If we have tables in schema cache, use those
 	if len(p.schemaCache) > 0 {
 		tables := make([]string, 0, len(p.schemaCache))
 		for table := range p.schemaCache {
@@ -1125,8 +1130,8 @@ func (p *Proxy) getKnownTables() []string {
 		}
 		return tables
 	}
-
-	return []string{}
+	// Fall back to tables registered in the mock registry (e.g. ACCESSING_TABLES mocks)
+	return p.registry.GetTables()
 }
 
 // extractShowFullFieldsTable extracts table name from SHOW FULL FIELDS FROM <table> query

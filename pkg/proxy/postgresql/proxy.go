@@ -2931,7 +2931,12 @@ func extractWhereInfo(query string, bindParams []string) (columns []string, valu
 	values = make(map[string]string)
 	seen := make(map[string]struct{})
 	for _, m := range reWhereCondition.FindAllStringSubmatch(query, -1) {
-		col := strings.ToLower(m[1])
+		raw := strings.ToLower(m[1])
+		// Strip optional "table." prefix so that "notifications.recipient" → "recipient"
+		col := raw
+		if dot := strings.LastIndex(raw, "."); dot >= 0 {
+			col = raw[dot+1:]
+		}
 		if _, ok := seen[col]; !ok {
 			seen[col] = struct{}{}
 			columns = append(columns, col)

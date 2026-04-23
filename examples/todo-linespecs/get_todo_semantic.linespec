@@ -1,0 +1,20 @@
+TEST get_todo_semantic
+
+RECEIVE HTTP:GET /api/v1/todos/1
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+RETURNS {{payloads/authenticated_user.yaml}}
+
+# Match the todo query by verifying both required WHERE columns are present
+EXPECT READ:MYSQL
+ACCESSING_TABLES [todos]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [id, user_id]
+RETURNS {{payloads/todo_single.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/todo_single.yaml}}

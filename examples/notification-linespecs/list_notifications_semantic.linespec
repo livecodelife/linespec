@@ -1,0 +1,28 @@
+TEST list_notifications_semantic
+
+RECEIVE HTTP:GET /api/v1/notifications
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
+RETURNS EMPTY
+
+EXPECT WRITE:REDIS SET auth:cache:${AUTH_TOKEN}
+RETURNS EMPTY
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+RETURNS {{payloads/authenticated_user.yaml}}
+
+# PostgreSQL SELECT with $1 Bind parameter — verify by table and WHERE column only.
+# Wire-level param resolution means the actual user id is available at match time,
+# but for this test verifying the column presence is sufficient.
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [notifications]
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS [recipient]
+RETURNS {{payloads/notifications_list.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/notifications_list_response.yaml}}

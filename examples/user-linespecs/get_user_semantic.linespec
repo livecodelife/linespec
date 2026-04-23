@@ -1,0 +1,22 @@
+TEST get_user_semantic
+
+RECEIVE HTTP:GET /api/v1/users/42
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+# Auth check: SELECT by token — matched by table + WHERE column presence
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  token: PRESENT
+RETURNS {{payloads/user_response.json}}
+
+# Fetch user by id — matched by table + exact WHERE value
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_WHERE
+  id: 42
+RETURNS {{payloads/user_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/user_public_response.json}}

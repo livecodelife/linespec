@@ -1,0 +1,37 @@
+TEST update_user_semantic
+
+RECEIVE HTTP:PUT /api/v1/users/42
+WITH {{payloads/update_user_request.json}}
+HEADERS
+  Authorization: Bearer ${AUTH_TOKEN}
+
+# Three SELECT queries to the same table — differentiated by CALL N ordering
+EXPECT READ:MYSQL CALL 1
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_response.json}}
+
+EXPECT READ:MYSQL CALL 2
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_response.json}}
+
+EXPECT READ:MYSQL CALL 3
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS EMPTY
+
+# UPDATE with written value verification
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION UPDATE
+VERIFY_WRITTEN_VALUES
+  name: Jane Doe
+  email: jane@example.com
+WITH {{payloads/update_user_request.json}}
+RETURNS {{payloads/user_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/updated_user_response.json}}
+NOISE
+  body.updated_at

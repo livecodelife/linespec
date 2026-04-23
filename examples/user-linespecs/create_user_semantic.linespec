@@ -1,0 +1,28 @@
+TEST create_user_semantic
+
+RECEIVE HTTP:POST /api/v1/users
+WITH {{payloads/create_user_request.json}}
+
+# Uniqueness check — ACCESSING_TABLES alone is sufficient (only one SELECT on users)
+EXPECT READ:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS EMPTY
+
+# Insert new user — verify the operation type and written column values
+EXPECT WRITE:MYSQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: john@example.com
+  name: John Doe
+WITH {{payloads/user_db_write_record.json}}
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS '`password`'
+
+RESPOND HTTP:201
+WITH {{payloads/user_public_response.json}}
+NOISE
+  body.id
+  body.created_at
+  body.password_digest
