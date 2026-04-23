@@ -1,6 +1,6 @@
 id: prov-2026-7b7c2c32
 title: Resolve CodeQL allocation overflow by slicing msg before allocation
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -20,7 +20,7 @@ supersedes: prov-2026-710251c7
 superseded_by: ""
 related:
   - prov-2026-ae5d2ade
-sealed_at_sha: ""
+sealed_at_sha: 0f6c58d1fd47e65c96440003de5dfa5849a83d4c
 associated_specs:
   - path: pkg/proxy/grpc/interceptor_test.go
     type: go-test
