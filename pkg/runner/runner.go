@@ -1738,23 +1738,63 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}
 		}
 	}
-	const grpcProxyAlias = "grpc-proxy"
+	grpcDeps := r.getGRPCProxyDependencies(serviceConfig)
 	grpcProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"})
 	var grpcHostPort, grpcVerifyPort string
-	if hasGRPC || serviceConfig.Infrastructure.GRPC {
+	if hasGRPC || serviceConfig.Infrastructure.GRPC || len(grpcDeps) > 0 {
+		var grpcProxyAliases []string
+		grpcProxyAlias := "grpc-proxy"
+		grpcProxyAliases = append(grpcProxyAliases, grpcProxyAlias)
+
+		grpcUpstream := "unused"
+		grpcPort := 50051
+		for _, dep := range grpcDeps {
+			alias := dep.Name
+			if dep.HostAlias != "" {
+				alias = dep.HostAlias
+			}
+			grpcProxyAliases = append(grpcProxyAliases, alias)
+			if dep.Port != 0 {
+				grpcPort = dep.Port
+			}
+			if dep.Host != "" && grpcUpstream == "unused" {
+				grpcUpstream = fmt.Sprintf("%s:%d", dep.Host, dep.Port)
+				if dep.Port == 0 {
+					grpcUpstream = dep.Host
+				}
+			}
+		}
+
+		grpcAddr := fmt.Sprintf("0.0.0.0:%d", grpcPort)
 		grpcProxyCmd := []string{
-			"proxy", "grpc", "0.0.0.0:50051", "unused",
+			"proxy", "grpc", grpcAddr, grpcUpstream,
 			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
 		}
+
+		mergedDescriptorPath, descriptorErr := r.mergeGRPCDescriptorSets(serviceConfig, r.projectRoot)
+		if descriptorErr != nil {
+			return fmt.Errorf("failed to merge gRPC descriptor sets: %w", descriptorErr)
+		}
+		if mergedDescriptorPath != "" {
+			containerDescriptorPath := r.suite.containerNaming.GetProjectMountPath() + "/" + mergedDescriptorPath
+			if strings.HasPrefix(mergedDescriptorPath, r.tempDir) {
+				containerDescriptorPath = r.suite.containerNaming.GetRegistryMountPath() + "/" + filepath.Base(mergedDescriptorPath)
+			} else if strings.HasPrefix(mergedDescriptorPath, r.projectRoot) {
+				rel, _ := filepath.Rel(r.projectRoot, mergedDescriptorPath)
+				containerDescriptorPath = r.suite.containerNaming.GetProjectMountPath() + "/" + rel
+			}
+			grpcProxyCmd = append(grpcProxyCmd, "--grpc-descriptor-set="+containerDescriptorPath)
+		}
+
 		if logger.IsDebug() {
 			grpcProxyCmd = append(grpcProxyCmd, "--debug")
 		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: proxyImage,
-			Cmd:   grpcProxyCmd,
+			Cmd: grpcProxyCmd,
 			ExposedPorts: map[nat.Port]struct{}{
-				nat.Port("50051/tcp"): {},
-				nat.Port("8081/tcp"):  {},
+				nat.Port(fmt.Sprintf("%d/tcp", grpcPort)): {},
+				nat.Port("8081/tcp"):                      {},
 			},
 		}, &container.HostConfig{
 			Binds: []string{
@@ -1762,18 +1802,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
 			},
 			PortBindings: map[nat.Port][]nat.PortBinding{
-				nat.Port("50051/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
-				nat.Port("8081/tcp"):  {{HostIP: "0.0.0.0", HostPort: "0"}},
+				nat.Port(fmt.Sprintf("%d/tcp", grpcPort)): {{HostIP: "0.0.0.0", HostPort: "0"}},
+				nat.Port("8081/tcp"):                      {{HostIP: "0.0.0.0", HostPort: "0"}},
 			},
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				r.suite.networkName: {Aliases: []string{grpcProxyAlias}},
+				r.suite.networkName: {Aliases: grpcProxyAliases},
 			},
 		}, grpcProxyContainerName)
 		if err != nil {
 			return fmt.Errorf("failed to start gRPC interceptor: %w", err)
 		}
-		logger.Debug("gRPC interceptor started with alias %s", grpcProxyAlias)
+		logger.Debug("gRPC interceptor started with aliases %v (upstream: %s)", grpcProxyAliases, grpcUpstream)
 		if logger.IsDebug() {
 			go func() {
 				logCtx, logCancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -1793,14 +1833,15 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			}
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, grpcProxyContainerName)
 		}()
+		grpcNatPort := nat.Port(fmt.Sprintf("%d/tcp", grpcPort))
 		if inspectGRPC, err := r.suite.orch.GetContainerInspect(ctx, grpcProxyContainerName); err == nil && inspectGRPC.NetworkSettings != nil {
-			if p, ok := inspectGRPC.NetworkSettings.Ports["50051/tcp"]; ok && len(p) > 0 {
+			if p, ok := inspectGRPC.NetworkSettings.Ports[grpcNatPort]; ok && len(p) > 0 {
 				grpcHostPort = p[0].HostPort
 			}
-			if p, ok := inspectGRPC.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
-				grpcVerifyPort = p[0].HostPort
-			}
+		if p, ok := inspectGRPC.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+			grpcVerifyPort = p[0].HostPort
 		}
+	}
 	}
 
 	// Start Redis interceptor when infrastructure.redis is enabled.
@@ -1985,9 +2026,28 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		envMap["KAFKA_BROKERS"] = "kafka:29092"
 	}
 
-	if hasGRPC || serviceConfig.Infrastructure.GRPC {
-		envMap["GRPC_HOST"] = grpcProxyAlias
-		envMap["GRPC_PORT"] = "50051"
+	if hasGRPC || serviceConfig.Infrastructure.GRPC || len(grpcDeps) > 0 {
+		defaultGRPCPort := 50051
+		envMap["GRPC_HOST"] = "grpc-proxy"
+		envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+		for _, dep := range grpcDeps {
+			alias := dep.Name
+			if dep.HostAlias != "" {
+				alias = dep.HostAlias
+			}
+			envVarPrefix := strings.ToUpper(strings.ReplaceAll(dep.Name, "-", "_"))
+			depPort := dep.Port
+			if depPort == 0 {
+				depPort = 50051
+			}
+			if _, exists := serviceConfig.Service.Environment[envVarPrefix+"_HOST"]; !exists {
+				envMap[envVarPrefix+"_HOST"] = alias
+			}
+			if _, exists := serviceConfig.Service.Environment[envVarPrefix+"_PORT"]; !exists {
+				envMap[envVarPrefix+"_PORT"] = fmt.Sprintf("%d", depPort)
+			}
+			logger.Debug("Added gRPC dependency env: %s_HOST=%s, %s_PORT=%d", envVarPrefix, alias, envVarPrefix, depPort)
+		}
 	}
 
 	if serviceConfig.Infrastructure.Redis {
@@ -2464,6 +2524,47 @@ func (r *testRunner) getHTTPProxyDependencies(cfg *config.LineSpecConfig) []conf
 		}
 	}
 	return result
+}
+
+func (r *testRunner) getGRPCProxyDependencies(cfg *config.LineSpecConfig) []config.DependencyConfig {
+	var result []config.DependencyConfig
+	for _, dep := range cfg.Dependencies {
+		if dep.Type == "grpc" && dep.Proxy {
+			result = append(result, dep)
+		}
+	}
+	return result
+}
+
+func (r *testRunner) mergeGRPCDescriptorSets(cfg *config.LineSpecConfig, projectRoot string) (string, error) {
+	var paths []string
+	if cfg.GRPCDescriptorSet != "" {
+		paths = append(paths, filepath.Join(projectRoot, cfg.GRPCDescriptorSet))
+	}
+	for _, dep := range cfg.Dependencies {
+		if dep.Type == "grpc" && dep.GRPCDescriptorSet != "" {
+			paths = append(paths, filepath.Join(projectRoot, dep.GRPCDescriptorSet))
+		}
+	}
+	if len(paths) == 0 {
+		return "", nil
+	}
+	if len(paths) == 1 {
+		return paths[0], nil
+	}
+	var combinedData []byte
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return "", fmt.Errorf("failed to read descriptor set %s: %w", p, err)
+		}
+		combinedData = append(combinedData, data...)
+	}
+	mergedPath := filepath.Join(r.tempDir, "merged-descriptor-set.pb")
+	if err := os.WriteFile(mergedPath, combinedData, 0644); err != nil {
+		return "", fmt.Errorf("failed to write merged descriptor set: %w", err)
+	}
+	return mergedPath, nil
 }
 
 // SchemaCache represents the cached schema for tables

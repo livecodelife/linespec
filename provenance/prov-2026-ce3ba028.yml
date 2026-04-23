@@ -17,12 +17,33 @@ constraints:
 affected_scope:
   - pkg/proxy/grpc/interceptor.go
   - pkg/proxy/grpc/interceptor_test.go
+  - pkg/proxy/grpc/descriptor.go
+  - pkg/proxy/grpc/descriptor_test.go
+  - pkg/proxy/grpc/testdata/test.pb
   - pkg/config/types.go
   - pkg/runner/runner.go
+  - pkg/runner/grpc_deps_test.go
   - cmd/linespec/main_beta.go
   - cmd/linespec/main_stable.go
   - go.mod
   - go.sum
+  - examples/temporal-service/app/main.py
+  - examples/temporal-service/Dockerfile
+  - examples/temporal-service/requirements.txt
+  - examples/temporal-service/.dockerignore
+  - examples/temporal-service/proto/workflow.proto
+  - examples/temporal-service/proto/workflow.pb
+  - examples/temporal-linespecs/.linespec.yml
+  - examples/temporal-linespecs/start_workflow_success.linespec
+  - examples/temporal-linespecs/get_workflow_result_success.linespec
+  - examples/temporal-linespecs/payloads/start_workflow_http_req.json
+  - examples/temporal-linespecs/payloads/start_workflow_request.yaml
+  - examples/temporal-linespecs/payloads/start_workflow_response.json
+  - examples/temporal-linespecs/payloads/start_workflow_http_resp.json
+  - examples/temporal-linespecs/payloads/get_result_http_req.json
+  - examples/temporal-linespecs/payloads/get_result_request.yaml
+  - examples/temporal-linespecs/payloads/get_result_response.json
+  - examples/temporal-linespecs/payloads/get_result_http_resp.json
 forbidden_scope:
   - pkg/proxy/postgresql/**
   - pkg/proxy/mysql/**
@@ -39,6 +60,14 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/proxy/grpc/interceptor_test.go
     type: go-test
+  - path: pkg/proxy/grpc/descriptor_test.go
+    type: go-test
+  - path: pkg/runner/grpc_deps_test.go
+    type: go-test
+  - path: examples/temporal-linespecs/start_workflow_success.linespec
+    type: linespec
+  - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags:

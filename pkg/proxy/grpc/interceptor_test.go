@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestEncodeGRPCFrame_Empty(t *testing.T) {
 func TestInterceptor_NoMock_ReturnsUnimplemented(t *testing.T) {
 	reg := registry.NewMockRegistry()
 	addr := "127.0.0.1:19877"
-	interceptor := NewInterceptor(addr, reg)
+	interceptor := NewInterceptor(addr, "", reg)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -246,8 +247,175 @@ func TestGRPCFrameRoundtrip(t *testing.T) {
 			t.Fatalf("Failed to read body: %v", err)
 		}
 
-		if string(body) != msg {
-			t.Errorf("Roundtrip mismatch for message of length %d", len(msg))
-		}
+	if string(body) != msg {
+		t.Errorf("Roundtrip mismatch for message of length %d", len(msg))
+	}
+	}
+}
+
+func TestInterceptor_NoUpstream_BackwardCompat(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	addr := "127.0.0.1:19878"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/unknown.Service/Method", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Grpc-Status") != "12" {
+		t.Errorf("Expected Grpc-Status 12 (UNIMPLEMENTED), got %s", resp.Header.Get("Grpc-Status"))
+	}
+	if resp.Header.Get("Content-Type") != "application/grpc+json" {
+		t.Errorf("Expected Content-Type application/grpc+json, got %s", resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestInterceptor_ContentTypeEcho(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "test-ct-echo",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:  types.GRPC,
+				Service:  "test.v1.TestService",
+				RPCMethod: "GetUser",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	addr := "127.0.0.1:19879"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{"user_id": "1"}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Type") != "application/grpc" {
+		t.Errorf("Expected Content-Type application/grpc (echo), got %s", resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestInterceptor_ContentTypeDefault(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	addr := "127.0.0.1:19880"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/unknown.Service/Method", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Type") != "application/grpc+json" {
+		t.Errorf("Expected default Content-Type application/grpc+json, got %s", resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestInterceptor_WithDescriptor(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "test-descriptor",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:   types.GRPC,
+				Service:   "test.v1.TestService",
+				RPCMethod: "GetUser",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	path := filepath.Join("testdata", "test.pb")
+	desc, err := LoadDescriptorSet(path)
+	if err != nil {
+		t.Fatalf("LoadDescriptorSet failed: %v", err)
+	}
+
+	addr := "127.0.0.1:19881"
+	interceptor := NewInterceptor(addr, "", reg)
+	interceptor.SetDescriptor(desc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{"user_id": "1"}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Content-Type") != "application/grpc" {
+		t.Errorf("Expected Content-Type application/grpc, got %s", resp.Header.Get("Content-Type"))
 	}
 }
