@@ -98,7 +98,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	var requestBody string
 	if len(bodyBytes) >= 5 {
 		msgLen := binary.BigEndian.Uint32(bodyBytes[1:5])
-		if int(msgLen) <= len(bodyBytes)-5 {
+		if msgLen <= uint32(len(bodyBytes)-5) {
 			requestBody = string(bodyBytes[5 : 5+msgLen])
 		}
 	}
@@ -226,9 +226,13 @@ func (i *Interceptor) forwardToUpstream(w http.ResponseWriter, r *http.Request, 
 }
 
 func encodeGRPCFrame(msg []byte) []byte {
-	frame := make([]byte, 5+len(msg))
+	msgLen := len(msg)
+	if msgLen > (1<<32)-1-5 {
+		msgLen = (1 << 32) - 1 - 5
+	}
+	frame := make([]byte, 5+msgLen)
 	frame[0] = 0
-	binary.BigEndian.PutUint32(frame[1:5], uint32(len(msg)))
+	binary.BigEndian.PutUint32(frame[1:5], uint32(msgLen))
 	copy(frame[5:], msg)
 	return frame
 }
