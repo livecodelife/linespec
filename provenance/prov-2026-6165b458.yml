@@ -34,16 +34,14 @@ affected_scope:
   - pkg/proxy/http/interceptor.go
   - pkg/proxy/postgresql/proxy.go
   - pkg/proxy/postgresql/result.go
+  - LINESPEC.md
+  - docs/linespec.html
 forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: LINESPEC.md
-    type: docs
-  - path: docs/linespec.html
-    type: docs
   - path: pkg/proxy/http/interceptor.go
     type: code
     run_command: make test

@@ -481,9 +481,29 @@ RETURNS {{orders_with_user.yaml}}</code></pre>
   ...]
 RETURNS {{<response_body>}}</code></pre>
                     </div>
+                    <p><strong>Simulating dependency failures:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code># Simulate a network/connection failure (TCP close, no response)
+EXPECT HTTP:GET http://user-service.local/users/42
+RETURNS ERROR
+
+# Return a non-200 HTTP status from the dependency
+EXPECT HTTP:POST http://payment-service.local/charge
+RETURNS HTTP:429
+
+# Non-200 status with a response body
+EXPECT HTTP:GET http://auth-service.local/validate
+RETURNS HTTP:401
+WITH {{payloads/auth_error.json}}</code></pre>
+                    </div>
                     <p><strong>Rules:</strong></p>
                     <ul>
-                        <li>RETURNS is required for HTTP expectations</li>
+                        <li>RETURNS is required for HTTP expectations; use <code>{{file}}</code>, <code>ERROR</code>, <code>ERROR &lt;code&gt;</code>, or <code>HTTP:NNN</code></li>
+                        <li><code>RETURNS ERROR</code> closes the TCP connection immediately — the service sees an <code>io.EOF</code></li>
+                        <li><code>RETURNS HTTP:NNN</code> sends the given status code; combine with <code>WITH {{file}}</code> for a response body</li>
                         <li>HEADERS is optional; headers are matched against the actual request</li>
                         <li>The proxy intercepts calls to the hostname and returns the mocked response</li>
                         <li>Tests fail if the HTTP mock is defined but not invoked</li>

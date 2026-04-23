@@ -401,9 +401,33 @@ HEADERS
 RETURNS {{user_info.yaml}}
 ```
 
+Simulating dependency failures:
+
+```
+# Simulate a network/connection failure (TCP close, no response)
+EXPECT HTTP:GET http://user-service.local/users/42
+RETURNS ERROR
+
+# Simulate a specific error condition
+EXPECT HTTP:POST http://temporal.local/workflows
+RETURNS ERROR cycle_detected
+
+# Return a non-200 HTTP status from the dependency
+EXPECT HTTP:POST http://payment-service.local/charge
+RETURNS HTTP:429
+
+# Non-200 status with a response body
+EXPECT HTTP:GET http://auth-service.local/validate
+RETURNS HTTP:401
+WITH {{payloads/auth_error.json}}
+```
+
 Rules:
 
-* RETURNS is required for HTTP expectations
+* RETURNS is required for HTTP expectations; use `{{file}}`, `ERROR`, `ERROR <code>`, or `HTTP:NNN`
+* `RETURNS ERROR` closes the TCP connection immediately — the service sees an `io.EOF`
+* `RETURNS ERROR <code>` does the same; `<code>` is a label for test readability (e.g. `cycle_detected`)
+* `RETURNS HTTP:NNN` sends the given status code; combine with `WITH {{file}}` for a response body
 * HEADERS is optional; headers are matched against the actual request
 * The proxy intercepts calls to the hostname and returns the mocked response
 * Tests fail if the HTTP mock is defined but not invoked
