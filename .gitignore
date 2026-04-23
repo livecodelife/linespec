@@ -41,6 +41,9 @@ user_tests.log
 # Test reports
 linespec-report/
 
+# LineSpec runtime artifacts
+.linespec/
+
 # Docker compose override (generated during test runs)
 .linespec-compose-override.yml
 
