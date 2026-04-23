@@ -1182,20 +1182,27 @@ user_id: 123</code></pre>
   proxy_image: linespec:latest  # Docker image for protocol proxy sidecars</code></pre>
                     </div>
 
-                    <h3>Dependencies</h3>
-                    <p>External HTTP services the SUT calls. Each entry creates a proxy that intercepts matching requests.</p>
-                    <div class="code-block">
-                        <div class="code-header"><span>.linespec.yml</span></div>
-                        <pre><code>dependencies:
-  - name: user-service
-    type: http
-    host: user-service.local   # Hostname the SUT dials
-    port: 3001
-    proxy: true                # Intercept calls to this host
-    host_alias: user-svc       # Optional DNS alias inside the test network
-    headers:                   # Default headers forwarded to all matched requests
-      X-Internal-Token: secret</code></pre>
-                    </div>
+<h3>Dependencies</h3>
+<p>External services the SUT calls. Each entry creates a proxy that intercepts matching requests. Supported types: <code>http</code>, <code>grpc</code>.</p>
+<div class="code-block">
+<div class="code-header"><span>.linespec.yml</span></div>
+<pre><code>dependencies:
+- name: user-service
+  type: http
+  host: user-service.local
+  port: 3001
+  proxy: true # Intercept calls to this host
+  host_alias: user-svc # Optional DNS alias inside the test network
+  headers: # Default headers forwarded to all matched requests
+    X-Internal-Token: secret
+
+- name: workflow-service
+  type: grpc
+  host: temporal
+  port: 7233
+  grpc_descriptor_set: proto/workflow.pb # Optional per-dependency override</code></pre>
+</div>
+<p><strong>gRPC dependencies</strong> support an optional <code>grpc_descriptor_set</code> field for protobuf descriptor mocks (see <a href="#grpc">gRPC Expectations</a>). A service-level default can be set via the top-level <code>grpc_descriptor_set</code> field; per-dependency values take precedence.</p>
 
                     <h3>Provenance</h3>
                     <p>Enables git hooks and semantic search for Provenance Records.</p>
@@ -1379,52 +1386,95 @@ RESPOND HTTP:200</code></pre>
                     </div>
                 </section>
 
-                <section id="grpc" class="docs-section">
-                    <h2>gRPC Expectations</h2>
-                    <p>LineSpec intercepts gRPC traffic using an HTTP/2 + JSON proxy. The service under test must point its gRPC client at the proxy host. No code changes to the service are required.</p>
+<section id="grpc" class="docs-section">
+<h2>gRPC Expectations</h2>
+<p>LineSpec intercepts gRPC traffic using an HTTP/2 proxy. The service under test must point its gRPC client at the proxy host. No code changes to the service are required.</p>
 
-                    <p>Enable gRPC in <code>.linespec.yml</code>:</p>
-                    <div class="code-block">
-                        <div class="code-header"><span>.linespec.yml</span></div>
-                        <pre><code>infrastructure:
+<p>Enable gRPC in <code>.linespec.yml</code>:</p>
+<div class="code-block">
+<div class="code-header"><span>.linespec.yml</span></div>
+<pre><code>infrastructure:
   grpc: true
 
 dependencies:
-  - name: user-grpc-service
-    type: grpc
-    host: user-grpc-service.local
-    port: 50051</code></pre>
-                    </div>
+- name: user-grpc-service
+  type: grpc
+  host: user-grpc-service.local
+  port: 50051</code></pre>
+</div>
 
-                    <h3>EXPECT GRPC</h3>
-                    <div class="code-block">
-                        <div class="code-header"><span>LineSpec</span></div>
-                        <pre><code>EXPECT GRPC:&lt;ServiceName&gt;/&lt;MethodName&gt;
+<h3>EXPECT GRPC</h3>
+<div class="code-block">
+<div class="code-header"><span>LineSpec</span></div>
+<pre><code>EXPECT GRPC:&lt;ServiceName&gt;/&lt;MethodName&gt;
 [WITH {{&lt;request_payload&gt;}}]
 RETURNS {{&lt;response_payload&gt;}}</code></pre>
-                    </div>
-                    <ul>
-                        <li><code>ServiceName/MethodName</code> matches the gRPC route (e.g. <code>UserService/GetUser</code>)</li>
-                        <li>Payloads are JSON — LineSpec serialises to/from the wire format transparently</li>
-                        <li><code>RETURNS</code> is required; the proxy returns it as the gRPC response</li>
-                        <li>Test fails if the expected gRPC call is not observed</li>
-                    </ul>
+</div>
+<ul>
+<li><code>ServiceName/MethodName</code> matches the gRPC route (e.g. <code>UserService/GetUser</code>)</li>
+<li><code>WITH</code> is optional; omit it to match any request body for that method</li>
+<li><code>RETURNS</code> is required; the proxy returns it as the gRPC response</li>
+<li>Test fails if the expected gRPC call is not observed</li>
+</ul>
 
-                    <h3>Example</h3>
-                    <div class="code-block">
-                        <div class="code-header">
-                            <span>get_notification_with_grpc_lookup.linespec</span>
-                            <button class="copy-btn" aria-label="Copy code">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <pre><code>TEST get_notification_resolves_user_via_grpc
+<h3>Content-Type handling</h3>
+<p>The gRPC proxy echoes the request's <code>Content-Type</code> in its response:</p>
+<ul>
+<li><code>application/grpc+json</code> (default) — payloads are JSON. The 5-byte gRPC length-prefixed frame contains a JSON body. This is the original mode and remains the default when no Content-Type is specified.</li>
+<li><code>application/grpc</code> — payloads are binary protobuf. When a protobuf descriptor set is configured (see below), <code>RETURNS</code> payloads written as JSON are automatically converted to binary protobuf on the wire. Without a descriptor, the raw bytes from the payload file are sent as-is.</li>
+</ul>
+
+<h3>Upstream passthrough</h3>
+<p>When a <code>type: grpc</code> dependency specifies a <code>host</code> and <code>port</code>, the proxy forwards any <strong>unmocked</strong> gRPC calls to that upstream backend via HTTP/2 reverse proxy. This lets you mix mocked and real gRPC backends in a single test — methods you <code>EXPECT</code> are intercepted; all others are forwarded transparently.</p>
+<p>When no upstream is configured (or <code>infrastructure.grpc: true</code> is used without gRPC dependencies), unmocked calls return <code>UNIMPLEMENTED</code> — preserving backward compatibility with the original pure-mock behavior.</p>
+
+<h3>Protobuf descriptor mocks</h3>
+<p>When the service under test uses native gRPC clients (not JSON), the proxy needs a compiled protobuf descriptor set (<code>.pb</code> file) to convert JSON <code>RETURNS</code> payloads into binary protobuf on the wire.</p>
+<p>Configure the descriptor set in <code>.linespec.yml</code>:</p>
+<div class="code-block">
+<div class="code-header"><span>.linespec.yml</span></div>
+<pre><code># Service-level default — applies to all gRPC dependencies
+grpc_descriptor_set: proto/workflow.pb
+
+dependencies:
+- name: workflow-service
+  type: grpc
+  host: temporal
+  port: 7233
+
+# Per-dependency override — takes precedence over the service-level default
+- name: user-grpc-service
+  type: grpc
+  host: user-grpc-service.local
+  port: 50051
+  grpc_descriptor_set: proto/user.pb</code></pre>
+</div>
+<p>The descriptor set is a <code>FileDescriptorSet</code> compiled with <code>protoc</code>:</p>
+<div class="code-block">
+<div class="code-header"><span>Shell</span></div>
+<pre><code>protoc --include_imports --descriptor_set_out=workflow.pb workflow.proto</code></pre>
+</div>
+<ul>
+<li>When a descriptor is loaded and the request <code>Content-Type</code> is <code>application/grpc</code>, the proxy converts JSON <code>RETURNS</code> payloads to binary protobuf using the descriptor's message definitions</li>
+<li>When no descriptor is configured, or when the request <code>Content-Type</code> is <code>application/grpc+json</code>, payloads are served as-is (JSON or raw bytes)</li>
+<li>The runner merges all descriptor sets (service-level + per-dependency) into a single <code>FileDescriptorSet</code> before passing it to the proxy container</li>
+</ul>
+
+<h3>Example — JSON gRPC (application/grpc+json)</h3>
+<div class="code-block">
+<div class="code-header">
+<span>get_notification_with_grpc_lookup.linespec</span>
+<button class="copy-btn" aria-label="Copy code">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+<path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+</svg>
+</button>
+</div>
+<pre><code>TEST get_notification_resolves_user_via_grpc
 
 RECEIVE HTTP:GET /api/v1/notifications/42
 HEADERS
-  Authorization: Bearer ${AUTH_TOKEN}
+Authorization: Bearer ${AUTH_TOKEN}
 
 # Cache miss — must call downstream gRPC service for user info
 EXPECT READ:REDIS GET auth:cache:${AUTH_TOKEN}
@@ -1442,8 +1492,31 @@ RETURNS {{payloads/notification.yaml}}
 
 RESPOND HTTP:200
 WITH {{payloads/notification_response.yaml}}</code></pre>
-                    </div>
-                </section>
+</div>
+
+<h3>Example — Binary protobuf gRPC (application/grpc)</h3>
+<div class="code-block">
+<div class="code-header">
+<span>start_workflow_success.linespec</span>
+<button class="copy-btn" aria-label="Copy code">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+<path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+</svg>
+</button>
+</div>
+<pre><code>TEST start_workflow_success
+
+RECEIVE HTTP:POST /api/v1/workflows
+WITH {{payloads/start_workflow_request.json}}
+
+EXPECT GRPC:temporal.api.workflowservice.v1.WorkflowService/StartWorkflowExecution
+WITH {{payloads/grpc_start_request.json}}
+RETURNS {{payloads/grpc_start_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/start_workflow_response.json}}</code></pre>
+</div>
+</section>
 
                 <section id="timeout" class="docs-section">
                     <h2>TIMEOUT Directive</h2>
