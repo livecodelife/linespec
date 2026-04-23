@@ -1,6 +1,6 @@
 id: prov-2026-45238e7a
 title: Release v2.9.0 — semantic SQL matching and RETURNS ERROR/HTTP:NNN
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: |
@@ -18,7 +18,7 @@ superseded_by: ""
 related:
   - prov-2026-ae2a4514
   - prov-2026-6165b458
-sealed_at_sha: ""
+sealed_at_sha: 3ddaba3f7ae51820afea708a1fcabaaa3b4c7dd3
 associated_specs:
   - path: CHANGELOG.md
     type: docs
