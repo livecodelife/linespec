@@ -242,27 +242,26 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else {
-					tableName := p.extractTable(query)
-					p.registry.CheckNegativeMocks(tableName, query)
-					mock, found := p.registry.FindMock(tableName, query)
+					p.checkNegativeMocksForQuery(query)
+					mock, found := p.findMock(query)
 					if found {
 						// Store the actual query in the mock for proper hit tracking
 						// (only for unconstrained mocks; SQL/SQLContains mocks use their own key)
-						if mock.SQL == "" && mock.SQLContains == "" {
+						if mock.SQL == "" && mock.SQLContains == "" && len(mock.AccessingTables) == 0 {
 							mock.SQL = query
 						}
 						// Execute VERIFY rules if any
 						if len(mock.Verify) > 0 {
 							if err := verify.VerifySQL(query, mock.Verify); err != nil {
-								logger.Error("VERIFY failed for table %s: %v", tableName, err)
-								p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", tableName, err))
+								logger.Error("VERIFY failed: %v", err)
+								p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", mock.Table, err))
 								// Send error response to client
 								p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 								continue
 							}
-							logger.Debug("All VERIFY rules passed for table %s", tableName)
+							logger.Debug("All VERIFY rules passed")
 						}
-						logger.Debug("Mocking query for table %s: %s", tableName, query)
+						logger.Debug("Mocking query for table %s: %s", mock.Table, query)
 						_ = p.sendMockResponse(clientConn, mock, clientCapabilities)
 					} else {
 						p.registry.RecordPassthrough("MySQL query: " + query[:min(80, len(query))])
@@ -285,16 +284,15 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					_, _ = upstreamConn.Write(header)
 					_, _ = upstreamConn.Write(payload)
 				} else {
-					tableName := p.extractTable(sql)
-					_, found := p.registry.PeekMock(tableName, sql)
+					_, found := p.peekMock(sql)
 					if found {
 						stmtID := nextStmtID
 						nextStmtID++
 						preparedStmts[stmtID] = sql
-						logger.Debug("Intercepting COM_STMT_PREPARE for table %s, stmtID=%d", tableName, stmtID)
+						logger.Debug("Intercepting COM_STMT_PREPARE stmtID=%d sql=%.80s", stmtID, sql)
 						_ = p.sendStmtPrepareOK(clientConn, stmtID, sql, clientCapabilities)
 					} else {
-						logger.Debug("No mock for COM_STMT_PREPARE table %s, forwarding", tableName)
+						logger.Debug("No mock for COM_STMT_PREPARE, forwarding: %.80s", sql)
 						_, _ = upstreamConn.Write(header)
 						_, _ = upstreamConn.Write(payload)
 					}
@@ -309,22 +307,21 @@ func (p *Proxy) handleConn(clientConn net.Conn) {
 					stmtID := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
 					if sql, ok := preparedStmts[stmtID]; ok {
 						logger.Debug("COM_STMT_EXECUTE for synthetic stmtID=%d, sql=%.80s", stmtID, sql)
-						tableName := p.extractTable(sql)
-						p.registry.CheckNegativeMocks(tableName, sql)
-						mock, found := p.registry.FindMock(tableName, sql)
+						p.checkNegativeMocksForQuery(sql)
+						mock, found := p.findMock(sql)
 						if found {
-							if mock.SQL == "" {
+							if mock.SQL == "" && len(mock.AccessingTables) == 0 {
 								mock.SQL = sql
 							}
 							if len(mock.Verify) > 0 {
 								if err := verify.VerifySQL(sql, mock.Verify); err != nil {
-									logger.Error("VERIFY failed for prepared stmt table %s: %v", tableName, err)
-									p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", tableName, err))
+									logger.Error("VERIFY failed for prepared stmt: %v", err)
+									p.registry.RecordVerifyError(fmt.Sprintf("WRITE:MYSQL [%s]: %v", mock.Table, err))
 									p.sendErrorResponse(clientConn, fmt.Sprintf("VERIFY failed: %v", err))
 									continue
 								}
 							}
-							logger.Debug("Mocking COM_STMT_EXECUTE for table %s", tableName)
+							logger.Debug("Mocking COM_STMT_EXECUTE for table %s", mock.Table)
 							_ = p.sendBinaryMockResponse(clientConn, mock, clientCapabilities)
 						} else {
 							// Synthetic stmt but mock disappeared (e.g. registry reset) — error out.
@@ -924,6 +921,167 @@ func (p *Proxy) isWhitelisted(query string) bool {
 	}
 	return false
 }
+
+// ── Semantic SQL matching helpers ─────────────────────────────────────────────
+
+// extractAllTables scans the query for every registered table name.
+func (p *Proxy) extractAllTables(query string) []string {
+	q := strings.ToLower(query)
+	known := p.getKnownTables()
+	seen := make(map[string]bool)
+	var tables []string
+	for _, t := range known {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(t) + `\b`)
+		if re.MatchString(q) && !seen[t] {
+			seen[t] = true
+			tables = append(tables, t)
+		}
+	}
+	return tables
+}
+
+// extractQueryOperation returns the first SQL DML keyword.
+func (p *Proxy) extractQueryOperation(query string) string {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	switch {
+	case strings.HasPrefix(upper, "SELECT"), strings.HasPrefix(upper, "WITH"):
+		return "SELECT"
+	case strings.HasPrefix(upper, "INSERT"):
+		return "INSERT"
+	case strings.HasPrefix(upper, "UPDATE"):
+		return "UPDATE"
+	case strings.HasPrefix(upper, "DELETE"):
+		return "DELETE"
+	}
+	return ""
+}
+
+var (
+	mysqlReWhereCondition = regexp.MustCompile(`(?i)\b(\w+)\s*=\s*('[^']*'|\d+(?:\.\d+)?|\?)`)
+	mysqlReInsertCols     = regexp.MustCompile(`(?i)INSERT\s+(?:INTO\s+)?\w+\s*\(([^)]+)\)`)
+	mysqlReInsertVals     = regexp.MustCompile(`(?i)\)\s*VALUES?\s*\(([^)]+)\)`)
+	mysqlReUpdateSet      = regexp.MustCompile(`(?i)SET\s+(.+?)(?:\s+WHERE\s+|\s*$)`)
+	mysqlReSetItem        = regexp.MustCompile(`(?i)(\w+)\s*=\s*('[^']*'|\d+(?:\.\d+)?|\?)`)
+)
+
+// extractWhereInfo extracts WHERE clause column names and resolved values.
+func (p *Proxy) extractWhereInfo(query string) (columns []string, values map[string]string) {
+	upper := strings.ToUpper(query)
+	whereIdx := strings.Index(upper, " WHERE ")
+	if whereIdx == -1 {
+		return nil, nil
+	}
+	wherePart := query[whereIdx+7:]
+	// Trim ORDER BY / LIMIT etc.
+	for _, kw := range []string{" ORDER ", " LIMIT ", " GROUP ", " HAVING "} {
+		if i := strings.Index(strings.ToUpper(wherePart), kw); i != -1 {
+			wherePart = wherePart[:i]
+		}
+	}
+	values = make(map[string]string)
+	matches := mysqlReWhereCondition.FindAllStringSubmatch(wherePart, -1)
+	for _, m := range matches {
+		col := strings.ToLower(m[1])
+		val := strings.Trim(m[2], "'")
+		if val == "?" {
+			val = "PRESENT"
+		}
+		columns = append(columns, col)
+		values[col] = val
+	}
+	return columns, values
+}
+
+// extractWrittenValuesFromSQL extracts written column/value pairs for INSERT/UPDATE.
+func (p *Proxy) extractWrittenValuesFromSQL(query, operation string) map[string]string {
+	result := make(map[string]string)
+	switch operation {
+	case "INSERT":
+		colM := mysqlReInsertCols.FindStringSubmatch(query)
+		valM := mysqlReInsertVals.FindStringSubmatch(query)
+		if colM == nil || valM == nil {
+			return result
+		}
+		cols := splitCommaTrimmedMySQL(colM[1])
+		vals := splitCommaTrimmedMySQL(valM[1])
+		for i, col := range cols {
+			if i < len(vals) {
+				v := strings.Trim(vals[i], "'")
+				if v == "?" {
+					v = "PRESENT"
+				}
+				result[strings.ToLower(col)] = v
+			}
+		}
+	case "UPDATE":
+		setM := mysqlReUpdateSet.FindStringSubmatch(query)
+		if setM == nil {
+			return result
+		}
+		items := mysqlReSetItem.FindAllStringSubmatch(setM[1], -1)
+		for _, m := range items {
+			v := strings.Trim(m[2], "'")
+			if v == "?" {
+				v = "PRESENT"
+			}
+			result[strings.ToLower(m[1])] = v
+		}
+	}
+	return result
+}
+
+func splitCommaTrimmedMySQL(s string) []string {
+	parts := strings.Split(s, ",")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+	return parts
+}
+
+// findMock tries semantic matching first, then falls back to legacy table-based matching.
+func (p *Proxy) findMock(query string) (*types.ExpectStatement, bool) {
+	tables := p.extractAllTables(query)
+	if len(tables) > 0 {
+		op := p.extractQueryOperation(query)
+		whereCols, whereVals := p.extractWhereInfo(query)
+		written := p.extractWrittenValuesFromSQL(query, op)
+		if mock, ok := p.registry.FindMockByTables(tables, op, whereCols, whereVals, written); ok {
+			return mock, true
+		}
+	}
+	tableName := p.extractTable(query)
+	return p.registry.FindMock(tableName, query)
+}
+
+// peekMock tries semantic matching first, then falls back to legacy table-based matching.
+func (p *Proxy) peekMock(query string) (*types.ExpectStatement, bool) {
+	tables := p.extractAllTables(query)
+	if len(tables) > 0 {
+		op := p.extractQueryOperation(query)
+		whereCols, whereVals := p.extractWhereInfo(query)
+		written := p.extractWrittenValuesFromSQL(query, op)
+		if mock, ok := p.registry.PeekMockByTables(tables, op, whereCols, whereVals, written); ok {
+			return mock, true
+		}
+	}
+	tableName := p.extractTable(query)
+	return p.registry.PeekMock(tableName, query)
+}
+
+// checkNegativeMocksForQuery checks both semantic and legacy negative expectations.
+func (p *Proxy) checkNegativeMocksForQuery(query string) {
+	tables := p.extractAllTables(query)
+	if len(tables) > 0 {
+		op := p.extractQueryOperation(query)
+		whereCols, whereVals := p.extractWhereInfo(query)
+		written := p.extractWrittenValuesFromSQL(query, op)
+		p.registry.CheckNegativeMocksByTables(tables, op, whereCols, whereVals, written)
+	}
+	tableName := p.extractTable(query)
+	p.registry.CheckNegativeMocks(tableName, query)
+}
+
+// ── End semantic SQL matching helpers ─────────────────────────────────────────
 
 func (p *Proxy) extractTable(query string) string {
 	q := strings.ReplaceAll(strings.ToLower(query), "`", " ")
