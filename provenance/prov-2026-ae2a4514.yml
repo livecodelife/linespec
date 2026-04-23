@@ -1,7 +1,7 @@
 id: prov-2026-ae2a4514
 title: 'Replace USING_SQL/USING_SQL_CONTAINS with semantic SQL matching: ACCESSING_TABLES,
   VERIFY_WHERE, VERIFY_WRITTEN_VALUES'
-status: open
+status: implemented
 created_at: "2026-04-21"
 author: calebcowen@gmail.com
 intent: |
@@ -88,7 +88,7 @@ superseded_by: ""
 related:
   - prov-2026-030
   - prov-2026-4dcca1c0
-sealed_at_sha: ""
+sealed_at_sha: a6ab57a6af76b031a218b9c7ba210dd56e397488
 associated_specs:
   - path: LINESPEC.md
     type: docs
