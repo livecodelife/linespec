@@ -1,0 +1,33 @@
+id: prov-2026-b0e44331
+title: Fix git hooks to allow supersession transition commits
+status: open
+created_at: "2026-04-24"
+author: noreply@anthropic.com
+intent: |
+  When a new provenance record is created with --supersedes <old-id>, the old record
+  is updated with superseded_by and status:superseded on disk. Both files get staged
+  in one commit tagged with the new record ID. The commit-msg hook calls CheckStaged,
+  which checks all staged files against the new record's scope. The old record file
+  is not in affected_scope, so the hook incorrectly rejects the commit. The same
+  issue affects CheckCommit during historical audits. The fix adds a supersession
+  transition exception to both functions, parallel to the completion transition
+  exception, that permits the old record file when the before-status is open, the
+  after-status is superseded, superseded_by equals the new record ID, and the new
+  record's supersedes field references the old record.
+constraints:
+  - The exception must verify bidirectional consistency between supersedes and superseded_by
+  - The transition check must read before/after versions from git (HEAD vs staged for CheckStaged, commit^ vs commit for CheckCommit)
+  - The exception only applies when before-status is open and after-status is superseded
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-006
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
