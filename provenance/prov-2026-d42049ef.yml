@@ -1,6 +1,6 @@
 id: prov-2026-d42049ef
 title: Annotate remote-owned nodes in graph output
-status: open
+status: implemented
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ implements: prov-2026-90ec670e
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cb75d29254d5d38d6c987809a9a3a47d213adc6c
 associated_specs:
   - path: pkg/provenance/formatter.go
     type: code
