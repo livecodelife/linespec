@@ -1,0 +1,33 @@
+id: prov-2026-3b749a71
+title: Guard Lint --save-scope against remote records
+status: open
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Lint --save-scope collects records whose scope was auto-populated from git
+  history (autoPopulatedRecords) and writes them back with SaveRecord. These
+  records come from the full loader which includes both local and cached remote
+  records. AutoPopulateScope reads local git history so a remote record matching
+  a commit tag is unlikely, but not impossible. Add a filter to skip remote
+  records when building autoPopulatedRecords so no write can silently reach the
+  local cache for a record owned by a shared repo.
+constraints:
+  - Filter is applied at collection time, not at save time, so the log message count is accurate
+  - No behavioural change for local records
+  - No error surfaced to the user for skipped remote records; silent skip is correct since the remote record's scope is managed by its origin repo
+affected_scope:
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-90ec670e
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
