@@ -1,7 +1,7 @@
 id: prov-2026-53e3e311
 title: 'Provenance hierarchy chunk 2: cross-tier lint enforcement'
 type: blueprint
-status: draft
+status: open
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -26,5 +26,14 @@ constraints:
   - Cross-repo implements references (non-local ID format containing a colon separator) must produce a warning, not an error, and must name the referenced ID
   - All three rules must be always-on regardless of the configured enforcement level (none/warn/strict), since they represent graph integrity violations
   - New SARIF rule IDs PROV020, PROV021, PROV022 must be added to sarif.go alongside the existing catalog
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/sarif.go
+  - pkg/provenance/linter_test.go
+  - pkg/provenance/sarif_test.go
 related:
   - prov-2026-cd41b067
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
