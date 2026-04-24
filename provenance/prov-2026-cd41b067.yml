@@ -1,0 +1,33 @@
+id: prov-2026-cd41b067
+title: 'Provenance hierarchy: type field, implements field, draft status, open command'
+status: open
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Extend the Provenance Record schema and CLI to support a three-tier hierarchy
+  (brief, blueprint, imprint) via a new type field, a parent reference via an
+  implements field, and a draft lifecycle status. A new `linespec provenance open`
+  command transitions records from draft to open, which is when enforcement begins.
+constraints:
+  - Records without a type field must parse successfully with a backward-compat default of blueprint and surface a lint hint
+  - The draft status must suppress scope and linespecs enforcement rules
+  - The open command must reject any starting status other than draft with a clear error message
+  - The create command must default to draft status and accept --type brief|blueprint|imprint
+  - The implements field must parse as a nullable string and be omitted from YAML output when empty
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/linter.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/provenance_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
