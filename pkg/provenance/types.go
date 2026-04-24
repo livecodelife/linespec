@@ -39,13 +39,14 @@ type RecordType string
 const (
 	RecordTypeBrief     RecordType = "brief"
 	RecordTypeBlueprint RecordType = "blueprint"
+	RecordTypeBug       RecordType = "bug"
 	RecordTypeImprint   RecordType = "imprint"
 )
 
 // IsValid returns true if the record type is a known value
 func (t RecordType) IsValid() bool {
 	switch t {
-	case RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint:
+	case RecordTypeBrief, RecordTypeBlueprint, RecordTypeBug, RecordTypeImprint:
 		return true
 	}
 	return false
@@ -82,6 +83,7 @@ type Record struct {
 	// Graph relationships
 	Supersedes   string   `yaml:"supersedes"`
 	SupersededBy string   `yaml:"superseded_by"`
+	Extends      string   `yaml:"extends,omitempty"`
 	Implements   string   `yaml:"implements,omitempty"`
 	Related      []string `yaml:"related"`
 
