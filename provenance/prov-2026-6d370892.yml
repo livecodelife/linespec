@@ -1,0 +1,29 @@
+id: prov-2026-6d370892
+title: 'CI workflow: authenticate git for shared repo sync'
+status: draft
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >-
+  The provenance-lint-sarif CI workflow must configure git credentials so that
+  `linespec provenance sync` can clone private shared repos. The workflow
+  currently runs `./linespec -p sync` without any authentication, which fails
+  against private GitHub repos. Add a git config step that rewrites HTTPS URLs
+  to include the SHARED_REPO_TOKEN secret, and update the sync command to use
+  the canonical `provenance sync` subcommand form.
+implements: prov-2026-e7d88140
+constraints:
+  - "The SHARED_REPO_TOKEN secret must be used instead of GITHUB_TOKEN since the default token is scoped to the current repo only"
+  - "The git insteadOf rewrite must be global so both git archive and git clone fallback are authenticated"
+  - "The sync command must use the canonical provenance sync form, not the -p alias"
+affected_scope:
+  - .github/workflows/provenance-lint-sarif.yml
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
