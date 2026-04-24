@@ -1,6 +1,6 @@
 id: prov-2026-64c6a450
 title: Update local docs for bug type and field enforcement matrix
-status: open
+status: implemented
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ implements: prov-2026-9ffe68bb
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8ac42e8b6ca9f311b6c3ea0750403e7eb80d61f7
 associated_specs:
   - path: CHANGELOG.md
     type: config
