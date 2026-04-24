@@ -317,8 +317,8 @@ func (c *Commands) Status(opts StatusOptions) error {
 				if err := c.Checker.AutoPopulateScope(record); err != nil {
 					// Non-fatal, just log
 					fmt.Fprintf(os.Stderr, "Warning: Could not auto-populate scope for %s: %v\n", record.ID, err)
-				} else if len(record.AffectedScope) > originalLen {
-					// Scope was actually populated with new files
+				} else if len(record.AffectedScope) > originalLen && !c.isRemoteRecord(record) {
+					// Scope was actually populated with new files (remote records are read-only)
 					autoPopulatedRecords = append(autoPopulatedRecords, record)
 				}
 			}
