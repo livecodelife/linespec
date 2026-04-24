@@ -8,6 +8,19 @@ import (
 	"strings"
 )
 
+// isRemoteFilePath reports whether filePath lives outside the local provenance
+// directory, i.e. it was resolved from a shared-repo cache.
+func isRemoteFilePath(filePath, localDir string) bool {
+	if filePath == "" || localDir == "" {
+		return false
+	}
+	dir := localDir
+	if !strings.HasSuffix(dir, string(os.PathSeparator)) {
+		dir += string(os.PathSeparator)
+	}
+	return !strings.HasPrefix(filePath, dir)
+}
+
 // Formatter handles output formatting for provenance commands
 type Formatter struct {
 	Output io.Writer
@@ -387,7 +400,7 @@ func (f *Formatter) FormatGraph(loader *Loader, filter string, root string) {
 		if filter != "" && string(record.Status) != filter {
 			continue
 		}
-		f.printGraphNodeSimple(record)
+		f.printGraphNodeSimple(record, loader.Dir)
 	}
 
 	fmt.Fprintln(f.Output)
@@ -409,7 +422,7 @@ func (f *Formatter) printRootedGraph(loader *Loader, rootID string, filter strin
 	if root.Implements != "" {
 		parent, parentExists := loader.GetRecord(root.Implements)
 		if parentExists {
-			f.printGraphNodeLine(parent, 0, false)
+			f.printGraphNodeLine(parent, 0, false, loader.Dir)
 			visited[parent.ID] = true
 			// Print root as an implements child of parent
 			f.printImplementsNode(loader, rootID, 1, visited, filter)
@@ -445,7 +458,7 @@ func (f *Formatter) printGraphNode(loader *Loader, id string, depth int, visited
 		}
 	}
 
-	f.printGraphNodeLine(record, depth, false)
+	f.printGraphNodeLine(record, depth, false, loader.Dir)
 
 	// Supersession children (records that supersede this one) — same dimension
 	for _, r := range loader.Records {
@@ -487,12 +500,18 @@ func (f *Formatter) printImplementsNode(loader *Loader, id string, depth int, vi
 
 	statusStr := f.statusLabel(record)
 
-	fmt.Fprintf(f.Output, "%s↳ [%s] %s  %s  %s\n",
+	remoteLabel := ""
+	if isRemoteFilePath(record.FilePath, loader.Dir) {
+		remoteLabel = " [remote]"
+	}
+
+	fmt.Fprintf(f.Output, "%s↳ [%s] %s  %s  %s%s\n",
 		indent,
 		typeLabel,
 		record.ID,
 		statusStr,
-		record.Title)
+		record.Title,
+		remoteLabel)
 
 	// Supersession children within this implements tier
 	for _, r := range loader.Records {
@@ -510,7 +529,7 @@ func (f *Formatter) printImplementsNode(loader *Loader, id string, depth int, vi
 }
 
 // printGraphNodeLine prints a single record line with the appropriate indent and connector.
-func (f *Formatter) printGraphNodeLine(record *Record, depth int, implementsChild bool) {
+func (f *Formatter) printGraphNodeLine(record *Record, depth int, implementsChild bool, localDir string) {
 	indent := strings.Repeat("  ", depth)
 	statusStr := f.statusLabel(record)
 
@@ -519,12 +538,18 @@ func (f *Formatter) printGraphNodeLine(record *Record, depth int, implementsChil
 		connector = "└─ "
 	}
 
-	fmt.Fprintf(f.Output, "%s%s%s  %s  %s\n",
+	remoteLabel := ""
+	if isRemoteFilePath(record.FilePath, localDir) {
+		remoteLabel = " [remote]"
+	}
+
+	fmt.Fprintf(f.Output, "%s%s%s  %s  %s%s\n",
 		indent,
 		connector,
 		record.ID,
 		statusStr,
-		record.Title)
+		record.Title,
+		remoteLabel)
 }
 
 // statusLabel returns a coloured status string for a record.
@@ -549,11 +574,16 @@ func (f *Formatter) statusLabel(record *Record) string {
 }
 
 // printGraphNodeSimple prints a simple node line
-func (f *Formatter) printGraphNodeSimple(record *Record) {
-	fmt.Fprintf(f.Output, "  %s  %s  %s\n",
+func (f *Formatter) printGraphNodeSimple(record *Record, localDir string) {
+	remoteLabel := ""
+	if isRemoteFilePath(record.FilePath, localDir) {
+		remoteLabel = " [remote]"
+	}
+	fmt.Fprintf(f.Output, "  %s  %s  %s%s\n",
 		record.ID,
 		f.statusLabel(record),
-		record.Title)
+		record.Title,
+		remoteLabel)
 }
 
 // FormatCheckResult formats the check command output
@@ -736,6 +766,7 @@ type JSONGraphNode struct {
 	Title           string          `json:"title"`
 	Status          string          `json:"status"`
 	Type            string          `json:"type,omitempty"`
+	Remote          bool            `json:"remote,omitempty"`
 	Supersedes      string          `json:"supersedes,omitempty"`
 	SupersededBy    string          `json:"superseded_by,omitempty"`
 	Implements      string          `json:"implements,omitempty"`
@@ -815,13 +846,14 @@ func buildJSONNode(loader *Loader, id string, visited map[string]bool, implement
 	}
 
 	node := &JSONGraphNode{
-		ID:           record.ID,
-		Title:        record.Title,
-		Status:       string(record.Status),
-		Type:         typeStr,
-		Supersedes:   record.Supersedes,
-		SupersededBy: record.SupersededBy,
-		Implements:   record.Implements,
+		ID:            record.ID,
+		Title:         record.Title,
+		Status:        string(record.Status),
+		Type:          typeStr,
+		Remote:        isRemoteFilePath(record.FilePath, loader.Dir),
+		Supersedes:    record.Supersedes,
+		SupersededBy:  record.SupersededBy,
+		Implements:    record.Implements,
 		ImplementedBy: implementedBy[record.ID],
 	}
 
