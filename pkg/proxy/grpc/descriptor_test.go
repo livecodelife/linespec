@@ -54,6 +54,9 @@ func TestHasDescriptor_Found(t *testing.T) {
 	if !resolver.HasDescriptor("test.v1.TestService", "CreateUser") {
 		t.Error("Expected HasDescriptor to return true for test.v1.TestService/CreateUser")
 	}
+	if !resolver.HasDescriptor("test.v1.TestService", "DeleteUser") {
+		t.Error("Expected HasDescriptor to return true for test.v1.TestService/DeleteUser")
+	}
 }
 
 func TestHasDescriptor_NotFound(t *testing.T) {
@@ -138,5 +141,21 @@ func TestJSONToProtobuf_NilResolver(t *testing.T) {
 	_, err := d.JSONToProtobuf("test.v1.TestService", "GetUser", []byte(`{}`))
 	if err == nil {
 		t.Fatal("Expected error for nil resolver")
+	}
+}
+
+func TestJSONToProtobuf_EmptyMessage(t *testing.T) {
+	path := filepath.Join("testdata", "test.pb")
+	resolver, err := LoadDescriptorSet(path)
+	if err != nil {
+		t.Fatalf("LoadDescriptorSet failed: %v", err)
+	}
+
+	protoBytes, err := resolver.JSONToProtobuf("test.v1.TestService", "DeleteUser", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("JSONToProtobuf failed for empty message: %v", err)
+	}
+	if len(protoBytes) != 0 {
+		t.Errorf("Expected 0 bytes for empty protobuf message, got %d", len(protoBytes))
 	}
 }

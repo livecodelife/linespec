@@ -1,0 +1,11 @@
+TEST signal_workflow_with_response
+
+RECEIVE HTTP:POST /signal
+WITH {{payloads/signal_workflow_http_req.json}}
+
+EXPECT GRPC:workflow.v1.WorkflowService/SignalWorkflow
+WITH {{payloads/signal_workflow_request.yaml}}
+RETURNS {{payloads/signal_workflow_response.json}}
+
+RESPOND HTTP:200
+WITH {{payloads/signal_workflow_http_resp.json}}

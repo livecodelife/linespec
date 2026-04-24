@@ -1741,13 +1741,13 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	grpcDeps := r.getGRPCProxyDependencies(serviceConfig)
 	grpcProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "grpc"})
 	var grpcHostPort, grpcVerifyPort string
+	grpcPort := 50051
 	if hasGRPC || serviceConfig.Infrastructure.GRPC || len(grpcDeps) > 0 {
 		var grpcProxyAliases []string
 		grpcProxyAlias := "grpc-proxy"
 		grpcProxyAliases = append(grpcProxyAliases, grpcProxyAlias)
 
 		grpcUpstream := "unused"
-		grpcPort := 50051
 		for _, dep := range grpcDeps {
 			alias := dep.Name
 			if dep.HostAlias != "" {
@@ -2027,9 +2027,8 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 
 	if hasGRPC || serviceConfig.Infrastructure.GRPC || len(grpcDeps) > 0 {
-		defaultGRPCPort := 50051
 		envMap["GRPC_HOST"] = "grpc-proxy"
-		envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+		envMap["GRPC_PORT"] = fmt.Sprintf("%d", grpcPort)
 		for _, dep := range grpcDeps {
 			alias := dep.Name
 			if dep.HostAlias != "" {

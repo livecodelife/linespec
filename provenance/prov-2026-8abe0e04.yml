@@ -25,13 +25,22 @@ constraints:
   - content-type must be present on the initial HEADERS frame (already correct, must remain so)
   - Existing unit tests must continue to pass; error-path tests must be updated to read trailers instead of initial headers
   - The temporal example must include a linespec test that exercises the empty-body gRPC response path to prevent regression
+  - The gRPC proxy port (GRPC_PORT env var) passed to the service container must match the actual port the gRPC interceptor listens on, not always default to 50051
 affected_scope:
-  - pkg/proxy/grpc/interceptor.go
-  - pkg/proxy/grpc/interceptor_test.go
-  - pkg/proxy/grpc/testdata/test.pb
-  - examples/temporal-service/proto/workflow.proto
-  - examples/temporal-service/proto/workflow.pb
-  - examples/temporal-service/app/main.py
+- pkg/proxy/grpc/interceptor.go
+- pkg/proxy/grpc/interceptor_test.go
+- pkg/proxy/grpc/descriptor_test.go
+- pkg/proxy/grpc/testdata/test.pb
+- examples/temporal-service/proto/workflow.proto
+- examples/temporal-service/proto/workflow.pb
+- examples/temporal-service/app/main.py
+- examples/temporal-linespecs/signal_workflow_success.linespec
+- examples/temporal-linespecs/signal_workflow_with_response.linespec
+- examples/temporal-linespecs/payloads/signal_workflow_http_req.json
+- examples/temporal-linespecs/payloads/signal_workflow_request.yaml
+- examples/temporal-linespecs/payloads/signal_workflow_response.json
+- examples/temporal-linespecs/payloads/signal_workflow_http_resp.json
+- pkg/runner/runner.go
 forbidden_scope:
   - pkg/proxy/postgresql/**
   - pkg/proxy/mysql/**
@@ -45,8 +54,10 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: examples/temporal-linespecs/start_workflow_success.linespec
-  - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+- path: examples/temporal-linespecs/start_workflow_success.linespec
+- path: examples/temporal-linespecs/get_workflow_result_success.linespec
+- path: examples/temporal-linespecs/signal_workflow_success.linespec
+- path: examples/temporal-linespecs/signal_workflow_with_response.linespec
 associated_traces: []
 monitors: []
 tags: []

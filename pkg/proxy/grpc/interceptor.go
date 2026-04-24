@@ -140,7 +140,9 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var responseBody []byte
-	if mock.ReturnsFile != "" {
+	if mock.ReturnsEmpty {
+		responseBody = nil
+	} else if mock.ReturnsFile != "" {
 		loader := dsl.NewPayloadLoaderWithResolver(mock.BaseDir, i.resolver)
 		raw, _, err := loader.LoadRaw(mock.ReturnsFile)
 		if err != nil {
@@ -169,10 +171,8 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Trailer", "Grpc-Status, Grpc-Message")
 	w.WriteHeader(http.StatusOK)
 
-	if len(responseBody) > 0 {
-		frame := encodeGRPCFrame(responseBody)
-		_, _ = w.Write(frame)
-	}
+	frame := encodeGRPCFrame(responseBody)
+	_, _ = w.Write(frame)
 
 	w.Header().Set("Grpc-Status", "0")
 	w.Header().Set("Grpc-Message", "OK")
@@ -245,7 +245,8 @@ func writeGRPCError(w http.ResponseWriter, statusCode int, message string, reque
 		ct = "application/grpc+json"
 	}
 	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Trailer", "Grpc-Status, Grpc-Message")
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Grpc-Status", fmt.Sprintf("%d", statusCode))
 	w.Header().Set("Grpc-Message", message)
-	w.WriteHeader(http.StatusOK)
 }
