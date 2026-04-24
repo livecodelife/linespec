@@ -1,9 +1,10 @@
 id: prov-2026-53e3e311
 title: 'Provenance hierarchy chunk 2: cross-tier lint enforcement'
 type: blueprint
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
+sealed_at_sha: 64149ea6042922ae649095ee6efa26b0562a550c
 intent: >
   Add three new lint rules to the provenance linter that enforce structural
   constraints introduced by the tier hierarchy (brief, blueprint, imprint).
