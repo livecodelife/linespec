@@ -228,7 +228,7 @@ forbidden_scope:
 implements: prov-2026-a1b2c3d4
 ```
 **Set by:** Author.  
-**Behavior:** Expresses an upward parent reference in the tier hierarchy. A `blueprint` record that implements a `brief`, or an `imprint` that implements a `blueprint`. The linter validates that the relationship is exactly one tier up (PROV021) and that the referenced record exists locally (PROV022). Cross-repo references (containing `:`) are skipped with a warning.  
+**Behavior:** Expresses an upward parent reference in the tier hierarchy. A `blueprint` record that implements a `brief`, or an `imprint` that implements a `blueprint`. The linter validates that the relationship is exactly one tier up (PROV021) and that the referenced record exists locally (PROV022). Cross-repo references (containing `:`) are skipped with a warning. The `graph` command renders implements relationships as `↳ [type]` indented children, visually distinct from supersession chains. The `status --record` command derives **Implements** (parent) and **Implemented by** (children) sections from this field at render time. In `--format json` graph output, implements relationships appear as edges with `"edge_type": "implements"`.  
 **Constraints:** Must reference a record exactly one tier above. `brief` records may not use this field. Omitted from YAML output when empty.
 
 ---
@@ -244,7 +244,7 @@ related:
   - prov-2026-deadbeef
 ```
 **Set by:** Author.  
-**Behavior:** Informational only. Expresses a contextual relationship between records that is not a supersedes relationship — for example, two concurrent records that govern different parts of the same feature, or a record that provides background context for this one. No enforcement behavior. Rendered in `graph` output as dashed edges distinct from supersedes edges.  
+**Behavior:** Informational only. Expresses a contextual relationship between records that is not a supersedes relationship — for example, two concurrent records that govern different parts of the same feature, or a record that provides background context for this one. No enforcement behavior. In `--format json` graph output, related relationships appear as edges with `"edge_type": "related"`, distinct from `supersedes` and `implements` edges.  
 **Constraints:** Immutable after `implemented`. Referenced records must exist (lint warning if not). A record should not list its own `supersedes` target in `related` — that relationship is already expressed structurally.
 
 ---

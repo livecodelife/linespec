@@ -356,6 +356,11 @@ linespec provenance status --record prov-2026-a1b2c3d4 --save-scope
 - `--save-scope` - Persist auto-populated scope
 - `-c, --config path` - Use custom config
 
+The detailed `--record` view includes two hierarchy sections derived at render time:
+
+- **Implements** — the parent record ID and title if this record's `implements` field is set, or `—` if not.
+- **Implemented by** — any records in the local provenance directory whose `implements` field points to this record's ID, shown with their type and title. `—` when none exist.
+
 ### Graph
 
 Render provenance graph:
@@ -364,14 +369,28 @@ Render provenance graph:
 # Full graph
 linespec provenance graph
 
-# Graph from specific record
+# Graph from specific record (shows parent + record + all downstream children)
 linespec provenance graph --root prov-2026-a1b2c3d4
 
+# Filter to open records only
+linespec provenance graph --filter open
+
+# JSON output with typed edges
+linespec provenance graph --format json
+```
+
 **Options:**
-- `--root prov-YYYY-XXXXXXXX` - Start from specific record
+- `--root prov-YYYY-XXXXXXXX` - Show subgraph centred on a record: one implements parent (if any) plus all downstream implements and supersession children
 - `--filter status` - Show only records with given status
 - `--format format` - human|json|dot
 - `-c, --config path` - Use custom config
+
+The graph renders two relationship dimensions:
+
+- **Supersession chains** (`└─` connector) — records that supersede one another, showing evolution within a tier
+- **Implements hierarchy** (`↳ [type]` connector) — brief → blueprint → imprint parent-child relationships, visually distinct from supersession
+
+In `--format json`, edges carry an `edge_type` field with values `supersedes`, `implements`, or `related`, so visualization tooling can apply different visual treatments. Each node also includes an `implements_nodes` array for direct implements children.
 
 ### Check
 
