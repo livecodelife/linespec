@@ -1,6 +1,6 @@
 id: prov-2026-c98d13b3
 title: 'Imprint: implements tree in graph and --root wiring'
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -25,7 +25,7 @@ implements: prov-2026-1dd4ba4a
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 06574d3ba3377977bfbf1ffc8943e90bf4059d63
 associated_specs:
   - path: pkg/provenance/formatter_test.go
     type: code
