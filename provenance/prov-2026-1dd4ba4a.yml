@@ -1,0 +1,40 @@
+id: prov-2026-1dd4ba4a
+title: 'Provenance hierarchy chunk 3: status and graph output for implements'
+status: draft
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Update `linespec provenance status` and `linespec provenance graph` to display
+  and traverse `implements` relationships introduced in Chunk 1. The status
+  command gains two new sections showing the parent record a given record
+  implements and the child records that implement it. The graph command gains a
+  second structural dimension showing the implements hierarchy as an indented
+  tree, visually distinct from the supersession chain. The --root flag is wired
+  up to actually filter the graph output starting from a given record, traversing
+  both upward (one level to the parent Brief) and downward (Blueprints and
+  Imprints). JSON graph output gains an implements edge type so the visualization
+  layer can treat it differently from supersedes and related edges.
+constraints:
+  - "status --record must show an Implements section (parent record ID and title, or dash if unset) and an Implemented by section (list of child records with type and title)"
+  - "Implemented-by derivation must scan all loader records at render time, not stored explicitly"
+  - "graph must render implements relationships as parent-child indentation, visually distinct from supersession chain (horizontal evolution within a tier)"
+  - "--root on graph must traverse: if root is a Brief, show full downward tree of Blueprints and Imprints; if root is a Blueprint, show its parent Brief (one level up) and its child Imprints"
+  - "JSON graph output must include implements edge type distinct from supersedes and related"
+  - "All output must degrade gracefully when implements relationships are absent, matching current behavior exactly"
+  - "The --root flag is currently parsed but not passed through to FormatGraph — this must be wired up"
+affected_scope:
+  - pkg/provenance/formatter.go
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-cd41b067
+  - prov-2026-53e3e311
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/formatter_test.go
+associated_traces: []
+monitors: []
+tags: []
