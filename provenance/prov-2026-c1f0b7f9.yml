@@ -1,0 +1,39 @@
+id: prov-2026-c1f0b7f9
+title: Update docs site to reflect v3.0.0 functionality
+status: draft
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Bring all four docs HTML files up to date with the functionality shipped
+  in v3.0.0. Key gaps: provenance.html is missing the draft status, the
+  type field and tier hierarchy (brief/blueprint/bug/imprint), the Open
+  command, SARIF lint output, and the GitHub Code Scanning integration
+  section. linespec.html is missing RETURNS EMPTY for gRPC and semantic
+  matching for WRITE:POSTGRESQL. docs.html still labels LineSpec Testing
+  as Beta.
+constraints:
+  - provenance.html status lifecycle must include draft → open → implemented → superseded/deprecated
+  - provenance.html schema must document the type field and its values (brief, blueprint, bug, imprint)
+  - provenance.html schema must document extends and implements fields
+  - provenance.html must have a Tier Hierarchy section
+  - provenance.html create command must document --type flag and note records start in draft status
+  - provenance.html must have an Open command section
+  - provenance.html lint must show sarif as a valid --format value
+  - provenance.html must have a GitHub Code Scanning / SARIF section under Git Integration
+  - linespec.html EXPECT GRPC must document RETURNS EMPTY
+  - linespec.html EXPECT WRITE:POSTGRESQL must document semantic matching (ACCESSING_TABLES, VERIFY_OPERATION, VERIFY_WRITTEN_VALUES, CALL N)
+  - docs.html Beta badge must be removed from LineSpec Testing sidebar entry
+affected_scope:
+  - docs/provenance.html
+  - docs/linespec.html
+  - docs/docs.html
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
