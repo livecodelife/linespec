@@ -370,6 +370,20 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 				}
 			}
 
+			// Allow supersession transition: old record being marked superseded by record.ID
+			// in a historical commit. Mirrors the same exception in CheckStaged.
+			if record.Supersedes != "" && record.Supersedes != "null" {
+				oldRecordID := strings.TrimSuffix(filepath.Base(file), ".yml")
+				if oldRecordID == record.Supersedes {
+					isSupersession, err := c.isSupersessionTransitionForCommit(commit, file, record.ID)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: could not check supersession transition: %v\n", err)
+					} else if isSupersession {
+						continue // Allowed - valid supersession transition of old record
+					}
+				}
+			}
+
 			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
@@ -532,6 +546,23 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 				}
 			}
 
+			// Allow supersession transition: the old record being marked as superseded by record.ID.
+			// When `linespec provenance create --supersedes <old-id>` runs, both the new record file
+			// and the old record file (updated with superseded_by + status:superseded) are staged
+			// together. The commit is tagged with the new record ID, so we allow the old record file
+			// when the new record's supersedes field matches it and the transition is valid.
+			if record.Supersedes != "" && record.Supersedes != "null" {
+				oldRecordID := strings.TrimSuffix(filepath.Base(file), ".yml")
+				if oldRecordID == record.Supersedes {
+					isSupersession, err := c.isSupersessionTransition(file, record.ID)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: could not check supersession transition: %v\n", err)
+					} else if isSupersession {
+						continue // Allowed - valid supersession transition of old record
+					}
+				}
+			}
+
 			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
@@ -584,6 +615,64 @@ func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {
 // by comparing the parent commit with the current commit
 func (c *CommitChecker) isCompletionTransitionForCommit(commit, filePath string) (bool, error) {
 	return c.isCompletionTransitionBetween(commit+"^", commit, filePath)
+}
+
+// isSupersessionTransition checks if the file is transitioning from open to superseded
+// with superseded_by == supersedingID, by comparing HEAD vs staged.
+func (c *CommitChecker) isSupersessionTransition(filePath, supersedingID string) (bool, error) {
+	return c.isSupersessionTransitionBetween("HEAD", "", filePath, supersedingID)
+}
+
+// isSupersessionTransitionForCommit checks if the file is transitioning from open to superseded
+// by comparing the parent commit with the given commit.
+func (c *CommitChecker) isSupersessionTransitionForCommit(commit, filePath, supersedingID string) (bool, error) {
+	return c.isSupersessionTransitionBetween(commit+"^", commit, filePath, supersedingID)
+}
+
+// isSupersessionTransitionBetween checks if a provenance record file transitions from open
+// to superseded with superseded_by == supersedingID between beforeRef and afterRef.
+// For staged comparison, pass empty string as afterRef to use ":filepath" syntax.
+func (c *CommitChecker) isSupersessionTransitionBetween(beforeRef, afterRef, filePath, supersedingID string) (bool, error) {
+	cmd := exec.Command("git", "show", beforeRef+":"+filePath)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	beforeOutput, err := cmd.Output()
+	if err != nil {
+		return false, nil
+	}
+
+	var beforeRecord Record
+	if err := yaml.Unmarshal(beforeOutput, &beforeRecord); err != nil {
+		return false, fmt.Errorf("failed to parse before record: %w", err)
+	}
+
+	if beforeRecord.Status != StatusOpen {
+		return false, nil
+	}
+
+	var afterRefSpec string
+	if afterRef == "" {
+		afterRefSpec = ":" + filePath
+	} else {
+		afterRefSpec = afterRef + ":" + filePath
+	}
+
+	cmd = exec.Command("git", "show", afterRefSpec)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	afterOutput, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to read after file: %w", err)
+	}
+
+	var afterRecord Record
+	if err := yaml.Unmarshal(afterOutput, &afterRecord); err != nil {
+		return false, fmt.Errorf("failed to parse after record: %w", err)
+	}
+
+	return afterRecord.Status == StatusSuperseded && afterRecord.SupersededBy == supersedingID, nil
 }
 
 // isCompletionTransitionBetween checks if the file is transitioning from open to implemented
