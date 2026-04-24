@@ -33,6 +33,7 @@ constraints:
   - The linter resolves implements references against local records first, then each configured shared repo cache in declaration order. If found in any source, tier-validity rules apply identically to local records. Error only if not found in any source.
 affected_scope:
   - .linespec.yml
+  - provenance/*.yml
   - pkg/config/types.go
   - pkg/config/parser.go
   - pkg/provenance/commands.go
