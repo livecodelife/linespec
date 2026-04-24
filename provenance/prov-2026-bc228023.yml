@@ -1,0 +1,33 @@
+id: prov-2026-bc228023
+title: Fix isRemoteRecord path-separator prefix match
+status: open
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Both isRemoteRecord implementations use strings.HasPrefix(record.FilePath,
+  c.Config.Dir) without a trailing path separator. A local dir such as
+  /repo/provenance would match /repo/provenance-backup/foo.yml, incorrectly
+  classifying it as local. In practice harmless because the cache always lives
+  under ~/.linespec/cache/..., but the robust form ensures the prefix ends with
+  a path separator before the comparison.
+constraints:
+  - Ensure the dir string ends with os.PathSeparator before calling HasPrefix
+  - Both implementations (Commands.isRemoteRecord and Linter.isRemoteRecord) must be updated identically
+  - No behavioural change when the dir already ends with a separator
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/linter.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-90ec670e
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
