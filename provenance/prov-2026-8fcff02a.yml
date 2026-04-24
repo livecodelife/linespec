@@ -1,0 +1,33 @@
+id: prov-2026-8fcff02a
+title: Fix remote-record write guards in Create and LockScope
+status: open
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Add isRemoteRecord guards to two write paths that were missed in the initial
+  implementation. Create --supersedes looks up a target record via GetRecord
+  (which searches both local and cache) and then calls SaveRecord on it without
+  checking ownership; if the target is remote-owned, the mutation silently
+  persists to the local cache until the next sync overwrites it. LockScope has
+  the same omission — it calls SaveRecord with no guard, while Complete,
+  Deprecate, and Open all check isRemoteRecord correctly.
+constraints:
+  - Return a clear error message naming the record and indicating it is read-only before touching SaveRecord
+  - Mirror the exact guard pattern already used in Complete, Deprecate, and Open
+  - No behaviour change for local records
+affected_scope:
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-90ec670e
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
