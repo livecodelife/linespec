@@ -14,6 +14,13 @@ constraints:
   - Git tag v3.0.0 must point to the release commit
 affected_scope:
   - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
 forbidden_scope: []
 type: blueprint
 supersedes: ""
