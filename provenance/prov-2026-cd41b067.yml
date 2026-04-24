@@ -1,6 +1,6 @@
 id: prov-2026-cd41b067
 title: 'Provenance hierarchy: type field, implements field, draft status, open command'
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 71087357c25b117621c1ffd9eded139b534926b3
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: code
