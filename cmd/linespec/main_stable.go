@@ -959,6 +959,11 @@ func runProvenance() {
 		if err := cmds.Open(opts); err != nil {
 			os.Exit(1)
 		}
+	case "sync":
+		opts := parseSyncOptions(args)
+		if err := cmds.Sync(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -1009,6 +1014,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
 			cfg.RunAssociatedSpecsOnComplete = fullConfig.Provenance.RunAssociatedSpecsOnComplete
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
+			cfg.CacheTTLMinutes = fullConfig.Provenance.CacheTTLMinutes
 
 			if fullConfig.Provenance.Embedding != nil {
 				cfg.Embedding = fullConfig.Provenance.Embedding
@@ -1073,6 +1079,7 @@ Subcommands:
   search [options]           Search provenance records by semantic similarity
   audit [options]            Audit recent changes against provenance history
   index [options]            Index all implemented records for semantic search
+  sync [options]             Refresh cache for all configured shared_repos
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
 
@@ -1668,6 +1675,32 @@ Example:
   linespec provenance index              # Index all unindexed records
   linespec provenance index --dry-run    # Preview what would be indexed
   linespec provenance index --force      # Re-index all records`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+func parseSyncOptions(args []string) provenance.SyncOptions {
+	opts := provenance.SyncOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--force":
+			opts.Force = true
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance sync [options]
+
+Fetches the provenance directory from each configured shared_repo using git archive
+and stores it in ~/.linespec/cache/. Skips repos whose cache is within the TTL window
+unless --force is specified.
+
+Options:
+  --force     Ignore TTL and re-fetch all repos
+  --help      Show this help message
+
+Example:
+  linespec provenance sync           # Sync all configured repos
+  linespec provenance sync --force   # Force re-fetch even if cache is fresh`)
 			os.Exit(0)
 		}
 	}

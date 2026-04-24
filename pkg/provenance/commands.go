@@ -19,6 +19,7 @@ type Commands struct {
 	Checker   *CommitChecker
 	Formatter *Formatter
 	Config    *ProvenanceConfig
+	Cache     *CacheManager
 	RepoRoot  string
 	Embedder  *embeddings.Client
 }
@@ -27,7 +28,8 @@ type Commands struct {
 type ProvenanceConfig struct {
 	Enforcement                  string
 	Dir                          string
-	SharedRepos                  []string
+	SharedRepos                  []config.SharedRepoConfig
+	CacheTTLMinutes              int
 	CommitTagRequired            bool
 	AutoAffectedScope            bool
 	RunAssociatedSpecsOnComplete bool
@@ -54,8 +56,11 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 		config.Dir = filepath.Join(repoRoot, config.Dir)
 	}
 
-	// Create loader
-	loader := NewLoader(config.Dir, config.SharedRepos)
+	// Build cache and collect any populated cache directories to load alongside local records.
+	cache := NewCacheManager(config.SharedRepos, config.CacheTTLMinutes)
+	sharedDirs := cache.LoadedDirs()
+
+	loader := NewLoader(config.Dir, sharedDirs)
 	if err := loader.LoadAll(); err != nil {
 		return nil, fmt.Errorf("failed to load provenance records: %w", err)
 	}
@@ -79,6 +84,7 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 		Checker:   checker,
 		Formatter: formatter,
 		Config:    config,
+		Cache:     cache,
 		RepoRoot:  repoRoot,
 		Embedder:  embedder,
 	}, nil
@@ -1973,5 +1979,38 @@ func (c *Commands) Index(opts IndexOptions) error {
 		return fmt.Errorf("indexing completed with %d failures", failCount)
 	}
 
+	return nil
+}
+
+// SyncOptions holds options for the sync command
+type SyncOptions struct {
+	Force bool // Ignore TTL and re-fetch even if cache is fresh
+}
+
+// Sync refreshes the local cache for all configured shared repos using git archive.
+// Within the configured TTL window, a repo is skipped as already fresh unless Force is set.
+func (c *Commands) Sync(opts SyncOptions) error {
+	if len(c.Config.SharedRepos) == 0 {
+		fmt.Fprintln(c.Formatter.Output, "No shared_repos configured in .linespec.yml")
+		return nil
+	}
+
+	results := c.Cache.SyncAll(opts.Force)
+	hasError := false
+	for _, r := range results {
+		host := r.Repo.URL
+		if r.Err != nil {
+			fmt.Fprintf(c.Formatter.Output, "✗ %s (%s): %v\n", r.Repo.Name, host, r.Err)
+			hasError = true
+		} else if r.WasFresh {
+			fmt.Fprintf(c.Formatter.Output, "✓ %s (%s) — cache is fresh, skipped\n", r.Repo.Name, host)
+		} else {
+			fmt.Fprintf(c.Formatter.Output, "✓ Synced %s (%s) — %d records\n", r.Repo.Name, host, r.RecordCount)
+		}
+	}
+
+	if hasError {
+		return fmt.Errorf("one or more repos failed to sync")
+	}
 	return nil
 }

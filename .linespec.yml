@@ -5,6 +5,7 @@ provenance:
     - name: livecodelife-cli
       url: https://github.com/livecodelife/linespec-provenance
       ref: main
+      dir: linespec-cli/provenance
   commit_tag_required: true  # whether commits must reference a prov ID
   auto_affected_scope: true   # whether to auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true  # run associated_specs before committing a completion transition

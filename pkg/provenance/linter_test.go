@@ -484,7 +484,10 @@ func TestValidateImplements_MissingTarget_Errors(t *testing.T) {
 	}
 }
 
-func TestValidateImplements_CrossRepoReference_Warns(t *testing.T) {
+func TestValidateImplements_CrossRepoReference_InvalidFormat(t *testing.T) {
+	// Colon-prefixed repo references (e.g. "product:prov-2026-001") are not valid
+	// provenance IDs. Cross-repo resolution happens via the cache loader, not via
+	// a special ID syntax — the implements field always holds a bare prov-YYYY-NNN ID.
 	tmpDir, err := os.MkdirTemp("", "linter-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -500,11 +503,8 @@ func TestValidateImplements_CrossRepoReference_Warns(t *testing.T) {
 	result := &LintResult{}
 	linter.validateImplements(blueprint, result)
 
-	if result.ErrorCount != 0 {
-		t.Errorf("Expected no errors for cross-repo reference, got: %v", result.Issues)
-	}
-	if result.WarningCount != 1 {
-		t.Errorf("Expected 1 warning for cross-repo reference, got %d: %v", result.WarningCount, result.Issues)
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for colon-prefixed ID (invalid format), got %d: %v", result.ErrorCount, result.Issues)
 	}
 }
 

@@ -302,15 +302,24 @@ type EmbeddingConfig struct {
 	IndexOnComplete     bool    `yaml:"index_on_complete"`    // default: true
 }
 
+// SharedRepoConfig defines a named remote repository for cross-repo provenance resolution
+type SharedRepoConfig struct {
+	Name string `yaml:"name"` // short alias used in log output and disambiguation
+	URL  string `yaml:"url"`  // git-cloneable remote URL
+	Ref  string `yaml:"ref"`  // branch or tag to fetch from; defaults to "main"
+	Dir  string `yaml:"dir"`  // subdirectory containing provenance records; defaults to "provenance"
+}
+
 // ProvenanceConfig defines provenance record settings
 type ProvenanceConfig struct {
-	Enforcement                  string           `yaml:"enforcement"`                      // none | warn | strict
-	Dir                          string           `yaml:"dir"`                              // relative to repo root
-	SharedRepos                  []string         `yaml:"shared_repos"`                     // paths or URLs to shared provenance repositories
-	CommitTagRequired            bool             `yaml:"commit_tag_required"`              // whether commits must reference a prov ID
-	AutoAffectedScope            bool             `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
-	RunAssociatedSpecsOnComplete bool             `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
-	Embedding                    *EmbeddingConfig `yaml:"embedding,omitempty"`              // embedding API configuration
+	Enforcement                  string             `yaml:"enforcement"`                      // none | warn | strict
+	Dir                          string             `yaml:"dir"`                              // relative to repo root
+	SharedRepos                  []SharedRepoConfig `yaml:"shared_repos"`                     // named remote repositories for cross-repo resolution
+	CacheTTLMinutes              int                `yaml:"cache_ttl_minutes"`                // cache freshness TTL in minutes; defaults to 60
+	CommitTagRequired            bool               `yaml:"commit_tag_required"`              // whether commits must reference a prov ID
+	AutoAffectedScope            bool               `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
+	RunAssociatedSpecsOnComplete bool               `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
+	Embedding                    *EmbeddingConfig   `yaml:"embedding,omitempty"`              // embedding API configuration
 }
 
 // DependencyConfig defines external service dependencies

@@ -23,7 +23,7 @@ intent: |
   directory. A record found in any source is treated identically to a local record — all
   tier-validity rules apply in full. Only error if the record cannot be found anywhere.
 constraints:
-  - "The fetch mechanism must use `git archive --remote=<url> <ref> provenance/` — no full clones"
+  - "The fetch mechanism must avoid full clones. Use git archive --remote for SSH/compatible remotes; fall back to a depth-1 sparse checkout (--filter=blob:none --sparse) for HTTPS remotes like GitHub that reject git archive."
   - "Cache lives at ~/.linespec/cache/<sha256-of-url>/provenance/ and persists across invocations"
   - "cache_ttl_minutes defaults to 60 if not set"
   - "A failed git archive (unreachable remote, bad ref) must be caught and reported clearly without crashing"
@@ -37,11 +37,16 @@ affected_scope:
   - pkg/config/types.go
   - pkg/config/parser.go
   - pkg/provenance/commands.go
+  - pkg/provenance/cache.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
 forbidden_scope:
   - pkg/provenance/loader.go
   - pkg/provenance/formatter.go
 type: blueprint
-implements: ""
+implements: prov-2026-95cb8b3d
 supersedes: ""
 superseded_by: ""
 related:

@@ -155,6 +155,15 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 		return
 	}
 
+	// Remote records (loaded from shared repo cache) are read-only and governed
+	// by their origin repo. Skip enforcement-level checks that require local
+	// artifacts or local conventions (scope paths, associated specs, etc.).
+	if l.isRemoteRecord(record) {
+		l.validateTitleLength(record, result)
+		l.validateConstraintsHint(record, result)
+		return
+	}
+
 	// Validate scope patterns
 	l.validateScopePatterns(record, result)
 
@@ -975,6 +984,17 @@ func (l *Linter) validateSupersessionType(record *Record, result *LintResult) {
 	}
 }
 
+// isRemoteRecord reports whether a record was loaded from a shared repo cache
+// rather than from the local provenance directory. Remote records are read-only
+// and governed by their origin repo, so enforcement-level checks (scope,
+// associated_specs) are skipped for them.
+func (l *Linter) isRemoteRecord(record *Record) bool {
+	if record.FilePath == "" || l.Loader.Dir == "" {
+		return false
+	}
+	return !strings.HasPrefix(record.FilePath, l.Loader.Dir)
+}
+
 // validateImplements checks the implements field for resolution and type correctness.
 // Both checks are always-on regardless of enforcement level (graph integrity rules).
 func (l *Linter) validateImplements(record *Record, result *LintResult) {
@@ -982,30 +1002,13 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 		return
 	}
 
-	// Detect cross-repo references by the presence of a colon separator.
-	// Cross-repo resolution is not yet supported — skip with a warning.
-	if strings.Contains(record.Implements, ":") {
-		result.Add(Issue{
-			RecordID: record.ID,
-			Field:    "implements",
-			Message: fmt.Sprintf(
-				"implements references %q which appears to be a cross-repo reference. "+
-					"Cross-repo resolution is not yet supported; skipping validation.",
-				record.Implements,
-			),
-			Severity: SeverityWarning,
-		})
-		return
-	}
-
-	// If it's not a valid local ID either, that's a format error.
+	// Validate the ID format before attempting resolution.
 	if !IsValidID(record.Implements) {
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "implements",
 			Message: fmt.Sprintf(
-				"implements value %q is not a valid provenance record ID (expected prov-YYYY-NNN format). "+
-					"For cross-repo references use a colon-prefixed format.",
+				"implements value %q is not a valid provenance record ID (expected prov-YYYY-NNN format).",
 				record.Implements,
 			),
 			Severity: SeverityError,
