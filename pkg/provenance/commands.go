@@ -1086,7 +1086,7 @@ linespec provenance create --title "..." --type blueprint --no-edit
 
 **Always pass ` + "`--no-edit`" + `.** Omitting it opens an interactive editor that hangs in non-TTY environments.
 
-Fill in ` + "`intent`" + ` and ` + "`constraints`" + ` in the draft record. Leave ` + "`affected_scope`" + ` empty (observed mode) — do not set ` + "`affected_scope`" + ` on a draft record unless you also include the record's own file; the self-modification exception in the git hook only applies to ` + "`open`" + ` records.
+Fill in ` + "`intent`" + `, ` + "`constraints`" + `, and ` + "`affected_scope`" + ` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning with the user.
 
 Commit the draft in a standalone commit:
 ` + "```" + `
@@ -1187,7 +1187,7 @@ Both directions must be set before committing.
 - **Never use ` + "`--no-verify`" + `** to skip git hooks. If a hook fails, fix the issue.
 - **Never complete the blueprint without user confirmation.**
 - Records are named ` + "`prov-YYYY-XXXXXXXX.yml`" + ` using crypto-random hex (not sequential).
-- Do not set ` + "`affected_scope`" + ` on a draft record — use observed mode until open.
+- Draft records are for planning — freely edit all fields including ` + "`affected_scope`" + `.
 
 ## Useful Commands
 

@@ -44,7 +44,7 @@ linespec provenance context -f <file>       # which records govern a file
 ```bash
 linespec provenance create --title "..." --type blueprint --no-edit
 ```
-Fill in `intent` and `constraints`. Leave `affected_scope` empty (observed mode) — the git hook's self-modification exception only applies to `open` records, so setting scope on a draft will block the creation commit. Commit the draft standalone, then **present it to the user and wait for confirmation** before writing any code.
+Fill in `intent`, `constraints`, and `affected_scope` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning. Commit the draft standalone, then **present it to the user and wait for confirmation** before writing any code.
 
 **3. Open the blueprint (after user confirms).** Once the user approves:
 ```bash
@@ -71,6 +71,7 @@ linespec provenance complete --record prov-YYYY-XXXXXXXX
 - Before any provenance management commit: `linespec provenance lint && linespec provenance check`
 - Before each implementation commit: `linespec provenance check --staged`
 - **Never use `--no-verify`** to skip git hooks
+- Draft records are for planning — freely edit all fields including `affected_scope` in draft mode
 
 ## Architecture
 

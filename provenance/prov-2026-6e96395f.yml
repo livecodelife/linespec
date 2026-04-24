@@ -23,6 +23,7 @@ constraints:
   - Imprint records must set implements pointing at the parent blueprint ID
   - All imprints must be implemented before the blueprint can be completed
   - The blueprint complete step must be gated on user confirmation, not automated
+  - Draft mode is for planning — all fields including affected_scope may be freely edited in draft
 affected_scope:
   - CLAUDE.md
   - pkg/provenance/commands.go
