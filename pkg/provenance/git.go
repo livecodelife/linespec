@@ -337,9 +337,10 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 				}
 			}
 
-			// NEW: Allow open records to modify their own YAML file
-			// This is the "self-modification exception" for open records
-			if record.Status == StatusOpen && isRecordFile(file, record) {
+			// Allow draft and open records to modify their own YAML file.
+			// Draft records are in active planning — fields (including affected_scope)
+			// may be freely adjusted before the record is opened for enforcement.
+			if (record.Status == StatusOpen || record.Status == StatusDraft) && isRecordFile(file, record) {
 				// Check if the record file itself is in forbidden_scope
 				isForbidden, err := isFileForbiddenForRecord(file, record)
 				if err != nil {
@@ -510,9 +511,10 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 		}
 
 		for _, file := range files {
-			// NEW: Allow open records to modify their own YAML file
-			// This is the "self-modification exception" for open records
-			if record.Status == StatusOpen && isRecordFile(file, record) {
+			// Allow draft and open records to modify their own YAML file.
+			// Draft records are in active planning — fields (including affected_scope)
+			// may be freely adjusted before the record is opened for enforcement.
+			if (record.Status == StatusOpen || record.Status == StatusDraft) && isRecordFile(file, record) {
 				// Check if the record file itself is explicitly in forbidden_scope
 				isForbidden, err := isFileForbiddenForRecord(file, record)
 				if err != nil {

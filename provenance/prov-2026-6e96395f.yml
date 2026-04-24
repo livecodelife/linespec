@@ -24,9 +24,12 @@ constraints:
   - All imprints must be implemented before the blueprint can be completed
   - The blueprint complete step must be gated on user confirmation, not automated
   - Draft mode is for planning — all fields including affected_scope may be freely edited in draft
+  - The self-modification exception in CheckStaged and CheckCommit (git.go) must apply to draft records as well as open records so that committing a draft record's own file is never blocked
 affected_scope:
   - CLAUDE.md
   - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
 associated_specs:
   - path: pkg/provenance/commands.go
     type: code

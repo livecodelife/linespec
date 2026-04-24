@@ -360,3 +360,63 @@ func TestCheckCommit_SupersessionTransition(t *testing.T) {
 		t.Errorf("Expected no violations for valid supersession commit, got %d: %v", len(violations), violations)
 	}
 }
+
+// TestCheckStaged_DraftSelfModification verifies that a draft record's own YAML file
+// is allowed in a commit tagged with that record's ID, even when affected_scope is
+// set to specific files that do not include the record file itself.
+func TestCheckStaged_DraftSelfModification(t *testing.T) {
+	const draftID = "prov-2026-ddd00001"
+
+	tmpDir, err := os.MkdirTemp("", "draft-self-mod-test")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gitExec(t, tmpDir, "init")
+	gitExec(t, tmpDir, "config", "user.email", "test@example.com")
+	gitExec(t, tmpDir, "config", "user.name", "Test User")
+	gitExec(t, tmpDir, "config", "commit.gpgsign", "false")
+
+	// Commit an unrelated file so HEAD exists
+	placeholder := filepath.Join(tmpDir, "README.md")
+	if err := os.WriteFile(placeholder, []byte("readme"), 0644); err != nil {
+		t.Fatalf("WriteFile placeholder: %v", err)
+	}
+	gitExec(t, tmpDir, "add", "README.md")
+	gitExec(t, tmpDir, "commit", "-m", "Initial commit")
+
+	provDir := filepath.Join(tmpDir, "provenance")
+	if err := os.MkdirAll(provDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// Draft record with affected_scope restricted to pkg/impl.go — does NOT include its own file
+	draftRelPath := "provenance/" + draftID + ".yml"
+	draftPath := filepath.Join(tmpDir, draftRelPath)
+	if err := os.WriteFile(draftPath, []byte(makeProvRecord(draftID, "draft", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile draft record: %v", err)
+	}
+
+	gitExec(t, tmpDir, "add", draftRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Create draft record ["+draftID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for draft self-modification, got %d: %v", len(violations), violations)
+	}
+}
