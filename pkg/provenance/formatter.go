@@ -158,6 +158,38 @@ func (f *Formatter) FormatStatusDetailed(record *Record, loader *Loader) {
 		fmt.Fprintf(f.Output, "Supersedes:   —\n")
 	}
 
+	// Implements (parent reference)
+	if record.Implements != "" {
+		parent, exists := loader.GetRecord(record.Implements)
+		if exists {
+			fmt.Fprintf(f.Output, "Implements:   %s  %s\n", record.Implements, parent.Title)
+		} else {
+			fmt.Fprintf(f.Output, "Implements:   %s\n", record.Implements)
+		}
+	} else {
+		fmt.Fprintf(f.Output, "Implements:   —\n")
+	}
+
+	// Implemented by (child references — derived by scanning all records)
+	var implementors []*Record
+	for _, r := range loader.Records {
+		if r.Implements == record.ID {
+			implementors = append(implementors, r)
+		}
+	}
+	if len(implementors) == 0 {
+		fmt.Fprintf(f.Output, "Implemented by: —\n")
+	} else {
+		fmt.Fprintf(f.Output, "Implemented by:\n")
+		for _, r := range implementors {
+			typeStr := string(r.Type)
+			if typeStr == "" {
+				typeStr = "blueprint"
+			}
+			fmt.Fprintf(f.Output, "  · %s  [%s]  %s\n", r.ID, typeStr, r.Title)
+		}
+	}
+
 	if len(record.Tags) > 0 {
 		fmt.Fprintf(f.Output, "Tags:         %s\n", strings.Join(record.Tags, ", "))
 	}
@@ -304,54 +336,94 @@ func (f *Formatter) FormatLint(result *LintResult) {
 	fmt.Fprintln(f.Output)
 }
 
-// FormatGraph formats the provenance graph
-func (f *Formatter) FormatGraph(loader *Loader, filter string) {
+// FormatGraph formats the provenance graph.
+// When root is non-empty, only the subgraph centred on that record is shown:
+// one level of implements parent (if any) plus all downstream implements and
+// supersession children.
+func (f *Formatter) FormatGraph(loader *Loader, filter string, root string) {
 	fmt.Fprintf(f.Output, "\n%s\n\n", f.colored("PROVENANCE GRAPH", colorBold))
 
-	// Find root records (not superseded by anything)
-	roots := make(map[string]bool)
-	for _, record := range loader.Records {
-		roots[record.ID] = true
+	if root != "" {
+		f.printRootedGraph(loader, root, filter)
+		fmt.Fprintln(f.Output)
+		return
 	}
+
+	// Build set of IDs that are superseded (so we can skip them as top-level roots)
+	supersededIDs := make(map[string]bool)
 	for _, record := range loader.Records {
 		if record.Supersedes != "" && record.Supersedes != "null" {
-			delete(roots, record.Supersedes)
+			supersededIDs[record.Supersedes] = true
 		}
 	}
 
-	// Filter if requested
-	if filter != "" {
-		// Only show records matching the filter status
-		filteredRoots := make(map[string]bool)
-		for id := range roots {
-			record, exists := loader.GetRecord(id)
-			if exists && string(record.Status) == filter {
-				filteredRoots[id] = true
-			}
+	// Build set of IDs that implement something else (they appear as children in the
+	// implements hierarchy, not as top-level roots)
+	hasImplementsParent := make(map[string]bool)
+	for _, record := range loader.Records {
+		if record.Implements != "" {
+			hasImplementsParent[record.ID] = true
 		}
-		roots = filteredRoots
 	}
 
-	// Print tree for each root
-	for id := range roots {
-		f.printGraphNode(loader, id, 0, make(map[string]bool), filter)
+	// Top-level roots: not superseded AND not a child in any implements chain
+	visited := make(map[string]bool)
+	for _, record := range loader.Records {
+		if supersededIDs[record.ID] || hasImplementsParent[record.ID] {
+			continue
+		}
+		if filter != "" && string(record.Status) != filter {
+			continue
+		}
+		f.printGraphNode(loader, record.ID, 0, visited, filter)
 	}
 
-	// Print unconnected records
+	// Orphaned implements children (parent missing) not yet printed
 	fmt.Fprintln(f.Output)
 	for _, record := range loader.Records {
-		if !roots[record.ID] && record.Supersedes == "" {
-			// Not a root and doesn't supersede anything - standalone
-			if filter == "" || string(record.Status) == filter {
-				f.printGraphNodeSimple(record)
-			}
+		if visited[record.ID] {
+			continue
 		}
+		if filter != "" && string(record.Status) != filter {
+			continue
+		}
+		f.printGraphNodeSimple(record)
 	}
 
 	fmt.Fprintln(f.Output)
 }
 
-// printGraphNode prints a node and its children recursively
+// printRootedGraph renders the subgraph centred on rootID:
+// shows the parent record (one level up via implements, if any) then the root
+// and all its implements+supersession descendants.
+func (f *Formatter) printRootedGraph(loader *Loader, rootID string, filter string) {
+	root, exists := loader.GetRecord(rootID)
+	if !exists {
+		fmt.Fprintf(f.Output, "  record not found: %s\n", rootID)
+		return
+	}
+
+	visited := make(map[string]bool)
+
+	// Show parent (one level up via implements) if present
+	if root.Implements != "" {
+		parent, parentExists := loader.GetRecord(root.Implements)
+		if parentExists {
+			f.printGraphNodeLine(parent, 0, false)
+			visited[parent.ID] = true
+			// Print root as an implements child of parent
+			f.printImplementsNode(loader, rootID, 1, visited, filter)
+			return
+		}
+	}
+
+	// No parent — print from root down
+	f.printGraphNode(loader, rootID, 0, visited, filter)
+}
+
+// printGraphNode prints a node and its children (both supersession and implements)
+// recursively. Supersession children use └─ connectors. Implements children use
+// ↳ [type] connectors to distinguish the two relationship types.
 func (f *Formatter) printGraphNode(loader *Loader, id string, depth int, visited map[string]bool, filter string) {
 	if visited[id] {
 		fmt.Fprintf(f.Output, "%s%s (circular reference)\n", strings.Repeat("  ", depth), id)
@@ -367,34 +439,83 @@ func (f *Formatter) printGraphNode(loader *Loader, id string, depth int, visited
 
 	// Filter check
 	if filter != "" && string(record.Status) != filter {
-		// Still show superseded children
+		// Still descend into superseded nodes so the chain is visible
 		if record.Status != StatusSuperseded {
 			return
 		}
 	}
 
-	indent := strings.Repeat("  ", depth)
+	f.printGraphNodeLine(record, depth, false)
 
-	// Status indicator
-	statusStr := string(record.Status)
-	switch record.Status {
-	case StatusOpen:
-		if len(record.AssociatedSpecs) == 0 {
-			statusStr = f.colored("open ⚠", colorYellow)
-		} else {
-			statusStr = f.colored("open", colorCyan)
+	// Supersession children (records that supersede this one) — same dimension
+	for _, r := range loader.Records {
+		if r.Supersedes == id {
+			f.printGraphNode(loader, r.ID, depth+1, visited, filter)
 		}
-	case StatusImplemented:
-		statusStr = f.colored("implemented", colorGreen)
-	case StatusSuperseded:
-		statusStr = f.colored("superseded", colorYellow)
-	case StatusDeprecated:
-		statusStr = f.colored("deprecated", colorYellow)
 	}
 
-	// Tree connector
+	// Implements children — visually distinct with ↳ [type] connector
+	for _, r := range loader.Records {
+		if r.Implements == id && !visited[r.ID] {
+			f.printImplementsNode(loader, r.ID, depth+1, visited, filter)
+		}
+	}
+}
+
+// printImplementsNode prints a record reached via an implements edge, using a
+// visually distinct connector (↳ [type]) to separate it from supersession chains.
+func (f *Formatter) printImplementsNode(loader *Loader, id string, depth int, visited map[string]bool, filter string) {
+	if visited[id] {
+		return
+	}
+	visited[id] = true
+
+	record, exists := loader.GetRecord(id)
+	if !exists {
+		return
+	}
+
+	if filter != "" && string(record.Status) != filter && record.Status != StatusSuperseded {
+		return
+	}
+
+	indent := strings.Repeat("  ", depth)
+	typeLabel := string(record.Type)
+	if typeLabel == "" {
+		typeLabel = "blueprint"
+	}
+
+	statusStr := f.statusLabel(record)
+
+	fmt.Fprintf(f.Output, "%s↳ [%s] %s  %s  %s\n",
+		indent,
+		typeLabel,
+		record.ID,
+		statusStr,
+		record.Title)
+
+	// Supersession children within this implements tier
+	for _, r := range loader.Records {
+		if r.Supersedes == id {
+			f.printGraphNode(loader, r.ID, depth+1, visited, filter)
+		}
+	}
+
+	// Further implements children (next tier down)
+	for _, r := range loader.Records {
+		if r.Implements == id && !visited[r.ID] {
+			f.printImplementsNode(loader, r.ID, depth+1, visited, filter)
+		}
+	}
+}
+
+// printGraphNodeLine prints a single record line with the appropriate indent and connector.
+func (f *Formatter) printGraphNodeLine(record *Record, depth int, implementsChild bool) {
+	indent := strings.Repeat("  ", depth)
+	statusStr := f.statusLabel(record)
+
 	connector := ""
-	if depth > 0 {
+	if depth > 0 && !implementsChild {
 		connector = "└─ "
 	}
 
@@ -404,36 +525,34 @@ func (f *Formatter) printGraphNode(loader *Loader, id string, depth int, visited
 		record.ID,
 		statusStr,
 		record.Title)
+}
 
-	// Find children (records that supersede this one)
-	for _, r := range loader.Records {
-		if r.Supersedes == id {
-			f.printGraphNode(loader, r.ID, depth+1, visited, filter)
+// statusLabel returns a coloured status string for a record.
+func (f *Formatter) statusLabel(record *Record) string {
+	switch record.Status {
+	case StatusOpen:
+		if len(record.AssociatedSpecs) == 0 {
+			return f.colored("open ⚠", colorYellow)
 		}
+		return f.colored("open", colorCyan)
+	case StatusImplemented:
+		return f.colored("implemented", colorGreen)
+	case StatusSuperseded:
+		return f.colored("superseded", colorYellow)
+	case StatusDeprecated:
+		return f.colored("deprecated", colorYellow)
+	case StatusDraft:
+		return f.colored("draft", colorCyan)
+	default:
+		return string(record.Status)
 	}
 }
 
 // printGraphNodeSimple prints a simple node line
 func (f *Formatter) printGraphNodeSimple(record *Record) {
-	statusStr := string(record.Status)
-	switch record.Status {
-	case StatusOpen:
-		if len(record.AssociatedSpecs) == 0 {
-			statusStr = f.colored("open ⚠", colorYellow)
-		} else {
-			statusStr = f.colored("open", colorCyan)
-		}
-	case StatusImplemented:
-		statusStr = f.colored("implemented", colorGreen)
-	case StatusSuperseded:
-		statusStr = f.colored("superseded", colorYellow)
-	case StatusDeprecated:
-		statusStr = f.colored("deprecated", colorYellow)
-	}
-
 	fmt.Fprintf(f.Output, "  %s  %s  %s\n",
 		record.ID,
-		statusStr,
+		f.statusLabel(record),
 		record.Title)
 }
 
@@ -603,41 +722,83 @@ func (r *LintResult) ToJSON() *JSONLintResult {
 	}
 }
 
+// JSONGraphEdge represents a directed edge in the JSON graph output.
+// EdgeType distinguishes supersedes, implements, and related relationships.
+type JSONGraphEdge struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	EdgeType string `json:"edge_type"` // "supersedes", "implements", "related"
+}
+
 // JSONGraphNode represents a node in the graph for JSON output
 type JSONGraphNode struct {
-	ID           string          `json:"id"`
-	Title        string          `json:"title"`
-	Status       string          `json:"status"`
-	Supersedes   string          `json:"supersedes,omitempty"`
-	SupersededBy string          `json:"superseded_by,omitempty"`
-	Children     []JSONGraphNode `json:"children,omitempty"`
+	ID              string          `json:"id"`
+	Title           string          `json:"title"`
+	Status          string          `json:"status"`
+	Type            string          `json:"type,omitempty"`
+	Supersedes      string          `json:"supersedes,omitempty"`
+	SupersededBy    string          `json:"superseded_by,omitempty"`
+	Implements      string          `json:"implements,omitempty"`
+	ImplementedBy   []string        `json:"implemented_by,omitempty"`
+	Children        []JSONGraphNode `json:"children,omitempty"`
+	ImplementsNodes []JSONGraphNode `json:"implements_nodes,omitempty"`
 }
 
-// BuildJSONGraph builds the graph for JSON output
-func BuildJSONGraph(loader *Loader) []JSONGraphNode {
-	// Find roots
-	roots := make(map[string]bool)
-	for _, record := range loader.Records {
-		roots[record.ID] = true
-	}
-	for _, record := range loader.Records {
-		if record.Supersedes != "" && record.Supersedes != "null" {
-			delete(roots, record.Supersedes)
+// JSONGraph is the top-level structure for --format json graph output.
+type JSONGraph struct {
+	Nodes []JSONGraphNode `json:"nodes"`
+	Edges []JSONGraphEdge `json:"edges"`
+}
+
+// BuildJSONGraph builds the graph for JSON output with typed edges.
+func BuildJSONGraph(loader *Loader) JSONGraph {
+	// Collect all edges
+	var edges []JSONGraphEdge
+	for _, r := range loader.Records {
+		if r.Supersedes != "" && r.Supersedes != "null" {
+			edges = append(edges, JSONGraphEdge{From: r.ID, To: r.Supersedes, EdgeType: "supersedes"})
+		}
+		if r.Implements != "" {
+			edges = append(edges, JSONGraphEdge{From: r.ID, To: r.Implements, EdgeType: "implements"})
+		}
+		for _, rel := range r.Related {
+			edges = append(edges, JSONGraphEdge{From: r.ID, To: rel, EdgeType: "related"})
 		}
 	}
 
-	var result []JSONGraphNode
-	for id := range roots {
-		node := buildJSONNode(loader, id, make(map[string]bool))
+	// Build implemented-by index
+	implementedBy := make(map[string][]string)
+	for _, r := range loader.Records {
+		if r.Implements != "" {
+			implementedBy[r.Implements] = append(implementedBy[r.Implements], r.ID)
+		}
+	}
+
+	// Build nodes (top-level: not superseded and no implements parent)
+	supersededIDs := make(map[string]bool)
+	for _, r := range loader.Records {
+		if r.Supersedes != "" && r.Supersedes != "null" {
+			supersededIDs[r.Supersedes] = true
+		}
+	}
+
+	// Top-level JSON nodes: not superseded AND not implementing something else
+	visited := make(map[string]bool)
+	var nodes []JSONGraphNode
+	for _, r := range loader.Records {
+		if supersededIDs[r.ID] || r.Implements != "" {
+			continue
+		}
+		node := buildJSONNode(loader, r.ID, visited, implementedBy)
 		if node != nil {
-			result = append(result, *node)
+			nodes = append(nodes, *node)
 		}
 	}
 
-	return result
+	return JSONGraph{Nodes: nodes, Edges: edges}
 }
 
-func buildJSONNode(loader *Loader, id string, visited map[string]bool) *JSONGraphNode {
+func buildJSONNode(loader *Loader, id string, visited map[string]bool, implementedBy map[string][]string) *JSONGraphNode {
 	if visited[id] {
 		return nil
 	}
@@ -648,20 +809,38 @@ func buildJSONNode(loader *Loader, id string, visited map[string]bool) *JSONGrap
 		return nil
 	}
 
+	typeStr := string(record.Type)
+	if typeStr == "" {
+		typeStr = "blueprint"
+	}
+
 	node := &JSONGraphNode{
 		ID:           record.ID,
 		Title:        record.Title,
 		Status:       string(record.Status),
+		Type:         typeStr,
 		Supersedes:   record.Supersedes,
 		SupersededBy: record.SupersededBy,
+		Implements:   record.Implements,
+		ImplementedBy: implementedBy[record.ID],
 	}
 
-	// Find children
+	// Supersession children
 	for _, r := range loader.Records {
 		if r.Supersedes == id {
-			child := buildJSONNode(loader, r.ID, visited)
+			child := buildJSONNode(loader, r.ID, visited, implementedBy)
 			if child != nil {
 				node.Children = append(node.Children, *child)
+			}
+		}
+	}
+
+	// Implements children (next tier down)
+	for _, r := range loader.Records {
+		if r.Implements == id && !visited[r.ID] {
+			child := buildJSONNode(loader, r.ID, visited, implementedBy)
+			if child != nil {
+				node.ImplementsNodes = append(node.ImplementsNodes, *child)
 			}
 		}
 	}
