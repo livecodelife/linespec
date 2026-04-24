@@ -135,6 +135,9 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 	// Validate supersedes
 	l.validateSupersedes(record, result)
 
+	// Validate extends field format
+	l.validateExtends(record, result)
+
 	// Validate supersession type agreement (always-on, graph integrity)
 	l.validateSupersessionType(record, result)
 
@@ -146,6 +149,12 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 
 	// Validate implements field (resolution + type correctness; always-on, graph integrity)
 	l.validateImplements(record, result)
+
+	// Validate not-applicable fields per type (always-on)
+	l.validateNotApplicableFields(record, result)
+
+	// Validate Bug-specific conditional rules (always-on, graph integrity)
+	l.validateBugConditionals(record, result)
 
 	// Draft records skip enforcement-sensitive checks
 	if record.Status == StatusDraft {
@@ -195,7 +204,7 @@ func (l *Linter) validateType(record *Record, result *LintResult) {
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "type",
-			Message:  "No type field set; defaulting to 'blueprint' for backward compatibility. Set type: brief|blueprint|imprint to suppress this hint.",
+			Message:  "No type field set; defaulting to 'blueprint' for backward compatibility. Set type: brief|blueprint|bug|imprint to suppress this hint.",
 			Severity: SeverityHint,
 		})
 		return
@@ -205,13 +214,17 @@ func (l *Linter) validateType(record *Record, result *LintResult) {
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "type",
-			Message:  fmt.Sprintf("Invalid type %q: must be one of brief, blueprint, imprint", record.Type),
+			Message:  fmt.Sprintf("Invalid type %q: must be one of brief, blueprint, bug, imprint", record.Type),
 			Severity: SeverityError,
 		})
 	}
 }
 
-// validateRequiredFields checks that all required fields are present and non-empty
+// validateRequiredFields checks that all required fields are present and non-empty.
+// Fields required on all types: id, title, status, created_at, author, intent.
+// Additional per-type requirements (always-on, graph integrity):
+//   - Brief: constraints required
+//   - Imprint: implements required
 func (l *Linter) validateRequiredFields(record *Record, result *LintResult) {
 	required := map[string]string{
 		"id":         record.ID,
@@ -231,6 +244,32 @@ func (l *Linter) validateRequiredFields(record *Record, result *LintResult) {
 				Severity: SeverityError,
 			})
 		}
+	}
+
+	// Resolve effective type for per-type rules
+	effectiveType := record.Type
+	if effectiveType == "" {
+		effectiveType = RecordTypeBlueprint
+	}
+
+	// Brief records must have constraints (graph integrity rule, always-on)
+	if effectiveType == RecordTypeBrief && len(record.Constraints) == 0 {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "constraints",
+			Message:  "Brief records must have constraints. Briefs define the business rationale and must carry machine-verifiable constraints.",
+			Severity: SeverityError,
+		})
+	}
+
+	// Imprint records must have implements (graph integrity rule, always-on)
+	if effectiveType == RecordTypeImprint && strings.TrimSpace(record.Implements) == "" {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message:  "Imprint records must set implements pointing at the parent Blueprint.",
+			Severity: SeverityError,
+		})
 	}
 }
 
@@ -722,6 +761,157 @@ func (l *Linter) validateConstraintsHint(record *Record, result *LintResult) {
 	}
 }
 
+// validateNotApplicableFields emits errors/warnings for fields that must not appear on specific types.
+// These are always-on rules derived from the field enforcement matrix.
+func (l *Linter) validateNotApplicableFields(record *Record, result *LintResult) {
+	effectiveType := record.Type
+	if effectiveType == "" {
+		effectiveType = RecordTypeBlueprint
+	}
+
+	// extends is only valid on Bug records
+	if effectiveType != RecordTypeBug && strings.TrimSpace(record.Extends) != "" {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "extends",
+			Message:  fmt.Sprintf("extends is not applicable on %s records; it is only valid on bug records", effectiveType),
+			Severity: SeverityError,
+		})
+	}
+
+	// Brief records must not carry affected_scope, forbidden_scope, or associated_specs
+	if effectiveType == RecordTypeBrief {
+		if len(record.AffectedScope) > 0 {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "affected_scope",
+				Message:  "affected_scope is not applicable on brief records; briefs define business rationale, not implementation scope",
+				Severity: SeverityWarning,
+			})
+		}
+		if len(record.ForbiddenScope) > 0 {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "forbidden_scope",
+				Message:  "forbidden_scope is not applicable on brief records",
+				Severity: SeverityWarning,
+			})
+		}
+		if len(record.AssociatedSpecs) > 0 {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "associated_specs",
+				Message:  "associated_specs is not applicable on brief records; proof artifacts belong on blueprints and imprints",
+				Severity: SeverityWarning,
+			})
+		}
+	}
+
+	// Imprint records must not carry associated_traces or monitors
+	if effectiveType == RecordTypeImprint {
+		if len(record.AssociatedTraces) > 0 {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "associated_traces",
+				Message:  "associated_traces is not applicable on imprint records; trace results are operational artifacts anchored at the blueprint tier",
+				Severity: SeverityWarning,
+			})
+		}
+		if len(record.Monitors) > 0 {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "monitors",
+				Message:  "monitors is not applicable on imprint records; production monitoring is anchored at the blueprint tier",
+				Severity: SeverityWarning,
+			})
+		}
+	}
+}
+
+// validateBugConditionals enforces Bug-specific rules (always-on, graph integrity):
+//   - Exactly one of supersedes or extends must be present
+//   - When supersedes is set, the target must be a Blueprint or Bug
+//   - When extends is set, the target must be a Blueprint or Bug
+func (l *Linter) validateBugConditionals(record *Record, result *LintResult) {
+	if record.Type != RecordTypeBug {
+		return
+	}
+
+	hasSupersedesRef := strings.TrimSpace(record.Supersedes) != "" && record.Supersedes != "null"
+	hasExtendsRef := strings.TrimSpace(record.Extends) != ""
+
+	if !hasSupersedesRef && !hasExtendsRef {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "supersedes",
+			Message:  "Bug records must either supersede or extend a Blueprint. Use supersedes when existing constraints are incorrect, extends when constraints are missing.",
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	if hasSupersedesRef && hasExtendsRef {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "supersedes",
+			Message:  "supersedes and extends are mutually exclusive on Bug records. A record cannot simultaneously replace and be additive to the same parent.",
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	if hasSupersedesRef {
+		target, exists := l.Loader.GetRecord(record.Supersedes)
+		if exists {
+			targetType := target.Type
+			if targetType == "" {
+				targetType = RecordTypeBlueprint
+			}
+			if targetType != RecordTypeBlueprint && targetType != RecordTypeBug {
+				result.Add(Issue{
+					RecordID: record.ID,
+					Field:    "supersedes",
+					Message: fmt.Sprintf(
+						"Bug records may only supersede a Blueprint or Bug, but %s is a %s. "+
+							"Use implements for downward tier references, related for lateral informational links.",
+						record.Supersedes, targetType,
+					),
+					Severity: SeverityError,
+				})
+			}
+		}
+	}
+
+	if hasExtendsRef {
+		target, exists := l.Loader.GetRecord(record.Extends)
+		if !exists {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "extends",
+				Message:  fmt.Sprintf("extends references unknown record: %s", record.Extends),
+				Severity: SeverityError,
+			})
+			return
+		}
+		targetType := target.Type
+		if targetType == "" {
+			targetType = RecordTypeBlueprint
+		}
+		if targetType != RecordTypeBlueprint && targetType != RecordTypeBug {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "extends",
+				Message: fmt.Sprintf(
+					"Bug records may only extend a Blueprint or Bug, but %s is a %s. "+
+						"Use implements for downward tier references, related for lateral informational links.",
+					record.Extends, targetType,
+				),
+				Severity: SeverityError,
+			})
+		}
+	}
+}
+
 // validateImmutability checks if an implemented record has been modified
 func (l *Linter) validateImmutability(record *Record, result *LintResult) {
 	if record.Status != StatusImplemented {
@@ -947,8 +1137,11 @@ func (l *Linter) checkLockedScope(result *LintResult) {
 	}
 }
 
-// validateSupersessionType checks that a supersedes relationship stays within the same tier.
-// This is always-on regardless of enforcement level because it is a graph integrity rule.
+// validateSupersessionType checks that a supersedes relationship stays within the same tier,
+// with the following exceptions from the enforcement matrix (always-on, graph integrity):
+//   - Bug may supersede Blueprint (the core bug-fix supersession case)
+//   - Bug may supersede Bug (a corrected bug fix)
+//   - Imprint may supersede Imprint, but both must share the same implements value
 func (l *Linter) validateSupersessionType(record *Record, result *LintResult) {
 	if record.Supersedes == "" || record.Supersedes == "null" {
 		return
@@ -967,6 +1160,29 @@ func (l *Linter) validateSupersessionType(record *Record, result *LintResult) {
 	targetType := target.Type
 	if targetType == "" {
 		targetType = RecordTypeBlueprint
+	}
+
+	// Bug-specific supersession exceptions handled by validateBugConditionals.
+	// Bug may supersede Blueprint or Bug — skip the type-equality check.
+	if recordType == RecordTypeBug {
+		return
+	}
+
+	// Imprint may supersede Imprint, but both must implement the same Blueprint.
+	if recordType == RecordTypeImprint && targetType == RecordTypeImprint {
+		if record.Implements != target.Implements {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "supersedes",
+				Message: fmt.Sprintf(
+					"Imprints may only supersede Imprints that implement the same Blueprint. "+
+						"This record implements %s but %s implements %s.",
+					record.Implements, record.Supersedes, target.Implements,
+				),
+				Severity: SeverityError,
+			})
+		}
+		return
 	}
 
 	if recordType != targetType {
@@ -1039,6 +1255,7 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 
 	// Rule: implements type relationship must be exactly one tier up.
 	// Allowed: blueprint implements brief, imprint implements blueprint.
+	// Not allowed: brief, bug.
 	recordType := record.Type
 	if recordType == "" {
 		recordType = RecordTypeBlueprint
@@ -1078,6 +1295,23 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 					"Allowed relationships: blueprint implements brief, imprint implements blueprint.",
 				recordType, expectedParent, record.Implements, targetType,
 			),
+			Severity: SeverityError,
+		})
+	}
+}
+
+// validateExtends checks that the extends field references a valid record.
+// Target existence is validated here; type constraints are enforced in validateBugConditionals.
+func (l *Linter) validateExtends(record *Record, result *LintResult) {
+	if strings.TrimSpace(record.Extends) == "" {
+		return
+	}
+
+	if !IsValidID(record.Extends) {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "extends",
+			Message:  fmt.Sprintf("extends value %q is not a valid provenance record ID (expected prov-YYYY-NNN format).", record.Extends),
 			Severity: SeverityError,
 		})
 	}

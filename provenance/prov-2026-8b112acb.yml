@@ -1,0 +1,37 @@
+id: prov-2026-8b112acb
+title: Implement per-type field enforcement rules in linter
+status: open
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Update the linter to enforce the per-type field presence rules from the
+  enforcement matrix. This covers: required/not-applicable field checks per type,
+  Bug-specific conditional rules (supersedes/extends mutual exclusion and target
+  type validation), Imprint supersession same-parent constraint, updated
+  supersession type rules to allow the Bug-to-Blueprint exception, and the updated
+  validateType hint to include bug.
+constraints:
+  - "validateType hint updated to list brief|blueprint|bug|imprint"
+  - "validateRequiredFields updated: Brief requires constraints; Imprint requires implements"
+  - "validateNotApplicableFields added: errors/warnings for fields that must not appear on specific types"
+  - "validateBugConditionals added: exactly one of supersedes/extends required; target type checks"
+  - "validateSupersessionType updated: Bug-to-Blueprint allowed; Imprint-to-Imprint requires same implements"
+  - "validateImplements updated: Bug and Brief records cannot use implements"
+  - "All new validation functions called from lintRecord"
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-9ffe68bb
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []

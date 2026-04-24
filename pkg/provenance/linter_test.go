@@ -602,3 +602,417 @@ func TestValidateImplements_UnresolvedErrorMentionsSharedRepos(t *testing.T) {
 		t.Errorf("Error message should mention 'linespec provenance sync', got: %s", msg)
 	}
 }
+
+// --- Per-type field enforcement tests ---
+
+func TestValidateRequiredFields_BriefRequiresConstraints(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	brief := &Record{
+		ID:          "prov-2026-001",
+		Type:        RecordTypeBrief,
+		Title:       "Test brief",
+		Status:      StatusOpen,
+		CreatedAt:   "2026-01-01",
+		Author:      "test@example.com",
+		Intent:      "some intent",
+		Constraints: []string{},
+	}
+	result := &LintResult{}
+	linter.validateRequiredFields(brief, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for Brief missing constraints, got %d: %v", result.ErrorCount, result.Issues)
+	}
+	if result.ErrorCount == 1 && result.Issues[0].Field != "constraints" {
+		t.Errorf("Expected error on field 'constraints', got %q", result.Issues[0].Field)
+	}
+}
+
+func TestValidateRequiredFields_BriefWithConstraintsPasses(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	brief := &Record{
+		ID:          "prov-2026-001",
+		Type:        RecordTypeBrief,
+		Title:       "Test brief",
+		Status:      StatusOpen,
+		CreatedAt:   "2026-01-01",
+		Author:      "test@example.com",
+		Intent:      "some intent",
+		Constraints: []string{"must do x"},
+	}
+	result := &LintResult{}
+	linter.validateRequiredFields(brief, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for Brief with constraints, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateRequiredFields_ImprintRequiresImplements(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	imprint := &Record{
+		ID:         "prov-2026-002",
+		Type:       RecordTypeImprint,
+		Title:      "Test imprint",
+		Status:     StatusOpen,
+		CreatedAt:  "2026-01-01",
+		Author:     "test@example.com",
+		Intent:     "some intent",
+		Implements: "",
+	}
+	result := &LintResult{}
+	linter.validateRequiredFields(imprint, result)
+
+	var implementsErrors []Issue
+	for _, i := range result.Issues {
+		if i.Field == "implements" {
+			implementsErrors = append(implementsErrors, i)
+		}
+	}
+	if len(implementsErrors) != 1 {
+		t.Errorf("Expected 1 error on 'implements' for Imprint missing implements, got %d: %v", len(implementsErrors), result.Issues)
+	}
+}
+
+func TestValidateRequiredFields_BriefConstraintsRequiredAtAllEnforcementLevels(t *testing.T) {
+	// The Brief constraints requirement is always-on (graph integrity), not adoption maturity
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+
+	brief := &Record{
+		ID:          "prov-2026-001",
+		Type:        RecordTypeBrief,
+		Title:       "Test",
+		Status:      StatusOpen,
+		CreatedAt:   "2026-01-01",
+		Author:      "test@example.com",
+		Intent:      "intent",
+		Constraints: []string{},
+	}
+
+	for _, level := range []string{"none", "warn", "strict"} {
+		linter := NewLinter(loader, level)
+		result := &LintResult{}
+		linter.validateRequiredFields(brief, result)
+		if result.ErrorCount == 0 {
+			t.Errorf("enforcement=%s: expected error for Brief missing constraints", level)
+		}
+	}
+}
+
+// --- validateNotApplicableFields tests ---
+
+func TestValidateNotApplicableFields_ExtendsOnNonBug(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	for _, rt := range []RecordType{RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint} {
+		record := &Record{ID: "prov-2026-001", Type: rt, Extends: "prov-2026-002"}
+		result := &LintResult{}
+		linter.validateNotApplicableFields(record, result)
+		if result.ErrorCount != 1 {
+			t.Errorf("type=%s: expected 1 error for extends on non-Bug, got %d", rt, result.ErrorCount)
+		}
+	}
+}
+
+func TestValidateNotApplicableFields_ExtendsOnBugAllowed(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	record := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Extends: "prov-2026-002"}
+	result := &LintResult{}
+	linter.validateNotApplicableFields(record, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected no error for extends on Bug, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateNotApplicableFields_BriefScopeWarnings(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	record := &Record{
+		ID:             "prov-2026-001",
+		Type:           RecordTypeBrief,
+		AffectedScope:  []string{"pkg/foo.go"},
+		ForbiddenScope: []string{"pkg/bar.go"},
+		AssociatedSpecs: []AssociatedSpec{
+			{Path: "pkg/foo_test.go"},
+		},
+	}
+	result := &LintResult{}
+	linter.validateNotApplicableFields(record, result)
+
+	if result.WarningCount != 3 {
+		t.Errorf("Expected 3 warnings for Brief with scope/specs, got %d: %v", result.WarningCount, result.Issues)
+	}
+}
+
+func TestValidateNotApplicableFields_ImprintTracesAndMonitorsWarnings(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	record := &Record{
+		ID:               "prov-2026-001",
+		Type:             RecordTypeImprint,
+		AssociatedTraces: []string{"trace-123"},
+		Monitors:         []string{"dashboard-url"},
+	}
+	result := &LintResult{}
+	linter.validateNotApplicableFields(record, result)
+
+	if result.WarningCount != 2 {
+		t.Errorf("Expected 2 warnings for Imprint with traces/monitors, got %d: %v", result.WarningCount, result.Issues)
+	}
+}
+
+// --- validateBugConditionals tests ---
+
+func newBugLoader(t *testing.T) (*Loader, *Record, *Record) {
+	t.Helper()
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	loader := NewLoader(tmpDir, nil)
+	blueprint := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint}
+	anotherBug := &Record{ID: "prov-2026-bg1", Type: RecordTypeBug}
+	loader.Records = []*Record{blueprint, anotherBug}
+	loader.RecordsByID = map[string]*Record{
+		"prov-2026-bp1": blueprint,
+		"prov-2026-bg1": anotherBug,
+	}
+	return loader, blueprint, anotherBug
+}
+
+func TestValidateBugConditionals_NeitherSupersedesNorExtends(t *testing.T) {
+	loader, _, _ := newBugLoader(t)
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: "", Extends: ""}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error when Bug has neither supersedes nor extends, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_BothSupersedesAndExtends(t *testing.T) {
+	loader, blueprint, _ := newBugLoader(t)
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: blueprint.ID, Extends: blueprint.ID}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error when Bug has both supersedes and extends, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_SupersedesBlueprint(t *testing.T) {
+	loader, blueprint, _ := newBugLoader(t)
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: blueprint.ID}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for Bug superseding Blueprint, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_SupersedesBug(t *testing.T) {
+	loader, _, anotherBug := newBugLoader(t)
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: anotherBug.ID}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for Bug superseding Bug, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_SupersedesBriefIsError(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	brief := &Record{ID: "prov-2026-br1", Type: RecordTypeBrief}
+	loader.Records = []*Record{brief}
+	loader.RecordsByID = map[string]*Record{"prov-2026-br1": brief}
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: "prov-2026-br1"}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for Bug superseding Brief, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_ExtendsBlueprint(t *testing.T) {
+	loader, blueprint, _ := newBugLoader(t)
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Extends: blueprint.ID}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for Bug extending Blueprint, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateBugConditionals_ExtendsImprintIsError(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	imp := &Record{ID: "prov-2026-im1", Type: RecordTypeImprint}
+	loader.Records = []*Record{imp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-im1": imp}
+	linter := NewLinter(loader, "strict")
+
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Extends: "prov-2026-im1"}
+	result := &LintResult{}
+	linter.validateBugConditionals(bug, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for Bug extending Imprint, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+// --- validateSupersessionType tests (Bug exceptions + Imprint same-parent) ---
+
+func TestValidateSupersessionType_BugSupersedesBlueprint(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	blueprint := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint}
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Supersedes: "prov-2026-bp1"}
+	loader.Records = []*Record{blueprint, bug}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": blueprint, "prov-2026-001": bug}
+	linter := NewLinter(loader, "strict")
+
+	result := &LintResult{}
+	linter.validateSupersessionType(bug, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Bug superseding Blueprint must be allowed, got %d errors: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateSupersessionType_ImprintSupersessesImprintSameParent(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	old := &Record{ID: "prov-2026-im1", Type: RecordTypeImprint, Implements: "prov-2026-bp1"}
+	newImp := &Record{ID: "prov-2026-im2", Type: RecordTypeImprint, Implements: "prov-2026-bp1", Supersedes: "prov-2026-im1"}
+	loader.Records = []*Record{old, newImp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-im1": old, "prov-2026-im2": newImp}
+	linter := NewLinter(loader, "strict")
+
+	result := &LintResult{}
+	linter.validateSupersessionType(newImp, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("Imprint superseding Imprint with same implements must be allowed, got %d errors: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateSupersessionType_ImprintSupersedesImprintDifferentParent(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	old := &Record{ID: "prov-2026-im1", Type: RecordTypeImprint, Implements: "prov-2026-bp1"}
+	newImp := &Record{ID: "prov-2026-im2", Type: RecordTypeImprint, Implements: "prov-2026-bp2", Supersedes: "prov-2026-im1"}
+	loader.Records = []*Record{old, newImp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-im1": old, "prov-2026-im2": newImp}
+	linter := NewLinter(loader, "strict")
+
+	result := &LintResult{}
+	linter.validateSupersessionType(newImp, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Imprint superseding Imprint with different implements must error, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+// --- validateImplements: Brief and Bug cannot use implements ---
+
+func TestValidateImplements_BriefCannotUseImplements(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	target := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint}
+	brief := &Record{ID: "prov-2026-001", Type: RecordTypeBrief, Implements: "prov-2026-bp1"}
+	loader.Records = []*Record{target, brief}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": target, "prov-2026-001": brief}
+	linter := NewLinter(loader, "strict")
+
+	result := &LintResult{}
+	linter.validateImplements(brief, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for Brief using implements, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
+
+func TestValidateImplements_BugCannotUseImplements(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	target := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint}
+	bug := &Record{ID: "prov-2026-001", Type: RecordTypeBug, Implements: "prov-2026-bp1"}
+	loader.Records = []*Record{target, bug}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": target, "prov-2026-001": bug}
+	linter := NewLinter(loader, "strict")
+
+	result := &LintResult{}
+	linter.validateImplements(bug, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error for Bug using implements, got %d: %v", result.ErrorCount, result.Issues)
+	}
+}
