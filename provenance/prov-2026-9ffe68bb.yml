@@ -1,0 +1,60 @@
+id: prov-2026-9ffe68bb
+title: Per-type field enforcement matrix for provenance record tiers
+status: draft
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  The linter currently applies a single flat set of required fields to all record types
+  and has no concept of not-applicable fields. The field enforcement matrix in
+  NEW_FIELD_ENFORCEMENT.md defines per-type rules across four tiers — Brief, Blueprint,
+  Bug, and Imprint — specifying which fields are required, optional, conditional, or
+  not applicable for each type.
+
+  This blueprint implements those rules in full. It introduces the bug record type
+  (currently absent from the type system), adds the extends field to the Record struct
+  (only applicable to Bug records), updates the linter to enforce per-type field
+  presence rules, adds Bug-specific conditional rules (exactly one of supersedes/extends;
+  target type constraints), updates Imprint supersession to require same-Blueprint parent,
+  updates supersession type rules to allow the Bug-to-Blueprint exception, and updates all
+  local documentation to reflect the new type and field rules.
+constraints:
+  - "The bug type must be added to RecordType and IsValid(), and accepted by the create command"
+  - "The extends field must be added to the Record struct (yaml:extends,omitempty), only applicable to Bug records"
+  - "Brief records must require constraints; absence is a lint error at all enforcement levels (graph integrity rule)"
+  - "Imprint records must require implements; absence is a lint error at all enforcement levels"
+  - "Brief records must not use implements; presence is a lint error"
+  - "Bug records must not use implements; presence is a lint error"
+  - "Brief records must not carry affected_scope, forbidden_scope, or associated_specs; presence is a lint warning"
+  - "Imprint records must not carry associated_traces or monitors; presence is a lint warning"
+  - "extends must not appear on Brief, Blueprint, or Imprint records; presence is a lint error"
+  - "Bug records must have exactly one of supersedes or extends; neither or both present are lint errors"
+  - "When Bug supersedes is set, the target must be a Blueprint or Bug; targeting a Brief or Imprint is a lint error"
+  - "When Bug extends is set, the target must be a Blueprint or Bug; targeting a Brief or Imprint is a lint error"
+  - "validateSupersessionType must be updated to allow Bug-to-Blueprint as a valid cross-type supersession"
+  - "When Imprint supersedes another Imprint, both must share the same implements value; mismatch is a lint error"
+  - "The validateType hint message must include bug in the list of valid types"
+  - "PROVENANCE_RECORDS.md, PROVENANCE_RECORD_SCHEMA.md, and CHANGELOG.md must be updated; docs/ site files must not be modified"
+  - "All new rules must have corresponding test coverage in linter_test.go"
+affected_scope:
+  - pkg/provenance/types.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
+  - CHANGELOG.md
+  - provenance/*.yml
+type: blueprint
+implements: prov-2026-95cb8b3d
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: test
+    run_command: make test
+monitors: []
+tags:
+  - provenance
+  - linter
+  - enforcement
