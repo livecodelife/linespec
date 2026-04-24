@@ -613,7 +613,23 @@ RETURNS {{order_update_result.yaml}}</code></pre>
                     <h3>EXPECT WRITE:POSTGRESQL</h3>
                     <div class="code-block">
                         <div class="code-header">
-                            <span>LineSpec</span>
+                            <span>LineSpec — Semantic (recommended)</span>
+                        </div>
+                        <pre><code>EXPECT WRITE:POSTGRESQL [&lt;table_name&gt;] [CALL N]
+[ACCESSING_TABLES [&lt;table1&gt;, &lt;table2&gt;, ...]]
+[VERIFY_OPERATION INSERT|UPDATE|DELETE]
+[VERIFY_WRITTEN_VALUES
+  &lt;col&gt;: &lt;value&gt;
+  ...]
+[WITH {{&lt;input_payload&gt;}}]
+[RETURNS {{&lt;write_result_file&gt;}}]
+[VERIFY query CONTAINS '&lt;string&gt;']
+[VERIFY query NOT_CONTAINS '&lt;string&gt;']
+[VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec — Legacy text matching (deprecated)</span>
                         </div>
                         <pre><code>EXPECT WRITE:POSTGRESQL &lt;table_name&gt;
 [USING_SQL """
@@ -635,6 +651,15 @@ RETURNS {{order_update_result.yaml}}</code></pre>
                         <div class="code-header"><span>write_result.yaml</span></div>
                         <pre><code>affected_rows: 3</code></pre>
                     </div>
+
+                    <p><strong>Semantic matching rules:</strong></p>
+                    <ul>
+                        <li><code>ACCESSING_TABLES</code> routes the mock by the exact set of tables the query touches — when used, the table name on the <code>EXPECT</code> line may be omitted</li>
+                        <li><code>VERIFY_OPERATION</code> asserts the DML type (INSERT, UPDATE, or DELETE)</li>
+                        <li><code>VERIFY_WRITTEN_VALUES</code> asserts column values in the INSERT column list or UPDATE SET clause; the proxy reads actual Bind message parameter values, so it works across any ORM</li>
+                        <li><code>CALL N</code> is a tiebreaker when multiple mocks match — consumed in ascending N order</li>
+                        <li>Specificity-wins: the mock with the most declared <code>VERIFY_</code> clauses wins; <code>CALL N</code> breaks ties</li>
+                    </ul>
 
                     <p>Note: SQL <code>RETURNING</code> clauses (PostgreSQL's row-returning syntax) are handled separately — the proxy returns a full result set for those queries, and the <code>RETURNS</code> payload is not used.</p>
                 </section>
@@ -1510,12 +1535,18 @@ dependencies:
 <div class="code-header"><span>LineSpec</span></div>
 <pre><code>EXPECT GRPC:&lt;ServiceName&gt;/&lt;MethodName&gt;
 [WITH {{&lt;request_payload&gt;}}]
-RETURNS {{&lt;response_payload&gt;}}</code></pre>
+RETURNS {{&lt;response_payload&gt;}}
+
+# or for a method that returns no body:
+EXPECT GRPC:&lt;ServiceName&gt;/&lt;MethodName&gt;
+[WITH {{&lt;request_payload&gt;}}]
+RETURNS EMPTY</code></pre>
 </div>
 <ul>
 <li><code>ServiceName/MethodName</code> matches the gRPC route (e.g. <code>UserService/GetUser</code>)</li>
 <li><code>WITH</code> is optional; omit it to match any request body for that method</li>
 <li><code>RETURNS</code> is required; the proxy returns it as the gRPC response</li>
+<li><code>RETURNS EMPTY</code> sends a 5-byte Length-Prefixed Message frame with a zero-length body — the correct wire encoding for a gRPC method that returns an empty protobuf message (e.g. <code>google.protobuf.Empty</code>)</li>
 <li>Test fails if the expected gRPC call is not observed</li>
 </ul>
 

@@ -58,6 +58,7 @@
                         <li><a href="#quick-start" class="active">Quick Start</a></li>
                         <li><a href="#concepts">Core Concepts</a></li>
                         <li><a href="#schema">Schema Reference</a></li>
+                        <li><a href="#tier-hierarchy">Tier Hierarchy</a></li>
                         <li><a href="#cli">CLI Commands</a></li>
                         <li><a href="#config">Configuration</a></li>
                         <li><a href="#semantic-search">Semantic Search</a></li>
@@ -92,6 +93,7 @@
                         <li><a href="#quick-start">Quick Start</a></li>
                         <li><a href="#concepts">Core Concepts</a></li>
                         <li><a href="#schema">Schema Reference</a></li>
+                        <li><a href="#tier-hierarchy">Tier Hierarchy</a></li>
                         <li><a href="#cli">CLI Commands</a></li>
                         <li><a href="#config">Configuration</a></li>
                         <li><a href="#semantic-search">Semantic Search</a></li>
@@ -166,17 +168,18 @@ linespec provenance graph</code></pre>
 
                     <h3>Status Lifecycle</h3>
                     <div class="diagram">
-                        <pre>┌─────────┐    ┌─────────────┐    ┌────────────┐
-│  open   │───▶│ implemented │───▶│ superseded │
-└─────────┘    └─────────────┘    └────────────┘
-                                     │
-                                     ▼
-                               ┌────────────┐
-                               │ deprecated │
-                               └────────────┘</pre>
+                        <pre>┌─────────┐    ┌─────────┐    ┌─────────────┐    ┌────────────┐
+│  draft  │───▶│  open   │───▶│ implemented │───▶│ superseded │
+└─────────┘    └─────────┘    └─────────────┘    └────────────┘
+                                                       │
+                                                       ▼
+                                                 ┌────────────┐
+                                                 │ deprecated │
+                                                 └────────────┘</pre>
                     </div>
                     <ul>
-                        <li><strong>open</strong> - Decision is being discussed/developed</li>
+                        <li><strong>draft</strong> - Record created but enforcement not yet active. Scope and spec checks are suppressed. Transition to open with <code>linespec provenance open --record &lt;id&gt;</code>.</li>
+                        <li><strong>open</strong> - Decision is active and under enforcement</li>
                         <li><strong>implemented</strong> - Decision is complete and immutable</li>
                         <li><strong>superseded</strong> - Replaced by a newer record (use <code>superseded_by</code>)</li>
                         <li><strong>deprecated</strong> - No longer relevant</li>
@@ -261,7 +264,12 @@ tags:
                             <tr>
                                 <td><code>status</code></td>
                                 <td>string</td>
-                                <td>One of: open, implemented, superseded, deprecated</td>
+                                <td>One of: draft, open, implemented, superseded, deprecated</td>
+                            </tr>
+                            <tr>
+                                <td><code>type</code></td>
+                                <td>string</td>
+                                <td>Record tier: <code>brief</code>, <code>blueprint</code> (default), <code>bug</code>, or <code>imprint</code>. See <a href="#tier-hierarchy">Tier Hierarchy</a>.</td>
                             </tr>
                             <tr>
                                 <td><code>created_at</code></td>
@@ -344,12 +352,22 @@ tags:
                             <tr>
                                 <td><code>supersedes</code></td>
                                 <td>string</td>
-                                <td>ID of older record this replaces</td>
+                                <td>ID of older record this replaces (same tier; Bug may also supersede Blueprint)</td>
                             </tr>
                             <tr>
                                 <td><code>superseded_by</code></td>
                                 <td>string</td>
                                 <td>ID of newer record that replaces this</td>
+                            </tr>
+                            <tr>
+                                <td><code>extends</code></td>
+                                <td>string</td>
+                                <td>Bug only: ID of Blueprint or Bug whose constraint coverage this record supplements. Unlike <code>supersedes</code>, the target is not replaced. Mutually exclusive with <code>supersedes</code> on Bug records.</td>
+                            </tr>
+                            <tr>
+                                <td><code>implements</code></td>
+                                <td>string</td>
+                                <td>ID of the parent record one tier up: Blueprint implements Brief, Imprint implements Blueprint. Brief and Bug records may not use this field.</td>
                             </tr>
                             <tr>
                                 <td><code>related</code></td>
@@ -411,6 +429,66 @@ tags:
                     </table>
                 </section>
 
+                <section id="tier-hierarchy" class="docs-section">
+                    <h2>Tier Hierarchy</h2>
+                    <p>Records can be organized into four tiers using the <code>type</code> field. Each tier has a defined role and relationship to the others:</p>
+
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Role</th>
+                                <th>Implements</th>
+                                <th>Required fields</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>brief</code></td>
+                                <td>High-level intent — the "why"</td>
+                                <td>Nothing (top of hierarchy)</td>
+                                <td><code>constraints</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>blueprint</code></td>
+                                <td>Design decision — the "what"</td>
+                                <td><code>brief</code> (optional)</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td><code>bug</code></td>
+                                <td>Correction or gap-fill — the "fix"</td>
+                                <td>Nothing (cannot use <code>implements</code>)</td>
+                                <td>Exactly one of <code>supersedes</code> or <code>extends</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>imprint</code></td>
+                                <td>Implementation record — the "how"</td>
+                                <td><code>blueprint</code> (required)</td>
+                                <td><code>implements</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>Records without a <code>type</code> field default to <code>blueprint</code> for backward compatibility (a lint hint is emitted).</p>
+
+                    <h3>Linter-enforced hierarchy rules</h3>
+                    <ul>
+                        <li><strong>Supersession must stay within the same tier.</strong> A <code>blueprint</code> cannot supersede a <code>brief</code>. Use <code>related</code> or <code>implements</code> for cross-tier connections. <em>Exception: <code>bug</code> may supersede <code>blueprint</code> or another <code>bug</code>.</em> (PROV020)</li>
+                        <li><strong><code>implements</code> must point exactly one tier up.</strong> <code>blueprint</code> implements <code>brief</code>, <code>imprint</code> implements <code>blueprint</code>. Skipping a tier or pointing sideways is a lint error. <code>brief</code> and <code>bug</code> records may not use <code>implements</code>. (PROV021)</li>
+                        <li><strong><code>implements</code> must resolve.</strong> The referenced record must exist locally or in a configured shared repo cache. A missing reference is always an error. (PROV022)</li>
+                        <li><strong>Imprint supersession requires same parent.</strong> When an Imprint supersedes another Imprint, both must share the same <code>implements</code> value.</li>
+                        <li><strong>Bug records require exactly one of <code>supersedes</code> or <code>extends</code>.</strong> Use <code>supersedes</code> when existing constraints are incorrect; use <code>extends</code> when constraints are missing. Neither or both is an error.</li>
+                        <li><strong><code>extends</code> target must be a Blueprint or Bug.</strong> A Bug extending a Brief or Imprint is an error.</li>
+                        <li><strong><code>brief</code> records must carry <code>constraints</code>.</strong> A Brief with no constraints is a lint error.</li>
+                    </ul>
+
+                    <div class="info-box">
+                        <h4>Lifecycle note</h4>
+                        <p>Draft records skip all scope and spec enforcement. Use <code>linespec provenance open</code> to begin enforcement when the record is ready.</p>
+                    </div>
+                </section>
+
                 <section id="cli" class="docs-section">
                     <h2>CLI Commands</h2>
 
@@ -440,12 +518,37 @@ linespec provenance create --title "Quick fix" --no-edit</code></pre>
                     <p><strong>Options:</strong></p>
                     <ul>
                         <li><code>--title "..."</code> - Pre-populate title</li>
+                        <li><code>--type brief|blueprint|bug|imprint</code> - Set the record tier (default: blueprint)</li>
                         <li><code>--supersedes prov-YYYY-XXXXXXXX</code> - Link to older record</li>
                         <li><code>--tag tag1,tag2</code> - Add tags</li>
                         <li><code>--no-edit</code> - Write without opening editor</li>
                         <li><code>-i, --id-suffix name</code> - Append service suffix</li>
                         <li><code>-c, --config path</code> - Use custom .linespec.yml</li>
                     </ul>
+                    <div class="info-box">
+                        <h4>Records start in <code>draft</code> status</h4>
+                        <p>Newly created records have <code>status: draft</code>. Scope and spec enforcement are suppressed while a record is in draft. Run <code>linespec provenance open --record &lt;id&gt;</code> to activate enforcement when the record is ready.</p>
+                    </div>
+
+                    <h3>Open</h3>
+                    <p>Transition a record from <code>draft</code> to <code>open</code>, activating scope and spec enforcement:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance open --record prov-2026-a1b2c3d4</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record prov-YYYY-XXXXXXXX</code> - Required. The record to open</li>
+                        <li><code>-c, --config path</code> - Use custom .linespec.yml</li>
+                    </ul>
+                    <p>Before opening, confirm <code>affected_scope</code> and <code>associated_specs</code> are set — these fields are enforced once the record is open. Commit the open transition as a standalone commit.</p>
 
                     <h3>Lint</h3>
                     <p>Validate provenance records:</p>
@@ -467,6 +570,9 @@ linespec provenance lint --record prov-2026-001
 # JSON output for CI
 linespec provenance lint --format json
 
+# SARIF output for GitHub Code Scanning
+linespec provenance lint --format sarif
+
 # Override enforcement level
 linespec provenance lint --enforcement strict</code></pre>
                     </div>
@@ -474,7 +580,7 @@ linespec provenance lint --enforcement strict</code></pre>
                     <ul>
                         <li><code>--record prov-YYYY-XXXXXXXX</code> - Lint single record</li>
                         <li><code>--enforcement level</code> - none|warn|strict (default from config)</li>
-                        <li><code>--format format</code> - human|json</li>
+                        <li><code>--format format</code> - human|json|sarif</li>
                         <li><code>-c, --config path</code> - Use custom config</li>
                     </ul>
                     <p><strong>Enforcement Levels:</strong></p>
@@ -1059,6 +1165,67 @@ git commit -m "Fix typo [prov-2026-deadbeef]"</code></pre>
                     </div>
                     
                     <p><strong>Required Secret:</strong> Add <code>VOYAGE_API_KEY</code> as a repository secret in GitHub (Settings → Secrets and variables → Actions).</p>
+
+                    <h3>GitHub Code Scanning / SARIF</h3>
+                    <p>LineSpec can emit lint results as SARIF 2.1.0, which integrates directly with GitHub Code Scanning to surface provenance violations as pull request annotations and security alerts.</p>
+
+                    <p><strong>Generate SARIF output:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance lint --format sarif &gt; results.sarif</code></pre>
+                    </div>
+
+                    <p><strong>Example GitHub Actions workflow:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>YAML</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>name: Provenance Lint
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LineSpec
+        run: |
+          brew install linespec
+
+      - name: Run provenance lint (SARIF)
+        run: linespec provenance lint --format sarif &gt; results.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif</code></pre>
+                    </div>
+
+                    <div class="info-box">
+                        <h4>SARIF output details</h4>
+                        <ul>
+                            <li>Violations appear as annotations on the files listed in <code>affected_scope</code></li>
+                            <li>Each lint rule (PROV020, PROV021, etc.) maps to a distinct Code Scanning rule ID</li>
+                            <li>Requires <code>security-events: write</code> permission on the workflow job</li>
+                            <li>Upload step requires GitHub Advanced Security on private repositories</li>
+                        </ul>
+                    </div>
                 </section>
 
                 <section id="sealed-sha" class="docs-section">
@@ -1229,27 +1396,31 @@ provenance:
                                 </svg>
                             </button>
                         </div>
-                        <pre><code># 1. Validate, then create (status: open) — standalone commit
+                        <pre><code># 1. Create in draft (status: draft) — standalone commit
 linespec provenance lint
 linespec provenance check
-linespec provenance create --title "New feature" --no-edit
+linespec provenance create --title "New feature" --type blueprint --no-edit
 git commit -m "Create provenance record [prov-2026-deadbeef]"
 
-# 2. Develop (make commits, scope auto-populates)
+# 2. Open the record (status: open) — standalone commit after confirming scope/specs
+linespec provenance open --record prov-2026-deadbeef
+git commit -m "Open provenance record [prov-2026-deadbeef]"
+
+# 3. Develop (make commits, scope auto-populates)
 #    Run check --staged before each implementation commit
 linespec provenance check --staged
 git commit -m "Implement feature [prov-2026-deadbeef]"
 
-# 3. Lock scope (when feature is complete)
+# 4. Lock scope (when feature is complete)
 linespec provenance lock-scope --record prov-2026-deadbeef
 
-# 4. Validate, then complete (status: implemented) — standalone commit
+# 5. Validate, then complete (status: implemented) — standalone commit
 linespec provenance lint
 linespec provenance check
 linespec provenance complete --record prov-2026-deadbeef
 git commit -m "Complete provenance record [prov-2026-deadbeef]"
 
-# 5. (Optional) Supersede later
+# 6. (Optional) Supersede later
 linespec provenance create --title "Better approach" --supersedes prov-2026-deadbeef</code></pre>
                     </div>
                 </section>
