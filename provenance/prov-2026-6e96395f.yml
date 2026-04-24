@@ -1,9 +1,10 @@
 id: prov-2026-6e96395f
 title: 'Refine provenance workflow: blueprint-first with imprint micro-decisions'
 type: blueprint
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
+sealed_at_sha: 80bc002c8326b365dceee969bed6a77664c1ba5c
 intent: >
   Encode a clearer, more intentional workflow for how agents use provenance records.
   Rather than creating a generic record and jumping straight to code, agents now
