@@ -47,7 +47,9 @@ type: blueprint
 implements: prov-2026-95cb8b3d
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-e7d88140
+  - prov-2026-90ec670e
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/provenance/linter_test.go
