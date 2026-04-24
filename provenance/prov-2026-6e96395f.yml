@@ -1,0 +1,28 @@
+id: prov-2026-6e96395f
+title: 'Refine provenance workflow: blueprint-first with imprint micro-decisions'
+type: blueprint
+status: draft
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Encode a clearer, more intentional workflow for how agents use provenance records.
+  Rather than creating a generic record and jumping straight to code, agents now
+  create a blueprint record (draft) that captures the scope and success criteria,
+  present it to the user for confirmation, transition it to open once approved,
+  and then use imprint records (one tier below) to log micro-decisions, trade-offs,
+  pivots, and learnings as the implementation unfolds. All imprints must be
+  implemented before the blueprint can be completed. The blueprint is only completed
+  in a standalone commit after the user confirms the acceptance criteria are met.
+  This workflow is encoded in CLAUDE.md, the provenance skill (SKILL.md at
+  ~/.claude/skills/provenance/), and the embedded provenanceSkillMD constant in
+  commands.go so that install-skills distributes the updated workflow.
+constraints:
+  - CLAUDE.md must document the full blueprint-first workflow including draft confirmation and imprint usage
+  - The provenance skill SKILL.md must match CLAUDE.md exactly in workflow description
+  - The provenanceSkillMD constant in commands.go must match the updated SKILL.md content
+  - Imprint records must set implements pointing at the parent blueprint ID
+  - All imprints must be implemented before the blueprint can be completed
+  - The blueprint complete step must be gated on user confirmation, not automated
+related:
+  - prov-2026-cd41b067
+  - prov-2026-53e3e311
