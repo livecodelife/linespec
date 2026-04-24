@@ -1,0 +1,30 @@
+id: prov-2026-53e3e311
+title: 'Provenance hierarchy chunk 2: cross-tier lint enforcement'
+type: blueprint
+status: draft
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Add three new lint rules to the provenance linter that enforce structural
+  constraints introduced by the tier hierarchy (brief, blueprint, imprint).
+  Rule 1: supersession type enforcement — when supersedes is set, the
+  referenced record must have the same type as the superseding record; crossing
+  tiers via supersedes is a lint error. Rule 2: implements type enforcement —
+  when implements is set, the referenced record must be exactly one tier above
+  (blueprint implements brief, imprint implements blueprint); skipping a tier or
+  pointing sideways is a lint error. Rule 3: implements resolution — the record
+  referenced by implements must exist in the local provenance directory; a missing
+  reference is always an error. All three rules are always-on regardless of
+  configured enforcement level. Cross-repo implements references (identifiable by
+  a colon-prefixed format) are skipped with a warning noting cross-repo resolution
+  is not yet supported.
+constraints:
+  - Supersession type enforcement must use the effective type (defaulting blueprint when type is unset) for both sides of the comparison
+  - A supersedes relationship that crosses tiers must be a lint error with a message naming both types and directing authors to use related or implements instead
+  - Implements type enforcement must allow only blueprint→brief and imprint→blueprint; all other combinations are lint errors
+  - The implements resolution check must fire even when the type relationship cannot be validated (missing record is always an error)
+  - Cross-repo implements references (non-local ID format containing a colon separator) must produce a warning, not an error, and must name the referenced ID
+  - All three rules must be always-on regardless of the configured enforcement level (none/warn/strict), since they represent graph integrity violations
+  - New SARIF rule IDs PROV020, PROV021, PROV022 must be added to sarif.go alongside the existing catalog
+related:
+  - prov-2026-cd41b067
