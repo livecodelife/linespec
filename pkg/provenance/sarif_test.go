@@ -35,8 +35,8 @@ func TestNewSARIFDocument(t *testing.T) {
 func TestGetAllRules(t *testing.T) {
 	rules := GetAllRules()
 
-	if len(rules) != 19 {
-		t.Errorf("Expected 19 rules, got %d", len(rules))
+	if len(rules) != 22 {
+		t.Errorf("Expected 22 rules, got %d", len(rules))
 	}
 
 	// Check that all expected rule IDs are present
@@ -47,7 +47,8 @@ func TestGetAllRules(t *testing.T) {
 		"PROV010": true, "PROV011": true, "PROV012": true,
 		"PROV013": true, "PROV014": true, "PROV015": true,
 		"PROV016": true, "PROV017": true, "PROV018": true,
-		"PROV019": true,
+		"PROV019": true, "PROV020": true, "PROV021": true,
+		"PROV022": true,
 	}
 
 	for _, rule := range rules {
@@ -191,8 +192,8 @@ func TestLintResultToSARIF(t *testing.T) {
 		t.Fatal("Expected tool descriptor")
 	}
 
-	if len(run.Tool.Driver.Rules) != 19 {
-		t.Errorf("Expected 19 rules in catalog, got %d", len(run.Tool.Driver.Rules))
+	if len(run.Tool.Driver.Rules) != 22 {
+		t.Errorf("Expected 22 rules in catalog, got %d", len(run.Tool.Driver.Rules))
 	}
 
 	// Check results
@@ -378,7 +379,7 @@ func TestCleanRunHasEmptyResults(t *testing.T) {
 	}
 
 	// Rules should still be present
-	if len(doc.Runs[0].Tool.Driver.Rules) != 19 {
-		t.Errorf("Expected 19 rules even for clean run, got %d", len(doc.Runs[0].Tool.Driver.Rules))
+	if len(doc.Runs[0].Tool.Driver.Rules) != 22 {
+		t.Errorf("Expected 22 rules even for clean run, got %d", len(doc.Runs[0].Tool.Driver.Rules))
 	}
 }

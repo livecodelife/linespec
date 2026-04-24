@@ -135,11 +135,17 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 	// Validate supersedes
 	l.validateSupersedes(record, result)
 
+	// Validate supersession type agreement (always-on, graph integrity)
+	l.validateSupersessionType(record, result)
+
 	// Validate superseded_by agreement
 	l.validateSupersededBy(record, result)
 
 	// Validate related
 	l.validateRelated(record, result)
+
+	// Validate implements field (resolution + type correctness; always-on, graph integrity)
+	l.validateImplements(record, result)
 
 	// Draft records skip enforcement-sensitive checks
 	if record.Status == StatusDraft {
@@ -929,6 +935,143 @@ func (l *Linter) checkLockedScope(result *LintResult) {
 				}
 			}
 		}
+	}
+}
+
+// validateSupersessionType checks that a supersedes relationship stays within the same tier.
+// This is always-on regardless of enforcement level because it is a graph integrity rule.
+func (l *Linter) validateSupersessionType(record *Record, result *LintResult) {
+	if record.Supersedes == "" || record.Supersedes == "null" {
+		return
+	}
+
+	target, exists := l.Loader.GetRecord(record.Supersedes)
+	if !exists {
+		return // Already reported by validateSupersedes
+	}
+
+	// Resolve effective types — records with no type field default to blueprint
+	recordType := record.Type
+	if recordType == "" {
+		recordType = RecordTypeBlueprint
+	}
+	targetType := target.Type
+	if targetType == "" {
+		targetType = RecordTypeBlueprint
+	}
+
+	if recordType != targetType {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "supersedes",
+			Message: fmt.Sprintf(
+				"Type mismatch in supersedes: a %s record cannot supersede a %s record (%s). "+
+					"Supersession must be within the same tier. "+
+					"Use 'related' or 'implements' for cross-tier relationships.",
+				recordType, targetType, record.Supersedes,
+			),
+			Severity: SeverityError,
+		})
+	}
+}
+
+// validateImplements checks the implements field for resolution and type correctness.
+// Both checks are always-on regardless of enforcement level (graph integrity rules).
+func (l *Linter) validateImplements(record *Record, result *LintResult) {
+	if record.Implements == "" {
+		return
+	}
+
+	// Detect cross-repo references by the presence of a colon separator.
+	// Cross-repo resolution is not yet supported — skip with a warning.
+	if strings.Contains(record.Implements, ":") {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message: fmt.Sprintf(
+				"implements references %q which appears to be a cross-repo reference. "+
+					"Cross-repo resolution is not yet supported; skipping validation.",
+				record.Implements,
+			),
+			Severity: SeverityWarning,
+		})
+		return
+	}
+
+	// If it's not a valid local ID either, that's a format error.
+	if !IsValidID(record.Implements) {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message: fmt.Sprintf(
+				"implements value %q is not a valid provenance record ID (expected prov-YYYY-NNN format). "+
+					"For cross-repo references use a colon-prefixed format.",
+				record.Implements,
+			),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	// Rule: implements reference must resolve locally.
+	target, exists := l.Loader.GetRecord(record.Implements)
+	if !exists {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message: fmt.Sprintf(
+				"implements references unknown record: %s. "+
+					"The referenced record must exist in the local provenance directory.",
+				record.Implements,
+			),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	// Rule: implements type relationship must be exactly one tier up.
+	// Allowed: blueprint implements brief, imprint implements blueprint.
+	recordType := record.Type
+	if recordType == "" {
+		recordType = RecordTypeBlueprint
+	}
+	targetType := target.Type
+	if targetType == "" {
+		targetType = RecordTypeBlueprint
+	}
+
+	validParent := map[RecordType]RecordType{
+		RecordTypeBlueprint: RecordTypeBrief,
+		RecordTypeImprint:   RecordTypeBlueprint,
+	}
+
+	expectedParent, allowed := validParent[recordType]
+	if !allowed {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message: fmt.Sprintf(
+				"A %s record cannot use the implements field. "+
+					"Only blueprint (implements brief) and imprint (implements blueprint) records may use implements.",
+				recordType,
+			),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	if targetType != expectedParent {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "implements",
+			Message: fmt.Sprintf(
+				"Invalid implements relationship: a %s record must implement a %s record, "+
+					"but %s is a %s. "+
+					"Allowed relationships: blueprint implements brief, imprint implements blueprint.",
+				recordType, expectedParent, record.Implements, targetType,
+			),
+			Severity: SeverityError,
+		})
 	}
 }
 

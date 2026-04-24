@@ -38,6 +38,9 @@ const (
 	PROV017 SARIFRuleID = "PROV017" // ModifiedImplementedRecord
 	PROV018 SARIFRuleID = "PROV018" // MissingSpecFile
 	PROV019 SARIFRuleID = "PROV019" // InvalidRegexPattern
+	PROV020 SARIFRuleID = "PROV020" // SupersessionTypeMismatch
+	PROV021 SARIFRuleID = "PROV021" // ImplementsTypeMismatch
+	PROV022 SARIFRuleID = "PROV022" // UnresolvedImplements
 )
 
 // SARIFRule represents a rule in the SARIF tool descriptor
@@ -421,6 +424,48 @@ func GetAllRules() []SARIFRule {
 				Level: "error",
 			},
 		},
+		{
+			ID:   string(PROV020),
+			Name: "SupersessionTypeMismatch",
+			ShortDescription: &SARIFMessage{
+				Text: "supersedes crosses tier boundaries",
+			},
+			FullDescription: &SARIFMessage{
+				Text: "The supersedes field references a record of a different type. Supersession must stay within the same tier (brief→brief, blueprint→blueprint, imprint→imprint). Use 'related' or 'implements' for cross-tier relationships.",
+			},
+			HelpURI: "https://linespec.dev/docs/provenance/lint-rules#PROV020",
+			DefaultConfiguration: &SARIFRuleConfiguration{
+				Level: "error",
+			},
+		},
+		{
+			ID:   string(PROV021),
+			Name: "ImplementsTypeMismatch",
+			ShortDescription: &SARIFMessage{
+				Text: "implements relationship skips a tier or points sideways",
+			},
+			FullDescription: &SARIFMessage{
+				Text: "The implements field must reference a record exactly one tier above. Allowed: blueprint implements brief, imprint implements blueprint. Skipping tiers or pointing sideways is a graph integrity violation.",
+			},
+			HelpURI: "https://linespec.dev/docs/provenance/lint-rules#PROV021",
+			DefaultConfiguration: &SARIFRuleConfiguration{
+				Level: "error",
+			},
+		},
+		{
+			ID:   string(PROV022),
+			Name: "UnresolvedImplements",
+			ShortDescription: &SARIFMessage{
+				Text: "implements references a non-existent record",
+			},
+			FullDescription: &SARIFMessage{
+				Text: "The implements field references a record ID that does not exist in the local provenance directory. This is a broken graph edge and is always an error.",
+			},
+			HelpURI: "https://linespec.dev/docs/provenance/lint-rules#PROV022",
+			DefaultConfiguration: &SARIFRuleConfiguration{
+				Level: "error",
+			},
+		},
 	}
 }
 
@@ -434,11 +479,19 @@ func GetRuleIDForIssue(issue Issue) SARIFRuleID {
 	case "created_at":
 		return PROV005
 	case "supersedes":
+		if strings.Contains(issue.Message, "Type mismatch") {
+			return PROV020
+		}
 		return PROV006
 	case "superseded_by":
 		return PROV007
 	case "related":
 		return PROV008
+	case "implements":
+		if strings.Contains(issue.Message, "unknown record") {
+			return PROV022
+		}
+		return PROV021
 	case "associated_specs":
 		// Check the message to determine which rule
 		if strings.Contains(issue.Message, "does not exist") || strings.Contains(issue.Message, "not found") {
