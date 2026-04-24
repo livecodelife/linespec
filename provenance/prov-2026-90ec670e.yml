@@ -4,7 +4,7 @@ status: draft
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: |
-  Wire the cache infrastructure from Chunk 4 into the lint and graph commands so that
+  Wire the cache infrastructure from prov-2026-e7d88140 into the lint and graph commands so that
   `implements` and `related` references pointing to records in configured shared repos
   resolve correctly.
 
@@ -18,13 +18,13 @@ intent: |
   deprecate, open) must reject cache-sourced records with a clear error explaining the record is
   owned by a remote repository.
 
-  Update the Chunk 2 lint warning that currently skips cross-repo `implements` references — those
-  references should now resolve correctly if the referenced repo is configured. If not configured,
-  the warning must be precise and actionable.
+  Update the lint warning introduced in prov-2026-53e3e311 that currently skips cross-repo
+  `implements` references — those references should now resolve correctly if the referenced repo
+  is configured. If not configured, the warning must be precise and actionable.
 
-  Update graph traversal from Chunk 3 to follow `implements` edges across repo boundaries using
-  the resolver. A Brief in a shared repo with Blueprints implementing it in a service repo should
-  render as a single connected tree in `linespec provenance graph`.
+  Update graph traversal from prov-2026-1dd4ba4a to follow `implements` edges across repo
+  boundaries using the resolver. A Brief in a shared repo with Blueprints implementing it in a
+  service repo should render as a single connected tree in `linespec provenance graph`.
 
   Add a stale cache warning surfaced by `linespec provenance lint` when the cache for any
   configured shared repo is older than the configured TTL, suggesting `linespec provenance sync`.
