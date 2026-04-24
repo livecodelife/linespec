@@ -14,6 +14,7 @@ import (
 type Status string
 
 const (
+	StatusDraft       Status = "draft"
 	StatusOpen        Status = "open"
 	StatusImplemented Status = "implemented"
 	StatusSuperseded  Status = "superseded"
@@ -21,12 +22,30 @@ const (
 )
 
 // ValidStatuses contains all valid status values
-var ValidStatuses = []Status{StatusOpen, StatusImplemented, StatusSuperseded, StatusDeprecated}
+var ValidStatuses = []Status{StatusDraft, StatusOpen, StatusImplemented, StatusSuperseded, StatusDeprecated}
 
 // IsValid returns true if the status is a known value
 func (s Status) IsValid() bool {
 	switch s {
-	case StatusOpen, StatusImplemented, StatusSuperseded, StatusDeprecated:
+	case StatusDraft, StatusOpen, StatusImplemented, StatusSuperseded, StatusDeprecated:
+		return true
+	}
+	return false
+}
+
+// RecordType represents the tier of a Provenance Record in the hierarchy
+type RecordType string
+
+const (
+	RecordTypeBrief     RecordType = "brief"
+	RecordTypeBlueprint RecordType = "blueprint"
+	RecordTypeImprint   RecordType = "imprint"
+)
+
+// IsValid returns true if the record type is a known value
+func (t RecordType) IsValid() bool {
+	switch t {
+	case RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint:
 		return true
 	}
 	return false
@@ -57,9 +76,13 @@ type Record struct {
 	AffectedScope  []string `yaml:"affected_scope"`
 	ForbiddenScope []string `yaml:"forbidden_scope"`
 
+	// Tier type (brief | blueprint | imprint). Empty means blueprint (backward compat).
+	Type RecordType `yaml:"type,omitempty"`
+
 	// Graph relationships
 	Supersedes   string   `yaml:"supersedes"`
 	SupersededBy string   `yaml:"superseded_by"`
+	Implements   string   `yaml:"implements,omitempty"`
 	Related      []string `yaml:"related"`
 
 	// Proof of completion

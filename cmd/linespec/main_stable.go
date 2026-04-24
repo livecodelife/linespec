@@ -950,6 +950,15 @@ func runProvenance() {
 		if err := cmds.RunSpecs(opts); err != nil {
 			os.Exit(1)
 		}
+	case "open":
+		opts := parseOpenOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Open(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -1049,7 +1058,8 @@ func printProvenanceUsage() {
 	logger.Info(`Usage: linespec provenance <subcommand> [options]
 
 Subcommands:
-  create [options]           Create a new provenance record
+  create [options]           Create a new provenance record (defaults to draft status)
+  open [options]             Transition a record from draft to open (enables enforcement)
   lint [options]             Validate provenance records (supports --format sarif)
   status [options]           Show record status
   graph [options]            Render provenance graph
@@ -1096,6 +1106,11 @@ func parseCreateOptions(args []string) provenance.CreateOptions {
 				opts.IDSuffix = args[i+1]
 				i++
 			}
+		case "--type":
+			if i+1 < len(args) {
+				opts.Type = provenance.RecordType(args[i+1])
+				i++
+			}
 		case "-c", "--config":
 			if i+1 < len(args) {
 				opts.ConfigFile = args[i+1]
@@ -1108,12 +1123,47 @@ Options:
   --title "..."              Pre-populate the title field
   --supersedes prov-YYYY-NNN Pre-populate the supersedes field
   --tag tag1,tag2            Pre-populate tags
+  --type brief|blueprint|imprint  Set the tier type of the record
   --no-edit                  Write without opening editor
   -i, --id-suffix name       Append service suffix to ID (e.g., user-service)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
 		}
+	}
+
+	return opts
+}
+
+func parseOpenOptions(args []string) provenance.OpenOptions {
+	opts := provenance.OpenOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--record":
+			if i+1 < len(args) {
+				opts.RecordID = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance open [options]
+
+Options:
+  --record prov-YYYY-NNN     Record to transition from draft to open
+  -c, --config path          Path to custom .linespec.yml file
+  --help                     Show this help message`)
+			os.Exit(0)
+		}
+	}
+
+	if opts.RecordID == "" {
+		logger.Error("--record is required")
+		os.Exit(1)
 	}
 
 	return opts

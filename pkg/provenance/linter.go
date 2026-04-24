@@ -126,6 +126,9 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 	// Validate status
 	l.validateStatus(record, result)
 
+	// Validate type field (hint for missing, error for invalid)
+	l.validateType(record, result)
+
 	// Validate date
 	l.validateDate(record, result)
 
@@ -137,6 +140,14 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 
 	// Validate related
 	l.validateRelated(record, result)
+
+	// Draft records skip enforcement-sensitive checks
+	if record.Status == StatusDraft {
+		// Still validate structural fields even for draft records
+		l.validateTitleLength(record, result)
+		l.validateSealedAtSHA(record, result)
+		return
+	}
 
 	// Validate scope patterns
 	l.validateScopePatterns(record, result)
@@ -161,6 +172,28 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 
 	// Validate sealed_at_sha field
 	l.validateSealedAtSHA(record, result)
+}
+
+// validateType checks the type field and emits a lint hint when absent (backward compat)
+func (l *Linter) validateType(record *Record, result *LintResult) {
+	if record.Type == "" {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "type",
+			Message:  "No type field set; defaulting to 'blueprint' for backward compatibility. Set type: brief|blueprint|imprint to suppress this hint.",
+			Severity: SeverityHint,
+		})
+		return
+	}
+
+	if !record.Type.IsValid() {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "type",
+			Message:  fmt.Sprintf("Invalid type %q: must be one of brief, blueprint, imprint", record.Type),
+			Severity: SeverityError,
+		})
+	}
 }
 
 // validateRequiredFields checks that all required fields are present and non-empty
@@ -212,7 +245,7 @@ func (l *Linter) validateStatus(record *Record, result *LintResult) {
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "status",
-			Message:  fmt.Sprintf("Invalid status %q: must be one of open, implemented, superseded, deprecated", record.Status),
+			Message:  fmt.Sprintf("Invalid status %q: must be one of draft, open, implemented, superseded, deprecated", record.Status),
 			Severity: SeverityError,
 		})
 	}
@@ -689,6 +722,7 @@ func (l *Linter) validateImmutability(record *Record, result *LintResult) {
 // checkScopeOverlaps checks for overlapping scope between open records
 func (l *Linter) checkScopeOverlaps(result *LintResult) {
 	openRecords := l.Loader.FilterByStatus(StatusOpen)
+	// Draft records are excluded — no enforcement applies until open
 
 	for i := 0; i < len(openRecords); i++ {
 		for j := i + 1; j < len(openRecords); j++ {

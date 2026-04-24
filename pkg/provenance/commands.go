@@ -90,8 +90,9 @@ type CreateOptions struct {
 	Supersedes string
 	Tags       []string
 	NoEdit     bool
-	IDSuffix   string // Service suffix for ID (e.g., "user-service" creates prov-YYYY-NNN-user-service)
-	ConfigFile string // Path to custom .linespec.yml file
+	IDSuffix   string     // Service suffix for ID (e.g., "user-service" creates prov-YYYY-NNN-user-service)
+	Type       RecordType // Tier type: brief | blueprint | imprint
+	ConfigFile string     // Path to custom .linespec.yml file
 }
 
 // Create creates a new provenance record
@@ -144,7 +145,8 @@ func (c *Commands) createRecord(opts CreateOptions) (*Record, error) {
 	record := &Record{
 		ID:               id,
 		Title:            opts.Title,
-		Status:           StatusOpen,
+		Status:           StatusDraft,
+		Type:             opts.Type,
 		CreatedAt:        CurrentDate(),
 		Author:           author,
 		Intent:           "",
@@ -721,6 +723,42 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "\n✓ %s marked as deprecated\n\n", opts.RecordID)
+
+	return nil
+}
+
+// OpenOptions holds options for the open command
+type OpenOptions struct {
+	RecordID   string
+	ConfigFile string // Path to custom .linespec.yml file
+}
+
+// Open transitions a record from draft to open, enabling enforcement
+func (c *Commands) Open(opts OpenOptions) error {
+	record, exists := c.Loader.GetRecord(opts.RecordID)
+	if !exists {
+		c.Formatter.FormatError(fmt.Sprintf("Record not found: %s", opts.RecordID))
+		return fmt.Errorf("record not found")
+	}
+
+	if record.Status != StatusDraft {
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot open %s: record status is %q (open only transitions from draft).\n\n  Use 'linespec provenance complete' to mark an open record as implemented.",
+			opts.RecordID, record.Status,
+		))
+		return fmt.Errorf("record is not in draft status")
+	}
+
+	record.Status = StatusOpen
+
+	if err := c.Loader.SaveRecord(record); err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
+		return err
+	}
+
+	fmt.Fprintf(os.Stdout, "\n✓ %s transitioned from draft → open\n\n", opts.RecordID)
+	fmt.Fprintln(os.Stdout, "  Scope and spec enforcement now apply to this record.")
+	fmt.Fprintln(os.Stdout)
 
 	return nil
 }
