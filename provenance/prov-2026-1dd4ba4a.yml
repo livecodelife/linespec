@@ -25,6 +25,8 @@ constraints:
 affected_scope:
   - pkg/provenance/formatter.go
   - pkg/provenance/commands.go
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
 forbidden_scope: []
 type: blueprint
 supersedes: ""
