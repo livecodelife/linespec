@@ -1,0 +1,32 @@
+id: prov-2026-c98d13b3
+title: 'Imprint: implements tree in graph and --root wiring'
+status: draft
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Extend FormatGraph to render implements relationships as a separate structural
+  dimension (parent-child indentation, visually distinct from supersession chains).
+  Wire the --root flag through Graph() into FormatGraph so it is actually used.
+  When --root is set, traverse: show the root record's parent (one level up via
+  implements) and all downstream implements children recursively. Add an implements
+  edge type to BuildJSONGraph and JSONGraphNode for the JSON output format.
+constraints:
+  - implements hierarchy renders as parent-child indentation, visually distinct from supersession chain
+  - --root flag must be passed from Graph() into FormatGraph (currently ignored)
+  - --root on a Brief shows full downward tree; on a Blueprint shows parent Brief + child Imprints
+  - JSON output adds implements edges distinct from supersedes edges
+  - Output degrades gracefully when no implements relationships exist
+affected_scope:
+  - pkg/provenance/formatter.go
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-1dd4ba4a
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
