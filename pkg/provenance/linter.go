@@ -1016,7 +1016,7 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 		return
 	}
 
-	// Rule: implements reference must resolve locally.
+	// Rule: implements reference must resolve (local or shared repo cache).
 	target, exists := l.Loader.GetRecord(record.Implements)
 	if !exists {
 		result.Add(Issue{
@@ -1024,7 +1024,8 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 			Field:    "implements",
 			Message: fmt.Sprintf(
 				"implements references unknown record: %s. "+
-					"The referenced record must exist in the local provenance directory.",
+					"The referenced record was not found locally or in any configured shared_repo cache. "+
+					"If this record lives in a remote repository, add it to shared_repos in .linespec.yml and run 'linespec provenance sync'.",
 				record.Implements,
 			),
 			Severity: SeverityError,

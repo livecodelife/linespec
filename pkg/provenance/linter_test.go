@@ -572,3 +572,33 @@ func TestValidateImplements_NoneEnforcement_StillErrors(t *testing.T) {
 		t.Errorf("Expected 1 error even at enforcement=none, got %d: %v", result.ErrorCount, result.Issues)
 	}
 }
+
+func TestValidateImplements_UnresolvedErrorMentionsSharedRepos(t *testing.T) {
+	// The error message for an unresolved implements reference must mention shared_repos
+	// and linespec provenance sync so the user knows how to fix a cross-repo reference.
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	blueprint := &Record{ID: "prov-2026-002", Type: RecordTypeBlueprint, Implements: "prov-2026-aabbccdd"}
+	loader.Records = []*Record{blueprint}
+	loader.RecordsByID = map[string]*Record{"prov-2026-002": blueprint}
+
+	linter := NewLinter(loader, "strict")
+	result := &LintResult{}
+	linter.validateImplements(blueprint, result)
+
+	if result.ErrorCount != 1 {
+		t.Fatalf("Expected 1 error, got %d", result.ErrorCount)
+	}
+	msg := result.Issues[0].Message
+	if !strings.Contains(msg, "shared_repos") {
+		t.Errorf("Error message should mention shared_repos, got: %s", msg)
+	}
+	if !strings.Contains(msg, "linespec provenance sync") {
+		t.Errorf("Error message should mention 'linespec provenance sync', got: %s", msg)
+	}
+}
