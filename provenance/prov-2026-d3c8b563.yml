@@ -1,0 +1,26 @@
+id: prov-2026-d3c8b563
+title: v3.0.0 release preparation
+status: draft
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: >
+  Update CHANGELOG.md and create git tag v3.0.0 to publish the release.
+  Covers bug type / field enforcement matrix (prov-2026-9ffe68bb) and
+  gRPC empty-body framing / error trailer / RETURNS EMPTY fixes (prov-2026-8abe0e04).
+constraints:
+  - CHANGELOG.md must have a [3.0.0] entry dated 2026-04-24
+  - All entries from [Unreleased] must be moved to [3.0.0]
+  - gRPC fixes from prov-2026-8abe0e04 must be documented
+  - Git tag v3.0.0 must point to the release commit
+affected_scope:
+  - CHANGELOG.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

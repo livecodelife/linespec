@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-04-24
+
 ### Added
 
 - **`bug` record type** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — New `type: bug` for correction and gap-fill records. A Bug must have exactly one of `supersedes` (when existing constraints are incorrect) or `extends` (when constraints are missing). Bug records may supersede a Blueprint or another Bug; all other cross-type supersessions remain errors.
@@ -17,9 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Imprint supersession same-parent constraint** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — When an Imprint supersedes another Imprint, both must share the same `implements` value (i.e., they must be in service of the same Blueprint). Mismatched parents are a lint error.
 
+- **`RETURNS EMPTY` for gRPC expectations** ([prov-2026-8abe0e04](./provenance/prov-2026-8abe0e04.yml)) — gRPC `EXPECT` blocks now support `RETURNS EMPTY` to simulate methods that return `google.protobuf.Empty` (e.g. `SignalWorkflow`). The proxy sends the required 5-byte Length-Prefixed Message frame with a zero-length body, which gRPC/h2 clients require for a successful empty response.
+
+### Fixed
+
+- **gRPC empty-body response framing** ([prov-2026-8abe0e04](./provenance/prov-2026-8abe0e04.yml)) — The gRPC proxy skipped the DATA frame entirely when the protobuf response body was empty (0 bytes), violating the gRPC spec. Tonic, grpc-go, and other h2 clients classified this as a retryable transport error instead of a successful response. The proxy now always sends `encodeGRPCFrame(nil)` — a 5-byte frame with compression-flag 0 and length 0 — for every unary response including empty ones.
+
+- **gRPC error trailers sent in initial HEADERS frame** ([prov-2026-8abe0e04](./provenance/prov-2026-8abe0e04.yml)) — `writeGRPCError` was setting `Grpc-Status` and `Grpc-Message` in the initial HEADERS frame rather than in a separate trailing HEADERS frame. The gRPC HTTP/2 spec requires these to appear as trailers. The proxy now declares trailer keys before `WriteHeader` and writes the values after, matching the success-path pattern.
+
+- **gRPC proxy port mismatch in runner** ([prov-2026-8abe0e04](./provenance/prov-2026-8abe0e04.yml)) — The runner was passing `GRPC_PORT=50051` as a fixed default to service containers instead of the actual port the gRPC interceptor bound to. Services that resolved their upstream gRPC address from the environment variable were connecting to the wrong port.
+
 ### Related Provenance Records
 
 - [prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml) - Per-type field enforcement matrix for provenance record tiers
+- [prov-2026-8abe0e04](./provenance/prov-2026-8abe0e04.yml) - gRPC empty-body framing fix, error trailer fix, RETURNS EMPTY support
 
 ## [2.9.1] - 2026-04-23
 
