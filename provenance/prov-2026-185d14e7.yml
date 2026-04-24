@@ -1,0 +1,28 @@
+id: prov-2026-185d14e7
+title: 'Imprint: add Implements and Implemented-by sections to status --record'
+status: draft
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Add two new display sections to FormatStatusDetailed: "Implements" showing the
+  parent record ID and title (or dash if unset), and "Implemented by" showing all
+  records in the loader whose implements field points to this record's ID, with
+  their type and title. The implemented-by list is derived by scanning loader
+  records at render time.
+constraints:
+  - Implements section shows parent ID and title when implements is set, dash otherwise
+  - Implemented by section shows each child's ID, type, and title; shows dash when none
+  - Implemented-by derivation must scan loader.Records at render time, not stored state
+affected_scope:
+  - pkg/provenance/formatter.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-1dd4ba4a
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
