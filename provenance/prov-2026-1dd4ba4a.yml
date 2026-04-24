@@ -1,6 +1,6 @@
 id: prov-2026-1dd4ba4a
 title: 'Provenance hierarchy chunk 3: status and graph output for implements'
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -34,7 +34,7 @@ superseded_by: ""
 related:
   - prov-2026-cd41b067
   - prov-2026-53e3e311
-sealed_at_sha: ""
+sealed_at_sha: 6a13ae86cf307de30045699669e9c6f768d5f95b
 associated_specs:
   - path: pkg/provenance/formatter_test.go
     type: code
