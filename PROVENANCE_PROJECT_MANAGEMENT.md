@@ -46,7 +46,7 @@ Third, **implements resolution.** The referenced record in `implements` must exi
 
 ---
 
-## Chunk 3 — CLI: Status and Graph Output for Implements
+## Chunk 3 — CLI: Status and Graph Output for Implements ✓ COMPLETE
 
 **Goal:** Update `linespec provenance status` and `linespec provenance graph` to display and traverse `implements` relationships. Depends on Chunk 1.
 
