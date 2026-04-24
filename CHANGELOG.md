@@ -5,6 +5,22 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`bug` record type** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — New `type: bug` for correction and gap-fill records. A Bug must have exactly one of `supersedes` (when existing constraints are incorrect) or `extends` (when constraints are missing). Bug records may supersede a Blueprint or another Bug; all other cross-type supersessions remain errors.
+
+- **`extends` field** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — New `extends` field on Bug records, pointing at the Blueprint or Bug whose constraint coverage this record supplements. Unlike `supersedes`, the target record is not replaced. `extends` and `supersedes` are mutually exclusive on Bug records.
+
+- **Per-type field enforcement matrix** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — The linter now enforces type-specific field rules as always-on graph integrity checks: Brief records require `constraints`; Imprint records require `implements`; Brief and Bug records may not use `implements`; `extends` is not applicable on Brief, Blueprint, or Imprint records; Brief records may not carry `affected_scope`, `forbidden_scope`, or `associated_specs`; Imprint records may not carry `associated_traces` or `monitors`.
+
+- **Imprint supersession same-parent constraint** ([prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml)) — When an Imprint supersedes another Imprint, both must share the same `implements` value (i.e., they must be in service of the same Blueprint). Mismatched parents are a lint error.
+
+### Related Provenance Records
+
+- [prov-2026-9ffe68bb](./provenance/prov-2026-9ffe68bb.yml) - Per-type field enforcement matrix for provenance record tiers
+
 ## [2.9.1] - 2026-04-23
 
 ### Added

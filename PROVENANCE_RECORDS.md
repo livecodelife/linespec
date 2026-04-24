@@ -169,7 +169,7 @@ tags:
 | `id` | string | Unique identifier (prov-YYYY-XXXXXXXX or prov-YYYY-XXXXXXXX-service) |
 | `title` | string | Human-readable title |
 | `status` | string | One of: draft, open, implemented, superseded, deprecated |
-| `type` | string | Record tier: `brief`, `blueprint` (default), or `imprint`. See [Tier Hierarchy](#tier-hierarchy). |
+| `type` | string | Record tier: `brief`, `blueprint` (default), `bug`, or `imprint`. See [Tier Hierarchy](#tier-hierarchy). |
 | `created_at` | string | ISO 8601 date (YYYY-MM-DD) |
 | `author` | string | Email of the author |
 
@@ -196,8 +196,9 @@ tags:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `supersedes` | string | ID of older record this replaces (must be same tier) |
+| `supersedes` | string | ID of older record this replaces (same tier; Bug may also supersede Blueprint) |
 | `superseded_by` | string | ID of newer record that replaces this |
+| `extends` | string | Bug only: ID of Blueprint or Bug whose constraint coverage this record supplements |
 | `implements` | string | ID of the parent record one tier above (blueprint→brief, imprint→blueprint) |
 | `related` | array | Related record IDs (no directional relationship) |
 
@@ -220,22 +221,26 @@ tags:
 
 ## Tier Hierarchy
 
-Records can be organized into three tiers using the `type` field:
+Records can be organized into tiers using the `type` field:
 
-| Type | Role | Implements |
-|------|------|------------|
-| `brief` | High-level intent — the "why" | Nothing (top of hierarchy) |
-| `blueprint` | Design decision — the "what" | `brief` |
-| `imprint` | Implementation record — the "how" | `blueprint` |
+| Type | Role | Implements | Required fields |
+|------|------|------------|-----------------|
+| `brief` | High-level intent — the "why" | Nothing (top of hierarchy) | `constraints` |
+| `blueprint` | Design decision — the "what" | `brief` (optional) | — |
+| `bug` | Correction or gap-fill — the "fix" | Nothing (cannot use `implements`) | exactly one of `supersedes` or `extends` |
+| `imprint` | Implementation record — the "how" | `blueprint` (required) | `implements` |
 
 Records without a `type` field default to `blueprint` for backward compatibility (a lint hint is emitted).
 
-**Hierarchy rules enforced by the linter:**
+**Hierarchy rules enforced by the linter (always-on, graph integrity):**
 
-- **Supersession must stay within the same tier.** A `blueprint` cannot supersede a `brief`. Use `related` or `implements` for cross-tier connections. (PROV020)
-- **`implements` must point exactly one tier up.** `blueprint` implements `brief`, `imprint` implements `blueprint`. Skipping a tier or pointing sideways is a lint error. (PROV021)
-- **`implements` must resolve locally.** The referenced record must exist in the provenance directory. A missing reference is always an error. (PROV022)
-- Cross-repo `implements` references (containing a `:` separator) are skipped with a warning — cross-repo resolution is not yet supported.
+- **Supersession must stay within the same tier.** A `blueprint` cannot supersede a `brief`. Use `related` or `implements` for cross-tier connections. (PROV020) _Exception: `bug` may supersede `blueprint` or another `bug`._
+- **`implements` must point exactly one tier up.** `blueprint` implements `brief`, `imprint` implements `blueprint`. Skipping a tier or pointing sideways is a lint error. `brief` and `bug` records may not use `implements`. (PROV021)
+- **`implements` must resolve.** The referenced record must exist locally or in a configured shared repo cache. A missing reference is always an error. (PROV022)
+- **Imprint supersession requires same parent.** When an Imprint supersedes another Imprint, both must share the same `implements` value.
+- **Bug records require exactly one of `supersedes` or `extends`.** Use `supersedes` when existing constraints are incorrect; use `extends` when constraints are missing. Neither or both is an error.
+- **`extends` target must be a Blueprint or Bug.** A Bug extending a Brief or Imprint is an error.
+- **`brief` records must carry `constraints`.** A Brief with no constraints is a lint error.
 
 **Lifecycle note:** Draft records skip all scope and spec enforcement. Use `linespec provenance open` to begin enforcement when the record is ready.
 
@@ -263,7 +268,7 @@ linespec provenance create --title "Quick fix" --no-edit
 
 **Options:**
 - `--title "..."` - Pre-populate title
-- `--type brief|blueprint|imprint` - Set record tier (default: blueprint)
+- `--type brief|blueprint|bug|imprint` - Set record tier (default: blueprint)
 - `--supersedes prov-YYYY-XXXXXXXX` - Link to older record
 - `--tag tag1,tag2` - Add tags
 - `--no-edit` - Write without opening editor
@@ -388,7 +393,7 @@ linespec provenance graph --format json
 The graph renders two relationship dimensions:
 
 - **Supersession chains** (`└─` connector) — records that supersede one another, showing evolution within a tier
-- **Implements hierarchy** (`↳ [type]` connector) — brief → blueprint → imprint parent-child relationships, visually distinct from supersession
+- **Implements hierarchy** (`↳ [type]` connector) — brief → blueprint → imprint parent-child relationships, visually distinct from supersession. Bug records appear in supersession chains alongside blueprints.
 
 In `--format json`, edges carry an `edge_type` field with values `supersedes`, `implements`, or `related`, so visualization tooling can apply different visual treatments. Each node also includes an `implements_nodes` array for direct implements children.
 

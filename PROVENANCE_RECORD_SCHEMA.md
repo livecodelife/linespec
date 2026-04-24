@@ -85,8 +85,9 @@
 
 | Value | Role |
 |---|---|
-| `brief` | High-level intent record — the "why". Top of the hierarchy; cannot use `implements`. |
+| `brief` | High-level intent record — the "why". Top of the hierarchy; cannot use `implements`. Must carry `constraints`. |
 | `blueprint` | Design decision — the "what". May implement a `brief`. |
+| `bug` | Correction or gap-fill record. Must have exactly one of `supersedes` or `extends` pointing at a Blueprint or Bug. |
 | `imprint` | Implementation record — the "how". Must implement a `blueprint`. |
 
 **Set by:** Author, optionally via `--type` flag on `linespec provenance create`.  
@@ -206,7 +207,7 @@ forbidden_scope:
 **Example:** `supersedes: prov-2026-a1b2c3d4`  
 **Set by:** Author at creation time, optionally pre-populated via `--supersedes` flag.  
 **Behavior:** When this field is set, the CLI automatically sets `superseded_by` on the referenced record and transitions its status to `superseded`. The referenced record must exist and must not already have a `superseded_by` value pointing to a different record.  
-**Constraints:** Immutable after creation. The referenced record must exist in the same repository or a configured shared repository. A record may supersede at most one other record. Circular supersedes chains are a lint error.
+**Constraints:** Immutable after creation. The referenced record must exist in the same repository or a configured shared repository. A record may supersede at most one other record. Circular supersedes chains are a lint error. Supersession must stay within the same tier, with two exceptions: a `bug` may supersede a `blueprint` or another `bug`. On `bug` records, `supersedes` and `extends` are mutually exclusive — exactly one must be set.
 
 ---
 
@@ -216,6 +217,20 @@ forbidden_scope:
 **Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
 **Set by:** CLI only, automatically, when another record's `supersedes` references this record's ID. Authors never write to this field.  
 **Constraints:** Immutable once set. The CLI reconstructs this value from the graph at load time and will surface a warning if the file's value disagrees with what the graph implies, indicating a manual edit.
+
+---
+
+### `extends`
+**Type:** string  
+**Required:** conditional (required on `bug` records when `supersedes` is absent)  
+**Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
+**Example:**
+```yaml
+extends: prov-2026-a1b2c3d4
+```
+**Set by:** Author.  
+**Behavior:** Expresses that this `bug` record adds constraint coverage that was missing from the target Blueprint or Bug. Unlike `supersedes`, the target record is not replaced — it remains valid. The linter validates that the target is a Blueprint or Bug; extending a Brief or Imprint is an error.  
+**Constraints:** Only applicable on `bug` records. Mutually exclusive with `supersedes` — a Bug must have exactly one of `extends` or `supersedes`. Omitted from YAML output when empty.
 
 ---
 
@@ -229,7 +244,7 @@ implements: prov-2026-a1b2c3d4
 ```
 **Set by:** Author.  
 **Behavior:** Expresses an upward parent reference in the tier hierarchy. A `blueprint` record that implements a `brief`, or an `imprint` that implements a `blueprint`. The linter validates that the relationship is exactly one tier up (PROV021) and that the referenced record exists locally (PROV022). Cross-repo references (containing `:`) are skipped with a warning. The `graph` command renders implements relationships as `↳ [type]` indented children, visually distinct from supersession chains. The `status --record` command derives **Implements** (parent) and **Implemented by** (children) sections from this field at render time. In `--format json` graph output, implements relationships appear as edges with `"edge_type": "implements"`.  
-**Constraints:** Must reference a record exactly one tier above. `brief` records may not use this field. Omitted from YAML output when empty.
+**Constraints:** Must reference a record exactly one tier above. `brief` and `bug` records may not use this field. Omitted from YAML output when empty.
 
 ---
 
