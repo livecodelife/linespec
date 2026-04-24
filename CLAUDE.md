@@ -30,29 +30,47 @@ make lint                # Runs: ./linespec provenance lint
 
 Every change must be documented by a provenance record. Records live in `provenance/` as YAML files using the format `prov-YYYY-XXXXXXXX.yml` (crypto-random hex, not sequential).
 
-**Critical workflow rules:**
+**Record lifecycle:** `draft` → `open` → `implemented` → `superseded|deprecated`
 
-- Create a provenance record before starting work: `linespec provenance create --title "..."`
-- Creating and completing provenance records must be standalone commits
-- Before a create or complete commit: run `linespec provenance lint` and `linespec provenance check`
-- Before each intra-lifecycle implementation commit: run `linespec provenance check --staged`
-- Never use `--no-verify` to skip git hooks
+### Workflow
 
-**Record lifecycle:** `open` → `implemented` → `superseded|deprecated`
-
-When a record is complete, mark it implemented: `linespec provenance complete <id>`
-
-Before modifying a file, check which provenance records govern it:
+**1. Investigate first.** Before writing any code, check existing records:
 ```bash
-linespec provenance context -f <file>
+linespec provenance search "<query>"        # semantic search (requires embeddings)
+linespec provenance context -f <file>       # which records govern a file
 ```
 
-To find relevant records by meaning (requires Voyage AI embeddings configured):
+**2. Create a blueprint record (draft).** This captures scope and success criteria:
 ```bash
-linespec provenance search "<query>"
+linespec provenance create --title "..." --type blueprint --no-edit
+```
+Fill in `intent` and `constraints`. Leave `affected_scope` empty (observed mode) — the git hook's self-modification exception only applies to `open` records, so setting scope on a draft will block the creation commit. Commit the draft standalone, then **present it to the user and wait for confirmation** before writing any code.
+
+**3. Open the blueprint (after user confirms).** Once the user approves:
+```bash
+linespec provenance open --record prov-YYYY-XXXXXXXX
+```
+Add `affected_scope` and `associated_specs` now. Commit the open transition standalone.
+
+**4. Implement with imprint records.** Create `imprint` records as you work to log micro-decisions, trade-offs, pivots, and learnings:
+```bash
+linespec provenance create --title "..." --type imprint --no-edit
+# Set in the YAML: implements: prov-YYYY-XXXXXXXX  (the blueprint ID)
+```
+Imprints can be freely opened, implemented, superseded, and deprecated as work evolves. **All imprints must be implemented before the blueprint can be completed.**
+
+**5. Show proof and ask to complete.** Before completing the blueprint, verify all imprints are implemented, then show the user the proof (test output, lint, working commands). **Ask the user explicitly** before completing. Then complete in a standalone commit:
+```bash
+linespec provenance complete --record prov-YYYY-XXXXXXXX
 ```
 
-The pre-commit hook validates that changed files don't violate governed scope from open records. The commit-msg hook validates that commit messages include a record ID (when `commit_tag_required: true`).
+### Commit Rules
+
+- Every implementation commit must include the governing record ID: `[prov-YYYY-XXXXXXXX]`
+- Create, open, and complete operations must each be standalone commits
+- Before any provenance management commit: `linespec provenance lint && linespec provenance check`
+- Before each implementation commit: `linespec provenance check --staged`
+- **Never use `--no-verify`** to skip git hooks
 
 ## Architecture
 

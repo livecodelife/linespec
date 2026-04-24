@@ -1,7 +1,7 @@
 id: prov-2026-6e96395f
 title: 'Refine provenance workflow: blueprint-first with imprint micro-decisions'
 type: blueprint
-status: draft
+status: open
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -23,6 +23,13 @@ constraints:
   - Imprint records must set implements pointing at the parent blueprint ID
   - All imprints must be implemented before the blueprint can be completed
   - The blueprint complete step must be gated on user confirmation, not automated
+affected_scope:
+  - CLAUDE.md
+  - pkg/provenance/commands.go
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: make test
 related:
   - prov-2026-cd41b067
   - prov-2026-53e3e311

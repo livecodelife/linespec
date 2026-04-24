@@ -1058,39 +1058,91 @@ when_to_use: "When starting any new work, modifying files covered by provenance 
 
 Follow these rules precisely whenever working with provenance records or making code changes in this repo.
 
-## Before Starting Any Work
+## Step 1 — Investigate Before Creating
 
-**Always investigate existing provenance context before writing a single line of code or creating a new record.** This is not optional — records capture design decisions, scope constraints, and rationale that aren't in the code.
+**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code.
 
-**Step 1 — Understand the topic.** If embeddings are configured (` + "`.linespec/embeddings.bin`" + ` exists), search semantically across all records to find anything related to what you're about to work on:
+If embeddings are configured (` + "`.linespec/embeddings.bin`" + ` exists), search semantically:
 
 ` + "```bash" + `
 linespec provenance search "<description of the work or feature area>"
 ` + "```" + `
 
-Read any records returned. They may reveal prior decisions, constraints you must respect, or open records you should work within instead of creating a new one.
-
-**Step 2 — Check file-level governance.** For every file you plan to touch, check which records govern it:
+For every file you plan to touch, check which records govern it:
 
 ` + "```bash" + `
 linespec provenance context -f <file>
 ` + "```" + `
 
-Run this for each file before modifying it. If an open record already covers the file, prefer working within that record rather than creating a new one.
+If an open record already covers the work, prefer working within that record.
 
-**Step 3 — Create a new record** only after completing the investigation above:
+## Step 2 — Create a Blueprint Record (Draft)
+
+Create a ` + "`blueprint`" + ` record to capture the scope and success criteria **before writing any code**:
 
 ` + "```bash" + `
-linespec provenance create --title "..." --no-edit
+linespec provenance create --title "..." --type blueprint --no-edit
 ` + "```" + `
 
 **Always pass ` + "`--no-edit`" + `.** Omitting it opens an interactive editor that hangs in non-TTY environments.
 
-The record ID printed by the command looks like ` + "`prov-YYYY-XXXXXXXX`" + `. Note it — every subsequent commit must reference it.
+Fill in ` + "`intent`" + ` and ` + "`constraints`" + ` in the draft record. Leave ` + "`affected_scope`" + ` empty (observed mode) — do not set ` + "`affected_scope`" + ` on a draft record unless you also include the record's own file; the self-modification exception in the git hook only applies to ` + "`open`" + ` records.
+
+Commit the draft in a standalone commit:
+` + "```" + `
+Create provenance record [prov-YYYY-XXXXXXXX]
+` + "```" + `
+
+**Then present the draft record to the user for review.** Show the intent and constraints. Do not write any implementation code until the user confirms the blueprint is correct.
+
+## Step 3 — Open the Blueprint (After User Confirmation)
+
+Once the user confirms the blueprint is correct, transition it to open:
+
+` + "```bash" + `
+linespec provenance open --record prov-YYYY-XXXXXXXX
+` + "```" + `
+
+Add ` + "`affected_scope`" + ` and ` + "`associated_specs`" + ` to the record at this point. Commit the open transition as a standalone commit:
+` + "```" + `
+Open provenance record prov-YYYY-XXXXXXXX [prov-YYYY-XXXXXXXX]
+` + "```" + `
+
+Scope and spec enforcement are now active for this record.
+
+## Step 4 — Implement with Imprint Records
+
+As you work, create ` + "`imprint`" + ` records to log micro-decisions, trade-offs, considerations, pivots, and learnings. An imprint must set ` + "`implements`" + ` pointing at the parent blueprint:
+
+` + "```yaml" + `
+type: imprint
+implements: prov-YYYY-XXXXXXXX   # the blueprint ID
+` + "```" + `
+
+Imprints can be freely opened, implemented, superseded, and deprecated as the implementation evolves. **All imprints must be implemented before the blueprint can be completed.**
+
+Imprint lifecycle is lightweight — create and complete them in quick succession as decisions are made. Tag every implementation commit with the relevant record ID (blueprint or imprint).
+
+## Step 5 — Show Proof and Complete the Blueprint
+
+Before completing the blueprint, verify all imprints are implemented. Then **show the user the proof** — demonstrate that the blueprint's constraints are met (test output, lint output, working commands, etc.).
+
+**Ask the user for explicit permission before completing the blueprint.** Do not complete it automatically.
+
+Once the user confirms, complete in a standalone commit:
+
+` + "```bash" + `
+linespec provenance complete --record prov-YYYY-XXXXXXXX
+` + "```" + `
+
+Commit message:
+` + "```" + `
+Complete provenance record [prov-YYYY-XXXXXXXX]
+` + "```" + `
 
 ## Commit Message Format
 
-Every commit (except the standalone provenance create/complete commits themselves) must include the record ID in square brackets at the end of the subject line:
+Every commit (except standalone provenance management commits) must include the governing record ID in square brackets:
 
 ` + "```" + `
 Short description of what changed [prov-YYYY-XXXXXXXX]
@@ -1098,78 +1150,54 @@ Short description of what changed [prov-YYYY-XXXXXXXX]
 
 The pre-commit hook enforces this when ` + "`commit_tag_required: true`" + ` is set in ` + "`.linespec.yml`" + `.
 
-## Record Lifecycle Rules
+## Pre-Commit Checks
 
-Records move through states: ` + "`open`" + ` → ` + "`implemented`" + ` → ` + "`superseded`" + ` or ` + "`deprecated`" + `.
-
-**Do not mark a record implemented until all its work is merged.**
-
-When work is complete, mark the record implemented in a **standalone commit**:
-
-` + "```bash" + `
-linespec provenance complete <id>
-` + "```" + `
-
-Then commit only that change with a message like:
-` + "```" + `
-Complete provenance record [prov-YYYY-XXXXXXXX]
-` + "```" + `
-
-## Standalone Commits for Record Operations
-
-Creating and completing provenance records must each be their own standalone commit — do not mix them with code changes. Commit order for a typical feature:
-
-1. **Standalone commit**: create the provenance record
-2. **Implementation commits**: code changes, each tagged ` + "`[prov-YYYY-XXXXXXXX]`" + `
-3. **Standalone commit**: complete the provenance record
-
-Before attempting a create or complete commit, always run:
-
+Before any create, open, or complete commit:
 ` + "```bash" + `
 linespec provenance lint
 linespec provenance check
 ` + "```" + `
 
-Fix any issues before committing.
-
-Before making an intra-lifecycle implementation commit, always run:
-
+Before each implementation commit:
 ` + "```bash" + `
 linespec provenance check --staged
 ` + "```" + `
 
 ## Superseding Records
 
-When creating a record that supersedes an existing one:
+When a record supersedes an existing one:
 
 1. Set ` + "`supersedes: prov-YYYY-XXXXXXXX`" + ` on the **new** record
-2. Immediately update the **old** record's ` + "`superseded_by`" + ` field to the new record ID
-3. Commit both records together in the standalone provenance creation commit
+2. Update the **old** record's ` + "`superseded_by`" + ` field to the new record ID
+3. Commit both records together in the standalone create commit
 
-Both directions of the relationship must be present before committing. The user caught a case where ` + "`superseded_by`" + ` was left empty — don't let that happen.
+Both directions must be set before committing.
+
+## Tier Hierarchy Rules (Enforced by Linter)
+
+- ` + "`brief`" + ` → top-level intent, cannot use ` + "`implements`" + `
+- ` + "`blueprint`" + ` → design decision, may ` + "`implements`" + ` a brief
+- ` + "`imprint`" + ` → implementation record, must ` + "`implements`" + ` a blueprint
+- ` + "`supersedes`" + ` must stay within the same tier — PROV020
+- ` + "`implements`" + ` must point exactly one tier up — PROV021
+- ` + "`implements`" + ` reference must resolve locally — PROV022
 
 ## Hard Rules
 
-- **Never use ` + "`--no-verify`" + `** to skip git hooks. If a hook fails, fix the underlying issue.
-- Records are named ` + "`prov-YYYY-XXXXXXXX.yml`" + ` using a crypto-random hex suffix (not sequential).
+- **Never use ` + "`--no-verify`" + `** to skip git hooks. If a hook fails, fix the issue.
+- **Never complete the blueprint without user confirmation.**
+- Records are named ` + "`prov-YYYY-XXXXXXXX.yml`" + ` using crypto-random hex (not sequential).
+- Do not set ` + "`affected_scope`" + ` on a draft record — use observed mode until open.
 
 ## Useful Commands
 
 ` + "```bash" + `
-# Semantic search across all records (requires embeddings)
-linespec provenance search "<query>"
-
-# Check which records govern a file
-linespec provenance context -f <file>
-
-# View record status
-linespec provenance status
-
-# Lint all records
-linespec provenance lint
-
-# Complete a record
-linespec provenance complete <id>
+linespec provenance search "<query>"        # semantic search (requires embeddings)
+linespec provenance context -f <file>       # which records govern a file
+linespec provenance status                  # list all records and status
+linespec provenance lint                    # validate all records
+linespec provenance open --record <id>      # draft → open (activates enforcement)
+linespec provenance complete --record <id>  # open → implemented
 ` + "```" + `
 `
 
