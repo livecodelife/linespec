@@ -1,6 +1,6 @@
 id: prov-2026-8abe0e04
 title: Fix gRPC proxy response framing for empty-body and error responses
-status: open
+status: implemented
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -52,7 +52,7 @@ forbidden_scope:
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: aed2646be459fdb965b3d49095406ad1206db1f4
 associated_specs:
 - path: examples/temporal-linespecs/start_workflow_success.linespec
 - path: examples/temporal-linespecs/get_workflow_result_success.linespec
