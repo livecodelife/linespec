@@ -1,6 +1,6 @@
 id: prov-2026-e7d88140
 title: Cross-repo config and cache infrastructure for shared provenance repos
-status: draft
+status: open
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: |
@@ -28,13 +28,13 @@ constraints:
   - "linespec provenance sync reports success/failure per repo with record count"
   - A second sync run within TTL reports cache as fresh and skips the fetch
   - "Existing shared_repos field is currently unused []string — a clean type change to []SharedRepoConfig is acceptable"
-  - No lint, graph, or resolver changes in this chunk — that is Chunk 5
+  - The linter must resolve implements references against the combined record set (local + all cached shared repos). If the record is found anywhere, all Chunk 2 tier-validity rules apply exactly as they do for local records — no degraded warning path for remote records. Only error if the record cannot be found in any source.
+  - No graph or resolver changes beyond linting in this chunk — full graph traversal across repos is Chunk 5
 affected_scope:
   - .linespec.yml
   - pkg/config/types.go
   - pkg/config/parser.go
   - pkg/provenance/commands.go
-  - pkg/provenance/cache.go
 forbidden_scope: []
 type: blueprint
 implements: ""
@@ -47,7 +47,8 @@ related:
   - prov-2026-1dd4ba4a
 sealed_at_sha: ""
 associated_specs:
-  - type: code
+  - path: pkg/provenance/linter_test.go
+    type: code
     run_command: make test
 associated_traces: []
 monitors: []
