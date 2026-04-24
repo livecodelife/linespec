@@ -24,7 +24,7 @@ The existing YAML parsing must continue to work for all current records. A recor
 
 ---
 
-## Chunk 2 — Lint: Cross-Tier and Supersession Type Enforcement
+## Chunk 2 — Lint: Cross-Tier and Supersession Type Enforcement ✓ COMPLETE
 
 **Goal:** Add lint rules that enforce the structural constraints introduced by the tier hierarchy. Depends on Chunk 1.
 
