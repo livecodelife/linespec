@@ -30,17 +30,25 @@ constraints:
   - "Existing shared_repos field is currently unused []string — a clean type change to []SharedRepoConfig is acceptable"
   - No lint, graph, or resolver changes in this chunk — that is Chunk 5
 affected_scope:
+  - .linespec.yml
   - pkg/config/types.go
   - pkg/config/parser.go
   - pkg/provenance/commands.go
   - pkg/provenance/cache.go
 forbidden_scope: []
 type: blueprint
+implements: ""
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-4c014dc3
+  - prov-2026-cd41b067
+  - prov-2026-53e3e311
+  - prov-2026-1dd4ba4a
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []

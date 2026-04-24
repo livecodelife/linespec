@@ -1,7 +1,10 @@
 provenance:
   enforcement: strict           # none | warn | strict
   dir: provenance/            # relative to repo root
-  shared_repos: []            # paths or URLs to shared provenance repositories
+  shared_repos:               # named remote repositories for cross-repo provenance resolution
+    - name: livecodelife-cli
+      url: https://github.com/livecodelife/linespec-provenance
+      ref: main
   commit_tag_required: true  # whether commits must reference a prov ID
   auto_affected_scope: true   # whether to auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true  # run associated_specs before committing a completion transition
