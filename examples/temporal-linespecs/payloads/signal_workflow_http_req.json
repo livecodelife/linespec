@@ -1,0 +1,5 @@
+{
+  "workflow_id": "order-123",
+  "signal_name": "cancel-order",
+  "input_data": ""
+}

@@ -7,6 +7,7 @@ option go_package = "github.com/livecodelife/linespec/examples/temporal-service/
 service WorkflowService {
   rpc StartWorkflow(StartWorkflowRequest) returns (StartWorkflowResponse);
   rpc GetWorkflowResult(GetWorkflowResultRequest) returns (GetWorkflowResultResponse);
+  rpc SignalWorkflow(SignalWorkflowRequest) returns (SignalWorkflowResponse);
 }
 
 message StartWorkflowRequest {
@@ -28,3 +29,11 @@ message GetWorkflowResultResponse {
   string result = 1;
   bool completed = 2;
 }
+
+message SignalWorkflowRequest {
+  string workflow_id = 1;
+  string signal_name = 2;
+  bytes input = 3;
+}
+
+message SignalWorkflowResponse {}

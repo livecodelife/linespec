@@ -3,8 +3,10 @@ package grpc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -13,7 +15,20 @@ import (
 
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
+	"golang.org/x/net/http2"
 )
+
+func newH2CClient() *http.Client {
+	return &http.Client{
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				dialer := &net.Dialer{}
+				return dialer.DialContext(ctx, network, addr)
+			},
+		},
+	}
+}
 
 func TestEncodeGRPCFrame(t *testing.T) {
 	msg := []byte(`{"user_id": "123"}`)
@@ -23,18 +38,15 @@ func TestEncodeGRPCFrame(t *testing.T) {
 		t.Fatalf("Expected frame length %d, got %d", 5+len(msg), len(frame))
 	}
 
-	// First byte: compressed flag (must be 0)
 	if frame[0] != 0 {
 		t.Errorf("Expected compressed flag 0, got %d", frame[0])
 	}
 
-	// Bytes 1-4: message length
 	msgLen := binary.BigEndian.Uint32(frame[1:5])
 	if int(msgLen) != len(msg) {
 		t.Errorf("Expected message length %d, got %d", len(msg), msgLen)
 	}
 
-	// Remaining bytes: message content
 	if !bytes.Equal(frame[5:], msg) {
 		t.Errorf("Frame body mismatch")
 	}
@@ -44,6 +56,20 @@ func TestEncodeGRPCFrame_Empty(t *testing.T) {
 	frame := encodeGRPCFrame([]byte{})
 	if len(frame) != 5 {
 		t.Fatalf("Expected frame length 5 for empty message, got %d", len(frame))
+	}
+	msgLen := binary.BigEndian.Uint32(frame[1:5])
+	if msgLen != 0 {
+		t.Errorf("Expected message length 0, got %d", msgLen)
+	}
+}
+
+func TestEncodeGRPCFrame_Nil(t *testing.T) {
+	frame := encodeGRPCFrame(nil)
+	if len(frame) != 5 {
+		t.Fatalf("Expected frame length 5 for nil message, got %d", len(frame))
+	}
+	if frame[0] != 0 {
+		t.Errorf("Expected compression flag 0, got %d", frame[0])
 	}
 	msgLen := binary.BigEndian.Uint32(frame[1:5])
 	if msgLen != 0 {
@@ -62,10 +88,8 @@ func TestInterceptor_NoMock_ReturnsUnimplemented(t *testing.T) {
 		_ = interceptor.Start(ctx)
 	}()
 
-	// Wait for startup
 	time.Sleep(100 * time.Millisecond)
 
-	// Make a gRPC-style HTTP/2 request
 	reqBody := encodeGRPCFrame([]byte(`{"user_id": "123"}`))
 	req, err := http.NewRequest("POST", "http://"+addr+"/users.UserService/GetUser", bytes.NewReader(reqBody))
 	if err != nil {
@@ -73,17 +97,14 @@ func TestInterceptor_NoMock_ReturnsUnimplemented(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/grpc+json")
 
-	// Use a plain HTTP/1.1 client for this test (h2c requires upgrade)
-	client := &http.Client{}
+	client := newH2CClient()
 	resp, err := client.Do(req)
 	if err != nil {
-		// On some systems the h2c upgrade may fail over HTTP/1.1 — skip
-		t.Skipf("Skipping h2c test (HTTP/1.1 fallback): %v", err)
+		t.Skipf("Skipping h2c test: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Should get a 200 with grpc-status != 0
 	if resp.StatusCode != 200 {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
 	}
@@ -91,23 +112,23 @@ func TestInterceptor_NoMock_ReturnsUnimplemented(t *testing.T) {
 
 func TestGRPCPathParsing(t *testing.T) {
 	tests := []struct {
-		path           string
-		expectedSvc    string
+		path string
+		expectedSvc string
 		expectedMethod string
-		expectError    bool
+		expectError bool
 	}{
 		{
-			path:           "/users.UserService/GetUser",
-			expectedSvc:    "users.UserService",
+			path: "/users.UserService/GetUser",
+			expectedSvc: "users.UserService",
 			expectedMethod: "GetUser",
 		},
 		{
-			path:           "/com.example.orders.OrderService/CreateOrder",
-			expectedSvc:    "com.example.orders.OrderService",
+			path: "/com.example.orders.OrderService/CreateOrder",
+			expectedSvc: "com.example.orders.OrderService",
 			expectedMethod: "CreateOrder",
 		},
 		{
-			path:        "/invalid",
+			path: "/invalid",
 			expectError: true,
 		},
 	}
@@ -138,11 +159,9 @@ func TestGRPCPathParsing(t *testing.T) {
 }
 
 func TestGRPCFrameDecoding(t *testing.T) {
-	// Encode a message and then decode it
 	original := `{"user_id": "123", "name": "Alice"}`
 	frame := encodeGRPCFrame([]byte(original))
 
-	// Decode
 	if len(frame) < 5 {
 		t.Fatalf("Frame too short")
 	}
@@ -170,15 +189,14 @@ func TestRegistryFindGRPCMock(t *testing.T) {
 		Name: "test-grpc",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:   types.GRPC,
-				Service:   "users.UserService",
+				Channel:  types.GRPC,
+				Service:  "users.UserService",
 				RPCMethod: "GetUser",
 			},
 		},
 	}
 	reg.Register(spec)
 
-	// Should find the mock
 	mock, found := reg.FindGRPCMock("users.UserService", "GetUser")
 	if !found {
 		t.Fatal("Expected to find gRPC mock")
@@ -190,7 +208,6 @@ func TestRegistryFindGRPCMock(t *testing.T) {
 		t.Errorf("Expected method GetUser, got %s", mock.RPCMethod)
 	}
 
-	// Should not find a second time (consumed)
 	_, found = reg.FindGRPCMock("users.UserService", "GetUser")
 	if found {
 		t.Error("Mock should be consumed after first hit")
@@ -204,25 +221,22 @@ func TestRegistryCheckNegativeGRPCMocks(t *testing.T) {
 		Name: "test-grpc-negative",
 		ExpectsNot: []types.ExpectStatement{
 			{
-				Channel:   types.GRPC,
-				Service:   "users.UserService",
+				Channel:  types.GRPC,
+				Service:  "users.UserService",
 				RPCMethod: "DeleteUser",
 			},
 		},
 	}
 	reg.Register(spec)
 
-	// Simulate a call to DeleteUser
 	reg.CheckNegativeGRPCMocks("users.UserService", "DeleteUser")
 
-	// Verify should fail because the negative mock was hit
 	err := reg.VerifyAll()
 	if err == nil {
 		t.Error("VerifyAll should fail when a negative gRPC mock was called")
 	}
 }
 
-// TestGRPCFrameRoundtrip verifies that encodeGRPCFrame + manual decode is consistent.
 func TestGRPCFrameRoundtrip(t *testing.T) {
 	messages := []string{
 		`{}`,
@@ -247,9 +261,9 @@ func TestGRPCFrameRoundtrip(t *testing.T) {
 			t.Fatalf("Failed to read body: %v", err)
 		}
 
-	if string(body) != msg {
-		t.Errorf("Roundtrip mismatch for message of length %d", len(msg))
-	}
+		if string(body) != msg {
+			t.Errorf("Roundtrip mismatch for message of length %d", len(msg))
+		}
 	}
 }
 
@@ -272,7 +286,7 @@ func TestInterceptor_NoUpstream_BackwardCompat(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/grpc+json")
 
-	client := &http.Client{}
+	client := newH2CClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Skipf("Skipping h2c test: %v", err)
@@ -280,11 +294,16 @@ func TestInterceptor_NoUpstream_BackwardCompat(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	_, _ = io.ReadAll(resp.Body)
+
 	if resp.StatusCode != 200 {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
 	}
-	if resp.Header.Get("Grpc-Status") != "12" {
-		t.Errorf("Expected Grpc-Status 12 (UNIMPLEMENTED), got %s", resp.Header.Get("Grpc-Status"))
+	if resp.Header.Get("Grpc-Status") != "" {
+		t.Errorf("Expected Grpc-Status NOT in initial headers, got %s", resp.Header.Get("Grpc-Status"))
+	}
+	if resp.Trailer.Get("Grpc-Status") != "12" {
+		t.Errorf("Expected Grpc-Status 12 (UNIMPLEMENTED) in trailers, got %s", resp.Trailer.Get("Grpc-Status"))
 	}
 	if resp.Header.Get("Content-Type") != "application/grpc+json" {
 		t.Errorf("Expected Content-Type application/grpc+json, got %s", resp.Header.Get("Content-Type"))
@@ -322,7 +341,7 @@ func TestInterceptor_ContentTypeEcho(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/grpc")
 
-	client := &http.Client{}
+	client := newH2CClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Skipf("Skipping h2c test: %v", err)
@@ -353,7 +372,7 @@ func TestInterceptor_ContentTypeDefault(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	client := &http.Client{}
+	client := newH2CClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Skipf("Skipping h2c test: %v", err)
@@ -372,8 +391,8 @@ func TestInterceptor_WithDescriptor(t *testing.T) {
 		Name: "test-descriptor",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:   types.GRPC,
-				Service:   "test.v1.TestService",
+				Channel:  types.GRPC,
+				Service:  "test.v1.TestService",
 				RPCMethod: "GetUser",
 			},
 		},
@@ -404,7 +423,7 @@ func TestInterceptor_WithDescriptor(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/grpc")
 
-	client := &http.Client{}
+	client := newH2CClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Skipf("Skipping h2c test: %v", err)
@@ -417,5 +436,176 @@ func TestInterceptor_WithDescriptor(t *testing.T) {
 	}
 	if resp.Header.Get("Content-Type") != "application/grpc" {
 		t.Errorf("Expected Content-Type application/grpc, got %s", resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestInterceptor_EmptyBody_SendsDataFrame(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "test-empty-body",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:  types.GRPC,
+				Service:  "test.v1.TestService",
+				RPCMethod: "GetUser",
+			},
+		},
+	}
+	reg.Register(spec)
+
+	addr := "127.0.0.1:19882"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{"user_id": "1"}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc+json")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	if len(body) != 5 {
+		t.Errorf("Expected 5-byte empty gRPC frame, got %d bytes: %v", len(body), body)
+	}
+	if body[0] != 0 {
+		t.Errorf("Expected compression flag 0, got %d", body[0])
+	}
+	msgLen := binary.BigEndian.Uint32(body[1:5])
+	if msgLen != 0 {
+		t.Errorf("Expected message length 0, got %d", msgLen)
+	}
+
+	if resp.Trailer.Get("Grpc-Status") != "0" {
+		t.Errorf("Expected Grpc-Status 0 in trailers, got %s", resp.Trailer.Get("Grpc-Status"))
+	}
+}
+
+func TestInterceptor_ReturnsEmpty_SendsDataFrame(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "test-returns-empty",
+		Expects: []types.ExpectStatement{
+			{
+				Channel:      types.GRPC,
+				Service:      "test.v1.TestService",
+				RPCMethod:    "DeleteUser",
+				ReturnsEmpty: true,
+			},
+		},
+	}
+	reg.Register(spec)
+
+	addr := "127.0.0.1:19883"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{"user_id": "1"}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/DeleteUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc+json")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	if len(body) != 5 {
+		t.Errorf("Expected 5-byte empty gRPC frame for RETURNS EMPTY, got %d bytes: %v", len(body), body)
+	}
+	if body[0] != 0 {
+		t.Errorf("Expected compression flag 0, got %d", body[0])
+	}
+	msgLen := binary.BigEndian.Uint32(body[1:5])
+	if msgLen != 0 {
+		t.Errorf("Expected message length 0, got %d", msgLen)
+	}
+
+	if resp.Trailer.Get("Grpc-Status") != "0" {
+		t.Errorf("Expected Grpc-Status 0 in trailers, got %s", resp.Trailer.Get("Grpc-Status"))
+	}
+}
+
+func TestInterceptor_ErrorResponse_UsesTrailerHeaders(t *testing.T) {
+	reg := registry.NewMockRegistry()
+	addr := "127.0.0.1:19884"
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = interceptor.Start(ctx)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	reqBody := encodeGRPCFrame([]byte(`{}`))
+	req, err := http.NewRequest("POST", "http://"+addr+"/unknown.Service/Method", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc+json")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	if resp.Header.Get("Grpc-Status") != "" {
+		t.Errorf("Expected Grpc-Status to NOT be in initial headers, got %s", resp.Header.Get("Grpc-Status"))
+	}
+
+	if resp.Trailer.Get("Grpc-Status") != "12" {
+		t.Errorf("Expected Grpc-Status 12 in trailers, got %s", resp.Trailer.Get("Grpc-Status"))
+	}
+
+	if resp.Trailer.Get("Grpc-Message") == "" {
+		t.Error("Expected Grpc-Message in trailers")
+	}
+
+	if resp.Header.Get("Content-Type") != "application/grpc+json" {
+		t.Errorf("Expected Content-Type application/grpc+json, got %s", resp.Header.Get("Content-Type"))
 	}
 }

@@ -42,6 +42,12 @@ class GetResultResp(BaseModel):
     completed: bool
 
 
+class SignalWorkflowReq(BaseModel):
+    workflow_id: str
+    signal_name: str = "default-signal"
+    input_data: str = ""
+
+
 app = FastAPI(title="Temporal Client Service", version="1.0.0")
 
 
@@ -77,6 +83,27 @@ def _grpc_call(service_method: str, payload: bytes, content_type: str) -> Dict[s
         return json.loads(_decode_grpc_frame(response.content))
 
 
+def _grpc_call_empty(service_method: str, payload: bytes, content_type: str) -> None:
+    url = f"http://{WORKFLOW_HOST}:{WORKFLOW_PORT}/{service_method}"
+    body = _encode_grpc_frame(payload)
+    with httpx.Client(http2=True) as client:
+        response = client.post(
+            url,
+            content=body,
+            headers={
+                "Content-Type": content_type,
+                "Te": "trailers",
+            },
+            timeout=5.0,
+        )
+        grpc_status = response.headers.get("grpc-status", "0")
+        if grpc_status != "0":
+            raise HTTPException(
+                status_code=502,
+                detail=f"gRPC error {grpc_status}: {response.headers.get('grpc-message', '')}",
+            )
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
@@ -101,3 +128,14 @@ async def get_result(req: GetResultReq):
     }).encode()
     result = _grpc_call("workflow.v1.WorkflowService/GetWorkflowResult", payload, WORKFLOW_CONTENT_TYPE)
     return GetResultResp(result=result.get("result", ""), completed=result.get("completed", False))
+
+
+@app.post("/signal")
+async def signal_workflow(req: SignalWorkflowReq):
+    payload = json.dumps({
+        "workflow_id": req.workflow_id,
+        "signal_name": req.signal_name,
+        "input": req.input_data.encode().decode("latin-1"),
+    }).encode()
+    _grpc_call_empty("workflow.v1.WorkflowService/SignalWorkflow", payload, WORKFLOW_CONTENT_TYPE)
+    return {"status": "ok"}
