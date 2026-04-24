@@ -227,6 +227,30 @@ func (c *Commands) Lint(opts LintOptions) error {
 		result = c.Linter.LintAll()
 	}
 
+	// Warn about stale shared repo caches (populated but older than TTL).
+	if c.Cache != nil {
+		ttl := c.Config.CacheTTLMinutes
+		if ttl <= 0 {
+			ttl = 60
+		}
+		for _, repo := range c.Config.SharedRepos {
+			if _, err := os.Stat(c.Cache.ProvenanceDir(repo)); err != nil {
+				continue // never synced — not a warning, just not configured yet
+			}
+			if !c.Cache.IsFresh(repo) {
+				result.Add(Issue{
+					RecordID: "",
+					Field:    "cache",
+					Message: fmt.Sprintf(
+						"Cache for shared repo %q is stale (older than %d minutes). Run 'linespec provenance sync' to refresh.",
+						repo.Name, ttl,
+					),
+					Severity: SeverityWarning,
+				})
+			}
+		}
+	}
+
 	// Output
 	switch opts.Format {
 	case "json":
@@ -615,11 +639,28 @@ type CompleteOptions struct {
 }
 
 // Complete marks a record as implemented
+// isRemoteRecord reports whether a record was loaded from a shared repo cache
+// rather than from the local provenance directory. Remote records are read-only.
+func (c *Commands) isRemoteRecord(record *Record) bool {
+	if record.FilePath == "" || c.Config.Dir == "" {
+		return false
+	}
+	return !strings.HasPrefix(record.FilePath, c.Config.Dir)
+}
+
 func (c *Commands) Complete(opts CompleteOptions) error {
 	record, exists := c.Loader.GetRecord(opts.RecordID)
 	if !exists {
 		c.Formatter.FormatError(fmt.Sprintf("Record not found: %s", opts.RecordID))
 		return fmt.Errorf("record not found")
+	}
+
+	if c.isRemoteRecord(record) {
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot modify %s: this record is owned by a remote repository and is read-only from this repo.",
+			opts.RecordID,
+		))
+		return fmt.Errorf("record is read-only")
 	}
 
 	// Check if already implemented
@@ -706,6 +747,14 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 		return fmt.Errorf("record not found")
 	}
 
+	if c.isRemoteRecord(record) {
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot modify %s: this record is owned by a remote repository and is read-only from this repo.",
+			opts.RecordID,
+		))
+		return fmt.Errorf("record is read-only")
+	}
+
 	// Check if already deprecated or superseded
 	if record.Status == StatusDeprecated {
 		c.Formatter.FormatError(fmt.Sprintf("Record %s is already deprecated", opts.RecordID))
@@ -745,6 +794,14 @@ func (c *Commands) Open(opts OpenOptions) error {
 	if !exists {
 		c.Formatter.FormatError(fmt.Sprintf("Record not found: %s", opts.RecordID))
 		return fmt.Errorf("record not found")
+	}
+
+	if c.isRemoteRecord(record) {
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot modify %s: this record is owned by a remote repository and is read-only from this repo.",
+			opts.RecordID,
+		))
+		return fmt.Errorf("record is read-only")
 	}
 
 	if record.Status != StatusDraft {
