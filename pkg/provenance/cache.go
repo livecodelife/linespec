@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -142,13 +143,14 @@ func repoDir(repo config.SharedRepoConfig) string {
 func (c *CacheManager) fetchViaArchive(repo config.SharedRepoConfig, ref, provDir string) (int, error) {
 	dir := repoDir(repo)
 	cmd := exec.Command("git", "archive", "--remote="+repo.URL, ref, dir+"/")
-	out, err := cmd.Output()
+	pr, err := cmd.StdoutPipe()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if isExitError(err, &exitErr) {
-			return 0, fmt.Errorf("git archive failed for %s: %s",
-				repo.Name, strings.TrimSpace(string(exitErr.Stderr)))
-		}
+		return 0, fmt.Errorf("git archive failed for %s: %w", repo.Name, err)
+	}
+	// Capture stderr for a helpful error message on non-zero exit.
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+	if err := cmd.Start(); err != nil {
 		return 0, fmt.Errorf("git archive failed for %s: %w", repo.Name, err)
 	}
 
@@ -159,9 +161,17 @@ func (c *CacheManager) fetchViaArchive(repo config.SharedRepoConfig, ref, provDi
 		}
 	}
 
-	count, err := unpackProvenance(strings.NewReader(string(out)), provDir)
-	if err != nil {
-		return 0, fmt.Errorf("failed to unpack archive for %s: %w", repo.Name, err)
+	count, unpackErr := unpackProvenance(pr, provDir)
+	if waitErr := cmd.Wait(); waitErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(waitErr, &exitErr) {
+			return 0, fmt.Errorf("git archive failed for %s: %s",
+				repo.Name, strings.TrimSpace(stderrBuf.String()))
+		}
+		return 0, fmt.Errorf("git archive failed for %s: %w", repo.Name, waitErr)
+	}
+	if unpackErr != nil {
+		return 0, fmt.Errorf("failed to unpack archive for %s: %w", repo.Name, unpackErr)
 	}
 	return count, nil
 }
@@ -329,13 +339,4 @@ func unpackProvenance(r io.Reader, destDir string) (int, error) {
 		count++
 	}
 	return count, nil
-}
-
-// isExitError checks if err is an *exec.ExitError and populates target.
-func isExitError(err error, target **exec.ExitError) bool {
-	if e, ok := err.(*exec.ExitError); ok {
-		*target = e
-		return true
-	}
-	return false
 }
