@@ -1,6 +1,6 @@
 id: prov-2026-3b749a71
 title: Guard Lint --save-scope against remote records
-status: open
+status: implemented
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ implements: prov-2026-90ec670e
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 9fae63e7b26661c4cb333850bd3a967749e7a7df
 associated_specs:
   - path: pkg/provenance/commands.go
     type: code
