@@ -1,0 +1,46 @@
+id: prov-2026-e7d88140
+title: Cross-repo config and cache infrastructure for shared provenance repos
+status: draft
+created_at: "2026-04-24"
+author: calebcowen@gmail.com
+intent: |
+  Build the configuration schema for named remote repositories and a local cache layer that
+  fetches and stores remote provenance directories. This chunk contains no user-facing behavior
+  changes beyond the new `linespec provenance sync` command — it is pure infrastructure consumed
+  by Chunk 5 (cross-repo reference resolution).
+
+  The `shared_repos` field in `.linespec.yml` is currently an unused `[]string`. Replace it
+  with a structured array of objects (`name`, `url`, `ref`) that fully describe remote repos.
+  Add a `cache_ttl_minutes` field (default 60) to control cache freshness.
+
+  Build a cache layer that stores fetched provenance directories at
+  `~/.linespec/cache/<sha256-of-url>/provenance/`. Use `git archive --remote=<url> <ref>
+  provenance/` to fetch only the provenance directory (not a full clone). Store a sidecar
+  `.meta` JSON file per cached repo recording `fetched_at` for TTL checks.
+
+  Add `linespec provenance sync` which explicitly refreshes the cache for all configured
+  shared repos regardless of TTL. Intended for CI and SessionStart hook use.
+constraints:
+  - "The fetch mechanism must use `git archive --remote=<url> <ref> provenance/` — no full clones"
+  - "Cache lives at ~/.linespec/cache/<sha256-of-url>/provenance/ and persists across invocations"
+  - "cache_ttl_minutes defaults to 60 if not set"
+  - "A failed git archive (unreachable remote, bad ref) must be caught and reported clearly without crashing"
+  - "linespec provenance sync reports success/failure per repo with record count"
+  - A second sync run within TTL reports cache as fresh and skips the fetch
+  - "Existing shared_repos field is currently unused []string — a clean type change to []SharedRepoConfig is acceptable"
+  - No lint, graph, or resolver changes in this chunk — that is Chunk 5
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/cache.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
