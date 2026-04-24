@@ -37,6 +37,7 @@ constraints:
   - "All existing local-only behavior must be preserved — no regressions when shared_repos is empty."
   - "The resolver must not re-fetch from remote; it reads only from the on-disk cache populated by linespec provenance sync."
 affected_scope:
+  - provenance/*.yml
   - pkg/provenance/commands.go
   - pkg/provenance/linter.go
   - pkg/provenance/cache.go
