@@ -9,6 +9,7 @@
 | `id` | string | yes | no | CLI |
 | `title` | string | yes | no | author |
 | `status` | enum | yes | no (transitions only) | CLI |
+| `type` | enum | no | no | author |
 | `created_at` | date | yes | no | CLI |
 | `author` | string | yes | no | CLI |
 | `intent` | string | yes | no | author |
@@ -17,6 +18,7 @@
 | `forbidden_scope` | []pattern | no | no | author |
 | `supersedes` | string | no | no | author |
 | `superseded_by` | string | no | no | CLI |
+| `implements` | string | no | no | author |
 | `related` | []string | no | no | author |
 | `associated_specs` | []object | no | no | author |
 | `associated_traces` | []string | no | **yes** | author |
@@ -53,23 +55,42 @@
 ### `status`
 **Type:** enum  
 **Required:** yes  
-**Default:** `open` (set by CLI at creation)  
+**Default:** `draft` (set by CLI at creation)  
 **Allowed values:**
 
 | Value | Meaning |
 |---|---|
-| `open` | Authorized but not yet fully implemented or proven |
-| `implemented` | All associated LineSpecs exist on disk and the record has been explicitly completed via CLI |
+| `draft` | Created but enforcement not yet active. Scope and spec checks are suppressed. |
+| `open` | Authorized and under enforcement |
+| `implemented` | All associated specs exist on disk and the record has been explicitly completed via CLI |
 | `superseded` | Replaced by a newer record. `superseded_by` is set. |
 | `deprecated` | Closed without replacement, e.g. the governed feature was removed |
 
 **Set by:** CLI only. Authors do not write to this field directly. Status transitions are:
+- `draft` → `open` via `linespec provenance open --record <id>`
 - `open` → `implemented` via `linespec provenance complete`
 - `open` → `superseded` automatically when another record's `supersedes` references this ID
 - `open` → `deprecated` via `linespec provenance deprecate`
 - `implemented` → `superseded` automatically when another record's `supersedes` references this ID
 
 **Constraints:** `implemented` records are immutable except for `monitors` and `associated_traces`. No transition back from `superseded` or `deprecated`.
+
+---
+
+### `type`
+**Type:** enum  
+**Required:** no  
+**Default:** `blueprint` (inferred when field is absent; a lint hint is emitted)  
+**Allowed values:**
+
+| Value | Role |
+|---|---|
+| `brief` | High-level intent record — the "why". Top of the hierarchy; cannot use `implements`. |
+| `blueprint` | Design decision — the "what". May implement a `brief`. |
+| `imprint` | Implementation record — the "how". Must implement a `blueprint`. |
+
+**Set by:** Author, optionally via `--type` flag on `linespec provenance create`.  
+**Constraints:** Immutable after creation. See [Tier Hierarchy](#tier-hierarchy) for lint rules that govern cross-tier relationships.
 
 ---
 
@@ -195,6 +216,20 @@ forbidden_scope:
 **Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
 **Set by:** CLI only, automatically, when another record's `supersedes` references this record's ID. Authors never write to this field.  
 **Constraints:** Immutable once set. The CLI reconstructs this value from the graph at load time and will surface a warning if the file's value disagrees with what the graph implies, indicating a manual edit.
+
+---
+
+### `implements`
+**Type:** string  
+**Required:** no  
+**Format:** A single valid Provenance Record ID: `prov-YYYY-XXXXXXXX`  
+**Example:**
+```yaml
+implements: prov-2026-a1b2c3d4
+```
+**Set by:** Author.  
+**Behavior:** Expresses an upward parent reference in the tier hierarchy. A `blueprint` record that implements a `brief`, or an `imprint` that implements a `blueprint`. The linter validates that the relationship is exactly one tier up (PROV021) and that the referenced record exists locally (PROV022). Cross-repo references (containing `:`) are skipped with a warning.  
+**Constraints:** Must reference a record exactly one tier above. `brief` records may not use this field. Omitted from YAML output when empty.
 
 ---
 
@@ -355,7 +390,10 @@ tags:
 | `id` matches `prov-YYYY-XXXXXXXX` format | error | always |
 | `created_at` is a valid ISO 8601 date | error | always |
 | `supersedes` references a real record | error | always |
+| `supersedes` crosses tier boundaries (type mismatch) | error | always |
 | `superseded_by` agrees with graph | warning | always |
+| `implements` references a non-existent local record | error | always |
+| `implements` relationship skips a tier or points sideways | error | always |
 | `related` references real records | warning | always |
 | A pattern appears in both `affected_scope` and `forbidden_scope` | error | always |
 | `open` record has no `associated_specs` | error | strict |

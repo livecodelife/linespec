@@ -97,17 +97,18 @@ Examples:
 ### Status Lifecycle
 
 ```
-┌─────────┐    ┌─────────────┐    ┌────────────┐
-│  open   │───▶│ implemented │───▶│ superseded│
-└─────────┘    └─────────────┘    └────────────┘
-                                    │
-                                    ▼
-                              ┌────────────┐
-                              │ deprecated │
-                              └────────────┘
+┌─────────┐    ┌─────────┐    ┌─────────────┐    ┌────────────┐
+│  draft  │───▶│  open   │───▶│ implemented │───▶│ superseded│
+└─────────┘    └─────────┘    └─────────────┘    └────────────┘
+                                                    │
+                                                    ▼
+                                              ┌────────────┐
+                                              │ deprecated │
+                                              └────────────┘
 ```
 
-- **open** - Decision is being discussed/developed
+- **draft** - Record created but enforcement not yet active. Scope and spec checks are suppressed. Transition to open with `linespec provenance open --record <id>`.
+- **open** - Decision is active and under enforcement
 - **implemented** - Decision is complete and immutable
 - **superseded** - Replaced by a newer record (use `superseded_by`)
 - **deprecated** - No longer relevant
@@ -167,7 +168,8 @@ tags:
 |-------|------|-------------|
 | `id` | string | Unique identifier (prov-YYYY-XXXXXXXX or prov-YYYY-XXXXXXXX-service) |
 | `title` | string | Human-readable title |
-| `status` | string | One of: open, implemented, superseded, deprecated |
+| `status` | string | One of: draft, open, implemented, superseded, deprecated |
+| `type` | string | Record tier: `brief`, `blueprint` (default), or `imprint`. See [Tier Hierarchy](#tier-hierarchy). |
 | `created_at` | string | ISO 8601 date (YYYY-MM-DD) |
 | `author` | string | Email of the author |
 
@@ -194,8 +196,9 @@ tags:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `supersedes` | string | ID of older record this replaces |
+| `supersedes` | string | ID of older record this replaces (must be same tier) |
 | `superseded_by` | string | ID of newer record that replaces this |
+| `implements` | string | ID of the parent record one tier above (blueprint→brief, imprint→blueprint) |
 | `related` | array | Related record IDs (no directional relationship) |
 
 #### Proof of Completion
@@ -212,6 +215,29 @@ tags:
 | Field | Type | Description |
 |-------|------|-------------|
 | `tags` | array | Arbitrary tags for filtering and organization |
+
+---
+
+## Tier Hierarchy
+
+Records can be organized into three tiers using the `type` field:
+
+| Type | Role | Implements |
+|------|------|------------|
+| `brief` | High-level intent — the "why" | Nothing (top of hierarchy) |
+| `blueprint` | Design decision — the "what" | `brief` |
+| `imprint` | Implementation record — the "how" | `blueprint` |
+
+Records without a `type` field default to `blueprint` for backward compatibility (a lint hint is emitted).
+
+**Hierarchy rules enforced by the linter:**
+
+- **Supersession must stay within the same tier.** A `blueprint` cannot supersede a `brief`. Use `related` or `implements` for cross-tier connections. (PROV020)
+- **`implements` must point exactly one tier up.** `blueprint` implements `brief`, `imprint` implements `blueprint`. Skipping a tier or pointing sideways is a lint error. (PROV021)
+- **`implements` must resolve locally.** The referenced record must exist in the provenance directory. A missing reference is always an error. (PROV022)
+- Cross-repo `implements` references (containing a `:` separator) are skipped with a warning — cross-repo resolution is not yet supported.
+
+**Lifecycle note:** Draft records skip all scope and spec enforcement. Use `linespec provenance open` to begin enforcement when the record is ready.
 
 ---
 
@@ -237,10 +263,27 @@ linespec provenance create --title "Quick fix" --no-edit
 
 **Options:**
 - `--title "..."` - Pre-populate title
+- `--type brief|blueprint|imprint` - Set record tier (default: blueprint)
 - `--supersedes prov-YYYY-XXXXXXXX` - Link to older record
 - `--tag tag1,tag2` - Add tags
 - `--no-edit` - Write without opening editor
 - `-i, --id-suffix name` - Append service suffix
+- `-c, --config path` - Use custom .linespec.yml
+
+**Note:** New records start in `draft` status. Scope and spec enforcement are suppressed until you run `linespec provenance open`.
+
+### Open
+
+Transition a record from `draft` to `open`, activating scope and spec enforcement:
+
+```bash
+linespec provenance open --record prov-2026-XXXXXXXX
+```
+
+Only records in `draft` status can be opened. Attempting to open a record in any other status returns an error.
+
+**Options:**
+- `--record prov-YYYY-XXXXXXXX` - Record ID to open (required)
 - `-c, --config path` - Use custom .linespec.yml
 
 ### Lint
@@ -818,10 +861,14 @@ Upload provenance lint results to GitHub Code Scanning for inline PR annotations
 - **Suppression** - Use GitHub's alert management UI to dismiss false positives
 
 **Rule IDs:**
-The SARIF output uses stable rule IDs (PROV001-PROV019) that persist across LineSpec versions:
+The SARIF output uses stable rule IDs (PROV001-PROV022) that persist across LineSpec versions:
 - PROV001: InvalidYaml
 - PROV002: MissingRequiredField
 - PROV003: UnknownStatus
+- PROV006: UnresolvedSupersedes
+- PROV020: SupersessionTypeMismatch (supersedes crosses tier boundaries)
+- PROV021: ImplementsTypeMismatch (implements skips a tier or points sideways)
+- PROV022: UnresolvedImplements (implements references a non-existent record)
 - ... (see full catalog in SARIF output)
 
 **Example PR annotation:**

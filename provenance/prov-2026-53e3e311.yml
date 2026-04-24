@@ -31,6 +31,8 @@ affected_scope:
   - pkg/provenance/sarif.go
   - pkg/provenance/linter_test.go
   - pkg/provenance/sarif_test.go
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
 related:
   - prov-2026-cd41b067
 associated_specs:
