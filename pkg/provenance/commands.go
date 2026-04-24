@@ -382,7 +382,7 @@ func (c *Commands) Graph(opts GraphOptions) error {
 	case "dot":
 		return c.outputDotGraph(opts)
 	default:
-		c.Formatter.FormatGraph(c.Loader, opts.Filter)
+		c.Formatter.FormatGraph(c.Loader, opts.Filter, opts.Root)
 	}
 
 	return nil
