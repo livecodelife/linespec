@@ -35,7 +35,7 @@ jobs:
         run: go build -o linespec ./cmd/linespec
       
       - name: Lint provenance records and generate SARIF
-        run: ./linespec provenance lint --format sarif > provenance-results.sarif
+        run: ./linespec provenance lint -c .linespec.yml --format sarif > provenance-results.sarif
         # Continue even if lint fails so we can upload the findings to Code Scanning
         continue-on-error: true
       
@@ -48,6 +48,6 @@ jobs:
       - name: Check for lint failures (strict mode)
         run: |
           # Run lint again without SARIF to check for actual errors
-          ./linespec provenance lint --enforcement strict
+          ./linespec provenance lint -c .linespec.yml --enforcement strict
         # On PRs, we allow failures so the SARIF upload happens first
         continue-on-error: ${{ github.event_name == 'pull_request' }}
