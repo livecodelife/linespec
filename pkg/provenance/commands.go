@@ -112,6 +112,13 @@ func (c *Commands) Create(opts CreateOptions) error {
 	superseded := ""
 	if opts.Supersedes != "" && opts.Supersedes != "null" {
 		target, _ := c.Loader.GetRecord(opts.Supersedes)
+		if c.isRemoteRecord(target) {
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot supersede %s: this record is owned by a remote repository and is read-only from this repo.",
+				opts.Supersedes,
+			))
+			return fmt.Errorf("record is read-only")
+		}
 		target.SupersededBy = record.ID
 		target.Status = StatusSuperseded
 
@@ -546,6 +553,14 @@ func (c *Commands) LockScope(opts LockScopeOptions) error {
 	if !exists {
 		c.Formatter.FormatError(fmt.Sprintf("Record not found: %s", opts.RecordID))
 		return fmt.Errorf("record not found")
+	}
+
+	if c.isRemoteRecord(record) {
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot modify %s: this record is owned by a remote repository and is read-only from this repo.",
+			opts.RecordID,
+		))
+		return fmt.Errorf("record is read-only")
 	}
 
 	// Check status
