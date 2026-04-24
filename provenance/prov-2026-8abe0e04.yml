@@ -1,0 +1,52 @@
+id: prov-2026-8abe0e04
+title: Fix gRPC proxy response framing for empty-body and error responses
+status: open
+created_at: "2026-04-23"
+author: calebcowen@gmail.com
+intent: >
+  Fix two gRPC wire-protocol compliance bugs in the proxy interceptor:
+  (1) Empty protobuf response bodies (e.g. SignalWorkflow returning google.protobuf.Empty)
+  skip the DATA frame entirely because of a `len(responseBody) > 0` guard. The gRPC spec
+  requires a 5-byte Length-Prefixed Message frame (compression-flag 0 + 4-byte length 0)
+  for every unary response, including empty ones. Without it, tonic/h2 sees HEADERS then
+  trailing HEADERS with END_STREAM and no DATA frame, classifying this as a retryable
+  transport error rather than a successful empty response. This also occurs when
+  ReturnsEmpty is set (currently only handled by DB/Redis proxies, not gRPC) and when
+  JSON-to-protobuf transcoding of `{}` for an empty message produces 0 bytes.
+  (2) writeGRPCError sends Grpc-Status in the initial HEADERS frame instead of in a
+  separate trailing HEADERS frame, violating the gRPC HTTP/2 spec which requires
+  grpc-status in trailers.
+constraints:
+  - Every unary gRPC response must include a 5-byte DATA frame (encodeGRPCFrame), even when the protobuf message body is empty (0 bytes)
+  - The guard `if len(responseBody) > 0` must be removed — encodeGRPCFrame(nil) produces the correct 5-byte frame
+  - RETURNS EMPTY must be supported for gRPC EXPECT statements, producing the same 5-byte empty frame
+  - writeGRPCError must declare Trailer headers before WriteHeader and set Grpc-Status/Grpc-Message after WriteHeader, matching the success path pattern
+  - content-length must never be set on gRPC responses (already correct, must remain so)
+  - content-type must be present on the initial HEADERS frame (already correct, must remain so)
+  - Existing unit tests must continue to pass; error-path tests must be updated to read trailers instead of initial headers
+  - The temporal example must include a linespec test that exercises the empty-body gRPC response path to prevent regression
+affected_scope:
+  - pkg/proxy/grpc/interceptor.go
+  - pkg/proxy/grpc/interceptor_test.go
+  - pkg/proxy/grpc/testdata/test.pb
+  - examples/temporal-service/proto/workflow.proto
+  - examples/temporal-service/proto/workflow.pb
+  - examples/temporal-service/app/main.py
+forbidden_scope:
+  - pkg/proxy/postgresql/**
+  - pkg/proxy/mysql/**
+  - pkg/proxy/http/**
+  - pkg/proxy/kafka/**
+  - pkg/proxy/redis/**
+  - pkg/proxy/mongodb/**
+  - pkg/provenance/**
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/temporal-linespecs/start_workflow_success.linespec
+  - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+associated_traces: []
+monitors: []
+tags: []
