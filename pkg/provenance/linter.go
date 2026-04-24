@@ -992,7 +992,11 @@ func (l *Linter) isRemoteRecord(record *Record) bool {
 	if record.FilePath == "" || l.Loader.Dir == "" {
 		return false
 	}
-	return !strings.HasPrefix(record.FilePath, l.Loader.Dir)
+	dir := l.Loader.Dir
+	if !strings.HasSuffix(dir, string(os.PathSeparator)) {
+		dir += string(os.PathSeparator)
+	}
+	return !strings.HasPrefix(record.FilePath, dir)
 }
 
 // validateImplements checks the implements field for resolution and type correctness.

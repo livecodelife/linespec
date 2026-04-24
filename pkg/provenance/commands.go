@@ -660,7 +660,11 @@ func (c *Commands) isRemoteRecord(record *Record) bool {
 	if record.FilePath == "" || c.Config.Dir == "" {
 		return false
 	}
-	return !strings.HasPrefix(record.FilePath, c.Config.Dir)
+	dir := c.Config.Dir
+	if !strings.HasSuffix(dir, string(os.PathSeparator)) {
+		dir += string(os.PathSeparator)
+	}
+	return !strings.HasPrefix(record.FilePath, dir)
 }
 
 func (c *Commands) Complete(opts CompleteOptions) error {
