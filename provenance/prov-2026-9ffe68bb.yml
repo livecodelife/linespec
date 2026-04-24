@@ -1,6 +1,6 @@
 id: prov-2026-9ffe68bb
 title: Per-type field enforcement matrix for provenance record tiers
-status: draft
+status: open
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
