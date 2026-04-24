@@ -1,6 +1,6 @@
 id: prov-2026-c1f0b7f9
 title: Update docs site to reflect v3.0.0 functionality
-status: open
+status: implemented
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -32,7 +32,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cd2ec3e2f632e72e8c577b1dcc382e7d95d65094
 associated_specs:
   - path: docs/provenance.html
     type: document
