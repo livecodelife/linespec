@@ -47,9 +47,14 @@ implements: prov-2026-95cb8b3d
 supersedes: ""
 superseded_by: ""
 related:
+  - prov-2026-53e3e311
+  - prov-2026-1dd4ba4a
   - prov-2026-e7d88140
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
