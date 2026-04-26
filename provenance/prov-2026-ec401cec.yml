@@ -1,6 +1,6 @@
 id: prov-2026-ec401cec
 title: Wire body matching into HTTP, gRPC, and Kafka proxy interceptors
-status: open
+status: implemented
 created_at: "2026-04-26"
 author: noreply@anthropic.com
 intent: Replace FindHTTPMockWithHeaders with FindHTTPMockWithBody in the HTTP interceptor;
@@ -20,7 +20,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: af95233acc760a78f0bd3fdd66f72edb22d50911
 associated_specs: []
 associated_traces: []
 monitors: []
