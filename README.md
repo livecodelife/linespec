@@ -1,6 +1,6 @@
 # LineSpec v3.0.0
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
