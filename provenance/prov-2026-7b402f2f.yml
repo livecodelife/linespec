@@ -17,6 +17,7 @@ constraints:
   - The "associated_specs is not applicable on brief records" warning must still fire if a brief somehow carries specs
 affected_scope:
   - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
 forbidden_scope: []
 type: bug
 supersedes: ""
@@ -24,7 +25,9 @@ superseded_by: ""
 extends: prov-2026-9ffe68bb
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    run_command: go test ./pkg/provenance/... -run TestValidateAssociatedSpecs_BriefOpenNoSpecs_NoEnforcementIssues -v
 associated_traces: []
 monitors: []
 tags: []

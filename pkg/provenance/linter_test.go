@@ -1016,3 +1016,29 @@ func TestValidateImplements_BugCannotUseImplements(t *testing.T) {
 		t.Errorf("Expected 1 error for Bug using implements, got %d: %v", result.ErrorCount, result.Issues)
 	}
 }
+
+// --- prov-2026-7b402f2f: brief records must not receive associated_specs enforcement issues ---
+
+func TestValidateAssociatedSpecs_BriefOpenNoSpecs_NoEnforcementIssues(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "linter-test")
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+
+	for _, enforcement := range []string{"strict", "warn", "none"} {
+		linter := NewLinter(loader, enforcement)
+		brief := &Record{
+			ID:     "prov-2026-001",
+			Type:   RecordTypeBrief,
+			Status: StatusOpen,
+		}
+		result := &LintResult{}
+		linter.validateAssociatedSpecs(brief, result)
+
+		for _, issue := range result.Issues {
+			if issue.Field == "associated_specs" {
+				t.Errorf("enforcement=%s: open brief with no associated_specs produced unexpected issue: %s", enforcement, issue.Message)
+			}
+		}
+	}
+}
