@@ -42,7 +42,7 @@ go install github.com/livecodelife/linespec/cmd/linespec@v3.0.0
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_2.0.0_*` - Full release (Provenance Records + LineSpec Testing)
+- `linespec_3.0.0_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
