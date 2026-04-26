@@ -1,6 +1,6 @@
 id: prov-2026-623ee9b6
 title: v3.0.1 release preparation
-status: open
+status: implemented
 created_at: "2026-04-26"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-7b402f2f
-sealed_at_sha: ""
+sealed_at_sha: 88615d19ce761fa16d00b2d491e2785f65e9b39d
 associated_specs:
   - path: CHANGELOG.md
     type: document
