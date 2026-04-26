@@ -1,0 +1,54 @@
+id: prov-2026-9e052576
+title: Add request body comparison via WITH statements for HTTP, gRPC, and Kafka EXPECT blocks
+status: draft
+created_at: "2026-04-26"
+author: noreply@anthropic.com
+intent: |
+  When a service under test makes an outbound HTTP, gRPC, or Kafka call, the test author should be
+  able to assert that the request body (or message value) matches an expected payload defined in a
+  WITH file. This is analogous to how database EXPECTs use VERIFY_WRITTEN_VALUES to validate what
+  values the service wrote.
+
+  Currently, HTTP mocks match on URL + method + headers; gRPC mocks match on service + method only;
+  Kafka mocks match on topic name only. None of them compare the request body against the WITH file.
+
+  After this change:
+  - EXPECT HTTP:METHOD /path WITH {{file}} will verify the outbound HTTP request body matches the file.
+  - EXPECT GRPC:Service/Method WITH {{file}} will verify the outbound gRPC request body matches the file.
+  - EXPECT EVENT:topic WITH {{file}} will verify the Kafka Produce message value matches the file.
+
+  The WITH file acts as a discriminator: if multiple mocks share the same URL/service/topic, the one
+  whose WITH file matches the actual request body is selected. Mocks without a WITH file continue to
+  match any request body (existing behavior preserved).
+
+  Comparison uses deep JSON subset matching: all fields in the expected payload must be present in
+  the actual body with matching values; extra fields in the actual are ignored.
+constraints:
+  - Body comparison must be opt-in via WITH file presence; omitting WITH preserves existing match-any behavior.
+  - Comparison is deep JSON subset where expected is a subset of actual. Non-JSON request bodies are not
+    supported in this iteration.
+  - Body matching must participate in mock disambiguation — a mock with a mismatching WITH body is
+    skipped rather than producing a hard error at the registry level.
+  - A shared CompareJSON utility must be used by all three proxies to avoid logic duplication.
+  - The Kafka interceptor must gain resolver support via SetResolver so WITH files can use ${VAR}
+    substitution, consistent with HTTP and gRPC interceptors.
+  - All existing proxy tests must continue to pass unmodified.
+  - The cmd/linespec/main_beta.go Kafka wiring must call SetResolver so variable substitution works
+    in production.
+affected_scope:
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/grpc/interceptor.go
+  - pkg/proxy/kafka/interceptor.go
+  - pkg/registry/registry.go
+  - pkg/verify/
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
