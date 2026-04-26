@@ -48,7 +48,97 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/catalog-linespecs/create_product_success.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/get_product_not_found.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/get_product_success.linespec
+    type: linespec
+  - path: examples/catalog-linespecs/list_products_success.linespec
+    type: linespec
+  - path: examples/multi-db-linespecs/create_order_success.linespec
+    type: linespec
+  - path: examples/multi-db-linespecs/create_order_success_missing_expect_test.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_not_found.linespec
+    type: linespec
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_cache_hit.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_semantic.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_success.linespec
+    type: linespec
+  - path: examples/notification-linespecs/list_notifications_unauthenticated.linespec
+    type: linespec
+  - path: examples/notification-linespecs/process_todo_created_event.linespec
+    type: linespec
+  - path: examples/order-linespecs/create_order_success.linespec
+    type: linespec
+  - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+    type: linespec
+  - path: examples/temporal-linespecs/signal_workflow_success.linespec
+    type: linespec
+  - path: examples/temporal-linespecs/signal_workflow_with_response.linespec
+    type: linespec
+  - path: examples/temporal-linespecs/start_workflow_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+    type: linespec
+  - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+    type: linespec
+  - path: examples/todo-linespecs/delete_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_semantic.linespec
+    type: linespec
+  - path: examples/todo-linespecs/get_todo_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/list_todos_success.linespec
+    type: linespec
+  - path: examples/todo-linespecs/update_todo_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/authenticate_user_invalid_token.linespec
+    type: linespec
+  - path: examples/user-linespecs/authenticate_user_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/create_user_already_exists.linespec
+    type: linespec
+  - path: examples/user-linespecs/create_user_semantic.linespec
+    type: linespec
+  - path: examples/user-linespecs/create_user_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/delete_user_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/get_user_not_found.linespec
+    type: linespec
+  - path: examples/user-linespecs/get_user_semantic.linespec
+    type: linespec
+  - path: examples/user-linespecs/get_user_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/get_user_with_pattern_token.linespec
+    type: linespec
+  - path: examples/user-linespecs/get_user_with_vars.linespec
+    type: linespec
+  - path: examples/user-linespecs/login_success.linespec
+    type: linespec
+  - path: examples/user-linespecs/update_user_semantic.linespec
+    type: linespec
+  - path: examples/user-linespecs/update_user_success.linespec
+    type: linespec
+  - path: pkg/registry/registry_test.go
+    type: go_test
+  - path: pkg/verify/verify_test.go
+    type: go_test
+  - path: pkg/verify/verify_http_test.go
+    type: go_test
+  - path: pkg/verify/verify_grpc_test.go
+    type: go_test
+  - path: pkg/verify/verify_kafka_test.go
+    type: go_test
 associated_traces: []
 monitors: []
 tags: []
