@@ -1,0 +1,33 @@
+id: prov-2026-623ee9b6
+title: v3.0.1 release preparation
+status: open
+created_at: "2026-04-26"
+author: calebcowen@gmail.com
+intent: >
+  Update CHANGELOG.md and version references to publish v3.0.1.
+  Covers the validateAssociatedSpecs brief enforcement bug fix (prov-2026-7b402f2f).
+constraints:
+  - CHANGELOG.md must have a [3.0.1] entry dated 2026-04-26
+  - VERSION file must read 3.0.1
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7b402f2f
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: document
+associated_traces: []
+monitors: []
+tags: []

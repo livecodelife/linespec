@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-04-26
+
+### Fixed
+
+- **`associated_specs` enforcement incorrectly fires on open `brief` records** ([prov-2026-7b402f2f](./provenance/prov-2026-7b402f2f.yml)) — The `validateAssociatedSpecs` enforcement block (strict/warn/none) now skips `brief` records entirely. Brief records are structurally forbidden from carrying `associated_specs`, so the enforcement check previously always fired on open briefs with no valid resolution path.
+
 ## [3.0.0] - 2026-04-24
 
 ### Added
