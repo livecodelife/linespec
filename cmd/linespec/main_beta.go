@@ -468,6 +468,7 @@ func runProxy() {
 		if kafkaHost != "" {
 			p.SetHost(kafkaHost)
 		}
+		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "grpc":
 		p := grpcproxy.NewInterceptor(addr, upstream, reg)
