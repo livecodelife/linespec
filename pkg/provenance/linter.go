@@ -707,6 +707,16 @@ func (l *Linter) validateAssociatedSpecs(record *Record, result *LintResult) {
 	hasSpecs := len(record.AssociatedSpecs) > 0
 	isOpen := record.Status == StatusOpen
 
+	// Brief records cannot carry associated_specs (enforced by validateNotApplicableFields),
+	// so the enforcement check would always fire on open briefs with no valid resolution.
+	effectiveType := record.Type
+	if effectiveType == "" {
+		effectiveType = RecordTypeBlueprint
+	}
+	if effectiveType == RecordTypeBrief {
+		return
+	}
+
 	if isOpen && !hasSpecs {
 		switch l.Enforcement {
 		case "strict":
