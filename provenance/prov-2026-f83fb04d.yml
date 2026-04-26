@@ -1,0 +1,24 @@
+id: prov-2026-f83fb04d
+title: Add body-matcher variants of FindHTTPMock, FindGRPCMock, and FindKafkaMock to registry
+status: draft
+created_at: "2026-04-26"
+author: noreply@anthropic.com
+intent: Add FindHTTPMockWithBody, FindGRPCMockWithBody, and FindKafkaMockWithBody to the registry.
+  Each accepts a bodyMatch func(withFile, baseDir string) bool callback so the interceptor supplies
+  the comparison logic (loading + CompareJSON) while the registry handles iteration and hit tracking.
+  Mocks whose callback returns false are skipped; mocks with no WithFile always return true from
+  the callback (match-any preserved).
+implements: prov-2026-9e052576
+constraints: []
+affected_scope:
+  - pkg/registry/registry.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
