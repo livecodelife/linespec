@@ -1,0 +1,30 @@
+id: prov-2026-7b402f2f
+title: 'Bug: validateAssociatedSpecs fires enforcement check on brief records'
+status: draft
+created_at: "2026-04-26"
+author: calebcowen@gmail.com
+intent: >
+  The validateAssociatedSpecs function in the linter fires its enforcement-level
+  check (strict/warn/none) against any open record that has no associated_specs.
+  Brief records are structurally forbidden from carrying associated_specs (the
+  validateNotApplicableFields rule emits a warning if they do), which means an
+  open brief will always trigger the "No associated specs" error/warning from
+  the enforcement block — even though adding specs is not a valid resolution.
+  The fix is to skip the enforcement check entirely for brief records.
+constraints:
+  - After the fix, open brief records must not produce any associated_specs lint issues
+  - Non-brief open records must continue to be subject to enforcement-level associated_specs checks
+  - The "associated_specs is not applicable on brief records" warning must still fire if a brief somehow carries specs
+affected_scope:
+  - pkg/provenance/linter.go
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+extends: prov-2026-9ffe68bb
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
