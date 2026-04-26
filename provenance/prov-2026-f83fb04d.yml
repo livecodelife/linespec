@@ -1,6 +1,6 @@
 id: prov-2026-f83fb04d
 title: Add body-matcher variants of FindHTTPMock, FindGRPCMock, and FindKafkaMock to registry
-status: draft
+status: open
 created_at: "2026-04-26"
 author: noreply@anthropic.com
 intent: Add FindHTTPMockWithBody, FindGRPCMockWithBody, and FindKafkaMockWithBody to the registry.
