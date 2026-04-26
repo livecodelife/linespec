@@ -1,6 +1,6 @@
 id: prov-2026-9e052576
 title: Add request body comparison via WITH statements for HTTP, gRPC, and Kafka EXPECT blocks
-status: draft
+status: open
 created_at: "2026-04-26"
 author: noreply@anthropic.com
 intent: |
