@@ -1,6 +1,6 @@
 id: prov-2026-623ee9b6
 title: v3.0.1 release preparation
-status: implemented
+status: superseded
 created_at: "2026-04-26"
 author: calebcowen@gmail.com
 intent: >
@@ -21,7 +21,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 supersedes: ""
-superseded_by: ""
+superseded_by: prov-2026-c70485bb
 related:
   - prov-2026-7b402f2f
 sealed_at_sha: 88615d19ce761fa16d00b2d491e2785f65e9b39d

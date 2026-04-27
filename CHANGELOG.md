@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-04-27
+
+### Added
+
+- **Request body comparison via `WITH` statements** ([prov-2026-9e052576](./provenance/prov-2026-9e052576.yml)) — HTTP, gRPC, and Kafka `EXPECT` blocks now support `WITH {{payload.json}}` to assert the exact request body sent by the service. The proxy intercepts the inbound request, compares it against the mock payload using semantic JSON equality (key order-independent), and fails the test if the bodies do not match. New `CompareJSON` utility in `pkg/verify` handles the comparison with detailed diff output on mismatch.
+
+### Fixed
+
+- **gRPC descriptor load failure is now non-fatal** ([prov-2026-a9d51966](./provenance/prov-2026-a9d51966.yml)) — A missing or unreadable proto descriptor file previously crashed the runner at startup. The error is now logged as a warning and execution continues, allowing tests that do not rely on gRPC reflection to proceed normally.
+
+- **Kafka resolver wiring in stable build** ([prov-2026-7c084083](./provenance/prov-2026-7c084083.yml)) — The Kafka mock resolver was not wired into the stable binary. Kafka `EXPECT` blocks now resolve correctly in both stable and beta builds. Dynamic timestamps removed from Kafka event payloads in example tests to prevent spurious match failures.
+
+### Related Provenance Records
+
+- [prov-2026-9e052576](./provenance/prov-2026-9e052576.yml) - Add request body comparison via WITH statements
+- [prov-2026-a9d51966](./provenance/prov-2026-a9d51966.yml) - Fix gRPC descriptor load failure to be non-fatal
+- [prov-2026-7c084083](./provenance/prov-2026-7c084083.yml) - Fix stable Kafka resolver wiring
+
 ## [3.0.1] - 2026-04-26
 
 ### Fixed
