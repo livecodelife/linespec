@@ -1,0 +1,26 @@
+id: prov-2026-378fc53b
+title: Add -s -w -trimpath build flags to Makefile
+status: open
+created_at: "2026-04-27"
+author: calebcowen@gmail.com
+intent: |
+  Add -ldflags="-s -w" and -trimpath to the go build and go install invocations
+  in the Makefile. Strips debug symbols and local filesystem paths from the
+  binary, reducing size by ~29% with no runtime impact.
+constraints: []
+affected_scope:
+  - Makefile
+forbidden_scope: []
+type: imprint
+implements: prov-2026-e0762917
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: Makefile
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
