@@ -1,6 +1,6 @@
 id: prov-2026-29521f73
 title: v3.1.1 release preparation
-status: open
+status: implemented
 created_at: "2026-04-27"
 author: calebcowen@gmail.com
 intent: >
@@ -25,7 +25,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 7d5d827f5f7f9b35a6d1d2f6909829796de25d36
 associated_specs:
   - path: CHANGELOG.md
     type: document
