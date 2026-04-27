@@ -1,0 +1,34 @@
+id: prov-2026-a9d51966
+title: Fix gRPC descriptor load failure to be non-fatal in stable and beta
+status: open
+created_at: "2026-04-27"
+author: noreply@anthropic.com
+intent: |
+  The gRPC proxy in both stable and beta binaries called os.Exit(1) when the descriptor set file
+  failed to load. This caused the proxy container to crash when the grpc_descriptor_set path in
+  .linespec.yml resolved to a non-existent file (e.g., temporal-linespecs where the path was
+  relative to the wrong base directory). Services using application/grpc+json mode do not need the
+  descriptor set for JSON-to-protobuf conversion, so the crash was unnecessary.
+
+  Changed to log a warning and continue without protobuf decoding support when the descriptor set
+  cannot be loaded, allowing grpc+json services to work correctly.
+constraints:
+  - Must still log an error-level message when descriptor load fails
+  - Must only skip SetDescriptor call when load fails; otherwise behavior is unchanged
+  - Protobuf decoding remains available when descriptor loads successfully
+implements: prov-2026-9e052576
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - examples/catalog-service/go.mod
+  - examples/todo-api/Gemfile.lock
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
