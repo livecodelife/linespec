@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -106,7 +107,25 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	i.registry.CheckNegativeGRPCMocks(service, method)
 
-	mock, found := i.registry.FindGRPCMock(service, method)
+	bodyMatcher := func(withFile, baseDir string) bool {
+		if withFile == "" {
+			return true
+		}
+		loader := dsl.NewPayloadLoaderWithResolver(baseDir, i.resolver)
+		expected, err := loader.Load(withFile)
+		if err != nil {
+			logger.Debug("WITH body match: failed to load %s: %v", withFile, err)
+			return false
+		}
+		var actual interface{}
+		if jsonErr := json.Unmarshal([]byte(requestBody), &actual); jsonErr != nil {
+			logger.Debug("WITH body match: failed to parse gRPC request body as JSON: %v", jsonErr)
+			return false
+		}
+		return verify.CompareJSON(expected, actual) == nil
+	}
+
+	mock, found := i.registry.FindGRPCMockWithBody(service, method, bodyMatcher)
 	if !found {
 		if i.upstream != "" {
 			i.forwardToUpstream(w, r, bodyBytes, service, method)

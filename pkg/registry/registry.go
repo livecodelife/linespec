@@ -783,6 +783,72 @@ func (r *MockRegistry) FindHTTPMockWithHeaders(url string, method string, header
 	return nil, false
 }
 
+// FindHTTPMockWithBody finds an HTTP mock matching URL, method, headers, and optionally
+// the request body. bodyMatch is called for each candidate; it receives the mock's
+// WithFile path and BaseDir and returns true if the body matches (or if no body
+// constraint should be applied). Mocks with an empty WithFile always satisfy the check.
+func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[string]string, bodyMatch func(withFile, baseDir string) bool) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	mocks, ok := r.mocks[url]
+	if !ok {
+		return nil, false
+	}
+
+	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
+			if len(mock.Headers) > 0 && !r.matchHeaders(mock.Headers, headers) {
+				continue
+			}
+			if !bodyMatch(mock.WithFile, mock.BaseDir) {
+				continue
+			}
+			r.hits[mock]++
+			return mock, true
+		}
+	}
+
+	return nil, false
+}
+
+// FindKafkaMockWithBody finds a Kafka mock for the given topic, also filtering by
+// the message body when the mock declares a WithFile. bodyMatch follows the same
+// contract as in FindHTTPMockWithBody.
+func (r *MockRegistry) FindKafkaMockWithBody(topic string, bodyMatch func(withFile, baseDir string) bool) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	mocks, ok := r.mocks[topic]
+	if !ok {
+		return nil, false
+	}
+
+	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.Event {
+			if !bodyMatch(mock.WithFile, mock.BaseDir) {
+				continue
+			}
+			r.hits[mock]++
+			return mock, true
+		}
+	}
+
+	return nil, false
+}
+
 // matchHeaders checks if all expected headers are present in the request
 func (r *MockRegistry) matchHeaders(expected, actual map[string]string) bool {
 	for k, v := range expected {
@@ -932,6 +998,37 @@ func (r *MockRegistry) FindGRPCMock(service, method string) (*types.ExpectStatem
 			continue
 		}
 		if mock.Channel == types.GRPC {
+			r.hits[mock]++
+			return mock, true
+		}
+	}
+	return nil, false
+}
+
+// FindGRPCMockWithBody finds a gRPC mock matching the service and method, also
+// filtering by the request body when the mock declares a WithFile. bodyMatch
+// follows the same contract as in FindHTTPMockWithBody.
+func (r *MockRegistry) FindGRPCMockWithBody(service, method string, bodyMatch func(withFile, baseDir string) bool) (*types.ExpectStatement, bool) {
+	r.Lock()
+	defer r.Unlock()
+
+	key := service + "/" + method
+	mocks, ok := r.mocks[key]
+	if !ok {
+		return nil, false
+	}
+
+	for _, mock := range mocks {
+		if mock.Negative {
+			continue
+		}
+		if r.hits[mock] > 0 {
+			continue
+		}
+		if mock.Channel == types.GRPC {
+			if !bodyMatch(mock.WithFile, mock.BaseDir) {
+				continue
+			}
 			r.hits[mock]++
 			return mock, true
 		}

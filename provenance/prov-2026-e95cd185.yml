@@ -1,0 +1,21 @@
+id: prov-2026-e95cd185
+title: Add CompareJSON utility to pkg/verify for deep JSON subset comparison
+status: implemented
+created_at: "2026-04-26"
+author: noreply@anthropic.com
+intent: Add a shared CompareJSON(expected, actual interface{}) error function to pkg/verify so all
+  three proxy interceptors can do deep JSON subset comparison without duplicating logic.
+implements: prov-2026-9e052576
+constraints: []
+affected_scope:
+  - pkg/verify/
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 4df5a74815df53c99f467003178314699abaceab
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

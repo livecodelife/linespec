@@ -20,6 +20,7 @@ type Interceptor struct {
 	addr     string
 	registry *registry.MockRegistry
 	loader   *dsl.PayloadLoader
+	resolver *interpolate.Resolver
 }
 
 func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
@@ -33,6 +34,7 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 // SetResolver wires an interpolate.Resolver into the payload loader so that
 // ${VAR} tokens in RETURNS payload files are resolved at runtime.
 func (i *Interceptor) SetResolver(resolver *interpolate.Resolver) {
+	i.resolver = resolver
 	i.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
 }
 
@@ -95,10 +97,12 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	for _, key := range keys {
 		i.registry.CheckNegativeHTTPMocks(key, method)
 	}
+	bodyMatcher := makeBodyMatcher(body, i.resolver)
+
 	var mock *types.ExpectStatement
 	var found bool
 	for _, key := range keys {
-		mock, found = i.registry.FindHTTPMockWithHeaders(key, method, requestHeaders)
+		mock, found = i.registry.FindHTTPMockWithBody(key, method, requestHeaders, bodyMatcher)
 		if found {
 			break
 		}
@@ -236,6 +240,29 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// makeBodyMatcher returns a registry body-match callback for HTTP requests. When the
+// mock has no WithFile the callback always returns true (match-any). Otherwise it loads
+// the file, parses the actual body as JSON, and delegates to verify.CompareJSON.
+func makeBodyMatcher(actualBody string, resolver *interpolate.Resolver) func(withFile, baseDir string) bool {
+	return func(withFile, baseDir string) bool {
+		if withFile == "" {
+			return true
+		}
+		loader := dsl.NewPayloadLoaderWithResolver(baseDir, resolver)
+		expected, err := loader.Load(withFile)
+		if err != nil {
+			logger.Debug("WITH body match: failed to load %s: %v", withFile, err)
+			return false
+		}
+		var actual interface{}
+		if jsonErr := json.Unmarshal([]byte(actualBody), &actual); jsonErr != nil {
+			logger.Debug("WITH body match: failed to parse request body as JSON: %v", jsonErr)
+			return false
+		}
+		return verify.CompareJSON(expected, actual) == nil
+	}
 }
 
 // Note: Rails-specific auth extraction has been removed.

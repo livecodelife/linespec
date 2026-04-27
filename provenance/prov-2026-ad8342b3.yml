@@ -1,0 +1,25 @@
+id: prov-2026-ad8342b3
+title: Gitignore environment-specific build artifacts from example services
+status: implemented
+created_at: "2026-04-27"
+author: noreply@anthropic.com
+intent: |
+  During local testing of example services, environment-specific build artifacts are generated
+  that should not be tracked in git: compiled service binaries, Ruby vendor/bundle directories,
+  .bundle config, mariadb dev headers, Anthropic CA certs, and Dockerfile.linespec files used
+  as Docker build context. These are local-only artifacts not needed in the repo.
+constraints:
+  - Only add gitignore patterns; do not delete any existing patterns
+implements: prov-2026-9e052576
+affected_scope:
+  - .gitignore
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 4376000e9c2f3af3fbffd137bfa17a1ccc2866b2
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

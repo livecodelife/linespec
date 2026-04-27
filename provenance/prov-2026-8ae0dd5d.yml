@@ -1,0 +1,25 @@
+id: prov-2026-8ae0dd5d
+title: Rebuild linespec-beta binary and add catalog-service go.sum
+status: implemented
+created_at: "2026-04-27"
+author: noreply@anthropic.com
+intent: |
+  Rebuild the linespec-beta binary to include all changes from this feature branch (body comparison
+  via WITH statements for HTTP/gRPC/Kafka, and non-fatal gRPC descriptor load). Also add
+  examples/catalog-service/go.sum which was generated when go.mod was updated with indirect deps.
+constraints:
+  - Binary must be built with -tags beta flag and CGO_ENABLED=0 for the correct feature set
+implements: prov-2026-9e052576
+affected_scope:
+  - linespec-beta
+  - examples/catalog-service/go.sum
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: e9982924730a9028b87b2c297b8ef6fc9fcdc50c
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

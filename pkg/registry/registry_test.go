@@ -910,3 +910,117 @@ func TestSemanticRegistry_ExactTableSetRequired(t *testing.T) {
 		t.Error("Multi-table query should not match single-table ACCESSING_TABLES mock")
 	}
 }
+
+// alwaysMatch is a bodyMatch callback that always returns true (no WITH file constraint).
+func alwaysMatch(_, _ string) bool { return true }
+
+// neverMatch is a bodyMatch callback that always returns false (body never matches).
+func neverMatch(_, _ string) bool { return false }
+
+func TestFindHTTPMockWithBody_NoWithFile(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.HTTP, URL: "/api/users", Method: "POST"},
+		},
+	})
+
+	// Mock has no WithFile — alwaysMatch and neverMatch both should find it
+	mock, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, alwaysMatch)
+	if !found || mock == nil {
+		t.Fatal("expected to find mock when no WithFile constraint")
+	}
+}
+
+func TestFindHTTPMockWithBody_BodyMatchSkipsNonMatching(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.HTTP, URL: "/api/users", Method: "POST", WithFile: "body.json"},
+		},
+	})
+
+	_, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, neverMatch)
+	if found {
+		t.Fatal("expected no match when bodyMatch returns false")
+	}
+}
+
+func TestFindHTTPMockWithBody_DisambiguatesByBody(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.HTTP, URL: "/api/users", Method: "POST", WithFile: "alice.json", ReturnsFile: "alice_resp.json"},
+			{Channel: types.HTTP, URL: "/api/users", Method: "POST", WithFile: "bob.json", ReturnsFile: "bob_resp.json"},
+		},
+	})
+
+	// Simulate: first call matches "alice.json" body, second matches "bob.json" body
+	aliceMatcher := func(withFile, _ string) bool { return withFile == "alice.json" }
+	bobMatcher := func(withFile, _ string) bool { return withFile == "bob.json" }
+
+	m1, found1 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, aliceMatcher)
+	if !found1 || m1.ReturnsFile != "alice_resp.json" {
+		t.Fatalf("expected alice mock, got %v", m1)
+	}
+	m2, found2 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, bobMatcher)
+	if !found2 || m2.ReturnsFile != "bob_resp.json" {
+		t.Fatalf("expected bob mock, got %v", m2)
+	}
+}
+
+func TestFindKafkaMockWithBody_NoWithFile(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.Event, Topic: "orders"},
+		},
+	})
+
+	mock, found := reg.FindKafkaMockWithBody("orders", alwaysMatch)
+	if !found || mock == nil {
+		t.Fatal("expected to find Kafka mock with no WithFile")
+	}
+}
+
+func TestFindKafkaMockWithBody_BodyMatchSkipsNonMatching(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.Event, Topic: "orders", WithFile: "order.json"},
+		},
+	})
+
+	_, found := reg.FindKafkaMockWithBody("orders", neverMatch)
+	if found {
+		t.Fatal("expected no match when bodyMatch returns false")
+	}
+}
+
+func TestFindGRPCMockWithBody_NoWithFile(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.GRPC, Service: "UserService", RPCMethod: "GetUser"},
+		},
+	})
+
+	mock, found := reg.FindGRPCMockWithBody("UserService", "GetUser", alwaysMatch)
+	if !found || mock == nil {
+		t.Fatal("expected to find gRPC mock with no WithFile")
+	}
+}
+
+func TestFindGRPCMockWithBody_BodyMatchSkipsNonMatching(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.GRPC, Service: "UserService", RPCMethod: "GetUser", WithFile: "req.json"},
+		},
+	})
+
+	_, found := reg.FindGRPCMockWithBody("UserService", "GetUser", neverMatch)
+	if found {
+		t.Fatal("expected no match when bodyMatch returns false")
+	}
+}
