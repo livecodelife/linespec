@@ -59,19 +59,19 @@ clean:
 
 # Build linespec (Provenance Records + LineSpec Testing)
 build:
-	go build -o linespec ./cmd/linespec
+	go build -ldflags="-s -w" -trimpath -o linespec ./cmd/linespec
 
 # Build linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 build-beta:
-	go build -o linespec-beta ./cmd/linespec
+	go build -ldflags="-s -w" -trimpath -o linespec-beta ./cmd/linespec
 
 # Install linespec
 install:
-	go install ./cmd/linespec
+	go install -ldflags="-s -w" -trimpath ./cmd/linespec
 
 # Install linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 install-beta:
-	go install ./cmd/linespec
+	go install -ldflags="-s -w" -trimpath ./cmd/linespec
 
 # Bump version across all docs and the doc site
 # Usage: make bump-version NEW=2.1.0
