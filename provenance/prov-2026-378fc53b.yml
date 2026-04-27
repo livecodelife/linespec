@@ -1,6 +1,6 @@
 id: prov-2026-378fc53b
 title: Add -s -w -trimpath build flags to Makefile
-status: open
+status: implemented
 created_at: "2026-04-27"
 author: calebcowen@gmail.com
 intent: |
@@ -16,7 +16,7 @@ implements: prov-2026-e0762917
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ff42aee4f36a10adbecda31b3852c9f5f07d366b
 associated_specs:
   - type: code
     path: Makefile
