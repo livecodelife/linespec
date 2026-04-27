@@ -107,6 +107,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	i.registry.CheckNegativeGRPCMocks(service, method)
 
+	contentType := r.Header.Get("Content-Type")
 	bodyMatcher := func(withFile, baseDir string) bool {
 		if withFile == "" {
 			return true
@@ -117,8 +118,21 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 			logger.Debug("WITH body match: failed to load %s: %v", withFile, err)
 			return false
 		}
+		bodyJSON := requestBody
+		if !strings.Contains(contentType, "+json") {
+			if i.descriptor == nil {
+				logger.Debug("WITH body match: binary protobuf requires a descriptor; set grpc_descriptor_set in .linespec.yml")
+				return false
+			}
+			decoded, decodeErr := i.descriptor.ProtobufToJSON(service, method, []byte(requestBody))
+			if decodeErr != nil {
+				logger.Debug("WITH body match: failed to decode binary protobuf: %v", decodeErr)
+				return false
+			}
+			bodyJSON = string(decoded)
+		}
 		var actual interface{}
-		if jsonErr := json.Unmarshal([]byte(requestBody), &actual); jsonErr != nil {
+		if jsonErr := json.Unmarshal([]byte(bodyJSON), &actual); jsonErr != nil {
 			logger.Debug("WITH body match: failed to parse gRPC request body as JSON: %v", jsonErr)
 			return false
 		}

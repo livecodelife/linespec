@@ -66,6 +66,37 @@ func (d *DescriptorResolver) JSONToProtobuf(service, method string, jsonData []b
 	return proto.Marshal(msg)
 }
 
+func (d *DescriptorResolver) ProtobufToJSON(service, method string, protoData []byte) ([]byte, error) {
+	if d == nil || d.files == nil {
+		return nil, fmt.Errorf("no descriptor loaded")
+	}
+
+	desc, err := d.files.FindDescriptorByName(protoreflect.FullName(service))
+	if err != nil {
+		return nil, fmt.Errorf("service %s not found in descriptor: %w", service, err)
+	}
+
+	svcDesc, ok := desc.(protoreflect.ServiceDescriptor)
+	if !ok {
+		return nil, fmt.Errorf("%s is not a service", service)
+	}
+
+	methodDesc := svcDesc.Methods().ByName(protoreflect.Name(method))
+	if methodDesc == nil {
+		return nil, fmt.Errorf("method %s not found in service %s", method, service)
+	}
+
+	inputDesc := methodDesc.Input()
+	msg := dynamicpb.NewMessage(inputDesc)
+
+	if err := proto.Unmarshal(protoData, msg); err != nil {
+		return nil, fmt.Errorf("proto unmarshal failed: %w", err)
+	}
+
+	opts := protojson.MarshalOptions{UseProtoNames: true}
+	return opts.Marshal(msg)
+}
+
 func (d *DescriptorResolver) HasDescriptor(service, method string) bool {
 	if d == nil || d.files == nil {
 		return false

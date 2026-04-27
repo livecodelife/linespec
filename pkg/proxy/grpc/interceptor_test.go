@@ -8,10 +8,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/livecodelife/linespec/pkg/registry"
 	"github.com/livecodelife/linespec/pkg/types"
@@ -607,5 +612,201 @@ func TestInterceptor_ErrorResponse_UsesTrailerHeaders(t *testing.T) {
 
 	if resp.Header.Get("Content-Type") != "application/grpc+json" {
 		t.Errorf("Expected Content-Type application/grpc+json, got %s", resp.Header.Get("Content-Type"))
+	}
+}
+
+func makeBinaryGetUserRequest(t *testing.T, userID string) []byte {
+	t.Helper()
+	path := filepath.Join("testdata", "test.pb")
+	resolver, err := LoadDescriptorSet(path)
+	if err != nil {
+		t.Fatalf("LoadDescriptorSet failed: %v", err)
+	}
+	desc, err := resolver.files.FindDescriptorByName("test.v1.TestService")
+	if err != nil {
+		t.Fatalf("FindDescriptorByName failed: %v", err)
+	}
+	svcDesc := desc.(protoreflect.ServiceDescriptor)
+	method := svcDesc.Methods().ByName("GetUser")
+	msg := dynamicpb.NewMessage(method.Input())
+	msg.Set(method.Input().Fields().ByName("user_id"), protoreflect.ValueOfString(userID))
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("proto.Marshal failed: %v", err)
+	}
+	return data
+}
+
+func TestInterceptor_BinaryProtobuf_WithBodyMatch_Matches(t *testing.T) {
+	tmpDir := t.TempDir()
+	// UseProtoNames: true preserves snake_case field names
+	if err := os.WriteFile(filepath.Join(tmpDir, "expected.json"), []byte(`{"user_id": "test-42"}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name:    "test-binary-with",
+		BaseDir: tmpDir,
+		Expects: []types.ExpectStatement{
+			{
+				Channel:   types.GRPC,
+				Service:   "test.v1.TestService",
+				RPCMethod: "GetUser",
+				WithFile:  "expected.json",
+				BaseDir:   tmpDir,
+			},
+		},
+	}
+	reg.Register(spec)
+
+	path := filepath.Join("testdata", "test.pb")
+	desc, err := LoadDescriptorSet(path)
+	if err != nil {
+		t.Fatalf("LoadDescriptorSet failed: %v", err)
+	}
+
+	addr := "127.0.0.1:19886"
+	interceptor := NewInterceptor(addr, "", reg)
+	interceptor.SetDescriptor(desc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = interceptor.Start(ctx) }()
+	time.Sleep(100 * time.Millisecond)
+
+	protoBytes := makeBinaryGetUserRequest(t, "test-42")
+	reqBody := encodeGRPCFrame(protoBytes)
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+
+	if resp.Trailer.Get("Grpc-Status") != "0" {
+		t.Errorf("Expected grpc-status 0 (mock matched), got %s (message: %s)",
+			resp.Trailer.Get("Grpc-Status"), resp.Trailer.Get("Grpc-Message"))
+	}
+}
+
+func TestInterceptor_BinaryProtobuf_WithBodyMatch_Mismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	// WITH file expects a different user_id — should not match
+	if err := os.WriteFile(filepath.Join(tmpDir, "expected.json"), []byte(`{"user_id": "other-user"}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name:    "test-binary-with-mismatch",
+		BaseDir: tmpDir,
+		Expects: []types.ExpectStatement{
+			{
+				Channel:   types.GRPC,
+				Service:   "test.v1.TestService",
+				RPCMethod: "GetUser",
+				WithFile:  "expected.json",
+				BaseDir:   tmpDir,
+			},
+		},
+	}
+	reg.Register(spec)
+
+	path := filepath.Join("testdata", "test.pb")
+	desc, err := LoadDescriptorSet(path)
+	if err != nil {
+		t.Fatalf("LoadDescriptorSet failed: %v", err)
+	}
+
+	addr := "127.0.0.1:19887"
+	interceptor := NewInterceptor(addr, "", reg)
+	interceptor.SetDescriptor(desc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = interceptor.Start(ctx) }()
+	time.Sleep(100 * time.Millisecond)
+
+	// Send user_id="test-42" but WITH file expects "other-user" → no match
+	protoBytes := makeBinaryGetUserRequest(t, "test-42")
+	reqBody := encodeGRPCFrame(protoBytes)
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+
+	// Mock should not match; expect UNIMPLEMENTED (12)
+	if resp.Trailer.Get("Grpc-Status") != "12" {
+		t.Errorf("Expected grpc-status 12 (no mock matched), got %s", resp.Trailer.Get("Grpc-Status"))
+	}
+}
+
+func TestInterceptor_BinaryProtobuf_WithBodyMatch_NoDescriptor(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "expected.json"), []byte(`{"user_id": "test-42"}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	reg := registry.NewMockRegistry()
+	spec := &types.TestSpec{
+		Name:    "test-binary-no-descriptor",
+		BaseDir: tmpDir,
+		Expects: []types.ExpectStatement{
+			{
+				Channel:   types.GRPC,
+				Service:   "test.v1.TestService",
+				RPCMethod: "GetUser",
+				WithFile:  "expected.json",
+				BaseDir:   tmpDir,
+			},
+		},
+	}
+	reg.Register(spec)
+
+	addr := "127.0.0.1:19888"
+	// Intentionally no descriptor set
+	interceptor := NewInterceptor(addr, "", reg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = interceptor.Start(ctx) }()
+	time.Sleep(100 * time.Millisecond)
+
+	protoBytes := makeBinaryGetUserRequest(t, "test-42")
+	reqBody := encodeGRPCFrame(protoBytes)
+	req, err := http.NewRequest("POST", "http://"+addr+"/test.v1.TestService/GetUser", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := newH2CClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Skipf("Skipping h2c test: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+
+	// No descriptor → bodyMatcher logs diagnostic and returns false → no mock matched
+	if resp.Trailer.Get("Grpc-Status") != "12" {
+		t.Errorf("Expected grpc-status 12 (no descriptor → no match), got %s", resp.Trailer.Get("Grpc-Status"))
 	}
 }

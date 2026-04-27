@@ -38,6 +38,13 @@ constraints:
 affected_scope:
   - pkg/proxy/grpc/interceptor.go
   - pkg/proxy/grpc/descriptor.go
+  - pkg/proxy/grpc/interceptor_test.go
+  - pkg/proxy/grpc/descriptor_test.go
+  - examples/temporal-service/app/main.py
+  - examples/temporal-service/app/workflow_pb2.py
+  - examples/temporal-service/requirements.txt
+  - examples/temporal-linespecs/.linespec.yml
+  - examples/temporal-linespecs/start_workflow_binary_grpc_body_matching.linespec
 forbidden_scope: []
 type: bug
 extends: prov-2026-9e052576
