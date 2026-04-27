@@ -1,6 +1,6 @@
 id: prov-2026-ad8342b3
 title: Gitignore environment-specific build artifacts from example services
-status: open
+status: implemented
 created_at: "2026-04-27"
 author: noreply@anthropic.com
 intent: |
@@ -18,7 +18,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4376000e9c2f3af3fbffd137bfa17a1ccc2866b2
 associated_specs: []
 associated_traces: []
 monitors: []
