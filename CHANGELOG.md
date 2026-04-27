@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-04-27
+
+### Fixed
+
+- **gRPC WITH body matching for binary protobuf requests** ([prov-2026-ad235109](./provenance/prov-2026-ad235109.yml)) — `EXPECT GRPC:Service/Method WITH {{file}}` was silently failing for services that use standard binary protobuf encoding (`Content-Type: application/grpc`). The interceptor now decodes the protobuf request body to JSON using the registered descriptor before running `CompareJSON`. If no descriptor is registered and the request is binary protobuf, a clear diagnostic error is surfaced instead of a silent false match.
+
+### Internal
+
+- **Reduced binary size ~29%** ([prov-2026-e0762917](./provenance/prov-2026-e0762917.yml)) — Added `-ldflags="-s -w"` and `-trimpath` to all `go build` and `go install` targets. Strips debug symbols and local filesystem paths from distributed binaries with no impact on runtime behavior.
+
+### Related Provenance Records
+
+- [prov-2026-ad235109](./provenance/prov-2026-ad235109.yml) - Fix gRPC WITH body matching for binary protobuf requests
+- [prov-2026-e0762917](./provenance/prov-2026-e0762917.yml) - Add build optimization flags to reduce binary size
+
 ## [3.1.0] - 2026-04-27
 
 ### Added
