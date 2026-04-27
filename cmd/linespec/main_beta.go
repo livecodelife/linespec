@@ -476,11 +476,11 @@ func runProxy() {
 		if grpcDescriptorSet != "" {
 			desc, err := grpcproxy.LoadDescriptorSet(grpcDescriptorSet)
 			if err != nil {
-				logger.Error("Failed to load gRPC descriptor set: %v", err)
-				os.Exit(1)
+				logger.Error("Warning: failed to load gRPC descriptor set (protobuf decoding unavailable): %v", err)
+			} else {
+				p.SetDescriptor(desc)
+				logger.Debug("Loaded gRPC descriptor set from %s", grpcDescriptorSet)
 			}
-			p.SetDescriptor(desc)
-			logger.Debug("Loaded gRPC descriptor set from %s", grpcDescriptorSet)
 		}
 		proxyErr = p.Start(ctx)
 	case "redis":
