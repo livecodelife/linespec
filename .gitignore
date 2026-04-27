@@ -58,3 +58,12 @@ linespec-report/
 
 examples/order-service/target/**
 examples/order-service/Cargo.lock
+
+# Example service build artifacts (local testing only)
+examples/catalog-service/catalog-service
+examples/multi-db-service/order-events-service
+examples/*/vendor/bundle/
+examples/*/.bundle/
+examples/*/mariadb-dev/
+examples/*/anthropic-ca.pem
+examples/*/Dockerfile.linespec
