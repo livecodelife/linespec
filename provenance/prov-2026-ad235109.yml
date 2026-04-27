@@ -1,6 +1,6 @@
 id: prov-2026-ad235109
 title: gRPC WITH body matching silently fails for binary protobuf requests
-status: draft
+status: open
 created_at: "2026-04-27"
 author: calebcowen@gmail.com
 intent: |
@@ -45,7 +45,15 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/temporal-linespecs/start_workflow_binary_grpc_body_matching.linespec
+    type: linespec
+  - path: pkg/proxy/grpc/interceptor_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/proxy/grpc/descriptor_test.go
+    type: go_test
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
