@@ -1,6 +1,6 @@
 id: prov-2026-8ae0dd5d
 title: Rebuild linespec-beta binary and add catalog-service go.sum
-status: open
+status: implemented
 created_at: "2026-04-27"
 author: noreply@anthropic.com
 intent: |
@@ -18,7 +18,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e9982924730a9028b87b2c297b8ef6fc9fcdc50c
 associated_specs: []
 associated_traces: []
 monitors: []
