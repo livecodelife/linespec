@@ -1,6 +1,6 @@
 id: prov-2026-a9d51966
 title: Fix gRPC descriptor load failure to be non-fatal in stable and beta
-status: open
+status: implemented
 created_at: "2026-04-27"
 author: noreply@anthropic.com
 intent: |
@@ -27,7 +27,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c7df9d7229faa30911fb8cc042d54cd63a94e045
 associated_specs: []
 associated_traces: []
 monitors: []
