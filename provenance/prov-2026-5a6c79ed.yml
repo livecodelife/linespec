@@ -23,6 +23,9 @@ associated_specs:
   - path: pkg/phoenix/evidence.go
     type: code
     run_command: make test
+  - path: pkg/phoenix/evidence_test.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
