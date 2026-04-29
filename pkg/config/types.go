@@ -284,7 +284,8 @@ type LineSpecConfig struct {
 	ContainerNaming     *ContainerNaming    `yaml:"container_naming,omitempty"`
 	PortConfig          *PortConfig         `yaml:"ports,omitempty"`
 	SchemaDiscovery     *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
-	Payload             *PayloadConfig      `yaml:"payload,omitempty"`
+	Payload             *PayloadConfig         `yaml:"payload,omitempty"`
+	Phoenix             *PhoenixConfig         `yaml:"phoenix,omitempty"`
 	TestTimeoutSeconds  int                 `yaml:"timeout_seconds,omitempty"`
 	StrictPassthrough   bool                `yaml:"strict_passthrough,omitempty"`
 	GRPCDescriptorSet   string              `yaml:"grpc_descriptor_set,omitempty"`
@@ -320,6 +321,18 @@ type ProvenanceConfig struct {
 	AutoAffectedScope            bool               `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
 	RunAssociatedSpecsOnComplete bool               `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
 	Embedding                    *EmbeddingConfig   `yaml:"embedding,omitempty"`              // embedding API configuration
+}
+
+// PhoenixIUMapping maps a Phoenix IU ID to a .linespec test file path.
+type PhoenixIUMapping struct {
+	IUID string `yaml:"iu_id"`
+	Spec string `yaml:"spec"`
+}
+
+// PhoenixConfig enables LineSpec to emit evidence into a Phoenix VCS store.
+type PhoenixConfig struct {
+	Root       string             `yaml:"root"`        // path to the Phoenix project root (where .phoenix/ lives)
+	IUMappings []PhoenixIUMapping `yaml:"iu_mappings"` // explicit IU-to-spec bindings
 }
 
 // DependencyConfig defines external service dependencies

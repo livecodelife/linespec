@@ -1,0 +1,24 @@
+id: prov-2026-f4e04e04
+title: Add PhoenixConfig to .linespec.yml config schema
+type: imprint
+status: open
+created_at: "2026-04-29"
+author: calebcowen@gmail.com
+implements: prov-2026-bf080d28
+intent: |
+  Extend LineSpecConfig with an optional `phoenix` top-level section that
+  holds the Phoenix root path and the developer-authored IU-to-spec mapping.
+  Absent config means no evidence emission — no behaviour change for existing
+  users.
+constraints:
+  - All new fields are optional (pointer or omitempty). Existing .linespec.yml files with no phoenix section must continue to work unchanged.
+affected_scope:
+  - pkg/config/types.go
+forbidden_scope: []
+associated_specs:
+  - path: pkg/config/types.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
