@@ -1,6 +1,7 @@
 id: prov-2026-bf080d28
 title: 'LineSpec-Phoenix evidence integration: emit behavioral test results as Phoenix EvidenceRecords'
-status: draft
+type: blueprint
+status: open
 created_at: "2026-04-29"
 author: calebcowen@gmail.com
 implements: prov-2026-e90eda10
@@ -11,18 +12,16 @@ intent: |
   evidence kind. This lets Phoenix policy evaluation treat passing LineSpec
   suites as behavioral proof for medium- and high-risk IUs.
 
-  The integration has two parts:
+  This blueprint covers the LineSpec side only: a new `pkg/phoenix/` package
+  that locates and writes Phoenix evidence records, plus a `phoenix:` section
+  in .linespec.yml holding the Phoenix root path and the developer-authored
+  IU-to-spec mapping. After `linespec test` runs, if phoenix config is
+  present, evidence records are written automatically for each mapped suite.
 
-  1. LineSpec (this repo): a new `pkg/phoenix/` package that knows how to
-     locate and write Phoenix evidence records, plus a `phoenix:` section in
-     .linespec.yml that holds the Phoenix root path and the developer-authored
-     IU-to-spec mapping. After `linespec test` runs, if phoenix config is
-     present, evidence records are written for each mapped suite.
-
-  2. Phoenix (fork at ../phoenix-linespec): add LINESPEC_BEHAVIORAL_TEST to
-     the EvidenceKind enum and render it in status/inspect output. No changes
-     to the policy engine or evidence store mechanics — the new kind is
-     treated like any other.
+  The contract between the two tools (evidence kind string, record schema, and
+  IU mapping shape) is defined here. Phoenix-side changes (adding the
+  LINESPEC_BEHAVIORAL_TEST enum value and updating display rendering) are
+  tracked in a separate blueprint in the Phoenix repository.
 
   Both tools remain independently usable. Absence of phoenix config in
   .linespec.yml is a no-op. Absence of LineSpec evidence in Phoenix produces
@@ -34,36 +33,33 @@ constraints:
     message, timestamp) — no custom fields, no schema changes to Phoenix's
     store format.
   - >
-    The evidence kind string must be versioned: "linespec_behavioral_test/v1".
-    Any future breaking change to the record payload bumps the version suffix.
+    The evidence kind string is "linespec_behavioral_test/v1". Any future
+    breaking change to the record payload requires a new version suffix and a
+    superseding blueprint.
   - >
     IU-to-spec mapping must be explicitly authored in .linespec.yml under a
     `phoenix.iu_mappings` list. LineSpec must never infer which IU a spec
     covers — missing mappings are silently skipped, not auto-populated.
   - >
-    Phoenix-side changes are limited to: (a) adding LINESPEC_BEHAVIORAL_TEST
-    to the EvidenceKind enum in src/models/evidence.ts, and (b) rendering the
-    kind label in CLI status/inspect output. The policy engine, evidence store,
-    and cascade logic must not be modified.
-  - >
-    If .phoenix/graphs/evidence.json does not exist or the phoenix root is
-    unreachable, LineSpec must log a warning and exit cleanly — it must not
-    fail the test run.
+    If the Phoenix root is absent or .phoenix/graphs/evidence.json cannot be
+    written, LineSpec must log a warning and exit cleanly — it must not fail
+    the test run or change the exit code.
   - >
     The `artifact_hash` field in each emitted EvidenceRecord must be the SHA-1
     of the .linespec file's content at run time, so Phoenix can detect staleness
     when the spec changes.
   - >
-    canon_ids in emitted records must be left as an empty array — LineSpec has
+    canon_ids in emitted records must be set to an empty array — LineSpec has
     no knowledge of Phoenix canonical node IDs. Mapping is IU-level only.
 affected_scope:
-  - pkg/phoenix/
-  - pkg/config/
+  - pkg/phoenix/**
+  - pkg/config/**
   - cmd/linespec/main_beta.go
-  - ../phoenix-linespec/src/models/evidence.ts
-  - ../phoenix-linespec/src/cli.ts
 forbidden_scope: []
-associated_specs: []
+associated_specs:
+  - path: cmd/linespec/main_beta.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
