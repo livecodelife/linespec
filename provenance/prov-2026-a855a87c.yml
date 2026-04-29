@@ -1,0 +1,26 @@
+id: prov-2026-a855a87c
+title: Hook evidence emission into runTestWithCode
+type: imprint
+status: open
+created_at: "2026-04-29"
+author: calebcowen@gmail.com
+implements: prov-2026-bf080d28
+intent: |
+  After the test loop completes, load the service config from the root spec
+  directory, check for a PhoenixConfig, and call phoenix.EmitEvidence with the
+  accumulated per-file results. Errors are logged as warnings; the exit code
+  is unchanged.
+constraints:
+  - Evidence emission happens after all tests run, never mid-loop
+  - A failure to emit evidence must not change the exit code
+  - The phoenix config is loaded from absPath (or its parent if absPath is a file)
+affected_scope:
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+associated_specs:
+  - path: cmd/linespec/main_beta.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
