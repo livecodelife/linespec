@@ -1,0 +1,28 @@
+id: prov-2026-5a6c79ed
+title: Implement pkg/phoenix evidence writer
+type: imprint
+status: open
+created_at: "2026-04-29"
+author: calebcowen@gmail.com
+implements: prov-2026-bf080d28
+intent: |
+  Implement the pkg/phoenix package: given a PhoenixConfig and a map of
+  spec paths to pass/fail outcomes, compute artifact hashes, construct
+  EvidenceRecords, and append them to .phoenix/graphs/evidence.json.
+  Errors are non-fatal — log and return, never panic or change exit code.
+constraints:
+  - evidence_id must be a UUID v4
+  - artifact_hash is lowercase hex SHA-1 of the .linespec file content
+  - canon_ids is always an empty slice
+  - kind is always "linespec_behavioral_test/v1"
+  - If the evidence.json file does not exist it must be created; if it does exist the new records are appended (not overwritten)
+affected_scope:
+  - pkg/phoenix/**
+forbidden_scope: []
+associated_specs:
+  - path: pkg/phoenix/evidence.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
