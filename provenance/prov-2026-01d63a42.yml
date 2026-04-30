@@ -1,6 +1,6 @@
 id: prov-2026-01d63a42
 title: 'Add todo-phoenix example: demonstrate LineSpec-Phoenix evidence integration'
-status: open
+status: implemented
 created_at: "2026-04-29"
 author: calebcowen@gmail.com
 type: imprint
@@ -22,7 +22,7 @@ forbidden_scope: []
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4f6066b9e10e3356b344d3179c806fa0024baef2
 associated_specs:
   - path: examples/todo-phoenix/.linespec.yml
     type: config
