@@ -13,11 +13,15 @@ intent: |
 constraints:
   - Evidence emission happens after all tests run, never mid-loop
   - A failure to emit evidence must not change the exit code
-  - The phoenix config is loaded from absPath (or its parent if absPath is a file)
+  - The phoenix config is loaded from path (or its parent if path is a file)
 affected_scope:
+  - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
 forbidden_scope: []
 associated_specs:
+  - path: cmd/linespec/main_stable.go
+    type: code
+    run_command: make test
   - path: cmd/linespec/main_beta.go
     type: code
     run_command: make test
