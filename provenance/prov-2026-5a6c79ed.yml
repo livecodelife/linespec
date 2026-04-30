@@ -1,12 +1,13 @@
 id: prov-2026-5a6c79ed
 title: Implement pkg/phoenix evidence writer
 type: imprint
-status: open
+status: implemented
 created_at: "2026-04-29"
 author: calebcowen@gmail.com
 implements: prov-2026-bf080d28
 intent: |
   Implement the pkg/phoenix package: given a PhoenixConfig and a map of
+  sealed_at_sha: e842fca0ae393bea5e09dccf0f748580d732544f
   spec paths to pass/fail outcomes, compute artifact hashes, construct
   EvidenceRecords, and append them to .phoenix/graphs/evidence.json.
   Errors are non-fatal — log and return, never panic or change exit code.
@@ -22,10 +23,10 @@ forbidden_scope: []
 associated_specs:
   - path: pkg/phoenix/evidence.go
     type: code
-    run_command: make test
+    run_command: "sh -c 'go test ./pkg/phoenix/...'"
   - path: pkg/phoenix/evidence_test.go
     type: code
-    run_command: make test
+    run_command: "sh -c 'go test ./pkg/phoenix/...'"
 associated_traces: []
 monitors: []
 tags: []
