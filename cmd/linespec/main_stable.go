@@ -24,6 +24,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/pkg/phoenix"
 	"github.com/livecodelife/linespec/pkg/provenance"
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
@@ -187,6 +188,7 @@ func runTestWithCode(path string) int {
 
 	passed := 0
 	failed := 0
+	var specResults []phoenix.SpecResult
 
 	for i, file := range testFiles {
 		// Stop running more tests if the context was cancelled (e.g. Ctrl+C).
@@ -239,15 +241,28 @@ func runTestWithCode(path string) int {
 				logger.StopSpinner(testStop)
 				logger.TestFailed(file, err)
 				failed++
+				specResults = append(specResults, phoenix.SpecResult{Path: file, Passed: false})
 			} else {
 				logger.StopSpinner(testStop)
 				logger.TestPassed()
 				passed++
+				specResults = append(specResults, phoenix.SpecResult{Path: file, Passed: true})
 			}
 		}()
 	}
 
 	logger.Summary(len(testFiles), passed, failed)
+
+	// Emit Phoenix evidence if configured. Errors are non-fatal.
+	rootDir := path
+	if !fileInfo.IsDir() {
+		rootDir = filepath.Dir(path)
+	}
+	if svcCfg, cfgErr := config.LoadConfig(rootDir); cfgErr == nil && svcCfg.Phoenix != nil {
+		if emitErr := phoenix.EmitEvidence(svcCfg.Phoenix, specResults, rootDir); emitErr != nil {
+			logger.Info("Warning: failed to emit Phoenix evidence: %v", emitErr)
+		}
+	}
 
 	if failed > 0 {
 		return 1
