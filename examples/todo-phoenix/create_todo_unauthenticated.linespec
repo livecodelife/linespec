@@ -1,0 +1,14 @@
+TEST create_todo_unauthenticated
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{payloads/create_todo_request.json}}
+HEADERS
+  Authorization: Bearer invalid_token
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer invalid_token
+RETURNS HTTP:401
+
+RESPOND HTTP:401
+WITH {{payloads/error_401.json}}

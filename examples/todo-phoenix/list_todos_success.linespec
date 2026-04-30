@@ -1,0 +1,13 @@
+TEST list_todos_success
+
+RECEIVE HTTP:GET /api/v1/todos
+HEADERS
+  Authorization: Bearer valid_token_123
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer valid_token_123
+RETURNS {{payloads/authenticated_user_empty.yaml}}
+
+RESPOND HTTP:200
+WITH {{payloads/todos_empty.json}}

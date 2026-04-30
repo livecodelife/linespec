@@ -1,0 +1,31 @@
+TEST setup_create_for_delete
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{payloads/create_todo_request.json}}
+HEADERS
+  Authorization: Bearer valid_token_123
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer valid_token_123
+RETURNS {{payloads/authenticated_user.yaml}}
+
+RESPOND HTTP:201
+WITH {{payloads/created_todo.json}}
+NOISE
+  body.id
+  body.created_at
+  body.updated_at
+
+TEST delete_todo_success
+
+RECEIVE HTTP:DELETE /api/v1/todos/1
+HEADERS
+  Authorization: Bearer valid_token_123
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer valid_token_123
+RETURNS {{payloads/authenticated_user.yaml}}
+
+RESPOND HTTP:204

@@ -1,0 +1,14 @@
+TEST create_todo_validation_error
+
+RECEIVE HTTP:POST /api/v1/todos
+WITH {{payloads/create_todo_empty_title.json}}
+HEADERS
+  Authorization: Bearer valid_token_123
+
+EXPECT HTTP:GET ${USER_SERVICE_URL}
+HEADERS
+  Authorization: Bearer valid_token_123
+RETURNS {{payloads/authenticated_user.yaml}}
+
+RESPOND HTTP:400
+WITH {{payloads/error_title_required.json}}

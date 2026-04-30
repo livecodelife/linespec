@@ -1,0 +1,34 @@
+service:
+  name: todo-phoenix
+  type: web
+  framework: custom
+  port: 3000
+  health_endpoint: /health
+  build_context: .
+  start_command: npx tsx src/server.ts
+  environment:
+    USER_SERVICE_URL: http://user-service:3001/api/v1/users/auth
+
+infrastructure:
+  database: false
+  kafka: false
+  external_db: false
+
+dependencies:
+  - name: user-service
+    type: http
+    host: user-service
+    port: 3001
+    proxy: true
+
+phoenix:
+  root: .
+  iu_mappings:
+    - iu_id: e3eddeb7a82aad689d0fefd0f28a3162d65312f9528d35d8782395fae55f5c00
+      spec: create_todo_success.linespec
+    - iu_id: aa8b81c228a0b071ae381335360696b9ec7c39c154285603a6085fd4fd36b8ec
+      spec: list_todos_success.linespec
+    - iu_id: b1ce9f3f792107a5e24af89c09b255c96c14336fa5511b8591df70ad47b2140a
+      spec: update_todo_success.linespec
+    - iu_id: 4f92a10b1dfd8ab355ee132d638d0f7f049ab701465f540df62eca41b5f3b4cf
+      spec: delete_todo_success.linespec
