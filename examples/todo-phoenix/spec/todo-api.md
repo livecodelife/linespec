@@ -7,12 +7,20 @@ scoped to the authenticated user.
 ## Authentication
 
 Every request must include an `Authorization: Bearer <token>` header. The server
-verifies the token by calling `GET /api/v1/users/auth` on the User Service,
-passing the same `Authorization` header. If the User Service returns 200 the
-request proceeds; any other status returns 401 to the caller.
+verifies the token by calling `GET` on the User Service auth endpoint, passing
+the same `Authorization` header. If the User Service returns 200 the request
+proceeds; any other status returns 401 to the caller.
+
+The full auth endpoint URL is provided in `process.env.USER_SERVICE_URL` (exact
+casing — uppercase with underscores). This is the complete URL including path —
+do NOT append any path to it. The fetch call must be exactly:
+`fetch(process.env.USER_SERVICE_URL!, { headers: { Authorization: authHeader } })`.
+Do not append `/api/v1/users/auth` or any other path segment to `USER_SERVICE_URL`.
 
 The authenticated user's `id` is extracted from the User Service response and
 used to scope all database queries.
+
+Error responses use the exact casing `"Unauthorized"` (capital U) for 401 errors.
 
 ## List Todos
 
