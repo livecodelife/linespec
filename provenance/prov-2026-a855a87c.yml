@@ -17,6 +17,8 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
+  - linespec
+  - linespec-beta
 forbidden_scope: []
 associated_specs:
   - path: cmd/linespec/main_stable.go
