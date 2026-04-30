@@ -55,6 +55,8 @@ affected_scope:
   - pkg/phoenix/**
   - pkg/config/**
   - cmd/linespec/main_beta.go
+  - cmd/linespec/main_stable.go
+  - examples/todo-phoenix/**
 forbidden_scope: []
 associated_specs:
   - path: cmd/linespec/main_beta.go
