@@ -1,6 +1,6 @@
 id: prov-2026-9a992763
 title: Content hash computed from canonical YAML field serialization via SHA-256
-status: draft
+status: open
 created_at: "2026-05-05"
 author: test@example.com
 intent: >
@@ -26,7 +26,10 @@ superseded_by: ""
 related:
   - prov-2026-618113ec
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []

@@ -1,6 +1,6 @@
 id: prov-2026-3ee43780
 title: 'Linter: validateImmutability reads hash manifest, no git required'
-status: draft
+status: open
 created_at: "2026-05-05"
 author: test@example.com
 intent: >
@@ -26,7 +26,10 @@ related:
   - prov-2026-618113ec
   - prov-2026-9a992763
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
