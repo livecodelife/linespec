@@ -1,6 +1,7 @@
 package provenance
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1040,5 +1041,278 @@ func TestValidateAssociatedSpecs_BriefOpenNoSpecs_NoEnforcementIssues(t *testing
 				t.Errorf("enforcement=%s: open brief with no associated_specs produced unexpected issue: %s", enforcement, issue.Message)
 			}
 		}
+	}
+}
+
+// ---- Hash manifest / validateImmutability tests ----
+
+func makeImplementedRecord(id string) *Record {
+	return &Record{
+		ID:          id,
+		Title:       "Test record " + id,
+		Status:      StatusImplemented,
+		CreatedAt:   "2026-05-05",
+		Author:      "test",
+		Intent:      "intent",
+		Type:        RecordTypeBlueprint,
+		SealedAtSHA: "abc1234",
+	}
+}
+
+func TestHashRecord_Deterministic(t *testing.T) {
+	r := makeImplementedRecord("prov-2026-test01")
+	h1, err := HashRecord(r)
+	if err != nil {
+		t.Fatalf("HashRecord error: %v", err)
+	}
+	h2, err := HashRecord(r)
+	if err != nil {
+		t.Fatalf("HashRecord error: %v", err)
+	}
+	if h1 != h2 {
+		t.Errorf("HashRecord is not deterministic: %q != %q", h1, h2)
+	}
+}
+
+func TestHashRecord_ChangeSensitive(t *testing.T) {
+	r := makeImplementedRecord("prov-2026-test01")
+	h1, _ := HashRecord(r)
+
+	r2 := *r
+	r2.Intent = "changed intent"
+	h2, _ := HashRecord(&r2)
+
+	if h1 == h2 {
+		t.Error("HashRecord should differ when content changes")
+	}
+}
+
+func TestHashRecord_FilePathExcluded(t *testing.T) {
+	r := makeImplementedRecord("prov-2026-test01")
+	r.FilePath = ""
+	h1, _ := HashRecord(r)
+
+	r2 := *r
+	r2.FilePath = "/some/path/to/record.yml"
+	h2, _ := HashRecord(&r2)
+
+	if h1 != h2 {
+		t.Error("HashRecord should be identical regardless of FilePath")
+	}
+}
+
+func TestHasher_SealAndVerify(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	r := makeImplementedRecord("prov-2026-seal01")
+
+	if err := h.SealRecord(r, []*Record{r}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	stored, current, ok, err := h.VerifyRecord(r)
+	if err != nil {
+		t.Fatalf("VerifyRecord: %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyRecord: record not found in manifest")
+	}
+	if stored != current {
+		t.Errorf("stored %q != current %q", stored, current)
+	}
+}
+
+func TestHasher_TamperDetected(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	r := makeImplementedRecord("prov-2026-tamper01")
+
+	if err := h.SealRecord(r, []*Record{r}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	// Tamper with the record after sealing.
+	r.Intent = "tampered"
+
+	stored, current, ok, err := h.VerifyRecord(r)
+	if err != nil {
+		t.Fatalf("VerifyRecord: %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyRecord: record not found in manifest")
+	}
+	if stored == current {
+		t.Error("Expected hash mismatch after tampering, but hashes match")
+	}
+}
+
+func TestHasher_GraphHashes(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+
+	active := makeImplementedRecord("prov-2026-active01")
+	deprecated := makeImplementedRecord("prov-2026-depr01")
+	deprecated.Status = StatusDeprecated
+	all := []*Record{active, deprecated}
+
+	if err := h.SealRecord(active, all); err != nil {
+		t.Fatalf("SealRecord active: %v", err)
+	}
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+
+	if m.FullGraphHash == "" {
+		t.Error("FullGraphHash should not be empty")
+	}
+	if m.ActiveSubsetHash == "" {
+		t.Error("ActiveSubsetHash should not be empty")
+	}
+	if m.FullGraphHash == m.ActiveSubsetHash {
+		t.Error("FullGraphHash and ActiveSubsetHash should differ when inactive records exist")
+	}
+}
+
+func TestHasher_ManifestAtomicWrite(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	r := makeImplementedRecord("prov-2026-atomic01")
+
+	if err := h.SealRecord(r, []*Record{r}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	// Ensure the manifest is valid JSON after writing.
+	data, err := os.ReadFile(h.manifestPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var m hashManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+	if m.Records["prov-2026-atomic01"] == "" {
+		t.Error("expected record hash in manifest")
+	}
+}
+
+func TestValidateImmutability_NoManifest(t *testing.T) {
+	tmp := t.TempDir()
+	loader := NewLoader(tmp, nil)
+	linter := NewLinter(loader, "strict")
+	linter.Hasher = &Hasher{manifestPath: filepath.Join(tmp, ".linespec", "hash_manifest.json")}
+
+	record := makeImplementedRecord("prov-2026-nomfst")
+	result := &LintResult{}
+	linter.validateImmutability(record, result)
+
+	// When the manifest doesn't exist the system is not yet active — no issues emitted.
+	if result.WarningCount != 0 || result.ErrorCount != 0 {
+		t.Errorf("expected no issues when manifest is absent, got %d warnings %d errors", result.WarningCount, result.ErrorCount)
+	}
+}
+
+func TestValidateImmutability_NoEntryInManifest(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Manifest exists but has no entry for this record.
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	other := makeImplementedRecord("prov-2026-other01")
+	if err := h.SealRecord(other, []*Record{other}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	loader := NewLoader(tmp, nil)
+	linter := NewLinter(loader, "strict")
+	linter.Hasher = h
+
+	record := makeImplementedRecord("prov-2026-noentry")
+	result := &LintResult{}
+	linter.validateImmutability(record, result)
+
+	// Record pre-dates the manifest — no issues emitted.
+	if result.WarningCount != 0 || result.ErrorCount != 0 {
+		t.Errorf("expected no issues for record not in manifest, got %d warnings %d errors", result.WarningCount, result.ErrorCount)
+	}
+}
+
+func TestValidateImmutability_Clean(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	record := makeImplementedRecord("prov-2026-clean01")
+	if err := h.SealRecord(record, []*Record{record}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	loader := NewLoader(tmp, nil)
+	linter := NewLinter(loader, "strict")
+	linter.Hasher = h
+
+	result := &LintResult{}
+	linter.validateImmutability(record, result)
+
+	if result.ErrorCount != 0 || result.WarningCount != 0 {
+		t.Errorf("expected no issues for clean record, got %d errors %d warnings", result.ErrorCount, result.WarningCount)
+	}
+}
+
+func TestValidateImmutability_Tampered(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
+	record := makeImplementedRecord("prov-2026-tamp01")
+	if err := h.SealRecord(record, []*Record{record}); err != nil {
+		t.Fatalf("SealRecord: %v", err)
+	}
+
+	// Modify record after sealing.
+	record.Intent = "tampered"
+
+	loader := NewLoader(tmp, nil)
+	linter := NewLinter(loader, "strict")
+	linter.Hasher = h
+
+	result := &LintResult{}
+	linter.validateImmutability(record, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("expected 1 PROV-IMM error for tampered record, got %d errors %d warnings", result.ErrorCount, result.WarningCount)
+	}
+	if len(result.Issues) > 0 && !strings.Contains(result.Issues[0].Message, "PROV-IMM") {
+		t.Errorf("expected PROV-IMM in error message, got: %s", result.Issues[0].Message)
 	}
 }

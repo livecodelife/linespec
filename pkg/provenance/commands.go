@@ -65,8 +65,9 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 		return nil, fmt.Errorf("failed to load provenance records: %w", err)
 	}
 
-	// Create linter
+	// Create linter with hash-based integrity checker
 	linter := NewLinter(loader, config.Enforcement)
+	linter.Hasher = NewHasher(repoRoot)
 
 	// Create git helper
 	git := NewGit(repoRoot)
@@ -725,6 +726,14 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 	if err := c.Loader.SaveRecord(record); err != nil {
 		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
 		return err
+	}
+
+	// Seal content hash into the manifest so the linter can verify integrity
+	// without git traversal.
+	if c.Linter != nil && c.Linter.Hasher != nil {
+		if err := c.Linter.Hasher.SealRecord(record, c.Loader.Records); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to seal content hash for %s: %v\n", record.ID, err)
+		}
 	}
 
 	c.Formatter.FormatCompleteSuccess(record)
