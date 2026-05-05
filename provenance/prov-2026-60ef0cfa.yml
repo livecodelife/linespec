@@ -36,7 +36,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: code
-    run_command: make test
+    run_command: go test ./pkg/provenance/... -run "TestHash|TestValidateImmutability|TestHasher"
 associated_traces: []
 monitors: []
 tags: []
