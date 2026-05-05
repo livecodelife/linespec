@@ -2,7 +2,7 @@ id: prov-2026-3ee43780
 title: 'Linter: validateImmutability reads hash manifest, no git required'
 status: implemented
 created_at: "2026-05-05"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: >
   The Linter.validateImmutability stub is replaced with a real check that loads
   the hash manifest, computes the current content hash of each implemented record,

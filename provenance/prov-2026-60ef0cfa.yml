@@ -2,7 +2,7 @@ id: prov-2026-60ef0cfa
 title: 'Blueprint: Hash-based integrity for implemented provenance records'
 status: open
 created_at: "2026-05-05"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: >
   Implement the hash-based provenance integrity system described in the parent
   brief. This blueprint covers three concrete deliverables: a Hasher type that
@@ -26,6 +26,10 @@ affected_scope:
   - .linespec/hash_manifest.json
   - pkg/provenance/linter_test.go
   - pkg/provenance/provenance_test.go
+  - provenance/prov-2026-60ef0cfa.yml
+  - provenance/prov-2026-618113ec.yml
+  - provenance/prov-2026-9a992763.yml
+  - provenance/prov-2026-3ee43780.yml
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-82bd8b00

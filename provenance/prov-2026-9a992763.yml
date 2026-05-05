@@ -2,7 +2,7 @@ id: prov-2026-9a992763
 title: Content hash computed from canonical YAML field serialization via SHA-256
 status: implemented
 created_at: "2026-05-05"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: >
   To compute a tamper-evident content hash for a provenance record, serialize
   only the record's content fields (excluding FilePath and any manifest-derived
