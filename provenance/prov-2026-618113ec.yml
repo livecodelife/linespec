@@ -1,6 +1,6 @@
 id: prov-2026-618113ec
 title: 'Hash manifest: JSON file in .linespec/, keyed by record ID'
-status: open
+status: implemented
 created_at: "2026-05-05"
 author: test@example.com
 intent: >
@@ -21,7 +21,7 @@ implements: prov-2026-60ef0cfa
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c938c186c370192ad39141334bc757aa40a285c5
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: code
