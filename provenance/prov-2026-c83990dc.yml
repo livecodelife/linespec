@@ -1,6 +1,6 @@
 id: prov-2026-c83990dc
 title: 'Blueprint: generate behavioral spec documents from provenance'
-status: open
+status: implemented
 created_at: "2026-05-06"
 author: calebcowen@gmail.com
 intent: >
@@ -32,11 +32,11 @@ implements: prov-2026-511eef9d
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d5adc0acdf88d02af8938c3c25a5ec479af7f73f
 associated_specs:
   - path: pkg/provenance/generate_test.go
     type: code
-    run_command: make test
+    run_command: go test ./pkg/provenance/... -run TestGenerate
 associated_traces: []
 monitors: []
 tags:
