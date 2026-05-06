@@ -1,6 +1,6 @@
 id: prov-2026-60ef0cfa
 title: 'Blueprint: Hash-based integrity for implemented provenance records'
-status: open
+status: implemented
 created_at: "2026-05-05"
 author: calebcowen@gmail.com
 intent: >
@@ -42,7 +42,7 @@ implements: prov-2026-82bd8b00
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1cb923875df1281dd4232f33ffff938fee730de7
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: code
