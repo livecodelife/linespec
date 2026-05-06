@@ -499,6 +499,8 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force
 - `--force` - Skip LineSpec existence check
 - `-c, --config path` - Use custom config
 
+**Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`. The manifest is created automatically on first use. The full-graph hash and active-subset hash in the manifest are also recomputed at this time. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
+
 ### Deprecate
 
 Mark record as deprecated:
@@ -885,7 +887,7 @@ Upload provenance lint results to GitHub Code Scanning for inline PR annotations
 - **Suppression** - Use GitHub's alert management UI to dismiss false positives
 
 **Rule IDs:**
-The SARIF output uses stable rule IDs (PROV001-PROV022) that persist across LineSpec versions:
+The SARIF output uses stable rule IDs (PROV001-PROV022, PROV-IMM) that persist across LineSpec versions:
 - PROV001: InvalidYaml
 - PROV002: MissingRequiredField
 - PROV003: UnknownStatus
@@ -893,6 +895,7 @@ The SARIF output uses stable rule IDs (PROV001-PROV022) that persist across Line
 - PROV020: SupersessionTypeMismatch (supersedes crosses tier boundaries)
 - PROV021: ImplementsTypeMismatch (implements skips a tier or points sideways)
 - PROV022: UnresolvedImplements (implements references a non-existent record)
+- PROV-IMM: ContentHashMismatch (implemented record content differs from sealed hash in `.linespec/hash_manifest.json`)
 - ... (see full catalog in SARIF output)
 
 **Example PR annotation:**
@@ -941,6 +944,36 @@ The workflow triggers on pushes to main that modify provenance records and autom
 ---
 
 ## Sealed at SHA and Stale Scope Warnings
+
+### Hash Manifest (`.linespec/hash_manifest.json`)
+
+When a record is completed, `linespec provenance complete` seals a **SHA-256 content hash** of the record into `.linespec/hash_manifest.json`. This file is created automatically on first use and is committed alongside the completion commit.
+
+**Structure:**
+
+```json
+{
+  "records": {
+    "prov-2026-a1b2c3d4": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prov-2026-deadbeef": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9820"
+  },
+  "full_graph_hash": "abc123...",
+  "active_subset_hash": "def456..."
+}
+```
+
+- **`records`** — Map of record ID to SHA-256 hex digest. The hash is computed over `yaml.Marshal` of the record with `FilePath` cleared, making it deterministic and path-independent.
+- **`full_graph_hash`** — SHA-256 of the sorted concatenation of all per-record hashes (all statuses).
+- **`active_subset_hash`** — Same, but only over records not in `superseded` or `deprecated` status.
+
+Both graph hashes are recomputed on every `complete` invocation.
+
+**Immutability enforcement:**
+
+`linespec provenance lint` includes a **PROV-IMM** check that computes the current hash of each implemented record and compares it against the manifest. A mismatch is reported as an error. This check:
+- Requires no git access — fully runnable in any CI environment or git hook
+- Is silent for records that predate the hash system (no manifest entry)
+- Is silent if `.linespec/hash_manifest.json` does not exist (graceful bootstrap)
 
 ### What is `sealed_at_sha`?
 

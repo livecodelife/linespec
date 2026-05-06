@@ -1,0 +1,35 @@
+id: prov-2026-3ee43780
+title: 'Linter: validateImmutability reads hash manifest, no git required'
+status: implemented
+created_at: "2026-05-05"
+author: calebcowen@gmail.com
+intent: >
+  The Linter.validateImmutability stub is replaced with a real check that loads
+  the hash manifest, computes the current content hash of each implemented record,
+  and compares it against the stored hash. A mismatch is reported as a PROV-IMM
+  error. The Linter receives a Hasher via its constructor so the manifest path
+  is resolved once and the check is git-free and runnable in any CI or hook
+  environment. If no manifest exists, records without hashes are flagged with a
+  warning to prompt a seal run.
+constraints:
+  - Linter holds a pointer to a Hasher (may be nil if no hasher configured)
+  - When Hasher is nil or the manifest is absent, validateImmutability emits a warning rather than an error
+  - When the manifest is present, a hash mismatch on any implemented record is a PROV-IMM error
+  - No git commands are called inside validateImmutability
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-60ef0cfa
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-618113ec
+  - prov-2026-9a992763
+sealed_at_sha: c938c186c370192ad39141334bc757aa40a285c5
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: go test ./pkg/provenance/... -run "TestHash|TestValidateImmutability|TestHasher"
+associated_traces: []
+monitors: []
+tags: []

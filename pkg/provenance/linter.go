@@ -58,6 +58,7 @@ type Linter struct {
 	Loader            *Loader
 	Enforcement       string // none | warn | strict
 	CommitTagRequired bool
+	Hasher            *Hasher // nil when hash manifest is not configured
 }
 
 // NewLinter creates a new linter
@@ -922,16 +923,42 @@ func (l *Linter) validateBugConditionals(record *Record, result *LintResult) {
 	}
 }
 
-// validateImmutability checks if an implemented record has been modified
+// validateImmutability checks whether an implemented record's content matches its
+// sealed hash in the manifest. No git traversal is required; the check is a direct
+// cryptographic comparison against the stored hash.
 func (l *Linter) validateImmutability(record *Record, result *LintResult) {
 	if record.Status != StatusImplemented {
 		return
 	}
 
-	// This would require comparing against git history
-	// For now, we'll skip this check as it requires git integration
-	// The check would compare current values against values at the time
-	// the record was marked implemented
+	if l.Hasher == nil || !l.Hasher.ManifestExists() {
+		return
+	}
+
+	stored, current, ok, err := l.Hasher.VerifyRecord(record)
+	if err != nil {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "integrity",
+			Message:  fmt.Sprintf("Could not verify content hash: %v", err),
+			Severity: SeverityWarning,
+		})
+		return
+	}
+
+	if !ok {
+		// Record pre-dates the hash manifest — no hash to check yet. Not an error.
+		return
+	}
+
+	if stored != current {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "integrity",
+			Message:  fmt.Sprintf("PROV-IMM: content hash mismatch — record was modified after being sealed (stored %s, current %s)", stored[:12], current[:12]),
+			Severity: SeverityError,
+		})
+	}
 }
 
 // checkScopeOverlaps checks for overlapping scope between open records

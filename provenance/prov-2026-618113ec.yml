@@ -1,0 +1,31 @@
+id: prov-2026-618113ec
+title: 'Hash manifest: JSON file in .linespec/, keyed by record ID'
+status: implemented
+created_at: "2026-05-05"
+author: calebcowen@gmail.com
+intent: >
+  Store the hash manifest as .linespec/hash_manifest.json — a JSON file keyed
+  by record ID, containing per-record content hashes plus the two derived graph
+  hash values (full_graph_hash and active_subset_hash). JSON is chosen over YAML
+  because it is unambiguous, has a stable canonical form, and is natively
+  parseable without an external library.
+constraints:
+  - Manifest file path is .linespec/hash_manifest.json at the repo root
+  - Top-level fields are records (map of ID to hash string), full_graph_hash, and active_subset_hash
+  - Per-record entries are keyed by record ID
+  - Manifest must be written atomically via temp-file rename to avoid partial writes
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-60ef0cfa
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: c938c186c370192ad39141334bc757aa40a285c5
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: go test ./pkg/provenance/... -run "TestHash|TestValidateImmutability|TestHasher"
+associated_traces: []
+monitors: []
+tags: []

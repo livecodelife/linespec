@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Hash-based provenance record integrity** ([prov-2026-60ef0cfa](./provenance/prov-2026-60ef0cfa.yml)) — Implemented records are now protected by cryptographic content hashes stored in `.linespec/hash_manifest.json`. `linespec provenance complete` seals a SHA-256 hash of each record's canonical YAML representation into the manifest at transition time. `linespec provenance lint` compares live record content against stored hashes and reports a **PROV-IMM** error on any mismatch — no git access required, fully runnable in any CI or hook environment. The manifest also tracks a full-graph hash (all records sorted by ID) and an active-subset hash (excludes superseded and deprecated records), both recomputed on every seal.
+
+### Related Provenance Records
+
+- [prov-2026-60ef0cfa](./provenance/prov-2026-60ef0cfa.yml) - Blueprint: Hash-based integrity for implemented provenance records
+- [prov-2026-618113ec](./provenance/prov-2026-618113ec.yml) - Hash manifest: JSON file in .linespec/, keyed by record ID
+- [prov-2026-9a992763](./provenance/prov-2026-9a992763.yml) - Content hash computed from canonical YAML field serialization via SHA-256
+- [prov-2026-3ee43780](./provenance/prov-2026-3ee43780.yml) - Linter: validateImmutability reads hash manifest, no git required
+
 ## [3.1.1] - 2026-04-27
 
 ### Fixed

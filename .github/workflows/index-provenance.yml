@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'provenance/**.yml'
+      - '.linespec/hash_manifest.json'
       - '.github/workflows/index-provenance.yml'
 
 env:
@@ -36,7 +37,7 @@ jobs:
       - name: Index new provenance records
         run: |
           echo "Indexing provenance records..."
-          ./linespec provenance index 2>&1 || true
+          ./linespec provenance index -c .linespec.yml 2>&1 || true
       
       - name: Generate GitHub App token
         id: app-token
@@ -81,7 +82,7 @@ jobs:
       - name: Check for unindexed records
         run: |
           # Check if there are any unindexed records
-          output=$(./linespec provenance index --dry-run 2>&1)
+          output=$(./linespec provenance index -c .linespec.yml --dry-run 2>&1)
           if echo "$output" | grep -q "record(s) to index"; then
             echo "⚠️ Warning: Some records were not indexed due to rate limits"
             echo "$output"

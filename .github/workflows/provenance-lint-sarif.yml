@@ -53,7 +53,7 @@ jobs:
       
       - name: Check for lint failures (strict mode)
         run: |
-          # Run lint again without SARIF to check for actual errors
+          # Run lint again without SARIF to get a non-zero exit on errors.
+          # SARIF is already uploaded above, so this step is purely the gate.
+          # PROV-IMM (content hash mismatch) is reported as an error here.
           ./linespec provenance lint -c .linespec.yml --enforcement strict
-        # On PRs, we allow failures so the SARIF upload happens first
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
