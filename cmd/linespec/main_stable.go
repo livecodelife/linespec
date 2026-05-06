@@ -960,6 +960,16 @@ func runProvenance() {
 		if err := cmds.Open(opts); err != nil {
 			os.Exit(1)
 		}
+	case "generate":
+		opts := parseGenerateOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Generate(opts); err != nil {
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
 	case "sync":
 		opts := parseSyncOptions(args)
 		if err := cmds.Sync(opts); err != nil {
@@ -1080,6 +1090,7 @@ Subcommands:
   search [options]           Search provenance records by semantic similarity
   audit [options]            Audit recent changes against provenance history
   index [options]            Index all implemented records for semantic search
+  generate [options]         Generate a behavioral specification document
   sync [options]             Refresh cache for all configured shared_repos
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
@@ -1676,6 +1687,63 @@ Example:
   linespec provenance index              # Index all unindexed records
   linespec provenance index --dry-run    # Preview what would be indexed
   linespec provenance index --force      # Re-index all records`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+func parseGenerateOptions(args []string) provenance.GenerateOptions {
+	opts := provenance.GenerateOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--record", "-r":
+			if i+1 < len(args) {
+				opts.RecordID = args[i+1]
+				i++
+			}
+		case "--format", "-f":
+			if i+1 < len(args) {
+				opts.Format = args[i+1]
+				i++
+			}
+		case "--output", "-o":
+			if i+1 < len(args) {
+				opts.OutputFile = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance generate [options]
+
+Generates a behavioral specification document from provenance records.
+Produces Markdown by default, or structured YAML via --format yaml.
+
+Options:
+  --record <id>       Target a specific brief or blueprint record
+  --format <fmt>      Output format: markdown (default) or yaml
+  --output <file>     Write output to a file instead of stdout
+  -c, --config <path> Path to .linespec.yml
+  --help              Show this help message
+
+Rules:
+  - When --record targets a brief, all implementing blueprints are included
+  - When --record targets a blueprint, only that blueprint is included
+  - Bug and imprint records cannot be targeted directly
+  - When run without --record, compiles from the full active provenance graph
+  - Imprint records are always excluded from generated output
+  - Bug records that extend a blueprint have their content merged in
+  - Bug records that supersede a blueprint replace that blueprint's content
+
+Example:
+  linespec provenance generate                                # Full spec, Markdown
+  linespec provenance generate --format yaml                 # Full spec, YAML
+  linespec provenance generate --record prov-2026-XXXXXXXX  # Scoped to one record
+  linespec provenance generate --output spec.md              # Write to file`)
 			os.Exit(0)
 		}
 	}
