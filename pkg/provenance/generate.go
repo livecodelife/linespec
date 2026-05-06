@@ -277,86 +277,76 @@ func (c *Commands) mergedBlueprintContent(r *Record) (intent string, constraints
 	return
 }
 
-// writeSpecMarkdown renders the document as Markdown with YAML front matter.
+// writeSpecMarkdown renders the document as Phoenix-compatible Markdown.
+// Format: # title, ## section, ### subsection, intent as prose paragraph,
+// constraints as bullet points. No metadata, no front matter.
 func (c *Commands) writeSpecMarkdown(w io.Writer, doc *specDocument) error {
-	fmt.Fprintln(w, "---")
-	fmt.Fprintln(w, "linespec_spec_version: \"1.0\"")
-	fmt.Fprintf(w, "generated_at: %q\n", doc.GeneratedAt)
-	fmt.Fprintf(w, "source: %q\n", doc.Source)
-	fmt.Fprintln(w, "---")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "# Behavioral Specification")
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "*Generated from LineSpec provenance records on %s*\n", doc.GeneratedAt)
+	// Document title
+	if doc.Source == "all" || len(doc.Sections) != 1 {
+		fmt.Fprintln(w, "# Behavioral Specification")
+	} else {
+		fmt.Fprintf(w, "# %s\n", doc.Sections[0].Title)
+	}
 
-	for _, section := range doc.Sections {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "---")
+	for i, section := range doc.Sections {
 		fmt.Fprintln(w)
 
-		switch section.Type {
-		case RecordTypeBrief:
-			fmt.Fprintf(w, "## Brief: %s\n\n", section.Title)
-		default:
-			fmt.Fprintf(w, "## Blueprint: %s\n\n", section.Title)
+		// Top-level section heading
+		if doc.Source == "all" || len(doc.Sections) != 1 {
+			fmt.Fprintf(w, "## %s\n", section.Title)
 		}
+		// When there is exactly one section and the title is already the h1,
+		// we skip repeating it as h2.
 
-		fmt.Fprintf(w, "**ID:** %s  \n", section.ID)
-		fmt.Fprintf(w, "**Status:** %s  \n", section.Status)
-		if len(section.Tags) > 0 {
-			fmt.Fprintf(w, "**Tags:** %s  \n", strings.Join(section.Tags, ", "))
-		}
+		writeSpecBody(w, section.Intent, section.Constraints)
 
-		if section.Intent != "" {
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "### Intent")
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, strings.TrimSpace(section.Intent))
-		}
-
-		if len(section.Constraints) > 0 {
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "### Constraints")
-			fmt.Fprintln(w)
-			for _, constraint := range section.Constraints {
-				fmt.Fprintf(w, "- %s\n", strings.TrimSpace(constraint))
-			}
-		}
-
+		// Blueprint subsections
 		for _, bp := range section.Blueprints {
 			fmt.Fprintln(w)
-			switch bp.Type {
-			case RecordTypeBug:
-				fmt.Fprintf(w, "### %s\n\n", bp.Title)
-			default:
-				fmt.Fprintf(w, "### Blueprint: %s\n\n", bp.Title)
+			if doc.Source == "all" || len(doc.Sections) != 1 {
+				fmt.Fprintf(w, "### %s\n", bp.Title)
+			} else {
+				fmt.Fprintf(w, "## %s\n", bp.Title)
 			}
+			writeSpecBody(w, bp.Intent, bp.Constraints)
+		}
 
-			fmt.Fprintf(w, "**ID:** %s  \n", bp.ID)
-			fmt.Fprintf(w, "**Status:** %s  \n", bp.Status)
-			if len(bp.Tags) > 0 {
-				fmt.Fprintf(w, "**Tags:** %s  \n", strings.Join(bp.Tags, ", "))
-			}
-
-			if bp.Intent != "" {
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, "#### Intent")
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, strings.TrimSpace(bp.Intent))
-			}
-
-			if len(bp.Constraints) > 0 {
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, "#### Constraints")
-				fmt.Fprintln(w)
-				for _, constraint := range bp.Constraints {
-					fmt.Fprintf(w, "- %s\n", strings.TrimSpace(constraint))
-				}
-			}
+		// Blank line between top-level sections (except after the last one)
+		if i < len(doc.Sections)-1 {
+			fmt.Fprintln(w)
 		}
 	}
 
 	return nil
+}
+
+// writeSpecBody writes an intent paragraph and constraint bullet list.
+func writeSpecBody(w io.Writer, intent string, constraints []string) {
+	intent = dedent(intent)
+	if intent != "" {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, intent)
+	}
+	if len(constraints) > 0 {
+		fmt.Fprintln(w)
+		for _, constraint := range constraints {
+			fmt.Fprintf(w, "- %s\n", strings.TrimSpace(constraint))
+		}
+	}
+}
+
+// dedent strips leading whitespace from every line and surrounding blank lines.
+// This normalises YAML block-scalar indentation artifacts in prose intent text.
+func dedent(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimLeft(line, " \t")
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // writeSpecYAML renders the document as structured YAML.
