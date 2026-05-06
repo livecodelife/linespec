@@ -285,7 +285,7 @@ func (c *Commands) writeSpecMarkdown(w io.Writer, doc *specDocument) error {
 	if doc.Source == "all" || len(doc.Sections) != 1 {
 		fmt.Fprintln(w, "# Behavioral Specification")
 	} else {
-		fmt.Fprintf(w, "# %s\n", doc.Sections[0].Title)
+		fmt.Fprintf(w, "# %s\n", cleanTitle(doc.Sections[0].Title))
 	}
 
 	for i, section := range doc.Sections {
@@ -293,7 +293,7 @@ func (c *Commands) writeSpecMarkdown(w io.Writer, doc *specDocument) error {
 
 		// Top-level section heading
 		if doc.Source == "all" || len(doc.Sections) != 1 {
-			fmt.Fprintf(w, "## %s\n", section.Title)
+			fmt.Fprintf(w, "## %s\n", cleanTitle(section.Title))
 		}
 		// When there is exactly one section and the title is already the h1,
 		// we skip repeating it as h2.
@@ -304,9 +304,9 @@ func (c *Commands) writeSpecMarkdown(w io.Writer, doc *specDocument) error {
 		for _, bp := range section.Blueprints {
 			fmt.Fprintln(w)
 			if doc.Source == "all" || len(doc.Sections) != 1 {
-				fmt.Fprintf(w, "### %s\n", bp.Title)
+				fmt.Fprintf(w, "### %s\n", cleanTitle(bp.Title))
 			} else {
-				fmt.Fprintf(w, "## %s\n", bp.Title)
+				fmt.Fprintf(w, "## %s\n", cleanTitle(bp.Title))
 			}
 			writeSpecBody(w, bp.Intent, bp.Constraints)
 		}
@@ -333,6 +333,24 @@ func writeSpecBody(w io.Writer, intent string, constraints []string) {
 			fmt.Fprintf(w, "- %s\n", strings.TrimSpace(constraint))
 		}
 	}
+}
+
+// cleanTitle strips leading type-prefix labels ("Blueprint:", "Bug:", "Brief:",
+// "Imprint:") from a record title so headings read as plain feature names.
+func cleanTitle(title string) string {
+	prefixes := []string{"blueprint:", "bug:", "brief:", "imprint:"}
+	lower := strings.ToLower(title)
+	for _, p := range prefixes {
+		if strings.HasPrefix(lower, p) {
+			title = strings.TrimSpace(title[len(p):])
+			// Capitalise first letter if the stripping left it lower-case.
+			if len(title) > 0 {
+				title = strings.ToUpper(title[:1]) + title[1:]
+			}
+			break
+		}
+	}
+	return title
 }
 
 // dedent strips leading whitespace from every line and surrounding blank lines.
