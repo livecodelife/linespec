@@ -42,14 +42,18 @@ func TestGenerate_BlueprintTarget(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "Blueprint: Widget service") {
-		t.Errorf("expected blueprint section header, got:\n%s", got)
+	// Title should be the record title as h1, no "Blueprint:" prefix
+	if !strings.Contains(got, "# Widget service") {
+		t.Errorf("expected h1 title, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Must be fast") {
-		t.Errorf("expected constraint in output, got:\n%s", got)
+	if strings.Contains(got, "Blueprint:") {
+		t.Errorf("no 'Blueprint:' prefix in Phoenix format, got:\n%s", got)
+	}
+	if !strings.Contains(got, "- Must be fast") {
+		t.Errorf("expected constraint as bullet, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Build the widget service.") {
-		t.Errorf("expected intent in output, got:\n%s", got)
+		t.Errorf("expected intent prose, got:\n%s", got)
 	}
 }
 
@@ -62,12 +66,12 @@ func TestGenerate_BriefTarget_WithBlueprints(t *testing.T) {
 		Intent: "Handle authentication.",
 	}
 	bp := &Record{
-		ID:         "prov-2026-bp000001",
-		Title:      "JWT implementation",
-		Status:     StatusOpen,
-		Type:       RecordTypeBlueprint,
-		Implements: "prov-2026-brief001",
-		Intent:     "Implement JWT.",
+		ID:          "prov-2026-bp000001",
+		Title:       "JWT implementation",
+		Status:      StatusOpen,
+		Type:        RecordTypeBlueprint,
+		Implements:  "prov-2026-brief001",
+		Intent:      "Implement JWT.",
 		Constraints: []string{"Token must expire in 24h"},
 	}
 	cmds := makeTestCommands([]*Record{brief, bp})
@@ -81,14 +85,19 @@ func TestGenerate_BriefTarget_WithBlueprints(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "Brief: Auth system") {
-		t.Errorf("expected brief section header, got:\n%s", got)
+	// Brief title becomes h1, no "Brief:" prefix
+	if !strings.Contains(got, "# Auth system") {
+		t.Errorf("expected h1 title for brief, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Blueprint: JWT implementation") {
-		t.Errorf("expected blueprint subsection, got:\n%s", got)
+	if strings.Contains(got, "Brief:") || strings.Contains(got, "Blueprint:") {
+		t.Errorf("no type prefixes in Phoenix format, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Token must expire in 24h") {
-		t.Errorf("expected blueprint constraint, got:\n%s", got)
+	// Blueprint becomes h2 subsection
+	if !strings.Contains(got, "## JWT implementation") {
+		t.Errorf("expected h2 for blueprint subsection, got:\n%s", got)
+	}
+	if !strings.Contains(got, "- Token must expire in 24h") {
+		t.Errorf("expected constraint as bullet, got:\n%s", got)
 	}
 }
 
@@ -131,6 +140,10 @@ func TestGenerate_BriefTarget_SupersededBlueprintReplaced(t *testing.T) {
 	if !strings.Contains(got, "New JWT implementation") {
 		t.Errorf("expected replacement blueprint in output, got:\n%s", got)
 	}
+	// Verify no metadata leaks into output
+	if strings.Contains(got, "prov-2026-") {
+		t.Errorf("record IDs should not appear in Phoenix format, got:\n%s", got)
+	}
 }
 
 func TestGenerate_BugExtendsMerged(t *testing.T) {
@@ -162,14 +175,14 @@ func TestGenerate_BugExtendsMerged(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "Cache TTL must be configurable") {
-		t.Errorf("expected original constraint, got:\n%s", got)
+	if !strings.Contains(got, "- Cache TTL must be configurable") {
+		t.Errorf("expected original constraint as bullet, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Invalidate on write") {
-		t.Errorf("expected merged bug constraint, got:\n%s", got)
+	if !strings.Contains(got, "- Invalidate on write") {
+		t.Errorf("expected merged bug constraint as bullet, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Fix stale cache entries.") {
-		t.Errorf("expected merged bug intent, got:\n%s", got)
+		t.Errorf("expected merged bug intent prose, got:\n%s", got)
 	}
 }
 
@@ -206,8 +219,8 @@ func TestGenerate_BugSupersedesBlueprint_FullGraph(t *testing.T) {
 	if !strings.Contains(got, "Cache layer rewrite") {
 		t.Errorf("expected bug replacement in output, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Use Redis") {
-		t.Errorf("expected bug constraint in output, got:\n%s", got)
+	if !strings.Contains(got, "- Use Redis") {
+		t.Errorf("expected bug constraint as bullet, got:\n%s", got)
 	}
 }
 
