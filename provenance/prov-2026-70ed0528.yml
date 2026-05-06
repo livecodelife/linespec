@@ -1,6 +1,6 @@
 id: prov-2026-70ed0528
 title: Implement provenance generate command
-status: open
+status: implemented
 created_at: "2026-05-06"
 author: calebcowen@gmail.com
 intent: >
@@ -20,11 +20,11 @@ implements: prov-2026-c83990dc
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8f7f2ce5fb85ae83dde756895a16e73b6b5084cf
 associated_specs:
   - path: pkg/provenance/generate_test.go
     type: code
-    run_command: make test
+    run_command: go test ./pkg/provenance/... -run TestGenerate
 associated_traces: []
 monitors: []
 tags:
