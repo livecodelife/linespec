@@ -68,12 +68,12 @@
 
 **Set by:** CLI only. Authors do not write to this field directly. Status transitions are:
 - `draft` → `open` via `linespec provenance open --record <id>`
-- `open` → `implemented` via `linespec provenance complete`
+- `open` → `implemented` via `linespec provenance complete` (also seals a content hash into `.linespec/hash_manifest.json`)
 - `open` → `superseded` automatically when another record's `supersedes` references this ID
 - `open` → `deprecated` via `linespec provenance deprecate`
 - `implemented` → `superseded` automatically when another record's `supersedes` references this ID
 
-**Constraints:** `implemented` records are immutable except for `monitors` and `associated_traces`. No transition back from `superseded` or `deprecated`.
+**Constraints:** `implemented` records are immutable except for `monitors` and `associated_traces`. No transition back from `superseded` or `deprecated`. Immutability is enforced cryptographically: `linespec provenance lint` compares the live record content against the SHA-256 hash stored in `.linespec/hash_manifest.json` (PROV-IMM).
 
 ---
 
@@ -420,5 +420,6 @@ tags:
 | Scope overlap between two open records | warning | always |
 | All files in `affected_scope` and `forbidden_scope` have been deleted | warning | always |
 | `implemented` record has modified immutable fields | warning | always |
+| Content hash mismatch against `.linespec/hash_manifest.json` (PROV-IMM) | error | always (silent if manifest absent or record not sealed) |
 | Listed `associated_specs` paths do not exist on disk | error | always |
 | Regex pattern fails to compile | error | always |

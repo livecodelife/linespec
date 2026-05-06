@@ -30,6 +30,9 @@ affected_scope:
   - provenance/prov-2026-618113ec.yml
   - provenance/prov-2026-9a992763.yml
   - provenance/prov-2026-3ee43780.yml
+  - CHANGELOG.md
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-82bd8b00
