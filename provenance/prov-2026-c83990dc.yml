@@ -1,6 +1,6 @@
 id: prov-2026-c83990dc
 title: 'Blueprint: generate behavioral spec documents from provenance'
-status: draft
+status: open
 created_at: "2026-05-06"
 author: calebcowen@gmail.com
 intent: >
@@ -22,7 +22,10 @@ constraints:
   - Bug records that extend a blueprint have their intent appended and constraints merged
   - Bug records that supersede a blueprint replace that blueprint content in the document
   - When targeting a brief, implementing blueprints are resolved through the SupersededBy chain
-affected_scope: []
+affected_scope:
+  - pkg/provenance/generate.go
+  - pkg/provenance/generate_test.go
+  - cmd/linespec/main_stable.go
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-511eef9d
