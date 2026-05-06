@@ -57,7 +57,7 @@ jobs:
           SHARED_REPO_TOKEN: ${{ secrets.SHARED_REPO_TOKEN }}
 
       - name: Lint provenance records
-        run: ./linespec provenance lint --enforcement strict
+        run: ./linespec provenance lint -c .linespec.yml --enforcement strict
 
   example-tests:
     name: Example LineSpec Tests
