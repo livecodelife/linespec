@@ -25,6 +25,40 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+  provenance-lint:
+    name: Provenance Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build LineSpec
+        run: go build -o linespec ./cmd/linespec
+
+      - name: Configure git for shared repo access
+        if: env.SHARED_REPO_TOKEN != ''
+        run: git config --global url."https://x-access-token:${{ secrets.SHARED_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          SHARED_REPO_TOKEN: ${{ secrets.SHARED_REPO_TOKEN }}
+
+      - name: Sync shared provenance repos
+        if: env.SHARED_REPO_TOKEN != ''
+        run: ./linespec provenance sync
+        continue-on-error: true
+        env:
+          SHARED_REPO_TOKEN: ${{ secrets.SHARED_REPO_TOKEN }}
+
+      - name: Lint provenance records
+        run: ./linespec provenance lint --enforcement strict
+
   example-tests:
     name: Example LineSpec Tests
     runs-on: ubuntu-latest

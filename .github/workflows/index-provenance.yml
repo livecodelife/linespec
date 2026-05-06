@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'provenance/**.yml'
+      - '.linespec/hash_manifest.json'
       - '.github/workflows/index-provenance.yml'
 
 env:

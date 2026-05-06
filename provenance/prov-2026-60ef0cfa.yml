@@ -33,6 +33,9 @@ affected_scope:
   - CHANGELOG.md
   - PROVENANCE_RECORDS.md
   - PROVENANCE_RECORD_SCHEMA.md
+  - .github/workflows/ci.yml
+  - .github/workflows/provenance-lint-sarif.yml
+  - .github/workflows/index-provenance.yml
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-82bd8b00
