@@ -1,0 +1,32 @@
+id: prov-2026-70ed0528
+title: Implement provenance generate command
+status: draft
+created_at: "2026-05-06"
+author: calebcowen@gmail.com
+intent: >
+  Implement the `linespec provenance generate` subcommand that builds a
+  behavioral specification document from provenance records. The command
+  produces Markdown (default) or YAML output, supports targeting a specific
+  record or generating from the full active graph, and handles bug
+  extends/supersedes merging.
+constraints:
+  - New generate.go in pkg/provenance/ contains all generation logic
+  - generate command is wired in cmd/linespec/main_stable.go
+  - Unit tests cover all major branches including error cases and bug merging
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-c83990dc
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/generate_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - generation
+  - feature
