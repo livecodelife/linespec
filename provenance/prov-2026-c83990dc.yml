@@ -1,0 +1,42 @@
+id: prov-2026-c83990dc
+title: 'Blueprint: generate behavioral spec documents from provenance'
+status: draft
+created_at: "2026-05-06"
+author: calebcowen@gmail.com
+intent: >
+  Implement a `linespec provenance generate` subcommand in the stable CLI
+  that compiles a behavioral specification document from provenance records.
+  The command produces Markdown by default (for human distribution) or YAML
+  (for machine consumption / Phoenix input). All generation logic lives in
+  pkg/provenance/generate.go; CLI wiring is in cmd/linespec/main_stable.go.
+constraints:
+  - Generate logic is isolated in pkg/provenance/generate.go as a Generate method on Commands
+  - GenerateOptions carries RecordID, Format, OutputFile, and ConfigFile fields
+  - Markdown is the default format; YAML is selectable via --format yaml
+  - Output goes to stdout unless --output file is given
+  - "Error path: imprint or bug target exits with error"
+  - "Error path: record not found exits with error"
+  - "Warning path: superseded or deprecated target prints to stderr, continues"
+  - generateFromAll collects active briefs, then standalone blueprints/bugs at tip of supersedes chain
+  - Imprint records are always excluded from generated output
+  - Bug records that extend a blueprint have their intent appended and constraints merged
+  - Bug records that supersede a blueprint replace that blueprint content in the document
+  - When targeting a brief, implementing blueprints are resolved through the SupersededBy chain
+affected_scope: []
+forbidden_scope: []
+type: blueprint
+implements: prov-2026-511eef9d
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/generate_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - generation
+  - feature
+  - docs
