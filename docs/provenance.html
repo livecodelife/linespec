@@ -82,7 +82,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v3.1.1</div>
+                    <div class="docs-badge stable">Stable v3.2.0</div>
                     <h1>Provenance Records</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a <code>provenance/</code> directory and form a queryable graph of architectural decisions.</p>
                 </header>
@@ -121,7 +121,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v3.1.1
+go install github.com/livecodelife/linespec/cmd/linespec@v3.2.0
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -896,6 +896,44 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                         <li><code>-c, --config path</code> - Use custom config</li>
                     </ul>
 
+                    <h3>Generate</h3>
+                    <p>Compile a behavioral specification document from provenance records:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Compile full graph to Markdown (stdout)
+linespec provenance generate
+
+# Scope to a specific brief or blueprint
+linespec provenance generate --record prov-2026-a1b2c3d4
+
+# Structured YAML output
+linespec provenance generate --format yaml
+
+# Write to a file
+linespec provenance generate --output spec.md</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--record &lt;id&gt;</code> - Target a specific brief or blueprint; Bug and imprint records cannot be targeted directly</li>
+                        <li><code>--format markdown|yaml</code> - Output format (default: <code>markdown</code>)</li>
+                        <li><code>--output &lt;path&gt;</code> - Write output to a file instead of stdout</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Inclusion rules:</strong></p>
+                    <ul>
+                        <li>Imprint records are always excluded from generated output</li>
+                        <li>Bug records that <code>extends</code> a blueprint have their constraints merged in</li>
+                        <li>Bug records that <code>supersede</code> a blueprint replace that blueprint's content</li>
+                        <li>When <code>--record</code> targets a brief, all implementing blueprints are included</li>
+                    </ul>
+
                     <h3>Install Hooks</h3>
                     <p>Install git hooks for automatic validation:</p>
                     <div class="code-block">
@@ -1129,6 +1167,18 @@ git commit -m "Fix typo [prov-2026-deadbeef]"</code></pre>
                     </div>
                     
                     <p>The only exception is the completion transition (when a record's own file changes from <code>status: open</code> to <code>status: implemented</code>), which is allowed.</p>
+
+                    <h3>Hash-Based Record Integrity</h3>
+                    <p>When <code>linespec provenance complete</code> transitions a record to <code>implemented</code>, a SHA-256 hash of the record's canonical YAML content is sealed into <code>.linespec/hash_manifest.json</code>. The linter compares live record content against stored hashes on every run and reports a <strong>PROV-IMM</strong> error if a mismatch is detected — no git access required, so it works in any CI or hook environment.</p>
+
+                    <p>The manifest tracks three values:</p>
+                    <ul>
+                        <li><strong>Per-record hash</strong> — SHA-256 of each implemented record's canonical YAML</li>
+                        <li><strong>Full-graph hash</strong> — hash of all records sorted by ID, recomputed on every seal</li>
+                        <li><strong>Active-subset hash</strong> — same as full-graph but excluding <code>superseded</code> and <code>deprecated</code> records</li>
+                    </ul>
+
+                    <p>PROV-IMM is wired as a hard-failing check in the CI and SARIF lint workflows, so any post-completion mutation to an implemented record is caught before merge.</p>
 
                     <h3>Automated Embedding Indexing</h3>
                     <p>When semantic search is enabled, a GitHub Action workflow automatically indexes newly completed provenance records when they are merged to the main branch. This ensures the embedding store stays up-to-date without manual intervention.</p>

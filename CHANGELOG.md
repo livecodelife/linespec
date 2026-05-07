@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-05-06
+
 ### Added
 
 - **Hash-based provenance record integrity** ([prov-2026-60ef0cfa](./provenance/prov-2026-60ef0cfa.yml)) — Implemented records are now protected by cryptographic content hashes stored in `.linespec/hash_manifest.json`. `linespec provenance complete` seals a SHA-256 hash of each record's canonical YAML representation into the manifest at transition time. `linespec provenance lint` compares live record content against stored hashes and reports a **PROV-IMM** error on any mismatch — no git access required, fully runnable in any CI or hook environment. The manifest also tracks a full-graph hash (all records sorted by ID) and an active-subset hash (excludes superseded and deprecated records), both recomputed on every seal.
+
+- **`linespec provenance generate` command** ([prov-2026-c83990dc](./provenance/prov-2026-c83990dc.yml)) — New command that compiles a behavioral specification document from provenance records. By default produces Markdown; pass `--format yaml` for structured output. Target a specific brief or blueprint with `--record <id>` to scope the output, or run without arguments to compile from the full active provenance graph. Imprint records are always excluded. Bug records that `extends` a blueprint have their constraints merged in; Bug records that `supersede` a blueprint replace its content. Output can be written to a file with `--output <path>`.
 
 ### Related Provenance Records
 
@@ -17,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [prov-2026-618113ec](./provenance/prov-2026-618113ec.yml) - Hash manifest: JSON file in .linespec/, keyed by record ID
 - [prov-2026-9a992763](./provenance/prov-2026-9a992763.yml) - Content hash computed from canonical YAML field serialization via SHA-256
 - [prov-2026-3ee43780](./provenance/prov-2026-3ee43780.yml) - Linter: validateImmutability reads hash manifest, no git required
+- [prov-2026-c83990dc](./provenance/prov-2026-c83990dc.yml) - Blueprint: generate command for behavioral specification documents
+- [prov-2026-70ed0528](./provenance/prov-2026-70ed0528.yml) - Imprint: generate command implementation
 
 ## [3.1.1] - 2026-04-27
 
