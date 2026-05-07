@@ -1,0 +1,30 @@
+id: prov-2026-f4f93fd1
+title: 'Release v3.2.0: generate command and hash integrity'
+status: draft
+created_at: "2026-05-06"
+author: calebcowen@gmail.com
+intent: "Ship v3.2.0 release: update CHANGELOG, docs site, and version string to capture the generate command and hash integrity features added since v3.1.1."
+constraints:
+  - CHANGELOG [Unreleased] must be moved to [3.2.0] with both new features documented
+  - docs/provenance.html must document the generate command (CLI Commands section) and hash integrity system (Git Integration section)
+  - make bump-version must update VERSION and all referenced doc files from 3.1.1 to 3.2.0
+  - build must succeed before tagging
+  - tag v3.2.0 must be pushed to origin to trigger the release workflow
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/provenance.html
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - README.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
