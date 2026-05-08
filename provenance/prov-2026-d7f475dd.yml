@@ -1,6 +1,6 @@
 id: prov-2026-d7f475dd
 title: init command for interactive LineSpec project setup
-status: open
+status: implemented
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -33,7 +33,7 @@ implements: prov-2026-85259a41
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 3e930677b91a6e5b050c27cbf5731bf5fb79053f
 associated_specs:
   - path: pkg/initcmd/init_test.go
     type: go_test
