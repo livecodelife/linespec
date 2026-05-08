@@ -1,6 +1,6 @@
 id: prov-2026-d5bcb98f
 title: Combined open transition with implementation due to strict spec enforcement
-status: open
+status: implemented
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,7 @@ implements: prov-2026-d7f475dd
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6971589136890e3f7502f25f903b56dc6448fac1
 associated_specs:
   - path: provenance/prov-2026-d7f475dd.yml
     type: code
