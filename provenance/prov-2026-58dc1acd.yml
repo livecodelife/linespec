@@ -1,0 +1,36 @@
+id: prov-2026-58dc1acd
+title: Release v3.3.0 — linespec init command
+status: draft
+created_at: "2026-05-08"
+author: calebcowen@gmail.com
+intent: "Publish v3.3.0 of LineSpec. This release adds the `linespec init` interactive setup command (prov-2026-85259a41 / prov-2026-d7f475dd), which guides users through configuring a new .linespec.yml from scratch. Includes CHANGELOG entry, docs site updates, version bump, and git tag."
+constraints:
+  - CHANGELOG.md must have a [3.3.0] entry documenting the init command.
+  - docs/index.html, docs/linespec.html, docs/provenance.html, and docs/docs.html must be updated to reference v3.3.0 and document the init command where appropriate.
+  - VERSION must read 3.3.0 after make bump-version runs.
+  - prov-2026-85259a41 (parent brief) must be completed before the release tag is pushed.
+  - make test must pass before tagging.
+  - A signed git tag v3.3.0 must be pushed to trigger the release workflow.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/provenance.html
+  - docs/docs.html
+  - README.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-85259a41
+  - prov-2026-d7f475dd
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - v3.3.0
+  - init
