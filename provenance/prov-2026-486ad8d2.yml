@@ -1,0 +1,29 @@
+id: prov-2026-486ad8d2
+title: Use pkg/initcmd to avoid Go reserved identifier conflict
+status: draft
+created_at: "2026-05-08"
+author: calebcowen@gmail.com
+intent: >
+  The init command lives in pkg/initcmd/ rather than pkg/init/ because "init"
+  is a reserved identifier in Go (every package may declare an init() function).
+  Using it as a package name would prevent any package from importing it and
+  would cause a compile error. The name initcmd is unambiguous and follows the
+  same convention used elsewhere in the Go standard library (e.g., cmd/).
+constraints:
+  - Package must be importable from main_stable.go and main_beta.go.
+  - Package name must not shadow a built-in Go identifier.
+affected_scope:
+  - pkg/initcmd/*.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-d7f475dd
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - go
+  - package-naming
