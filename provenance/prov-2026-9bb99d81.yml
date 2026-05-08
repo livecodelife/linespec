@@ -1,0 +1,33 @@
+id: prov-2026-9bb99d81
+title: Use bufio.Scanner for interactive prompts with no external deps
+status: draft
+created_at: "2026-05-08"
+author: calebcowen@gmail.com
+intent: >
+  The init wizard uses bufio.Scanner reading from an io.Reader (defaulting to
+  os.Stdin) rather than a survey or promptui library. This keeps the dependency
+  graph unchanged and makes the wizard trivially testable by substituting any
+  io.Reader in tests. Two helpers — ask() for free-text and askChoice() for
+  constrained options — cover all prompt cases. askChoice loops until valid
+  input or EOF so the user cannot accidentally proceed with a nonsense value.
+constraints:
+  - No new external dependencies introduced.
+  - Stdin must be injectable via Options.Stdin for unit tests.
+  - Empty input at any prompt must accept the displayed default.
+affected_scope:
+  - pkg/initcmd/init.go
+  - pkg/initcmd/init_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-d7f475dd
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - prompting
+  - testing
+  - dependencies
