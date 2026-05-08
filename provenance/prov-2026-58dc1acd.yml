@@ -1,6 +1,6 @@
 id: prov-2026-58dc1acd
 title: Release v3.3.0 — linespec init command
-status: draft
+status: open
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: "Publish v3.3.0 of LineSpec. This release adds the `linespec init` interactive setup command (prov-2026-85259a41 / prov-2026-d7f475dd), which guides users through configuring a new .linespec.yml from scratch. Includes CHANGELOG entry, docs site updates, version bump, and git tag."
@@ -27,7 +27,9 @@ related:
   - prov-2026-85259a41
   - prov-2026-d7f475dd
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: CHANGELOG.md
+    type: document
 associated_traces: []
 monitors: []
 tags:
