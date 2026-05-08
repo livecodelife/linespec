@@ -82,7 +82,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v3.2.0</div>
+                    <div class="docs-badge stable">Stable v3.3.0</div>
                     <h1>Provenance Records</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a <code>provenance/</code> directory and form a queryable graph of architectural decisions.</p>
                 </header>
@@ -121,7 +121,10 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v3.2.0
+go install github.com/livecodelife/linespec/cmd/linespec@v3.3.0
+
+# Set up a new project interactively (creates .linespec.yml)
+linespec init
 
 # Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -491,6 +494,37 @@ tags:
 
                 <section id="cli" class="docs-section">
                     <h2>CLI Commands</h2>
+
+                    <h3>Init</h3>
+                    <p>Interactively create a <code>.linespec.yml</code> configuration file for a new project:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Interactive setup — scans the project and prompts for each setting
+linespec init
+
+# Point at a different project directory
+linespec init --project /path/to/my-service
+
+# Write the config to a custom location
+linespec init --output /path/to/output
+
+# Overwrite an existing .linespec.yml without prompting
+linespec init --force</code></pre>
+                    </div>
+                    <p>The wizard scans the project directory and infers sensible defaults for framework, database, service name, and port before prompting. Framework detection order: <code>manage.py</code> (Django) → <code>requirements.txt</code> (FastAPI) → <code>go.mod</code> (chi) → <code>Gemfile</code> (Rails) → <code>package.json</code> (Express). Empty input at any prompt accepts the displayed default.</p>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--project, -p &lt;path&gt;</code> - Path to the project to set up (default: prompted)</li>
+                        <li><code>--output, -o &lt;path&gt;</code> - Directory where <code>.linespec.yml</code> is written (default: project path)</li>
+                        <li><code>--force, -f</code> - Overwrite existing <code>.linespec.yml</code> without prompting</li>
+                    </ul>
 
                     <h3>Create</h3>
                     <p>Create a new provenance record:</p>

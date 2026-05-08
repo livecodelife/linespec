@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-05-08
+
+### Added
+
+- **`linespec init` command** ([prov-2026-85259a41](./provenance/prov-2026-85259a41.yml)) — New interactive setup wizard that guides users through creating a `.linespec.yml` configuration file from scratch. The command scans the project directory to infer sensible defaults for framework (`rails`, `express`, `chi`, `django`, `fastapi`), database type, service name, and port, then prompts for confirmation at each step. Pass `--force` to overwrite an existing config, `--project` to point at a different directory, and `--output` to write the file to a custom location. Works in both stable and beta builds. Framework detection priority: `manage.py` (Django) takes precedence over `requirements.txt` (FastAPI) so multi-file Python projects are classified correctly.
+
+### Related Provenance Records
+
+- [prov-2026-85259a41](./provenance/prov-2026-85259a41.yml) - Brief: Add init command to LineSpec CLI
+- [prov-2026-d7f475dd](./provenance/prov-2026-d7f475dd.yml) - Blueprint: init command for interactive LineSpec project setup
+- [prov-2026-486ad8d2](./provenance/prov-2026-486ad8d2.yml) - Imprint: Use pkg/initcmd to avoid Go reserved identifier conflict
+- [prov-2026-55c45eda](./provenance/prov-2026-55c45eda.yml) - Imprint: Framework detection priority (manage.py before requirements.txt)
+- [prov-2026-9bb99d81](./provenance/prov-2026-9bb99d81.yml) - Imprint: Use bufio.Scanner for interactive prompts with no external deps
+- [prov-2026-d5bcb98f](./provenance/prov-2026-d5bcb98f.yml) - Imprint: Combined open transition with implementation due to strict spec enforcement
+
 ## [3.2.0] - 2026-05-06
 
 ### Added
