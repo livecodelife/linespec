@@ -1,0 +1,31 @@
+id: prov-2026-55c45eda
+title: 'Framework detection priority: manage.py before requirements.txt'
+status: draft
+created_at: "2026-05-08"
+author: calebcowen@gmail.com
+intent: >
+  Both Django and FastAPI projects may have a requirements.txt, so the scanner
+  checks for manage.py first. A project with both manage.py and requirements.txt
+  is almost certainly Django. FastAPI projects do not use manage.py. The full
+  priority order is: Gemfile (rails) > manage.py (django) > requirements.txt
+  (fastapi) > go.mod (chi) > package.json (express). This order minimises
+  false positives for multi-file projects.
+constraints:
+  - A project with manage.py must never be detected as fastapi.
+  - Detection falls back to empty string when no indicator file is present.
+affected_scope:
+  - pkg/initcmd/init.go
+  - pkg/initcmd/init_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-d7f475dd
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - framework-detection
+  - heuristics
