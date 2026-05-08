@@ -22,6 +22,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/config"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/embeddings"
+	"github.com/livecodelife/linespec/pkg/initcmd"
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
@@ -50,6 +51,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "init":
+		runInit()
 	case "proxy":
 		runProxy()
 	case "test":
@@ -484,12 +487,47 @@ func embeddedModuleVersion() string {
 	return v
 }
 
+func runInit() {
+	args := os.Args[2:]
+	opts := initcmd.Options{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--force", "-f":
+			opts.Force = true
+		case "--project", "-p":
+			i++
+			if i < len(args) {
+				opts.ProjectPath = args[i]
+			}
+		case "--output", "-o":
+			i++
+			if i < len(args) {
+				opts.OutputPath = args[i]
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec init [options]
+
+Options:
+  --force, -f           Overwrite existing .linespec.yml without prompting
+  --project, -p <path>  Path to the project to set up (default: prompted)
+  --output, -o <path>   Directory where .linespec.yml is written (default: project path)
+  --help, -h            Show this help message`)
+			return
+		}
+	}
+	if err := initcmd.Run(opts); err != nil {
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+}
+
 func printUsage() {
 	logger.Info(`LineSpec v` + version + ` - Provenance Records & Integration Testing
 
 Usage: linespec <command> [options]
 
 Commands:
+  init                       Interactively create a .linespec.yml for your project
   provenance <subcommand>    Manage provenance records (alias: -p)
   test [--debug] <path>      Run .linespec test files
   build                      Build the linespec:latest Docker image
