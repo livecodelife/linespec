@@ -1,6 +1,6 @@
 id: prov-2026-55c45eda
 title: 'Framework detection priority: manage.py before requirements.txt'
-status: open
+status: implemented
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -22,7 +22,7 @@ implements: prov-2026-d7f475dd
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a3a7ad919881a4cf68fde41c0d653b4df1bd1ad3
 associated_specs:
   - path: pkg/initcmd/init_test.go
     type: go_test
