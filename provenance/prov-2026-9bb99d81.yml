@@ -1,6 +1,6 @@
 id: prov-2026-9bb99d81
 title: Use bufio.Scanner for interactive prompts with no external deps
-status: draft
+status: open
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -24,7 +24,9 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/initcmd/init_test.go
+    type: go_test
 associated_traces: []
 monitors: []
 tags:
