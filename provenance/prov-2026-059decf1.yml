@@ -15,6 +15,7 @@ constraints:
   - No other content on the docs site should be changed.
 affected_scope:
   - docs/linespec.html
+  - provenance/prov-2026-00ac6322.yml
 forbidden_scope: []
 type: blueprint
 supersedes: ""
