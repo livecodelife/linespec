@@ -1,0 +1,26 @@
+id: prov-2026-00ac6322
+title: Correct TIMEOUT prose and example in linespec.html
+status: draft
+created_at: "2026-05-09"
+author: test@example.com
+intent: >
+  Fix two errors in the TIMEOUT section of docs/linespec.html: (1) the prose
+  incorrectly states TIMEOUT may appear anywhere before RECEIVE; correct it to
+  say TIMEOUT must appear after RECEIVE and before any EXPECT blocks. (2) the
+  code example shows TIMEOUT before RECEIVE; move it to after RECEIVE.
+constraints:
+  - Only the prose sentence about placement and the code example are changed.
+  - The corrected example must show RECEIVE then TIMEOUT then EXPECT in that order.
+affected_scope:
+  - docs/linespec.html
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: prov-2026-059decf1
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
