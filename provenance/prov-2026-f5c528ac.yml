@@ -1,6 +1,6 @@
 id: prov-2026-f5c528ac
 title: Fix EXPECT_NOT lexer regex and container name sanitization
-status: open
+status: implemented
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -32,7 +32,7 @@ extends: prov-2026-758af159
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: b5775e773f47c67ba5205522290f696041686cc0
 associated_specs:
   - path: pkg/dsl/dsl_test.go
     type: unit_test
