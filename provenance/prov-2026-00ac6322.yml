@@ -1,6 +1,6 @@
 id: prov-2026-00ac6322
 title: Correct TIMEOUT prose and example in linespec.html
-status: open
+status: implemented
 created_at: "2026-05-09"
 author: test@example.com
 intent: >
@@ -19,7 +19,7 @@ supersedes: ""
 superseded_by: ""
 implements: prov-2026-059decf1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 849c74082b6305a44a2fa97e3fbbc598fbe6a045
 associated_specs:
   - path: docs/linespec.html
     type: code
