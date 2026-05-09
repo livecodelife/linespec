@@ -1,0 +1,27 @@
+id: prov-2026-059decf1
+title: Fix TIMEOUT placement documentation in docs site
+status: draft
+created_at: "2026-05-09"
+author: test@example.com
+intent: >
+  The docs site (docs/linespec.html) documents the TIMEOUT directive with incorrect
+  placement. The prose says it "may appear anywhere before RECEIVE" and the example
+  shows it before RECEIVE. The parser requires TIMEOUT to appear after RECEIVE and
+  before any EXPECT blocks. Fix the prose and the example to match the actual parser
+  behavior.
+constraints:
+  - The prose description must state that TIMEOUT goes after RECEIVE and before EXPECT blocks.
+  - The code example must show TIMEOUT in the correct position (after RECEIVE, before EXPECT).
+  - No other content on the docs site should be changed.
+affected_scope:
+  - docs/linespec.html
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
