@@ -1,6 +1,6 @@
 id: prov-2026-f5c528ac
 title: Fix EXPECT_NOT lexer regex and container name sanitization
-status: draft
+status: open
 created_at: "2026-05-08"
 author: calebcowen@gmail.com
 intent: >
@@ -22,6 +22,7 @@ affected_scope:
   - pkg/dsl/lexer.go
   - pkg/config/types.go
   - pkg/dsl/dsl_test.go
+  - examples/notification-linespecs/get_notification_unauthenticated.linespec
   - VERSION
   - CHANGELOG.md
 forbidden_scope: []
@@ -31,7 +32,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/dsl/dsl_test.go
+    type: unit_test
+    run_command: go test ./pkg/dsl/... -run TestLexer_ExpectNot -v
+  - path: examples/notification-linespecs/get_notification_unauthenticated.linespec
+    type: linespec
+    run_command: linespec test examples/notification-linespecs/get_notification_unauthenticated.linespec
 associated_traces: []
 monitors: []
 tags: []
