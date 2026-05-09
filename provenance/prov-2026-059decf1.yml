@@ -1,6 +1,6 @@
 id: prov-2026-059decf1
 title: Fix TIMEOUT placement documentation in docs site
-status: open
+status: implemented
 created_at: "2026-05-09"
 author: test@example.com
 intent: >
@@ -21,7 +21,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 7c617da85a2d7b5561da2ab443629469dca6d010
 associated_specs:
   - path: docs/linespec.html
     type: code
