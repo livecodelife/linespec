@@ -1,0 +1,37 @@
+id: prov-2026-f5c528ac
+title: Fix EXPECT_NOT lexer regex and container name sanitization
+status: draft
+created_at: "2026-05-08"
+author: calebcowen@gmail.com
+intent: >
+  Two defects introduced alongside the EXPECT_NOT feature (prov-2026-758af159):
+  (1) The lexer regex for EXPECT_NOT uses `EXPECT\s+NOT` (space separator) while the
+  documented syntax and all new spec files use `EXPECT_NOT` (underscore). The fix accepts
+  both forms so existing specs using the space variant continue to work.
+  (2) Test spec names containing spaces (e.g. `TEST create record success`) are passed
+  verbatim into Docker container name templates, producing names that Docker rejects.
+  The fix sanitizes spec names by replacing spaces with hyphens before substitution.
+  A unit test and an example linespec are added to prevent regressions on both fixes.
+constraints:
+  - "Lexer regex updated to accept both EXPECT_NOT (underscore) and EXPECT NOT (space); existing specs must not break."
+  - "sanitizeContainerName replaces spaces with hyphens and strips other invalid Docker name characters."
+  - "Unit test covers TokenExpectNot for both the underscore and space forms."
+  - "New example linespec in an existing suite uses EXPECT_NOT (underscore) to provide integration-level coverage."
+  - "Version bumped to v3.3.1; CHANGELOG entry added."
+affected_scope:
+  - pkg/dsl/lexer.go
+  - pkg/config/types.go
+  - pkg/dsl/dsl_test.go
+  - VERSION
+  - CHANGELOG.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-758af159
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
