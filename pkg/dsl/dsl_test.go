@@ -1436,5 +1436,69 @@ func TestParser_SemanticExampleLinespecs(t *testing.T) {
 	}
 }
 
+// TestLexer_ExpectNot verifies that both EXPECT_NOT (underscore) and EXPECT NOT (space)
+// are recognised as TokenExpectNot by the lexer.
+func TestLexer_ExpectNot(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "underscore form",
+			content: "TEST my test\nRECEIVE HTTP:GET /foo\nEXPECT_NOT WRITE:POSTGRESQL bar\nRESPOND HTTP:401\n",
+		},
+		{
+			name: "space form",
+			content: "TEST my test\nRECEIVE HTTP:GET /foo\nEXPECT NOT WRITE:MYSQL baz\nRESPOND HTTP:401\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.CreateTemp("", "lexer_test_*.linespec")
+			if err != nil {
+				t.Fatalf("create temp file: %v", err)
+			}
+			defer os.Remove(f.Name())
+			if _, err := f.WriteString(tc.content); err != nil {
+				t.Fatalf("write temp file: %v", err)
+			}
+			f.Close()
+
+			tokens, err := LexFile(f.Name())
+			if err != nil {
+				t.Fatalf("LexFile failed: %v", err)
+			}
+			found := false
+			for _, tok := range tokens {
+				if tok.Type == TokenExpectNot {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected TokenExpectNot in token stream, got: %v", tokens)
+			}
+		})
+	}
+}
+
+// TestLexer_ExpectNotExampleSpec verifies the example spec that uses EXPECT_NOT (underscore)
+// and a TEST name with spaces parses without error.
+func TestLexer_ExpectNotExampleSpec(t *testing.T) {
+	path := "../../examples/notification-linespecs/get_notification_unauthenticated.linespec"
+	tokens, err := LexFile(path)
+	if err != nil {
+		t.Fatalf("LexFile failed: %v", err)
+	}
+	parser := NewParser(tokens)
+	spec, err := parser.Parse(path)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(spec.ExpectsNot) != 1 {
+		t.Errorf("expected 1 EXPECT_NOT, got %d", len(spec.ExpectsNot))
+	}
+}
+
 // Ensure time import is used (it was imported for pre-existing tests)
 var _ = time.Second

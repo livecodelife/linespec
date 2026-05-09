@@ -65,7 +65,7 @@ func LexFile(filePath string) ([]Token, error) {
 
 	reTest := regexp.MustCompile(`(?i)^TEST\s+(.+)$`)
 	reReceive := regexp.MustCompile(`(?i)^RECEIVE\s+(.+)$`)
-	reExpectNot := regexp.MustCompile(`(?i)^EXPECT\s+NOT\s+(.+)$`)
+	reExpectNot := regexp.MustCompile(`(?i)^EXPECT(?:_| )NOT\s+(.+)$`)
 	reExpect := regexp.MustCompile(`(?i)^EXPECT\s+(.+)$`)
 	reRespond := regexp.MustCompile(`(?i)^RESPOND\s+(.+)$`)
 	reWith := regexp.MustCompile(`(?i)^WITH\s+\{\{(.+)\}\}$`)

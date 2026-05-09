@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-05-08
+
+### Fixed
+
+- **`EXPECT_NOT` lexer regex** ([prov-2026-f5c528ac](./provenance/prov-2026-f5c528ac.yml)) — The lexer now accepts both `EXPECT_NOT` (underscore, documented form) and `EXPECT NOT` (space, legacy form). Previously only the space form worked; specs using the underscore form produced a parse error.
+- **Container name sanitization** ([prov-2026-f5c528ac](./provenance/prov-2026-f5c528ac.yml)) — Test spec names containing spaces (e.g. `TEST create record success`) are now sanitized before being used in Docker container names. Previously Docker rejected container names with embedded spaces.
+
+### Related Provenance Records
+
+- [prov-2026-f5c528ac](./provenance/prov-2026-f5c528ac.yml) - Bug: Fix EXPECT_NOT lexer regex and container name sanitization
+
 ## [3.3.0] - 2026-05-08
 
 ### Added
