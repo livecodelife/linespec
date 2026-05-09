@@ -1253,7 +1253,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			switch dbType {
 			case "postgresql":
 				logger.Debug("Starting PostgreSQL database (host=%s)", db.Host)
-				pgContainerName := "linespec-postgresql-" + db.Host + "-" + spec.Name
+				pgContainerName := "linespec-postgresql-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
 
 				var pgBinds []string
 				if db.InitScript != "" {
@@ -1433,7 +1433,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			case "mongodb":
 				logger.Debug("Starting MongoDB database (host=%s)", db.Host)
-				mongoContainerName := "linespec-mongodb-" + db.Host + "-" + spec.Name
+				mongoContainerName := "linespec-mongodb-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
 
 				var mongoBinds []string
 				if db.InitScript != "" {

@@ -14,7 +14,7 @@ intent: >
   A unit test and an example linespec are added to prevent regressions on both fixes.
 constraints:
   - "Lexer regex updated to accept both EXPECT_NOT (underscore) and EXPECT NOT (space); existing specs must not break."
-  - "sanitizeContainerName replaces spaces with hyphens and strips other invalid Docker name characters."
+  - "sanitizeContainerName replaces spaces with hyphens and strips other invalid Docker name characters; applied both in substituteTemplate and in runner.go hardcoded container names (PostgreSQL, MongoDB)."
   - "Unit test covers TokenExpectNot for both the underscore and space forms."
   - "New example linespec in an existing suite uses EXPECT_NOT (underscore) to provide integration-level coverage."
   - "Version bumped to v3.3.1; CHANGELOG entry added."
@@ -25,6 +25,7 @@ affected_scope:
   - examples/notification-linespecs/get_notification_unauthenticated.linespec
   - VERSION
   - CHANGELOG.md
+  - pkg/runner/runner.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-758af159

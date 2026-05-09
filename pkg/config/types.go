@@ -258,14 +258,16 @@ func (c *ContainerNaming) GetRegistryMountPath() string {
 func substituteTemplate(template string, params ContainerNameParams) string {
 	result := template
 	result = strings.ReplaceAll(result, "{{ .ServiceName }}", params.ServiceName)
-	result = strings.ReplaceAll(result, "{{ .SpecName }}", sanitizeContainerName(params.SpecName))
+	result = strings.ReplaceAll(result, "{{ .SpecName }}", SanitizeContainerName(params.SpecName))
 	result = strings.ReplaceAll(result, "{{ .Type }}", params.Type)
 	return result
 }
 
-// sanitizeContainerName replaces spaces with hyphens and strips characters that
+// SanitizeContainerName replaces spaces with hyphens and strips characters that
 // Docker container names do not allow ([a-zA-Z0-9][a-zA-Z0-9_.-]*).
-func sanitizeContainerName(s string) string {
+// Exported so runner and other packages can sanitize spec names before
+// constructing hardcoded container name strings.
+func SanitizeContainerName(s string) string {
 	s = strings.ToLower(strings.ReplaceAll(s, " ", "-"))
 	var b strings.Builder
 	for i, c := range s {
