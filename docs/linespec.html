@@ -1660,7 +1660,7 @@ WITH {{payloads/start_workflow_response.json}}</code></pre>
                         <div class="code-header"><span>LineSpec</span></div>
                         <pre><code>TIMEOUT &lt;duration&gt;</code></pre>
                     </div>
-                    <p>Duration uses Go duration syntax: <code>30s</code>, <code>2m</code>, <code>90s</code>, etc. The directive may appear anywhere before <code>RECEIVE</code>.</p>
+                    <p>Duration uses Go duration syntax: <code>30s</code>, <code>2m</code>, <code>90s</code>, etc. The directive must appear after <code>RECEIVE</code> and before any <code>EXPECT</code> blocks.</p>
 
                     <h3>Precedence</h3>
                     <ol>
@@ -1673,10 +1673,10 @@ WITH {{payloads/start_workflow_response.json}}</code></pre>
                     <div class="code-block">
                         <div class="code-header"><span>slow_report_generation.linespec</span></div>
                         <pre><code>TEST slow_report_generation
-TIMEOUT 5m
 
 RECEIVE HTTP:POST /api/v1/reports
 WITH {{payloads/report_request.yaml}}
+TIMEOUT 5m
 
 EXPECT WRITE:POSTGRESQL reports
 WITH {{payloads/report_insert.yaml}}
