@@ -114,7 +114,7 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 		t.Errorf("Expected 0 errors for existing exact path, got %d: %v", result2.ErrorCount, result2.Issues)
 	}
 
-	// Test 3: Non-open records should not validate scope paths
+	// Test 3: Terminal-state records produce a warning (not error) for missing paths
 	record3 := &Record{
 		ID:            "prov-2025-003",
 		Status:        StatusImplemented,
@@ -123,7 +123,22 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 	result3 := &LintResult{}
 	linter.validateScopePaths(record3, result3)
 	if result3.ErrorCount != 0 {
-		t.Errorf("Expected 0 errors for non-open record, got %d", result3.ErrorCount)
+		t.Errorf("Expected 0 errors for terminal-state record with missing path, got %d", result3.ErrorCount)
+	}
+	if result3.WarningCount != 1 {
+		t.Errorf("Expected 1 warning for terminal-state record with missing path, got %d", result3.WarningCount)
+	}
+
+	// Test 4: Draft records are skipped entirely
+	record4 := &Record{
+		ID:            "prov-2025-004",
+		Status:        StatusDraft,
+		AffectedScope: []string{filepath.Join(tmpDir, "nonexistent.go")},
+	}
+	result4 := &LintResult{}
+	linter.validateScopePaths(record4, result4)
+	if result4.ErrorCount != 0 || result4.WarningCount != 0 {
+		t.Errorf("Expected no issues for draft record, got errors=%d warnings=%d", result4.ErrorCount, result4.WarningCount)
 	}
 }
 
@@ -1056,6 +1071,123 @@ func makeImplementedRecord(id string) *Record {
 		Intent:      "intent",
 		Type:        RecordTypeBlueprint,
 		SealedAtSHA: "abc1234",
+	}
+}
+
+func TestValidateAssociatedSpecs_TerminalStatusWarns(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	terminalStatuses := []Status{StatusImplemented, StatusSuperseded, StatusDeprecated}
+	for _, status := range terminalStatuses {
+		record := &Record{
+			ID:     "prov-2025-001",
+			Status: status,
+			AssociatedSpecs: []AssociatedSpec{
+				{Path: filepath.Join(tmpDir, "gone.linespec")},
+			},
+		}
+		result := &LintResult{}
+		linter.validateAssociatedSpecs(record, result)
+		if result.ErrorCount != 0 {
+			t.Errorf("status %s: expected 0 errors for missing proof artifact, got %d", status, result.ErrorCount)
+		}
+		if result.WarningCount != 1 {
+			t.Errorf("status %s: expected 1 warning for missing proof artifact, got %d", status, result.WarningCount)
+		}
+	}
+}
+
+func TestValidateAssociatedSpecs_OpenStatusErrors(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	record := &Record{
+		ID:     "prov-2025-001",
+		Status: StatusOpen,
+		AssociatedSpecs: []AssociatedSpec{
+			{Path: filepath.Join(tmpDir, "gone.linespec")},
+		},
+	}
+	result := &LintResult{}
+	linter.validateAssociatedSpecs(record, result)
+	if result.ErrorCount != 1 {
+		t.Errorf("expected 1 error for open record with missing proof artifact, got %d", result.ErrorCount)
+	}
+	if result.WarningCount != 0 {
+		t.Errorf("expected 0 warnings for open record with missing proof artifact, got %d", result.WarningCount)
+	}
+}
+
+func TestValidateScopePaths_TerminalStatusWarnsGlob(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	terminalStatuses := []Status{StatusImplemented, StatusSuperseded, StatusDeprecated}
+	for _, status := range terminalStatuses {
+		record := &Record{
+			ID:            "prov-2025-001",
+			Status:        status,
+			AffectedScope: []string{filepath.Join(tmpDir, "*.deleted")},
+		}
+		result := &LintResult{}
+		linter.validateScopePaths(record, result)
+		if result.ErrorCount != 0 {
+			t.Errorf("status %s: expected 0 errors for unmatched glob, got %d", status, result.ErrorCount)
+		}
+		if result.WarningCount != 1 {
+			t.Errorf("status %s: expected 1 warning for unmatched glob, got %d", status, result.WarningCount)
+		}
+	}
+}
+
+func TestValidateScopePaths_TerminalStatusWarnsRegex(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	originalWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(originalWd)
+
+	loader := NewLoader(tmpDir, nil)
+	linter := NewLinter(loader, "strict")
+
+	terminalStatuses := []Status{StatusImplemented, StatusSuperseded, StatusDeprecated}
+	for _, status := range terminalStatuses {
+		record := &Record{
+			ID:            "prov-2025-001",
+			Status:        status,
+			AffectedScope: []string{"re:deleted_\\d+\\.go"},
+		}
+		result := &LintResult{}
+		linter.validateScopePaths(record, result)
+		if result.ErrorCount != 0 {
+			t.Errorf("status %s: expected 0 errors for unmatched regex, got %d", status, result.ErrorCount)
+		}
+		if result.WarningCount != 1 {
+			t.Errorf("status %s: expected 1 warning for unmatched regex, got %d", status, result.WarningCount)
+		}
 	}
 }
 
