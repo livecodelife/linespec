@@ -1,0 +1,35 @@
+id: prov-2026-f534cda1
+title: 'Implement compile command: CompileManifest on Hasher + CLI wiring'
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  Add a CompileManifest method to Hasher that recomputes hashes for all records and
+  writes the manifest only if something changed (idempotent). Wire it to a new
+  `compile` subcommand in commands.go and register it in both main_stable.go and
+  main_beta.go with a -c flag.
+constraints:
+  - CompileManifest iterates all records, computes fresh hashes, and diffs against the stored manifest before writing
+  - No file write occurs if computed hashes match stored hashes exactly (including graph hashes)
+  - compile subcommand accepts -c flag via the same config loading pattern as other subcommands
+  - compile is registered in both stable and beta entry points
+  - "Unit tests cover: idempotent run (no write), manifest-missing (full write), stale entry (rewrite)"
+affected_scope:
+  - pkg/provenance/hasher.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-37bea46b
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
