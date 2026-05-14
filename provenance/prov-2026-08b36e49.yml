@@ -1,6 +1,6 @@
 id: prov-2026-08b36e49
 title: Implement --warn/--info/--all output filter flags for lint
-status: open
+status: implemented
 created_at: "2026-05-14"
 author: calebcowen@gmail.com
 intent: >
@@ -23,7 +23,7 @@ implements: prov-2026-4358fe61
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: bc8bdd745a03dc23cd4e025a537601a0483b2abf
 associated_specs:
   - path: pkg/provenance/formatter_test.go
     type: code
