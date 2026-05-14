@@ -1,1 +1,16 @@
-# placeholder
+TEST process_email_job
+
+RECEIVE JOB
+WITH {{payloads/email_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_row.yaml}}
+
+EXPECT HTTP:POST /api/send
+RETURNS {{payloads/send_email_response.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [email_log]
+VERIFY_OPERATION INSERT

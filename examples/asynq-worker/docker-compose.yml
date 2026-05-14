@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: worker_db
+      POSTGRES_USER: worker_user
+      POSTGRES_PASSWORD: worker_password
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://worker_user:worker_password@db:5432/worker_db?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      EMAIL_SERVICE_URL: http://email-service:8080
+      WEBHOOK_URL: http://webhook-service:8080
+    depends_on:
+      - db
+      - redis

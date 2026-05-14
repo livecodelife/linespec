@@ -1,1 +1,16 @@
-# placeholder
+TEST process_report_job
+
+RECEIVE JOB
+WITH {{payloads/report_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/orders_data.yaml}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [reports]
+VERIFY_OPERATION INSERT
+
+EXPECT HTTP:POST /api/notify
+RETURNS {{payloads/webhook_response.json}}

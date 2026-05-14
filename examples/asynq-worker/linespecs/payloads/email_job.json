@@ -1,0 +1,5 @@
+{
+  "type": "send_email",
+  "user_id": 1,
+  "template": "welcome"
+}

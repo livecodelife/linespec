@@ -1,0 +1,45 @@
+service:
+  name: asynq-worker
+  service_dir: ..
+  type: worker
+  framework: custom
+  port: 8080
+  health_endpoint: /health
+  docker_compose: ../docker-compose.yml
+  build_context: ..
+  start_command: ./asynq-worker
+  environment:
+    DATABASE_URL: postgres://worker_user:worker_password@db:5432/worker_db?sslmode=disable
+    REDIS_URL: redis://redis-proxy:6379
+    EMAIL_SERVICE_URL: http://email-service:8080
+    WEBHOOK_URL: http://webhook-service:8080
+
+database:
+  type: postgresql
+  image: postgres:16-alpine
+  port: 5432
+  container: db
+  init_script: ../init.sql
+  database: worker_db
+  username: worker_user
+  password: worker_password
+
+job_backend:
+  type: redis
+  queue: worker:jobs
+
+infrastructure:
+  database: true
+  redis: true
+
+dependencies:
+  - name: email-service
+    type: http
+    host: email-service
+    port: 8080
+    proxy: true
+  - name: webhook-service
+    type: http
+    host: webhook-service
+    port: 8080
+    proxy: true
