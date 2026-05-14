@@ -284,12 +284,27 @@ func (f *Formatter) printIndented(text string) {
 	}
 }
 
-// FormatLint formats lint results
-func (f *Formatter) FormatLint(result *LintResult) {
+// FormatLint formats lint results, filtering issue output by severity based on opts.
+// The summary line is always printed. With no filter flag set, only errors are shown.
+func (f *Formatter) FormatLint(result *LintResult, opts LintOptions) {
 	// Header
 	total := result.PassedCount + result.WarningCount + result.ErrorCount
 	fmt.Fprintf(f.Output, "\n%s Linting %d provenance records (enforcement: %s)\n\n",
 		f.colored("✓", colorGreen), total, result.Enforcement)
+
+	// Determine which severities to show.
+	showSeverity := func(s Severity) bool {
+		switch {
+		case opts.ShowAll:
+			return true
+		case opts.ShowWarn:
+			return s == SeverityWarning
+		case opts.ShowInfo:
+			return s == SeverityHint
+		default:
+			return s == SeverityError
+		}
+	}
 
 	// Issues by record
 	issuesByRecord := make(map[string][]Issue)
@@ -300,6 +315,10 @@ func (f *Formatter) FormatLint(result *LintResult) {
 	// Print issues
 	for recordID, issues := range issuesByRecord {
 		for _, issue := range issues {
+			if !showSeverity(issue.Severity) {
+				continue
+			}
+
 			symbol := "⚠"
 			color := colorYellow
 
@@ -328,15 +347,9 @@ func (f *Formatter) FormatLint(result *LintResult) {
 		}
 	}
 
-	// Summary
+	// Summary — always printed regardless of filter
 	fmt.Fprintln(f.Output)
-	if result.ErrorCount > 0 {
-		fmt.Fprintf(f.Output, "%s %d passed  ", f.colored("✓", colorGreen), result.PassedCount)
-	} else if result.WarningCount > 0 {
-		fmt.Fprintf(f.Output, "%s %d passed  ", f.colored("✓", colorGreen), result.PassedCount)
-	} else {
-		fmt.Fprintf(f.Output, "%s %d passed  ", f.colored("✓", colorGreen), result.PassedCount)
-	}
+	fmt.Fprintf(f.Output, "%s %d passed  ", f.colored("✓", colorGreen), result.PassedCount)
 	fmt.Fprintf(f.Output, "%s %d warnings  ", f.colored("⚠", colorYellow), result.WarningCount)
 	fmt.Fprintf(f.Output, "%s %d errors\n", f.colored("✗", colorRed), result.ErrorCount)
 

@@ -215,6 +215,9 @@ type LintOptions struct {
 	Enforcement string
 	Format      string // human | json
 	ConfigFile  string // Path to custom .linespec.yml file
+	ShowWarn    bool   // show only warnings
+	ShowInfo    bool   // show only hints/info
+	ShowAll     bool   // show all severities
 }
 
 // Lint runs the linter
@@ -285,7 +288,7 @@ func (c *Commands) Lint(opts LintOptions) error {
 		}
 		return nil
 	default:
-		c.Formatter.FormatLint(result)
+		c.Formatter.FormatLint(result, opts)
 	}
 
 	if result.HasErrors() {

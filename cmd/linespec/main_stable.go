@@ -1274,6 +1274,12 @@ func parseLintOptions(args []string) provenance.LintOptions {
 				opts.ConfigFile = args[i+1]
 				i++
 			}
+		case "--warn":
+			opts.ShowWarn = true
+		case "--info":
+			opts.ShowInfo = true
+		case "--all":
+			opts.ShowAll = true
 		case "--help", "-h":
 			logger.Info(`Usage: linespec provenance lint [options]
 
@@ -1281,6 +1287,9 @@ Options:
   --record prov-YYYY-NNN     Lint a single record
   --enforcement level        Override enforcement (none|warn|strict)
   --format format            Output format (human|json|sarif)
+  --warn                     Show only warnings in output
+  --info                     Show only informational hints in output
+  --all                      Show all output (errors, warnings, and hints)
   -c, --config path          Path to custom .linespec.yml file
   --help                     Show this help message`)
 			os.Exit(0)
