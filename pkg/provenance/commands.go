@@ -2174,3 +2174,32 @@ func (c *Commands) Sync(opts SyncOptions) error {
 	}
 	return nil
 }
+
+// CompileOptions holds options for the compile command
+type CompileOptions struct {
+	ConfigFile string
+}
+
+// Compile rebuilds the hash manifest from all loaded records. It is idempotent:
+// if every record hash and both graph hashes already match the stored manifest,
+// no file is written and the command exits 0.
+func (c *Commands) Compile(opts CompileOptions) error {
+	if c.Linter == nil || c.Linter.Hasher == nil {
+		c.Formatter.FormatError("Hash manifest not configured")
+		return fmt.Errorf("hash manifest not configured")
+	}
+
+	changed, err := c.Linter.Hasher.CompileManifest(c.Loader.Records)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to compile manifest: %v", err))
+		return err
+	}
+
+	n := len(c.Loader.Records)
+	if changed {
+		fmt.Fprintf(os.Stdout, "\n✓ Hash manifest compiled (%d records)\n\n", n)
+	} else {
+		fmt.Fprintf(os.Stdout, "\n✓ Hash manifest is up to date (%d records)\n\n", n)
+	}
+	return nil
+}

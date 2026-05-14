@@ -16,9 +16,11 @@ constraints:
   - "Unit tests cover: idempotent run (no write), manifest-missing (full write), stale entry (rewrite)"
 affected_scope:
   - pkg/provenance/hasher.go
+  - pkg/provenance/hasher_test.go
   - pkg/provenance/commands.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
+  - .linespec/hash_manifest.json
 forbidden_scope: []
 type: imprint
 implements: prov-2026-37bea46b

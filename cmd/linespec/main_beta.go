@@ -766,6 +766,15 @@ func runProvenance() {
 		if err := cmds.Sync(opts); err != nil {
 			os.Exit(1)
 		}
+	case "compile":
+		opts := parseCompileOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Compile(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -881,6 +890,7 @@ Subcommands:
   audit [options]            Audit recent changes against provenance history
   index [options]            Index all implemented records for semantic search
   sync [options]             Refresh cache for all configured shared_repos
+  compile [options]          Rebuild the hash manifest from all provenance records
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
 

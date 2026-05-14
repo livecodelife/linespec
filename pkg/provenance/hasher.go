@@ -163,6 +163,46 @@ func computeGraphHash(records []*Record, hashes map[string]string, filter func(*
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// CompileManifest recomputes hashes for every record and writes the manifest only
+// when the result differs from what is already on disk. Returns true if the manifest
+// was written, false if it was already up to date.
+func (h *Hasher) CompileManifest(records []*Record) (bool, error) {
+	freshHashes := make(map[string]string, len(records))
+	for _, r := range records {
+		hash, err := HashRecord(r)
+		if err != nil {
+			return false, err
+		}
+		freshHashes[r.ID] = hash
+	}
+
+	freshFull := computeGraphHash(records, freshHashes, nil)
+	freshActive := computeGraphHash(records, freshHashes, isActiveRecord)
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		return false, err
+	}
+
+	if m.FullGraphHash == freshFull && m.ActiveSubsetHash == freshActive && len(m.Records) == len(freshHashes) {
+		allMatch := true
+		for id, hash := range freshHashes {
+			if stored, ok := m.Records[id]; !ok || stored != hash {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			return false, nil
+		}
+	}
+
+	m.Records = freshHashes
+	m.FullGraphHash = freshFull
+	m.ActiveSubsetHash = freshActive
+	return true, h.writeManifest(m)
+}
+
 // writeManifest atomically writes the manifest to disk.
 func (h *Hasher) writeManifest(m *hashManifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")

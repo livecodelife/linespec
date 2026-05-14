@@ -1013,6 +1013,15 @@ func runProvenance() {
 		if err := cmds.Sync(opts); err != nil {
 			os.Exit(1)
 		}
+	case "compile":
+		opts := parseCompileOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Compile(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -1130,6 +1139,7 @@ Subcommands:
   index [options]            Index all implemented records for semantic search
   generate [options]         Generate a behavioral specification document
   sync [options]             Refresh cache for all configured shared_repos
+  compile [options]          Rebuild the hash manifest from all provenance records
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
 
@@ -1817,6 +1827,35 @@ Options:
 Example:
   linespec provenance sync           # Sync all configured repos
   linespec provenance sync --force   # Force re-fetch even if cache is fresh`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+func parseCompileOptions(args []string) provenance.CompileOptions {
+	opts := provenance.CompileOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance compile [options]
+
+Rebuilds the hash manifest (.linespec/hash_manifest.json) from all provenance
+records. Idempotent: if every record hash and both graph hashes already match
+the stored manifest, no file is written.
+
+Options:
+  -c, --config path   Path to custom .linespec.yml file
+  --help              Show this help message
+
+Example:
+  linespec provenance compile          # Rebuild manifest
+  linespec provenance compile -c path/to/.linespec.yml`)
 			os.Exit(0)
 		}
 	}
