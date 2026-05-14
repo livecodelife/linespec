@@ -1,6 +1,6 @@
 id: prov-2026-d5afa7b6
 title: Runner RECEIVE JOB execution branch
-status: open
+status: implemented
 created_at: "2026-05-14"
 author: test@example.com
 implements: prov-2026-bfa97730
@@ -26,7 +26,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d29f7d3948e702b9e51e0b3bad8afbc7c52bf5cf
 associated_specs:
   - path: pkg/runner/port_allocator_test.go
     type: go_test
