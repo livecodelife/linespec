@@ -1,0 +1,51 @@
+id: prov-2026-bfa97730
+title: 'RECEIVE JOB: background job trigger channel'
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  Add RECEIVE JOB as a new test trigger channel for background job systems. Tests seed the job
+  payload into the service's backing queue at the wire protocol level — Redis BRPOP/LPOP/BLPOP,
+  Kafka topic, or DB proxy mock rows — so the worker picks it up naturally. For cron/scheduled
+  jobs, the runner observes without seeding. Completion is detected via existing proxy polling
+  (all EXPECTs satisfied), with no service endpoint required and no modification to the service
+  under test. Job backend is configured once in .linespec.yml; individual tests stay clean.
+constraints:
+  - RECEIVE JOB must work without any modification to the service under test
+  - Redis-backed frameworks (Sidekiq, BullMQ, Resque, RQ, Asynq, Dramatiq) must work via seed
+    injected at BRPOP/LPOP/BLPOP — the proxy returns the seeded payload on the worker's next
+    blocking pop, wrapped as the correct RESP2 two-element array [key, value]
+  - DB-backed frameworks (Oban, GoodJob, Que, River, Delayed Job, Solid Queue) must work via
+    EXPECT READ on the DB proxy — worker's SELECT returns the mocked job row; no special seeding
+    required
+  - Kafka-backed frameworks must work via the existing Kafka seed mechanism
+  - Cron/scheduled jobs must work via observe-only mode (no seed) with configurable timeout
+  - Job backend type and queue key configured once in .linespec.yml under a job_backend section;
+    RECEIVE JOB tests do not embed infrastructure details
+  - Completion detection must be purely proxy-based using the existing polling loop — no service
+    status endpoint required
+  - DSL syntax must follow existing channel conventions (RECEIVE JOB, WITH, TIMEOUT)
+  - New example applications must demonstrate each major backing store case (Redis worker,
+    DB-backed worker, scheduled/cron) with working LineSpec tests that pass against real
+    containerized service implementations
+  - LINESPEC.md must be updated with RECEIVE JOB DSL reference
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/config/
+  - pkg/registry/registry.go
+  - pkg/proxy/redis/interceptor.go
+  - pkg/runner/runner.go
+  - examples/
+  - LINESPEC.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
