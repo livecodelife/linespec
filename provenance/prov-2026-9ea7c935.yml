@@ -36,7 +36,9 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
