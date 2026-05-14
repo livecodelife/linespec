@@ -1,0 +1,37 @@
+id: prov-2026-bab878c6
+title: Node.js Redis worker example with RECEIVE JOB tests
+status: draft
+created_at: "2026-05-14"
+author: calebcowen@gmail.com
+implements: prov-2026-bfa97730
+intent: |
+  Build a minimal Node.js worker that BRPOPs jobs from a Redis queue and processes two job types:
+  send_notification (SELECT user, POST to notification service, INSERT into notification_log) and
+  generate_invoice (SELECT order, INSERT into invoices, POST to billing webhook). Two LineSpec
+  tests exercise RECEIVE JOB end-to-end with the Redis seed mechanism, demonstrating the same
+  BRPOP pattern works across different languages and frameworks.
+constraints:
+  - Worker uses ioredis BRPOP on queue key "jobs:notifications"
+  - Health endpoint at /health returns 200 for runner readiness check
+  - send_notification_job.linespec must exercise SELECT users, HTTP POST to notification service, and INSERT notification_log
+  - generate_invoice_job.linespec must exercise SELECT orders, INSERT invoices, and HTTP POST to billing webhook
+  - .linespec.yml configures job_backend type redis with queue "jobs:notifications"
+  - All database interactions use ACCESSING_TABLES semantic matching
+affected_scope:
+  - examples/bullmq-worker/**
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/bullmq-worker/linespecs/send_notification_job.linespec
+    type: linespec
+    run_command: make test
+  - path: examples/bullmq-worker/linespecs/generate_invoice_job.linespec
+    type: linespec
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
