@@ -1,0 +1,35 @@
+id: prov-2026-7095694c
+title: Go scheduled worker example with observe-only RECEIVE JOB test
+status: draft
+created_at: "2026-05-14"
+author: calebcowen@gmail.com
+implements: prov-2026-bfa97730
+intent: |
+  Build a minimal Go scheduled worker that fires a nightly_sync job on a configurable
+  interval (controlled via SYNC_INTERVAL_SECONDS env var for testing). The job fetches
+  user records from an external API, upserts them into the database, and posts a summary
+  to a webhook. One LineSpec test exercises the observe-only mode (no seed, no trigger)
+  — RECEIVE JOB with job_backend type scheduled — demonstrating that LineSpec waits for
+  the scheduler to fire naturally, then verifies all expected interactions.
+constraints:
+  - Scheduler uses time.NewTicker driven by SYNC_INTERVAL_SECONDS env var (default 86400)
+  - Health endpoint at /health returns 200 for runner readiness check
+  - nightly_sync_job.linespec uses observe-only mode (no WITH clause) and type scheduled
+  - .linespec.yml configures job_backend type scheduled (no queue key needed)
+  - nightly_sync_job.linespec must exercise GET from external API, WRITE upsert to users table, and POST summary webhook
+  - TIMEOUT in the linespec allows time for the scheduler to fire
+affected_scope:
+  - examples/scheduled-worker/**
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/scheduled-worker/linespecs/nightly_sync_job.linespec
+    type: linespec
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
