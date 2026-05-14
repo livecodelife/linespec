@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: worker_db
+      POSTGRES_USER: worker_user
+      POSTGRES_PASSWORD: worker_password
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  worker:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://worker_user:worker_password@db:5432/worker_db?sslmode=disable
+      USERS_API_URL: http://users-api:8080
+      WEBHOOK_URL: http://webhook-service:8080
+      SYNC_INTERVAL_SECONDS: "86400"
+    depends_on:
+      - db

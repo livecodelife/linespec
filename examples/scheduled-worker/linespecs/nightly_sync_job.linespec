@@ -1,1 +1,14 @@
-# placeholder
+TEST nightly_sync_job
+
+RECEIVE JOB
+TIMEOUT 30s
+
+EXPECT HTTP:GET /api/users
+RETURNS {{payloads/users_api_response.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+
+EXPECT HTTP:POST /api/sync-complete
+RETURNS {{payloads/webhook_response.json}}
