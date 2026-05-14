@@ -1,0 +1,34 @@
+id: prov-2026-4358fe61
+title: Add output filtering flags to lint command
+status: draft
+created_at: "2026-05-14"
+author: calebcowen@gmail.com
+intent: >
+  Scope the lint command output to only useful content by default and expose
+  flags for users to opt into seeing warnings, info, or all output.
+constraints:
+  - By default, lint output shows only error-severity issues (no warnings or hints).
+  - The --warn flag shows only warning-severity issues in the output.
+  - The --info flag shows only hint/informational issues in the output.
+  - The --all flag shows all issues regardless of severity.
+  - The summary line (passed / warnings / errors counts) always appears regardless of which flag is set.
+  - These flags are mutually exclusive; the last one wins if multiple are passed.
+  - No other behavior of the lint command changes.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: blueprint
+implements: prov-2026-66902c47
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - lint
+  - output
+  - flags
