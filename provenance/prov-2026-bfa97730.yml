@@ -55,6 +55,8 @@ affected_scope:
   - examples/bullmq-worker/**
   - examples/scheduled-worker/**
   - LINESPEC.md
+  - .linespec/hash_manifest.json
+  - provenance/prov-2026-bfa97730.yml
 forbidden_scope: []
 type: blueprint
 supersedes: ""
