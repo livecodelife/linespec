@@ -550,10 +550,10 @@ func commonAncestor(a, b string) string {
 }
 
 // canUsePersistentContainers returns true when the suite can keep containers alive across
-// tests for this spec. Kafka consumer tests are excluded because their trigger mechanism
-// (seeding + polling) requires a fresh interceptor per test.
+// tests for this spec. Kafka consumer and Job tests are excluded because their trigger
+// mechanism (seeding + polling) requires a fresh interceptor per test.
 func canUsePersistentContainers(spec *types.TestSpec) bool {
-	return spec.Receive.Channel != types.Event
+	return spec.Receive.Channel != types.Event && spec.Receive.Channel != types.Job
 }
 
 // reloadProxy POSTs registry bytes to a proxy sidecar's /reload-registry endpoint.
@@ -1087,6 +1087,31 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 		seedBytes, _ := json.Marshal(seedPayload)
 		r.registry.SeedTopic(spec.Receive.Topic, seedBytes)
+	}
+
+	// For Job-triggered tests, seed the backing queue based on job_backend config.
+	if spec.Receive.Channel == types.Job {
+		if serviceConfig.JobBackend == nil {
+			return fmt.Errorf("RECEIVE JOB requires job_backend to be configured in .linespec.yml")
+		}
+		if spec.Receive.WithFile != "" {
+			loader := dsl.NewPayloadLoaderWithResolver(spec.BaseDir, r.resolver)
+			seedPayload, err := loader.Load(spec.Receive.WithFile)
+			if err != nil {
+				return fmt.Errorf("failed to load job seed payload: %w", err)
+			}
+			seedBytes, _ := json.Marshal(seedPayload)
+			switch serviceConfig.JobBackend.Type {
+			case "redis":
+				r.registry.SeedRedisQueue(serviceConfig.JobBackend.Queue, seedBytes)
+			case "kafka":
+				r.registry.SeedTopic(serviceConfig.JobBackend.Queue, seedBytes)
+			case "scheduled":
+				// Observe-only: no seed needed.
+			default:
+				return fmt.Errorf("unsupported job_backend type %q (use redis, kafka, or scheduled)", serviceConfig.JobBackend.Type)
+			}
+		}
 	}
 
 	// Container persistence: if eligible and we have healthy persistent containers, skip setup.
@@ -2252,15 +2277,15 @@ func (r *testRunner) runTestPhase(
 	grpcVerifyPort string,
 	redisVerifyPort string,
 ) error {
-	// 6. Trigger (HTTP) or wait (Kafka consumer)
-	if spec.Receive.Channel == types.Event {
-		// The trigger is the seeded Kafka message already in the interceptor.
+	// 6. Trigger (HTTP) or observe (Kafka consumer / Job)
+	if spec.Receive.Channel == types.Event || spec.Receive.Channel == types.Job {
+		// The trigger is already in place (seeded queue or internal scheduler).
 		// Poll the verify endpoints every 500ms until all expected mocks are satisfied
 		// or the test context deadline is reached.
-		logger.Debug("Kafka consumer test: polling for expected mock interactions...")
+		logger.Debug("Async test: polling for expected mock interactions...")
 		pollTicker := time.NewTicker(500 * time.Millisecond)
 		defer pollTicker.Stop()
-	kafkaPollLoop:
+	asyncPollLoop:
 		for {
 			for _, vp := range dbVerifyPorts {
 				r.collectHits("localhost:" + vp)
@@ -2275,12 +2300,12 @@ func (r *testRunner) runTestPhase(
 				r.collectHits("localhost:" + redisVerifyPort)
 			}
 			if r.registry.VerifyAll() == nil {
-				logger.Debug("Kafka consumer test: all expected interactions satisfied")
-				break kafkaPollLoop
+				logger.Debug("Async test: all expected interactions satisfied")
+				break asyncPollLoop
 			}
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("kafka consumer test timed out waiting for expected interactions: %w", ctx.Err())
+				return fmt.Errorf("job test timed out waiting for expected interactions: %w", ctx.Err())
 			case <-pollTicker.C:
 				// continue polling
 			}
