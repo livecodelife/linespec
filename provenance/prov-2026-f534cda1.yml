@@ -1,6 +1,6 @@
 id: prov-2026-f534cda1
 title: 'Implement compile command: CompileManifest on Hasher + CLI wiring'
-status: open
+status: implemented
 created_at: "2026-05-14"
 author: test@example.com
 intent: |
@@ -27,7 +27,7 @@ implements: prov-2026-37bea46b
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c2b7e90d163ad8c02130f19e426464bc150c7a41
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: code
