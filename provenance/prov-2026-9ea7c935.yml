@@ -1,0 +1,39 @@
+id: prov-2026-9ea7c935
+title: Downgrade missing-file errors to warnings for implemented records
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  When a provenance record is in the `implemented` status and one of its associated_specs
+  files has been deleted or moved, the linter currently emits a SeverityError. This is
+  too aggressive: once a record is sealed, proof artifacts may legitimately be renamed,
+  moved, or deleted as the codebase evolves. For implemented records, a missing or
+  inaccessible proof artifact should produce a SeverityWarning on lint, not an error.
+
+  The change is scoped to validateAssociatedSpecs() in pkg/provenance/linter.go.
+  Records with StatusImplemented (and StatusSuperseded / StatusDeprecated, which are
+  also terminal states) should have missing-file issues reported as warnings.
+  Records with StatusOpen or StatusDraft retain the current error behavior.
+
+  The dead-record check (checkDeadRecords) is unaffected — it already emits a warning
+  when ALL governed scope files are gone, regardless of status, and that behavior is
+  intentional and should not change.
+constraints:
+  - Implemented, superseded, and deprecated records must produce SeverityWarning (not SeverityError) when a proof artifact file is missing or inaccessible.
+  - Open and draft records must continue to produce SeverityError for missing proof artifacts.
+  - The dead-record check (all governed files gone) must remain unchanged.
+  - Existing unit tests must be updated or extended to cover the new per-status severity behavior.
+  - No change to validateScopePaths() — it already correctly gates on StatusOpen.
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
