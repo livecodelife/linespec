@@ -293,23 +293,31 @@ type InfrastructureConfig struct {
 	ProxyImage string `yaml:"proxy_image"`   // Docker image for protocol proxies (default: linespec:latest)
 }
 
+// JobBackendConfig configures the backing store used to deliver jobs to the worker under test.
+// Type values: "redis" (seed via BRPOP/LPOP), "kafka" (seed via topic), "scheduled" (observe-only).
+type JobBackendConfig struct {
+	Type  string `yaml:"type"`            // redis | kafka | scheduled
+	Queue string `yaml:"queue,omitempty"` // Redis queue key (e.g. "queue:default") or Kafka topic
+}
+
 // LineSpecConfig is the root configuration structure
 type LineSpecConfig struct {
-	Service             ServiceConfig       `yaml:"service"`
-	Database            *DatabaseConfig     `yaml:"database,omitempty"` // Single-database form (backward compat). Normalised into Databases by applyDefaults.
-	Databases           []DatabaseConfig    `yaml:"databases,omitempty"` // Multi-database form. Takes precedence over Database when both are set.
-	Infrastructure      InfrastructureConfig `yaml:"infrastructure"`
-	Dependencies        []DependencyConfig  `yaml:"dependencies,omitempty"`
-	Provenance          *ProvenanceConfig   `yaml:"provenance,omitempty"`
-	ContainerNaming     *ContainerNaming    `yaml:"container_naming,omitempty"`
-	PortConfig          *PortConfig         `yaml:"ports,omitempty"`
+	Service             ServiceConfig        `yaml:"service"`
+	Database            *DatabaseConfig      `yaml:"database,omitempty"` // Single-database form (backward compat). Normalised into Databases by applyDefaults.
+	Databases           []DatabaseConfig     `yaml:"databases,omitempty"` // Multi-database form. Takes precedence over Database when both are set.
+	Infrastructure      InfrastructureConfig  `yaml:"infrastructure"`
+	Dependencies        []DependencyConfig   `yaml:"dependencies,omitempty"`
+	Provenance          *ProvenanceConfig    `yaml:"provenance,omitempty"`
+	ContainerNaming     *ContainerNaming     `yaml:"container_naming,omitempty"`
+	PortConfig          *PortConfig          `yaml:"ports,omitempty"`
 	SchemaDiscovery     *SchemaDiscoveryConfig `yaml:"schema_discovery,omitempty"`
-	Payload             *PayloadConfig      `yaml:"payload,omitempty"`
-	TestTimeoutSeconds  int                 `yaml:"timeout_seconds,omitempty"`
-	StrictPassthrough   bool                `yaml:"strict_passthrough,omitempty"`
-	GRPCDescriptorSet   string              `yaml:"grpc_descriptor_set,omitempty"`
-	Created             time.Time           `yaml:"-"`
-	BaseDir             string              `yaml:"-"`
+	Payload             *PayloadConfig       `yaml:"payload,omitempty"`
+	JobBackend          *JobBackendConfig    `yaml:"job_backend,omitempty"`
+	TestTimeoutSeconds  int                  `yaml:"timeout_seconds,omitempty"`
+	StrictPassthrough   bool                 `yaml:"strict_passthrough,omitempty"`
+	GRPCDescriptorSet   string               `yaml:"grpc_descriptor_set,omitempty"`
+	Created             time.Time            `yaml:"-"`
+	BaseDir             string               `yaml:"-"`
 }
 
 // EmbeddingConfig defines the embedding API configuration

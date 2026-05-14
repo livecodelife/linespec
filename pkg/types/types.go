@@ -17,6 +17,7 @@ const (
 	WriteRedis      ExpectChannel = "WRITE_REDIS"
 	ReadMongoDB     ExpectChannel = "READ_MONGODB"
 	WriteMongoDB    ExpectChannel = "WRITE_MONGODB"
+	Job             ExpectChannel = "JOB"
 )
 
 // VerifyRule defines a verification rule for any intercepted data

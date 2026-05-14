@@ -70,9 +70,10 @@ var (
 	reVerifyCommandMatches     = regexp.MustCompile(`(?i)^command\s+MATCHES\s/(.+?)/$`)
 
 	// parseTestSpec / parseReceive patterns
-	reReceiveHTTP    = regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
-	reReceiveKafka   = regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
-	reReceiveGRPC    = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
+	reReceiveHTTP      = regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
+	reReceiveKafka     = regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
+	reReceiveGRPC      = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
+	reReceiveJob       = regexp.MustCompile(`(?i)^JOB$`)
 	reRespondStatus  = regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
 	reReturnsPayload = regexp.MustCompile(`^\{\{(.+)\}\}$`)
 
@@ -158,6 +159,8 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		spec.Receive.Channel = types.GRPC
 		spec.Receive.Service = mGRPC[1]
 		spec.Receive.RPCMethod = mGRPC[2]
+	} else if reReceiveJob.MatchString(receiveToken.Literal) {
+		spec.Receive.Channel = types.Job
 	} else {
 		return nil, fmt.Errorf("Invalid RECEIVE format at line %d: %s", receiveToken.Line, receiveToken.Literal)
 	}
@@ -223,6 +226,8 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		}
 	} else if spec.Receive.Channel == types.HTTP {
 		return nil, fmt.Errorf("RESPOND block is required for HTTP-triggered tests")
+	} else if spec.Receive.Channel == types.Job {
+		// Job-triggered tests have no synchronous response to verify.
 	}
 
 	return spec, nil
