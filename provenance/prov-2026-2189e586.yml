@@ -1,6 +1,6 @@
 id: prov-2026-2189e586
 title: Downgrade file-path lint issues to warnings for terminal-state records
-status: draft
+status: open
 created_at: "2026-05-14"
 author: test@example.com
 intent: |
