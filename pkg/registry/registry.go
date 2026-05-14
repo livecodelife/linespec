@@ -20,6 +20,7 @@ type MockRegistry struct {
 	orderedMocks []*types.ExpectStatement            // All mocks in registration order (for deterministic fallback)
 	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
 	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
+	redisSeeds   map[string][][]byte                 // Redis job seeds: queue key -> ordered list of raw payloads
 	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
 	verifyErrors []string                            // VERIFY rule failures recorded by proxies
 	variables    map[string]string                   // Resolved interpolation variables, forwarded to proxy containers
@@ -32,6 +33,7 @@ func NewMockRegistry() *MockRegistry {
 		orderedMocks: make([]*types.ExpectStatement, 0),
 		hits:         make(map[*types.ExpectStatement]int),
 		seeds:        make(map[string][][]byte),
+		redisSeeds:   make(map[string][][]byte),
 		passthroughs: make([]string, 0),
 		variables:    make(map[string]string),
 		varTypes:     make(map[string]string),
@@ -96,6 +98,27 @@ func (r *MockRegistry) GetSeeds() map[string][][]byte {
 	return out
 }
 
+// SeedRedisQueue adds a raw payload to be served to Redis workers on a given queue key.
+// The seed is returned on the worker's next BRPOP/BLPOP/LPOP call for that key.
+func (r *MockRegistry) SeedRedisQueue(key string, value []byte) {
+	r.Lock()
+	defer r.Unlock()
+	r.redisSeeds[key] = append(r.redisSeeds[key], value)
+}
+
+// GetRedisSeeds returns a copy of all seeded Redis queue payloads.
+func (r *MockRegistry) GetRedisSeeds() map[string][][]byte {
+	r.RLock()
+	defer r.RUnlock()
+	out := make(map[string][][]byte, len(r.redisSeeds))
+	for key, msgs := range r.redisSeeds {
+		cp := make([][]byte, len(msgs))
+		copy(cp, msgs)
+		out[key] = cp
+	}
+	return out
+}
+
 // ResetHits resets the hit count for all mocks (useful for testing)
 func (r *MockRegistry) ResetHits() {
 	r.Lock()
@@ -117,7 +140,7 @@ func (r *MockRegistry) ClearState() {
 func (r *MockRegistry) ToBytes() ([]byte, error) {
 	r.RLock()
 	defer r.RUnlock()
-	return json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds})
+	return json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds, RedisSeeds: r.redisSeeds})
 }
 
 // LoadFromBytes replaces the registry contents from JSON bytes (same format as SaveToFile).
@@ -137,6 +160,9 @@ func (r *MockRegistry) LoadFromBytes(data []byte) error {
 	}
 	if rf.Seeds != nil {
 		r.seeds = rf.Seeds
+	}
+	if rf.RedisSeeds != nil {
+		r.redisSeeds = rf.RedisSeeds
 	}
 	if rf.Variables != nil {
 		r.variables = rf.Variables
@@ -1099,16 +1125,17 @@ func (r *MockRegistry) CheckNegativeRedisMocks(command, key string) {
 }
 
 type registryFile struct {
-	Mocks     map[string][]*types.ExpectStatement `json:"mocks"`
-	Seeds     map[string][][]byte                 `json:"seeds,omitempty"`
-	Variables map[string]string                   `json:"variables,omitempty"`
-	VarTypes  map[string]string                   `json:"var_types,omitempty"`
+	Mocks      map[string][]*types.ExpectStatement `json:"mocks"`
+	Seeds      map[string][][]byte                 `json:"seeds,omitempty"`
+	RedisSeeds map[string][][]byte                 `json:"redis_seeds,omitempty"`
+	Variables  map[string]string                   `json:"variables,omitempty"`
+	VarTypes   map[string]string                   `json:"var_types,omitempty"`
 }
 
 func (r *MockRegistry) SaveToFile(path string) error {
 	r.RLock()
 	defer r.RUnlock()
-	data, err := json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds})
+	data, err := json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds, RedisSeeds: r.redisSeeds})
 	if err != nil {
 		return err
 	}
@@ -1145,7 +1172,7 @@ func (r *MockRegistry) ToBytesForContainer(hostCwd, containerProjectMount string
 		rebasedMocks[key] = rebased
 	}
 
-	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds, Variables: r.variables, VarTypes: r.varTypes})
+	return json.Marshal(registryFile{Mocks: rebasedMocks, Seeds: r.seeds, RedisSeeds: r.redisSeeds, Variables: r.variables, VarTypes: r.varTypes})
 }
 
 // SaveToFileForContainer saves the registry to path with BaseDir fields rewritten
@@ -1180,6 +1207,9 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 	}
 	if rf.Seeds != nil {
 		r.seeds = rf.Seeds
+	}
+	if rf.RedisSeeds != nil {
+		r.redisSeeds = rf.RedisSeeds
 	}
 	if rf.Variables != nil {
 		r.variables = rf.Variables

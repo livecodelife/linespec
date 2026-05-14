@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/interpolate"
@@ -23,6 +24,12 @@ var readCommands = map[string]bool{
 	"LRANGE": true, "LLEN": true, "SMEMBERS": true, "SISMEMBER": true,
 	"ZRANGE": true, "ZRANGEBYSCORE": true, "EXISTS": true, "TTL": true,
 	"TYPE": true, "KEYS": true, "STRLEN": true, "LINDEX": true,
+	"BRPOP": true, "BLPOP": true, "LPOP": true,
+}
+
+// popCommands is the set of blocking/non-blocking pop commands that can deliver seeded jobs.
+var popCommands = map[string]bool{
+	"BRPOP": true, "BLPOP": true, "LPOP": true,
 }
 
 // Interceptor is a mock Redis server that serves responses from the registry.
@@ -31,6 +38,8 @@ type Interceptor struct {
 	addr     string
 	registry *registry.MockRegistry
 	resolver *interpolate.Resolver
+	seeds    map[string][][]byte // job seeds: queue key -> ordered list of raw payloads
+	seedsMu  sync.Mutex
 }
 
 // NewInterceptor creates a new Redis interceptor listening on addr.
@@ -38,7 +47,21 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 	return &Interceptor{
 		addr:     addr,
 		registry: reg,
+		seeds:    reg.GetRedisSeeds(),
 	}
+}
+
+// popSeed pops and returns the first seeded payload for key, or nil if empty.
+func (i *Interceptor) popSeed(key string) []byte {
+	i.seedsMu.Lock()
+	defer i.seedsMu.Unlock()
+	msgs := i.seeds[key]
+	if len(msgs) == 0 {
+		return nil
+	}
+	payload := msgs[0]
+	i.seeds[key] = msgs[1:]
+	return payload
 }
 
 // SetResolver stores a resolver so that ${VAR} tokens in RETURNS payload files
@@ -138,6 +161,14 @@ func (i *Interceptor) handleCommand(cmd, key string, args []string) []byte {
 			return encodeArray(nil)
 		}
 		return encodeSimpleString("OK")
+	}
+
+	// Pop commands: check for a seeded job payload first.
+	if popCommands[cmd] && key != "" {
+		if payload := i.popSeed(key); payload != nil {
+			logger.Debug("Redis Interceptor: serving seeded job for %s %s", cmd, key)
+			return encodeArray([][]byte{encodeBulkString(key), encodeBulkString(string(payload))})
+		}
 	}
 
 	// Data commands: look up a mock.
