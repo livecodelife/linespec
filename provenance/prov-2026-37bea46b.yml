@@ -1,0 +1,34 @@
+id: prov-2026-37bea46b
+title: Add provenance compile command to regenerate hash manifest
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  Add a `linespec provenance compile` command that walks all provenance records and
+  rebuilds the hash manifest from scratch. The command must be idempotent — if every
+  record's hash already matches what is stored in the manifest, no file is written and
+  the exit code is 0. This gives operators a first-class way to recover from a deleted
+  or corrupted manifest without needing to trigger an unrelated provenance write.
+constraints:
+  - Command is exposed as `linespec provenance compile` with a `-c` flag consistent with all other provenance subcommands
+  - Running compile when the manifest is already up-to-date produces no changes to .linespec/hash_manifest.json
+  - Running compile when the manifest is missing or stale writes the full manifest covering every record
+  - FullGraphHash and ActiveSubsetHash are recomputed and correct after compile
+  - All per-record hashes in the manifest match a fresh HashRecord() call for each record after compile
+  - Command exits 0 on success; non-zero on I/O or parse errors
+  - Subsequent `provenance lint` passes with no integrity errors after compile
+affected_scope:
+  - pkg/provenance/hasher.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
