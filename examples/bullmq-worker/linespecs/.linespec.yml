@@ -1,0 +1,45 @@
+service:
+  name: bullmq-worker
+  service_dir: ..
+  type: worker
+  framework: custom
+  port: 8080
+  health_endpoint: /health
+  docker_compose: ../docker-compose.yml
+  build_context: ..
+  start_command: node worker.js
+  environment:
+    DATABASE_URL: postgres://worker_user:worker_password@db:5432/worker_db
+    REDIS_URL: redis://redis-proxy:6379
+    NOTIFICATION_SERVICE_URL: http://notification-service:8080
+    BILLING_SERVICE_URL: http://billing-service:8080
+
+database:
+  type: postgresql
+  image: postgres:16-alpine
+  port: 5432
+  container: db
+  init_script: ../init.sql
+  database: worker_db
+  username: worker_user
+  password: worker_password
+
+job_backend:
+  type: redis
+  queue: jobs:notifications
+
+infrastructure:
+  database: true
+  redis: true
+
+dependencies:
+  - name: notification-service
+    type: http
+    host: notification-service
+    port: 8080
+    proxy: true
+  - name: billing-service
+    type: http
+    host: billing-service
+    port: 8080
+    proxy: true

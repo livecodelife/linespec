@@ -1,1 +1,16 @@
-# placeholder
+TEST send_notification_job
+
+RECEIVE JOB
+WITH {{payloads/notification_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_row.yaml}}
+
+EXPECT HTTP:POST /api/notify
+RETURNS {{payloads/notify_response.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [notification_log]
+VERIFY_OPERATION INSERT

@@ -1,0 +1,6 @@
+{
+  "type": "send_notification",
+  "user_id": 1,
+  "channel": "email",
+  "message": "Your order has shipped!"
+}

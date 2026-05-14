@@ -1,1 +1,16 @@
-# placeholder
+TEST generate_invoice_job
+
+RECEIVE JOB
+WITH {{payloads/invoice_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/order_row.yaml}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [invoices]
+VERIFY_OPERATION INSERT
+
+EXPECT HTTP:POST /api/invoice-created
+RETURNS {{payloads/billing_response.json}}

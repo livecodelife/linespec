@@ -1,0 +1,4 @@
+rows:
+  - id: 1
+    email: bob@example.com
+    name: Bob Jones

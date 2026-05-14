@@ -1,0 +1,5 @@
+{
+  "type": "generate_invoice",
+  "user_id": 1,
+  "order_id": 42
+}
