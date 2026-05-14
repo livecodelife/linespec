@@ -1,0 +1,33 @@
+id: prov-2026-fc2c3aef
+title: DSL, types, and config for RECEIVE JOB
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+implements: prov-2026-bfa97730
+intent: |
+  Add the Job channel type to pkg/types, a RECEIVE JOB parse branch in the DSL parser, and a
+  job_backend config struct. The queue key and backend type live in .linespec.yml so individual
+  test files stay clean. The parser sets Channel = Job and accepts an optional WITH payload and
+  TIMEOUT; no new ReceiveStatement fields are needed beyond the channel type.
+constraints:
+  - Add Job ExpectChannel constant to pkg/types/types.go
+  - Add JobBackendConfig struct (type, queue fields) to pkg/config/types.go and wire into
+    LineSpecConfig as job_backend
+  - Parser must accept RECEIVE JOB (case-insensitive) and set Receive.Channel = types.Job
+  - RESPOND must not be required for Job-triggered tests (same rule as Kafka consumer tests)
+  - No new ReceiveStatement fields needed; queue key comes from config at runner time
+  - Lexer requires no changes — RECEIVE, WITH, and TIMEOUT tokens already exist
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/parser.go
+  - pkg/config/types.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
