@@ -1,0 +1,35 @@
+id: prov-2026-2189e586
+title: Downgrade file-path lint issues to warnings for terminal-state records
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  Modify validateAssociatedSpecs(), validateScopePaths(), validateExactPath(),
+  validateGlobPattern(), and validateRegexPattern() in pkg/provenance/linter.go so that
+  any missing-or-inaccessible file path issue is emitted as SeverityWarning rather than
+  SeverityError when the record is in a terminal state (implemented, superseded, deprecated).
+  validateScopePaths() currently short-circuits on non-open records; it must instead
+  continue for terminal-state records but pass a degraded severity down to the helpers.
+  Add unit test cases in linter_test.go covering each check type at each relevant status.
+constraints:
+  - "isTerminalStatus helper (or inline check) covers: StatusImplemented, StatusSuperseded, StatusDeprecated."
+  - Severity for missing/inaccessible paths is SeverityWarning for terminal-state records across all four helper functions.
+  - Open and draft records continue to receive SeverityError for missing paths (no behavior change).
+  - "validateScopePaths() gate changes from StatusOpen-only to: run for open (errors) and terminal (warnings); still skip draft."
+  - Unit tests added for implemented, superseded, and deprecated records with missing associated_specs, missing exact scope path, no-match glob, and no-match regex.
+implements: prov-2026-9ea7c935
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
