@@ -1,6 +1,6 @@
 id: prov-2026-37bea46b
 title: Add provenance compile command to regenerate hash manifest
-status: draft
+status: open
 created_at: "2026-05-14"
 author: test@example.com
 intent: |
@@ -28,7 +28,10 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
