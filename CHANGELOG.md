@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-05-14
+
+### Added
+
+- **Lint output filtering flags** ([prov-2026-4358fe61](./provenance/prov-2026-4358fe61.yml)) — The `linespec provenance lint` command now shows only error-severity issues by default. Three new flags control what is displayed: `--warn` shows only warnings, `--info` shows only informational hints, and `--all` shows everything. The summary line (passed / warnings / errors counts) is always printed regardless of which flag is used.
+
+### Related Provenance Records
+
+- [prov-2026-66902c47](https://github.com/livecodelife/linespec-provenance) - Brief: Add flags for controlling lint output
+- [prov-2026-4358fe61](./provenance/prov-2026-4358fe61.yml) - Blueprint: Add output filtering flags to lint command
+- [prov-2026-08b36e49](./provenance/prov-2026-08b36e49.yml) - Imprint: Implement --warn/--info/--all output filter flags for lint
+
 ## [3.3.1] - 2026-05-08
 
 ### Fixed

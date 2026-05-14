@@ -20,6 +20,7 @@ affected_scope:
   - README.md
   - LINESPEC.md
   - CHANGELOG.md
+  - VERSION
   - .linespec/hash_manifest.json
 forbidden_scope: []
 type: blueprint
