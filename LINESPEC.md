@@ -229,6 +229,103 @@ Rules:
 * Headers are added to the HTTP request (Authorization, X-Custom-Header, etc.)
 * WITH must come before HEADERS if both are present
 
+### RECEIVE KAFKA
+
+Triggers a Kafka consumer test. The proxy seeds a message into the topic so the service picks it up naturally, then waits for all EXPECT mocks to be satisfied.
+
+```
+RECEIVE KAFKA:<topic_name>
+WITH {{<payload_file>}}
+[TIMEOUT <duration>]
+```
+
+Example:
+
+```
+RECEIVE KAFKA:order-events
+WITH {{payloads/order_created.yaml}}
+TIMEOUT 30s
+```
+
+Configure the Kafka broker in `infrastructure` and set `kafka: true`. RESPOND is not required for Kafka consumer tests.
+
+### RECEIVE JOB
+
+Triggers a background job test. Works with three modes depending on the `job_backend.type` configured in `.linespec.yml`:
+
+**Redis-backed** (`type: redis`): The proxy seeds the job payload into the configured queue key. The worker picks it up via BRPOP/BLPOP/LPOP as it normally would. Completion is detected when all EXPECT mocks are satisfied — no status endpoint needed.
+
+```
+RECEIVE JOB
+WITH {{<payload_file>}}
+[TIMEOUT <duration>]
+```
+
+**Kafka-backed** (`type: kafka`): Seeds the payload into the configured topic (same mechanism as RECEIVE KAFKA). Uses `queue` as the topic name.
+
+```
+RECEIVE JOB
+WITH {{<payload_file>}}
+[TIMEOUT <duration>]
+```
+
+**Scheduled/observe-only** (`type: scheduled`): No seed, no trigger. LineSpec waits for the service's internal scheduler to fire naturally. EXPECT mocks supply any input data the job reads; EXPECT WRITE/HTTP/etc. verify what the job produces. `TIMEOUT` is required to allow the scheduler to fire.
+
+```
+RECEIVE JOB
+TIMEOUT <duration>
+```
+
+Configure `job_backend` once in `.linespec.yml`:
+
+```yaml
+job_backend:
+  type: redis       # redis | kafka | scheduled
+  queue: worker:jobs  # Redis queue key or Kafka topic (omit for scheduled)
+```
+
+Examples:
+
+```
+# Redis-backed worker (e.g. Asynq, Sidekiq, RQ, Dramatiq)
+RECEIVE JOB
+WITH {{payloads/email_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_row.yaml}}
+
+EXPECT HTTP:POST /api/send
+RETURNS {{payloads/email_sent.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [email_log]
+VERIFY_OPERATION INSERT
+```
+
+```
+# Scheduled/cron job (observe-only, no seed)
+RECEIVE JOB
+TIMEOUT 30s
+
+EXPECT HTTP:GET /api/users
+RETURNS {{payloads/users_list.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT
+```
+
+Rules:
+
+* Exactly one RECEIVE per file
+* MUST appear before any EXPECT or EXPECT_NOT
+* `WITH` is required for redis and kafka types; omit for scheduled (observe-only)
+* `TIMEOUT` is recommended for all RECEIVE JOB tests; required for scheduled mode
+* RESPOND is not required for RECEIVE JOB tests
+* `job_backend` must be configured in `.linespec.yml`; omitting it is an error for redis/kafka types
+
 ---
 
 ## 2. EXPECT
