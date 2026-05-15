@@ -44,6 +44,10 @@ affected_scope:
   - "pkg/provenance/publish_test.go"
   - "pkg/provenance/commands.go"
   - "cmd/linespec/main_stable.go"
+associated_specs:
+  - path: pkg/provenance/publish_test.go
+    type: go_test
+    run_command: make test
 tags:
   - manifest
   - publish
