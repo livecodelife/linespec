@@ -73,10 +73,11 @@ type MockedPortal struct {
 // This is needed for the extended query protocol where we eavesdrop on Parse
 // but only intercept at Bind/Execute
 type ConnectionState struct {
-	preparedStatements map[string]string          // statement name -> query
-	describedStatements map[string]bool           // statement name -> Describe was forwarded
-	mockedPortals      map[string]*MockedPortal   // portal name -> mock + actual query
-	justMockedExecute  bool                       // track if we just mocked an Execute
+	preparedStatements  map[string]string        // statement name -> query
+	describedStatements map[string]bool          // statement name -> Describe was forwarded to upstream
+	mockedPortals       map[string]*MockedPortal // portal name -> mock + actual query
+	justMockedExecute   bool                     // track if we just mocked an Execute
+	mockOnlyStatements  map[string]bool          // statements handled locally (never forwarded to upstream)
 }
 
 // NewConnectionState creates a new connection state
@@ -86,6 +87,7 @@ func NewConnectionState() *ConnectionState {
 		describedStatements: make(map[string]bool),
 		mockedPortals:       make(map[string]*MockedPortal),
 		justMockedExecute:   false,
+		mockOnlyStatements:  make(map[string]bool),
 	}
 }
 
@@ -626,25 +628,35 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		// Handle based on message type
 		switch msgType {
 		case MsgParse:
-			// Eavesdrop on Parse to track prepared statements, then forward to real DB
 			stmtName, query := p.extractParseInfo(payload)
 			if query != "" {
 				state.preparedStatements[stmtName] = query
 				p.logDebug("  -> Tracked Parse: stmtName='%s', query='%s...'\n", stmtName, query[:min(50, len(query))])
 			}
-			// Forward to upstream
+			// If this query will be mocked, handle ParseComplete locally so we never
+			// forward Parse to upstream. This prevents stale ParseComplete messages from
+			// the relay goroutine arriving on idle connections after mocked Execute completes.
+			if query != "" {
+				if _, mocked := p.peekMock(query, nil); mocked {
+					state.mockOnlyStatements[stmtName] = true
+					p.logDebug("  -> Mock-only Parse for '%s': sending local ParseComplete\n", stmtName)
+					if err := p.writeMessage(clientConn, MsgParseComplete, nil); err != nil {
+						p.logDebug("  -> Error sending ParseComplete: %v\n", err)
+						return
+					}
+					continue
+				}
+			}
+			state.mockOnlyStatements[stmtName] = false
 			if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 				p.logDebug("  -> Error forwarding Parse: %v\n", err)
 				return
 			}
 
 		case MsgDescribe, MsgClose, MsgFlush:
-			// These always flow through to real DB.
-			// For Describe, record that the upstream will send RowDescription to the client;
-			// Execute for the same statement must then skip sending its own RowDescription.
+			// For Describe, record that upstream will send RowDescription (used by Execute).
+			// If the statement/portal is mock-only, respond locally instead of going upstream.
 			if msgType == MsgDescribe && len(payload) > 0 {
-				// payload[0] == 'S' (DescribeStatement) or 'P' (DescribePortal)
-				// We only care about DescribeStatement ('S') since that triggers RowDescription.
 				if payload[0] == 'S' {
 					stmtName := ""
 					if len(payload) > 1 {
@@ -654,7 +666,95 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 						}
 						stmtName = string(payload[1:nullIdx])
 					}
+					if state.mockOnlyStatements[stmtName] {
+						// Respond locally without going to upstream.
+						// Use the actual SQL param count so clients like lib/pq don't reject
+						// the prepared statement due to an arg-count mismatch.
+						query := state.preparedStatements[stmtName]
+						paramCount := countSQLParams(query)
+						p.logDebug("  -> Mock-only Describe '%s': ParameterDescription(%d)\n", stmtName, paramCount)
+						if err := p.writeMessage(clientConn, MsgParameterDescription, buildParameterDescription(paramCount)); err != nil {
+							p.logDebug("  -> Error sending ParameterDescription: %v\n", err)
+							return
+						}
+						// SELECT queries expect RowDescription so the client can set up the row
+						// scanner before the execute phase. WRITE queries expect NoData.
+						if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "SELECT") {
+							cols := p.extractSelectColumns(query)
+							if len(cols) == 0 {
+								cols = []string{"id"}
+							}
+							p.logDebug("  -> Mock-only Describe '%s': sending RowDescription %v\n", stmtName, cols)
+							if err := p.result.SendRowDescription(clientConn, cols); err != nil {
+								p.logDebug("  -> Error sending RowDescription: %v\n", err)
+								return
+							}
+							// Mark as described so Execute skips a second RowDescription.
+							state.describedStatements[stmtName] = true
+						} else {
+							if err := p.writeMessage(clientConn, MsgNoData, nil); err != nil {
+								p.logDebug("  -> Error sending NoData: %v\n", err)
+								return
+							}
+						}
+						continue
+					}
 					state.describedStatements[stmtName] = true
+				} else if payload[0] == 'P' {
+					// DescribePortal — respond locally for mocked portals to avoid forwarding
+					// to upstream (the portal never existed there).
+					portalName := ""
+					if len(payload) > 1 {
+						nullIdx := 1
+						for nullIdx < len(payload) && payload[nullIdx] != 0 {
+							nullIdx++
+						}
+						portalName = string(payload[1:nullIdx])
+					}
+					if mp, exists := state.mockedPortals[portalName]; exists {
+						p.logDebug("  -> Mock-only Describe Portal for '%s': responding locally\n", portalName)
+						if mp.Mock.Channel == types.ReadPostgreSQL {
+							// READ mock: send RowDescription so Execute can skip it.
+							if err := p.sendRowDescription(clientConn, mp.Mock); err != nil {
+								p.logDebug("  -> Error sending RowDescription: %v\n", err)
+								return
+							}
+							mp.DescribeForwarded = true
+						} else {
+							// WRITE mock: no result set.
+							if err := p.writeMessage(clientConn, MsgNoData, nil); err != nil {
+								p.logDebug("  -> Error sending NoData: %v\n", err)
+								return
+							}
+						}
+						continue
+					}
+				}
+			}
+			// Close for a mock-only statement or portal must be handled locally —
+			// the statement/portal never existed on upstream so forwarding it would error.
+			if msgType == MsgClose && len(payload) > 0 {
+				var name string
+				if len(payload) > 1 {
+					nullIdx := 1
+					for nullIdx < len(payload) && payload[nullIdx] != 0 {
+						nullIdx++
+					}
+					name = string(payload[1:nullIdx])
+				}
+				isMockOnly := false
+				if payload[0] == 'S' {
+					isMockOnly = state.mockOnlyStatements[name]
+				} else if payload[0] == 'P' {
+					_, isMockOnly = state.mockedPortals[name]
+				}
+				if isMockOnly {
+					p.logDebug("  -> Mock-only Close for '%c' '%s': sending local CloseComplete\n", payload[0], name)
+					if err := p.writeMessage(clientConn, MsgCloseComplete, nil); err != nil {
+						p.logDebug("  -> Error sending CloseComplete: %v\n", err)
+						return
+					}
+					continue
 				}
 			}
 			p.logDebug("  -> Forwarding message type %c to upstream\n", msgType)
@@ -2620,6 +2720,33 @@ func (p *Proxy) countParameters(sql string) int {
 // extractParameterTypes extracts PostgreSQL type OIDs for each $N parameter from SQL casts
 // e.g., "$1::INTEGER" returns [23] for parameter 1
 // e.g., "$1::INTEGER AND $2::VARCHAR" returns [23, 1043]
+// countSQLParams returns the highest $N param index found in sql (so the number of params).
+func countSQLParams(sql string) int {
+	re := regexp.MustCompile(`\$(\d+)`)
+	matches := re.FindAllStringSubmatch(sql, -1)
+	max := 0
+	for _, m := range matches {
+		if len(m) > 1 {
+			var n int
+			fmt.Sscanf(m[1], "%d", &n)
+			if n > max {
+				max = n
+			}
+		}
+	}
+	return max
+}
+
+// buildParameterDescription returns a ParameterDescription payload for n unspecified-type params.
+// PostgreSQL format: Int16 count, then n Int32 OIDs (0 = unspecified).
+func buildParameterDescription(n int) []byte {
+	buf := make([]byte, 2+n*4)
+	buf[0] = byte(n >> 8)
+	buf[1] = byte(n)
+	// OIDs are 0 (unspecified), already zeroed
+	return buf
+}
+
 func (p *Proxy) extractParameterTypes(sql string) []uint32 {
 	if sql == "" {
 		return nil

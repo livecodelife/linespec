@@ -119,6 +119,21 @@ func (r *MockRegistry) GetRedisSeeds() map[string][][]byte {
 	return out
 }
 
+// PopRedisSeed atomically removes and returns the first seeded payload for key, or nil.
+// This is the canonical way for proxy interceptors to consume seeds so they stay in sync
+// with the registry even after a hot-reload via /reload-registry.
+func (r *MockRegistry) PopRedisSeed(key string) []byte {
+	r.Lock()
+	defer r.Unlock()
+	msgs := r.redisSeeds[key]
+	if len(msgs) == 0 {
+		return nil
+	}
+	payload := msgs[0]
+	r.redisSeeds[key] = msgs[1:]
+	return payload
+}
+
 // ResetHits resets the hit count for all mocks (useful for testing)
 func (r *MockRegistry) ResetHits() {
 	r.Lock()

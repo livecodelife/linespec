@@ -9,7 +9,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/interpolate"
@@ -38,8 +37,6 @@ type Interceptor struct {
 	addr     string
 	registry *registry.MockRegistry
 	resolver *interpolate.Resolver
-	seeds    map[string][][]byte // job seeds: queue key -> ordered list of raw payloads
-	seedsMu  sync.Mutex
 }
 
 // NewInterceptor creates a new Redis interceptor listening on addr.
@@ -47,21 +44,13 @@ func NewInterceptor(addr string, reg *registry.MockRegistry) *Interceptor {
 	return &Interceptor{
 		addr:     addr,
 		registry: reg,
-		seeds:    reg.GetRedisSeeds(),
 	}
 }
 
 // popSeed pops and returns the first seeded payload for key, or nil if empty.
+// Reads directly from the registry so hot-reloads via /reload-registry are picked up.
 func (i *Interceptor) popSeed(key string) []byte {
-	i.seedsMu.Lock()
-	defer i.seedsMu.Unlock()
-	msgs := i.seeds[key]
-	if len(msgs) == 0 {
-		return nil
-	}
-	payload := msgs[0]
-	i.seeds[key] = msgs[1:]
-	return payload
+	return i.registry.PopRedisSeed(key)
 }
 
 // SetResolver stores a resolver so that ${VAR} tokens in RETURNS payload files
