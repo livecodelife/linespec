@@ -1,0 +1,36 @@
+id: prov-2026-bbe4b5cd
+title: Release v3.7.0 — document compile, init, publish, import, clone in provenance skill
+status: draft
+created_at: "2026-05-15"
+author: test@example.com
+intent: >
+  Publish v3.7.0 adding documentation of compile, init, publish, import, and clone
+  commands to the provenance skill (both embedded in the binary and the file-based
+  skill). Includes CHANGELOG entry and version bump via make bump-version.
+constraints:
+  - "make test must pass before tagging."
+  - "CHANGELOG.md [Unreleased] must be promoted to [3.7.0] - 2026-05-15 with a new empty [Unreleased] above it."
+  - "A git tag v3.7.0 must be pushed to trigger the release workflow."
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-f25d8526
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: document
+associated_traces: []
+monitors: []
+tags: []
