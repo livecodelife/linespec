@@ -1,0 +1,40 @@
+id: prov-2026-cbc8213e
+title: Fix PostgreSQL proxy OID resolution regression for Rust/tokio-postgres clients
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: |
+  prov-2026-806c453e introduced mock-only Parse interception: when a query is mocked, the proxy
+  sends ParseComplete locally instead of forwarding Parse to upstream. This works for clients like
+  asyncpg and lib/pq that supply explicit parameter type OIDs or use $N::TYPE casts. However,
+  tokio-postgres (Rust) sends num_params=0 in Parse with no OID hints and relies on the server's
+  ParameterDescription to discover parameter types. When the proxy returns OID=0 (unspecified) for
+  all parameters, tokio-postgres calls typeinfo(0), which queries pg_catalog for OID=0, finds no
+  rows, and raises "unexpected message from server" — causing any service using tokio-postgres to
+  return 500.
+
+  Fix: before intercepting Parse locally, check if OIDs can be resolved without the upstream. If
+  the client provided explicit OIDs in Parse, or the query contains $N::TYPE casts, or the query
+  has no parameters, use mock-only mode. Otherwise forward Parse to upstream so the real server's
+  ParameterDescription (with correct OIDs) is relayed to the client. Bind/Execute are still
+  intercepted and mocked as before.
+constraints:
+  - When a mocked query has parameters but no explicit OIDs from the client and no $N::TYPE casts, Parse must be forwarded to upstream; Bind/Execute are still intercepted
+  - Clients sending explicit OIDs in Parse (asyncpg, newer tokio-postgres runs) continue to use mock-only Parse
+  - No regression in notification, todo, user, or order example test suites
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: bug
+extends: prov-2026-bfa97730
+superseded_by: ""
+related:
+  - prov-2026-806c453e
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/order-linespecs/create_order_success.linespec
+    run_command: "make test"
+associated_traces: []
+monitors: []
+tags: []
