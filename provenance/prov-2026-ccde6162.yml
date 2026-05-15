@@ -1,6 +1,6 @@
 id: prov-2026-ccde6162
 title: linespec clone command and manifest_url config field
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-587563e4
@@ -27,7 +27,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 0e4f7a4e8dbe0d6662fd262a5998e2e89b05f202
 associated_specs:
   - path: pkg/provenance/clone_test.go
     type: go_test
