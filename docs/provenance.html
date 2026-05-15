@@ -992,6 +992,100 @@ linespec provenance generate --output spec.md</code></pre>
                         <li>When <code>--record</code> targets a brief, all implementing blueprints are included</li>
                     </ul>
 
+                    <h3>Publish</h3>
+                    <p>Package a repository's provenance records into a versioned, content-addressed <code>linespec.manifest.json</code> artifact for distribution:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Publish provenance records only (minimum viable publish)
+linespec provenance publish
+
+# Include optional layers
+linespec provenance publish --specs linespecs/ --code pkg/ --prompt PROMPT.md
+
+# Pin to an explicit version instead of auto-incrementing
+linespec provenance publish --version v2
+
+# Write the manifest to a custom path
+linespec provenance publish --manifest dist/linespec.manifest.json</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--manifest path</code> - Path to <code>linespec.manifest.json</code> (default: <code>./linespec.manifest.json</code>)</li>
+                        <li><code>--version label</code> - Explicit version label; default is auto-increment (<code>v1</code> → <code>v2</code> → <code>v3</code>)</li>
+                        <li><code>--specs path</code> - Path to a specs artifact file or directory</li>
+                        <li><code>--code path</code> - Path to a code artifact file or directory</li>
+                        <li><code>--prompt path</code> - Path to a prompt artifact file</li>
+                        <li><code>--help</code> - Show help</li>
+                    </ul>
+                    <p><strong>What it does:</strong> Applies a deterministic transformation pipeline (strip imprints, filter superseded, promote bugs, clean dangling refs, reset status) to produce consumer-appropriate records, packages each layer as a tar artifact, computes SHA-256 hashes per layer and a <code>root_hash</code> across all layers, and appends an immutable version entry to the manifest. URL fields are left empty for the author to fill in after uploading artifacts.</p>
+                    <p><strong>Immutability:</strong> <code>linespec provenance publish</code> refuses to overwrite an existing version key. Run it again to auto-increment.</p>
+                    <p><strong>When to use:</strong> When sharing a governed project. Recipients run <code>linespec clone &lt;manifest-url&gt;</code> to bootstrap a development-ready local copy.</p>
+
+                    <h3>Clone</h3>
+                    <p>Bootstrap a new project directory from a published manifest:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Clone from a manifest URL (destination dir defaults to manifest filename stem)
+linespec clone https://example.com/linespec.manifest.json
+
+# Pin to a specific version
+linespec clone https://example.com/linespec.manifest.json@v2
+linespec clone https://example.com/linespec.manifest.json --version v2
+
+# Specify the destination directory name
+linespec clone https://example.com/linespec.manifest.json --dir myproject</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>&lt;manifest-url&gt;</code> - Required. Append <code>@version</code> to pin to a specific version</li>
+                        <li><code>--version label</code> - Pin to a specific version (overrides <code>@version</code> suffix)</li>
+                        <li><code>--dir path</code> - Destination directory name (default: derived from the manifest URL's filename stem)</li>
+                        <li><code>--help</code> - Show help</li>
+                    </ul>
+                    <p><strong>What it does:</strong> Fetches the manifest and verifies <code>root_hash</code> before downloading any artifact. Creates the destination directory, runs <code>git init</code>, writes <code>.linespec.yml</code> with <code>provenance.manifest_url</code> set, installs git hooks, then downloads and hash-verifies each layer before extracting it. The provenance layer goes into <code>&lt;dest&gt;/provenance/</code>; other layers are extracted preserving repo-relative paths.</p>
+                    <p><strong>When to use:</strong> When a colleague or automated agent has published a governed project and you want a fully development-ready local copy with provenance records, hooks, and <code>.linespec.yml</code> already configured.</p>
+
+                    <h3>Import</h3>
+                    <p>Import provenance records from a published manifest into an existing repository:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Import all records from the latest manifest version
+linespec import https://example.com/linespec.manifest.json
+
+# Pin to a specific version
+linespec import https://example.com/linespec.manifest.json@v3
+linespec import https://example.com/linespec.manifest.json --version v2</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>&lt;manifest-url&gt;</code> - Required. Append <code>@version</code> to pin to a specific version</li>
+                        <li><code>--version label</code> - Pin to a specific version (overrides <code>@version</code> suffix)</li>
+                        <li><code>--help</code> - Show help</li>
+                    </ul>
+                    <p><strong>What it does:</strong> Fetches and verifies the manifest, checks all record IDs for conflicts with the local <code>provenance/</code> directory (aborts atomically if any exist), extracts all records, then runs <code>linespec provenance lint</code> to surface reference issues.</p>
+                    <p><strong>When to use:</strong> When you want to pull in a set of published records to extend an existing repository's provenance graph. Use <code>clone</code> instead when starting from scratch.</p>
+
                     <h3>Install Hooks</h3>
                     <p>Install git hooks for automatic validation:</p>
                     <div class="code-block">
