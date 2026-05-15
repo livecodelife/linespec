@@ -1,0 +1,48 @@
+id: prov-2026-62fe2434
+title: Manifest types, transformation pipeline, and SHA-256 hashing
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-dac81a68
+intent: >
+  Define the Go types for linespec.manifest.json (Manifest, ManifestVersion,
+  ManifestLayer) and implement the deterministic transformation pipeline that
+  converts a loaded record slice into consumer-appropriate records, plus the
+  SHA-256 hashing helpers for layer artifacts and root_hash computation.
+constraints:
+  - >
+    Transformation pipeline is a slice of pure functions applied in order:
+    stripImprints, filterSuperseded, promoteBugs, cleanDanglingRefs, resetStatus.
+    Each step takes []Record and returns []Record.
+  - >
+    cleanDanglingRefs removes supersedes, related, and implements values that
+    point to records not present in the post-filter slice.
+  - >
+    resetStatus sets Status to open and clears SealedAtSHA on every retained record.
+  - >
+    hashBytes([]byte) string returns the lowercase hex SHA-256 of the input.
+    rootHash(layerHashes []string) string returns SHA-256 of the concatenation of
+    hashes in the order supplied.
+  - >
+    Manifest JSON serializes with json tags; versions is a map[string]ManifestVersion,
+    latest is a string, created_at is an RFC3339 timestamp. ManifestLayer carries
+    sha256, url (omitempty), and an optional metadata map.
+affected_scope:
+  - "pkg/provenance/publish.go"
+  - "pkg/provenance/publish_test.go"
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/publish_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - transform
+  - hashing
