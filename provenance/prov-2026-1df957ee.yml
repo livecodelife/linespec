@@ -1,0 +1,30 @@
+id: prov-2026-1df957ee
+title: 'v3.6.0 release: document linespec clone and import commands'
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-92f06ee9
+intent: |
+  Document the linespec clone and linespec import top-level commands in all user-facing surfaces
+  (PROVENANCE_RECORDS.md, docs/provenance.html, README.md), update the CHANGELOG with entries for
+  clone, import, and pkg/manifest, and bump the version to v3.6.0. The doc site (provenance.html)
+  is also missing the Publish section — add it there alongside clone and import.
+constraints:
+  - PROVENANCE_RECORDS.md must have ### Clone and ### Import sections with usage, options, and behavior description
+  - docs/provenance.html must have equivalent Publish, Clone, and Import HTML sections inserted after the Generate section
+  - README.md CLI Commands block must list linespec clone and linespec import
+  - CHANGELOG.md [Unreleased] must be expanded with clone, import, and pkg/manifest entries, then promoted to [3.6.0] - 2026-05-15
+  - Version bump uses make bump-version NEW=3.6.0 to update all doc/site references atomically
+affected_scope:
+  - CHANGELOG.md
+  - PROVENANCE_RECORDS.md
+  - README.md
+  - docs/provenance.html
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+associated_specs: []
+tags:
+  - release
+  - documentation
