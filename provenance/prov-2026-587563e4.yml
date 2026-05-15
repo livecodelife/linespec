@@ -1,0 +1,40 @@
+id: prov-2026-587563e4
+title: Implement linespec clone and import commands
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-92f06ee9
+intent: >
+  Implement two new top-level commands — `linespec clone <manifest-url>` and
+  `linespec import <manifest-url>` — that consume a published manifest to
+  bootstrap or extend a governed repository. Clone creates a fully development-ready
+  project (git init, hooks, .linespec.yml, layers extracted). Import pulls
+  provenance records from a manifest into an existing repository. Both commands
+  perform integrity verification (root_hash then per-layer hashes) before writing
+  anything to disk, and abort cleanly on any mismatch.
+constraints:
+  - clone verifies root_hash against the concatenation of the resolved version's layer hashes before fetching any layer artifacts; aborts before fetching on mismatch
+  - each layer artifact is hash-verified after download and before extraction; on mismatch, abort and report — no files are written to disk
+  - cloned project setup runs git init, linespec provenance install-hooks, writes .linespec.yml with provenance.manifest_url set to the source manifest URL, and expands all layers to their correct paths
+  - specs layer files are extracted to their preserved repo-relative paths without consulting provenance records
+  - import aborts without writing if any local record ID already exists (no overwrite); conflict must be resolved manually
+  - import runs linespec provenance lint after all records are written to surface reference issues
+  - version pinning is supported via @version suffix in the URL and a --version flag; unpinned targets the latest field
+affected_scope:
+  - cmd/linespec/
+  - pkg/manifest/
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - clone
+  - import
+  - bootstrapping
