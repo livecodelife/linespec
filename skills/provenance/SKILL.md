@@ -108,4 +108,11 @@ linespec provenance lint
 
 # Complete a record
 linespec provenance complete <id>
+
+# Project setup and distribution
+linespec init                            # interactively bootstrap a .linespec.yml for a new project
+linespec provenance compile              # rebuild the hash manifest from all loaded records (idempotent)
+linespec provenance publish              # package records into a versioned, content-addressed manifest
+linespec import <manifest-url>           # import provenance records from a published manifest into the local provenance directory
+linespec clone <manifest-url>            # bootstrap a new project directory from a published manifest (git init, hooks, .linespec.yml, all layers)
 ```

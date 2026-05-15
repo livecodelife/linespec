@@ -1365,6 +1365,13 @@ linespec provenance lock-scope --record <id> [-c <config>] # lock scope to allow
 # Cross-repo
 linespec provenance sync                                # refresh shared_repos cache
 linespec provenance index [-c <config>]                 # index records for semantic search
+
+# Project setup and distribution
+linespec init                                           # interactively bootstrap a .linespec.yml for a new project
+linespec provenance compile [-c <config>]               # rebuild the hash manifest from all loaded records (idempotent)
+linespec provenance publish [-c <config>]               # package records into a versioned, content-addressed manifest
+linespec import <manifest-url>                          # import provenance records from a published manifest into the local provenance directory
+linespec clone <manifest-url>                           # bootstrap a new project directory from a published manifest (git init, hooks, .linespec.yml, all layers)
 ` + "```" + `
 `
 
