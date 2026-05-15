@@ -1,6 +1,6 @@
 id: prov-2026-806c453e
 title: Fix proxy extended-query protocol for multi-language clients
-status: draft
+status: open
 created_at: "2026-05-14"
 author: test@example.com
 intent: >
@@ -27,7 +27,22 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/asynq-worker/linespecs/process_email_job.linespec
+    type: code
+    run_command: make test
+  - path: examples/asynq-worker/linespecs/process_report_job.linespec
+    type: code
+    run_command: make test
+  - path: examples/bullmq-worker/linespecs/send_notification_job.linespec
+    type: code
+    run_command: make test
+  - path: examples/bullmq-worker/linespecs/generate_invoice_job.linespec
+    type: code
+    run_command: make test
+  - path: examples/scheduled-worker/linespecs/nightly_sync_job.linespec
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
