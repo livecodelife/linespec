@@ -1,6 +1,6 @@
 id: prov-2026-94a4a406
 title: 'pkg/manifest: fetch, verify, and extract manifest layers'
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-587563e4
