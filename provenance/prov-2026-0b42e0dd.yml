@@ -1,6 +1,6 @@
 id: prov-2026-0b42e0dd
 title: Update CHANGELOG and bump version to v3.7.0
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: test@example.com
 intent: >
@@ -28,7 +28,7 @@ implements: prov-2026-bbe4b5cd
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d562217dce2fbf20a651c35c1cf2543376efce52
 associated_specs:
   - path: CHANGELOG.md
     type: code
