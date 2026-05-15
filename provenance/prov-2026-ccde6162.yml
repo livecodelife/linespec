@@ -1,0 +1,39 @@
+id: prov-2026-ccde6162
+title: linespec clone command and manifest_url config field
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-587563e4
+intent: >
+  Implement the `linespec clone <manifest-url>` top-level command. It calls
+  pkg/manifest.Fetch to download and verify all layers, then bootstraps a new
+  project directory: git init, linespec provenance install-hooks, writes
+  .linespec.yml with provenance.manifest_url set to the source manifest URL, and
+  extracts all present layers to their correct paths. Also adds the manifest_url
+  field to the ProvenanceConfig struct in pkg/config so .linespec.yml can store it.
+constraints:
+  - git init, install-hooks, and .linespec.yml writing must all succeed before any layer is extracted to disk
+  - .linespec.yml must include provenance.manifest_url set to the original manifest URL (without @version suffix)
+  - the provenance layer is extracted into <destDir>/provenance/
+  - the specs layer is extracted into <destDir>/ preserving repo-relative paths
+  - other layers (code, prompt) are extracted into <destDir>/ preserving paths
+  - the destination directory name defaults to the last path segment of the manifest URL (without extension)
+affected_scope:
+  - cmd/linespec/**
+  - pkg/config/**
+  - pkg/provenance/clone_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/clone_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - clone
+  - bootstrapping
