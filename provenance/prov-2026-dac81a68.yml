@@ -1,9 +1,10 @@
 id: prov-2026-dac81a68
 title: 'linespec publish: manifest packaging, transformation, and versioning'
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-d422fec6
+sealed_at_sha: 04ff69d80608c9a56524ef6b6334e179c57bd659
 intent: >
   Implement the `linespec publish` command which packages a repository's provenance
   records (and optionally specs, code scaffold, and a generation prompt) into a
