@@ -1,0 +1,35 @@
+id: prov-2026-81b5d5ac
+title: linespec import command
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-587563e4
+intent: >
+  Implement the `linespec import <manifest-url>` top-level command. It fetches
+  and verifies the manifest's provenance layer via pkg/manifest.Fetch, then
+  writes each record's YAML into the local provenance directory. Before writing
+  any file, it checks all record IDs against the local directory and aborts
+  without writing anything if any ID already exists. After all records are
+  written it runs linespec provenance lint to surface reference issues.
+  Version pinning works the same way as clone via @version suffix or --version flag.
+constraints:
+  - abort without writing any file if any record ID from the manifest already exists locally
+  - all records from the manifest are written atomically (all or none on conflict)
+  - runs linespec provenance lint after writing all records to surface reference issues
+  - version pinning via @version URL suffix or --version flag; unpinned targets latest
+affected_scope:
+  - cmd/linespec/**
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/manifest/manifest_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - import
