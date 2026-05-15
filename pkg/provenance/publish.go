@@ -1,6 +1,8 @@
 package provenance
 
 import (
+	"archive/tar"
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -52,13 +54,17 @@ func (c *Commands) Publish(opts PublishOptions) error {
 		records[i] = *r
 	}
 	transformed := applyTransformPipeline(records)
-	provBytes, err := yaml.Marshal(transformed)
+	provBytes, err := packProvenanceLayer(transformed)
 	if err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to serialize provenance layer: %v", err))
+		c.Formatter.FormatError(fmt.Sprintf("Failed to package provenance layer: %v", err))
 		return err
 	}
 
-	layers := map[string][]byte{"provenance": provBytes}
+	type artifact struct {
+		data []byte
+		ext  string
+	}
+	artifacts := map[string]artifact{"provenance": {data: provBytes, ext: ".tar"}}
 
 	for layerName, layerPath := range map[string]string{
 		"specs":  opts.SpecsPath,
@@ -68,21 +74,24 @@ func (c *Commands) Publish(opts PublishOptions) error {
 		if layerPath == "" {
 			continue
 		}
-		data, err := readLayerBytes(layerPath)
+		data, ext, err := packLayer(layerPath)
 		if err != nil {
-			c.Formatter.FormatError(fmt.Sprintf("Failed to read %s layer from %q: %v", layerName, layerPath, err))
+			c.Formatter.FormatError(fmt.Sprintf("Failed to package %s layer from %q: %v", layerName, layerPath, err))
 			return err
 		}
-		layers[layerName] = data
+		artifacts[layerName] = artifact{data: data, ext: ext}
 	}
 
-	mv := newManifestVersion(layers)
+	layerBytes := make(map[string][]byte, len(artifacts))
+	for name, a := range artifacts {
+		layerBytes[name] = a.data
+	}
+	mv := newManifestVersion(layerBytes)
 
 	manifestDir := filepath.Dir(manifestPath)
-	for layerName, data := range layers {
-		ext := layerFileExt(layerName)
-		artifactPath := filepath.Join(manifestDir, fmt.Sprintf("linespec-%s-%s%s", layerName, version, ext))
-		if err := atomicWrite(artifactPath, data); err != nil {
+	for layerName, a := range artifacts {
+		artifactPath := filepath.Join(manifestDir, fmt.Sprintf("linespec-%s-%s%s", layerName, version, a.ext))
+		if err := atomicWrite(artifactPath, a.data); err != nil {
 			c.Formatter.FormatError(fmt.Sprintf("Failed to write %s artifact: %v", layerName, err))
 			return err
 		}
@@ -132,29 +141,79 @@ func loadOrCreateManifest(path string) (*Manifest, error) {
 	return &m, nil
 }
 
-// readLayerBytes reads artifact bytes from a file or directory.
-// For a directory, files are read recursively in sorted order and concatenated.
-func readLayerBytes(path string) ([]byte, error) {
-	info, err := os.Stat(path)
-	if err != nil {
+// packProvenanceLayer creates a tar archive containing one YAML file per record,
+// named <record.ID>.yml. This preserves individual record identity so linespec clone
+// can extract records directly into a provenance/ directory.
+func packProvenanceLayer(records []Record) ([]byte, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for i := range records {
+		data, err := yaml.Marshal(&records[i])
+		if err != nil {
+			return nil, fmt.Errorf("marshal record %s: %w", records[i].ID, err)
+		}
+		hdr := &tar.Header{
+			Name: records[i].ID + ".yml",
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return nil, err
+		}
+	}
+	if err := tw.Close(); err != nil {
 		return nil, err
 	}
-	if !info.IsDir() {
-		return os.ReadFile(path)
+	return buf.Bytes(), nil
+}
+
+// packLayer packages a file or directory as a layer artifact.
+// Returns (bytes, extension, error). Directories become tar archives (".tar");
+// single files are returned as raw bytes with their original extension.
+func packLayer(path string) ([]byte, string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, "", err
 	}
-	var buf []byte
-	err = filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
+	if !info.IsDir() {
+		data, err := os.ReadFile(path)
+		return data, filepath.Ext(path), err
+	}
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	err = filepath.Walk(path, func(p string, fi os.FileInfo, werr error) error {
+		if werr != nil || fi.IsDir() {
+			return werr
+		}
+		rel, err := filepath.Rel(path, p)
+		if err != nil {
 			return err
 		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		buf = append(buf, data...)
-		return nil
+		hdr := &tar.Header{
+			Name: rel,
+			Mode: int64(fi.Mode()),
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		_, err = tw.Write(data)
+		return err
 	})
-	return buf, err
+	if err != nil {
+		return nil, "", err
+	}
+	if err := tw.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), ".tar", nil
 }
 
 // atomicWrite writes data to path via a temp file and rename.
@@ -177,13 +236,6 @@ func atomicWrite(path string, data []byte) error {
 	return os.Rename(tmpName, path)
 }
 
-// layerFileExt returns the file extension for a layer artifact.
-func layerFileExt(layerName string) string {
-	if layerName == "provenance" {
-		return ".yml"
-	}
-	return ".bin"
-}
 
 // Manifest is the top-level structure for linespec.manifest.json.
 type Manifest struct {

@@ -1,7 +1,10 @@
 package provenance
 
 import (
+	"archive/tar"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -364,9 +367,98 @@ func TestPublish_WritesProvenanceArtifact(t *testing.T) {
 	if err := cmds.Publish(PublishOptions{ManifestPath: manifestPath}); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
-	artifactPath := filepath.Join(dir, "linespec-provenance-v1.yml")
+	artifactPath := filepath.Join(dir, "linespec-provenance-v1.tar")
 	if _, err := os.Stat(artifactPath); err != nil {
 		t.Errorf("expected provenance artifact at %s, got error: %v", artifactPath, err)
+	}
+}
+
+// --- packProvenanceLayer ---
+
+func readTarEntries(t *testing.T, data []byte) map[string][]byte {
+	t.Helper()
+	entries := map[string][]byte{}
+	tr := tar.NewReader(bytes.NewReader(data))
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar read error: %v", err)
+		}
+		content, _ := io.ReadAll(tr)
+		entries[hdr.Name] = content
+	}
+	return entries
+}
+
+func TestPackProvenanceLayer_OneFilePerRecord(t *testing.T) {
+	records := []Record{
+		{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen},
+		{ID: "prov-2026-bbb00001", Type: RecordTypeBlueprint, Status: StatusOpen},
+	}
+	data, err := packProvenanceLayer(records)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	entries := readTarEntries(t, data)
+	if _, ok := entries["prov-2026-aaa00001.yml"]; !ok {
+		t.Error("expected prov-2026-aaa00001.yml in tar")
+	}
+	if _, ok := entries["prov-2026-bbb00001.yml"]; !ok {
+		t.Error("expected prov-2026-bbb00001.yml in tar")
+	}
+}
+
+func TestPackProvenanceLayer_EntryContainsValidYAML(t *testing.T) {
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen, Title: "Test record"}
+	data, _ := packProvenanceLayer([]Record{r})
+	entries := readTarEntries(t, data)
+	content := string(entries["prov-2026-aaa00001.yml"])
+	if !strings.Contains(content, "prov-2026-aaa00001") {
+		t.Errorf("expected record ID in YAML content, got: %s", content)
+	}
+}
+
+// --- packLayer ---
+
+func TestPackLayer_FileReturnsRawBytesAndExt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prompt.md")
+	os.WriteFile(path, []byte("hello prompt"), 0644)
+
+	data, ext, err := packLayer(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ext != ".md" {
+		t.Errorf("expected .md extension, got %q", ext)
+	}
+	if string(data) != "hello prompt" {
+		t.Errorf("expected raw file bytes, got %q", data)
+	}
+}
+
+func TestPackLayer_DirectoryReturnsTarWithRelPaths(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "sub"), 0755)
+	os.WriteFile(filepath.Join(dir, "a.linespec"), []byte("spec a"), 0644)
+	os.WriteFile(filepath.Join(dir, "sub", "b.linespec"), []byte("spec b"), 0644)
+
+	data, ext, err := packLayer(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ext != ".tar" {
+		t.Errorf("expected .tar extension for directory, got %q", ext)
+	}
+	entries := readTarEntries(t, data)
+	if string(entries["a.linespec"]) != "spec a" {
+		t.Errorf("expected a.linespec content")
+	}
+	if string(entries[filepath.Join("sub", "b.linespec")]) != "spec b" {
+		t.Errorf("expected sub/b.linespec content")
 	}
 }
 
