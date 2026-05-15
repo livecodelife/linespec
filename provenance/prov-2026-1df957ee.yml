@@ -1,9 +1,10 @@
 id: prov-2026-1df957ee
 title: 'v3.6.0 release: document linespec clone and import commands'
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-92f06ee9
+sealed_at_sha: 7a210bca2ce79ed768d7f62b9205f0615be0b5c9
 intent: |
   Document the linespec clone and linespec import top-level commands in all user-facing surfaces
   (PROVENANCE_RECORDS.md, docs/provenance.html, README.md), update the CHANGELOG with entries for
