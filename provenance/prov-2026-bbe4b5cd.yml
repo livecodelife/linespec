@@ -1,6 +1,6 @@
 id: prov-2026-bbe4b5cd
 title: Release v3.7.0 — document compile, init, publish, import, clone in provenance skill
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: test@example.com
 intent: >
@@ -27,7 +27,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-f25d8526
-sealed_at_sha: ""
+sealed_at_sha: 95eab8ac80518507610f9e1cc589d877599b2fbc
 associated_specs:
   - path: CHANGELOG.md
     type: document
