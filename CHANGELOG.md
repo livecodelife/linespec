@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-05-15
+
 ### Added
 
 - **`linespec provenance publish` command** ([prov-2026-dac81a68](./provenance/prov-2026-dac81a68.yml)) — Packages a repository's provenance records into a versioned, content-addressed `linespec.manifest.json` artifact. Applies a deterministic transformation pipeline (strip imprints, filter superseded, promote bugs, clean dangling refs, reset status) before packaging. The provenance layer is a tar of individual record YAML files; specs and code directory layers are also tars with repo-relative paths preserved so `linespec clone` can extract them directly. SHA-256 hashes are computed per layer and combined into a `root_hash`. Versions are immutable — publish refuses to overwrite an existing version key. Supports `--specs`, `--code`, and `--prompt` optional layers, explicit `--version` override, and a custom `--manifest` path.
+
+- **`linespec clone` command** ([prov-2026-587563e4](./provenance/prov-2026-587563e4.yml)) — Bootstraps a new project directory from a published manifest. Fetches the manifest, verifies `root_hash` before downloading any artifact, runs `git init`, writes `.linespec.yml` with `provenance.manifest_url` set to the source URL, installs git hooks, then downloads and hash-verifies each layer before extracting it. The provenance layer is extracted into `<dest>/provenance/`; specs, code, and prompt layers are extracted preserving repo-relative paths. Supports `@version` URL suffix and `--version` flag for pinning; `--dir` sets the destination directory name.
+
+- **`linespec import` command** ([prov-2026-587563e4](./provenance/prov-2026-587563e4.yml)) — Imports provenance records from a published manifest into an existing repository. Checks all record IDs for conflicts with the local `provenance/` directory and aborts atomically if any exist. After extraction runs `linespec provenance lint` to surface reference issues. Supports `@version` URL suffix and `--version` flag for version pinning.
+
+- **`pkg/manifest` package** ([prov-2026-94a4a406](./provenance/prov-2026-94a4a406.yml)) — New package providing `Fetch` (download and hash-verify a manifest and all its layer artifacts), `ExtractProvenance` (untar a provenance layer into a local directory), `ExtractSpecs` (untar a specs/code layer preserving repo-relative paths), and `ProvenanceRecordIDs` (enumerate record IDs from a provenance layer without extracting). Used internally by both `clone` and `import`.
+
+### Related Provenance Records
+
+- [prov-2026-dac81a68](./provenance/prov-2026-dac81a68.yml) - Blueprint: linespec publish — manifest packaging, transformation, and versioning
+- [prov-2026-587563e4](./provenance/prov-2026-587563e4.yml) - Blueprint: Implement linespec clone and import commands
+- [prov-2026-94a4a406](./provenance/prov-2026-94a4a406.yml) - Imprint: pkg/manifest — fetch, verify, and extract manifest layers
+- [prov-2026-ccde6162](./provenance/prov-2026-ccde6162.yml) - Imprint: linespec clone command and manifest_url config field
+- [prov-2026-81b5d5ac](./provenance/prov-2026-81b5d5ac.yml) - Imprint: linespec import command
 
 ## [3.5.0] - 2026-05-15
 
