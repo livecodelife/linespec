@@ -1,6 +1,9 @@
 package provenance
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -252,5 +255,153 @@ func TestApplyTransformPipeline_EndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(out[0].ID, "prov-") {
 		t.Error("output should contain valid records")
+	}
+}
+
+// --- loadOrCreateManifest ---
+
+func TestLoadOrCreateManifest_CreatesEmptyWhenMissing(t *testing.T) {
+	m, err := loadOrCreateManifest(filepath.Join(t.TempDir(), "linespec.manifest.json"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.Versions == nil {
+		t.Error("versions map should be initialised")
+	}
+	if len(m.Versions) != 0 {
+		t.Errorf("expected empty versions, got %d", len(m.Versions))
+	}
+}
+
+func TestLoadOrCreateManifest_ReadsExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "linespec.manifest.json")
+	existing := Manifest{
+		Latest: "v1",
+		Versions: map[string]ManifestVersion{
+			"v1": {CreatedAt: "2026-01-01T00:00:00Z", RootHash: "abc123", Layers: map[string]ManifestLayer{}},
+		},
+	}
+	data, _ := json.MarshalIndent(existing, "", "  ")
+	os.WriteFile(path, data, 0644)
+
+	m, err := loadOrCreateManifest(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.Latest != "v1" {
+		t.Errorf("expected latest v1, got %q", m.Latest)
+	}
+	if _, ok := m.Versions["v1"]; !ok {
+		t.Error("expected v1 to be present")
+	}
+}
+
+// --- Publish (integration) ---
+
+func TestPublish_CreatesManifestWithV1(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+	err := cmds.Publish(PublishOptions{ManifestPath: manifestPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(manifestPath)
+	var m Manifest
+	json.Unmarshal(data, &m)
+	if m.Latest != "v1" {
+		t.Errorf("expected latest v1, got %q", m.Latest)
+	}
+	if _, ok := m.Versions["v1"]; !ok {
+		t.Error("expected v1 in versions map")
+	}
+}
+
+func TestPublish_RejectsExistingVersion(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+
+	if err := cmds.Publish(PublishOptions{ManifestPath: manifestPath}); err != nil {
+		t.Fatalf("first publish failed: %v", err)
+	}
+	err := cmds.Publish(PublishOptions{ManifestPath: manifestPath, Version: "v1"})
+	if err == nil {
+		t.Error("expected error when overwriting existing version")
+	}
+}
+
+func TestPublish_AutoIncrementsVersion(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+
+	for _, want := range []string{"v1", "v2", "v3"} {
+		if err := cmds.Publish(PublishOptions{ManifestPath: manifestPath}); err != nil {
+			t.Fatalf("publish failed: %v", err)
+		}
+		data, _ := os.ReadFile(manifestPath)
+		var m Manifest
+		json.Unmarshal(data, &m)
+		if m.Latest != want {
+			t.Errorf("expected latest %s, got %q", want, m.Latest)
+		}
+	}
+}
+
+func TestPublish_WritesProvenanceArtifact(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+
+	if err := cmds.Publish(PublishOptions{ManifestPath: manifestPath}); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+	artifactPath := filepath.Join(dir, "linespec-provenance-v1.yml")
+	if _, err := os.Stat(artifactPath); err != nil {
+		t.Errorf("expected provenance artifact at %s, got error: %v", artifactPath, err)
+	}
+}
+
+func TestPublish_URLsEmptyAfterPublish(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+	cmds.Publish(PublishOptions{ManifestPath: manifestPath})
+
+	data, _ := os.ReadFile(manifestPath)
+	var m Manifest
+	json.Unmarshal(data, &m)
+	for _, layer := range m.Versions["v1"].Layers {
+		if layer.URL != "" {
+			t.Errorf("expected empty URL after publish, got %q", layer.URL)
+		}
+	}
+}
+
+func TestPublish_RootHashMatchesProvenance(t *testing.T) {
+	dir := t.TempDir()
+	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
+	cmds := makeTestCommands([]*Record{&r})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+	cmds.Publish(PublishOptions{ManifestPath: manifestPath})
+
+	data, _ := os.ReadFile(manifestPath)
+	var m Manifest
+	json.Unmarshal(data, &m)
+
+	mv := m.Versions["v1"]
+	provLayer := mv.Layers["provenance"]
+	expectedRoot := rootHash([]string{provLayer.SHA256})
+	if mv.RootHash != expectedRoot {
+		t.Errorf("root_hash mismatch: got %q, want %q", mv.RootHash, expectedRoot)
 	}
 }

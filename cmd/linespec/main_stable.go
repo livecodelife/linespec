@@ -1027,6 +1027,15 @@ func runProvenance() {
 		if err := cmds.Compile(opts); err != nil {
 			os.Exit(1)
 		}
+	case "publish":
+		opts := parsePublishOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, "", repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Publish(opts); err != nil {
+			os.Exit(1)
+		}
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -1145,6 +1154,7 @@ Subcommands:
   generate [options]         Generate a behavioral specification document
   sync [options]             Refresh cache for all configured shared_repos
   compile [options]          Rebuild the hash manifest from all provenance records
+  publish [options]          Package records into a versioned linespec.manifest.json
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
 
@@ -1861,6 +1871,61 @@ Options:
 Example:
   linespec provenance compile          # Rebuild manifest
   linespec provenance compile -c path/to/.linespec.yml`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+func parsePublishOptions(args []string) provenance.PublishOptions {
+	opts := provenance.PublishOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--manifest":
+			if i+1 < len(args) {
+				opts.ManifestPath = args[i+1]
+				i++
+			}
+		case "--version":
+			if i+1 < len(args) {
+				opts.Version = args[i+1]
+				i++
+			}
+		case "--specs":
+			if i+1 < len(args) {
+				opts.SpecsPath = args[i+1]
+				i++
+			}
+		case "--code":
+			if i+1 < len(args) {
+				opts.CodePath = args[i+1]
+				i++
+			}
+		case "--prompt":
+			if i+1 < len(args) {
+				opts.PromptPath = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance publish [options]
+
+Packages provenance records into a versioned, content-addressed linespec.manifest.json.
+Applies a transformation pipeline (strip imprints, filter superseded, promote bugs,
+clean dangling refs, reset status) before packaging. Hashes each layer artifact and
+computes a root_hash. URL fields are left empty for the author to fill in after upload.
+
+Options:
+  --manifest path    Path to linespec.manifest.json (default: ./linespec.manifest.json)
+  --version label    Explicit version label (default: auto-increment v1, v2, v3...)
+  --specs path       Path to specs artifact (file or directory)
+  --code path        Path to code artifact (file or directory)
+  --prompt path      Path to prompt artifact file
+  --help             Show this help message
+
+Examples:
+  linespec provenance publish
+  linespec provenance publish --manifest dist/linespec.manifest.json
+  linespec provenance publish --version v2 --specs linespecs/ --prompt PROMPT.md`)
 			os.Exit(0)
 		}
 	}
