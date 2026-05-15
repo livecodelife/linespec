@@ -1,0 +1,33 @@
+id: prov-2026-806c453e
+title: Fix proxy extended-query protocol for multi-language clients
+status: draft
+created_at: "2026-05-14"
+author: test@example.com
+intent: >
+  Fix the PostgreSQL proxy's extended-query protocol handling so that mocked queries work
+  correctly across multiple client libraries (Go lib/pq, Node.js pg). The root cause was
+  that forwarding Parse to upstream created a race condition where the relay goroutine could
+  deliver a stale ParseComplete to an idle connection after mock Execute completed.
+  Additional fixes: Redis interceptor seeds must be read from the live registry (not a
+  startup-time snapshot) so hot-reload via /reload-registry is picked up correctly.
+constraints:
+  - Parse messages for mocked queries must not be forwarded to upstream; proxy handles them locally
+  - DescribeStatement for SELECT must reply with RowDescription (not NoData) to match lib/pq expectations
+  - DescribeStatement must include the correct parameter count from the SQL so lib/pq arg-count check passes
+  - DescribePortal for mocked portals must be handled locally to avoid "portal does not exist" upstream errors
+  - Close for mock-only statements/portals must be handled locally to avoid errors from upstream
+  - Redis PopRedisSeed must read from the live registry so seeds survive hot-reload
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/registry/registry.go
+  - pkg/proxy/redis/interceptor.go
+type: imprint
+implements: prov-2026-bfa97730
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
