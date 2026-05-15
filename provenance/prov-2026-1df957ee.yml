@@ -25,6 +25,7 @@ affected_scope:
   - docs/linespec.html
   - docs/docs.html
   - provenance/**
+  - .linespec/hash_manifest.json
 associated_specs:
   - path: CHANGELOG.md
     type: code
