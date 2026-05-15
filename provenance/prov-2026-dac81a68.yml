@@ -1,0 +1,50 @@
+id: prov-2026-dac81a68
+title: 'linespec publish: manifest packaging, transformation, and versioning'
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-d422fec6
+intent: >
+  Implement the `linespec publish` command which packages a repository's provenance
+  records (and optionally specs, code scaffold, and a generation prompt) into a
+  versioned, content-addressed `linespec.manifest.json` artifact. The command applies
+  a deterministic transformation pipeline to produce consumer-appropriate records,
+  computes SHA-256 hashes for each layer artifact and a root hash across all layers,
+  and appends a new immutable version entry to the manifest. Layer artifacts are
+  written to disk locally; the author is responsible for uploading them and filling
+  in the URL fields.
+constraints:
+  - >
+    Transformation pipeline is implemented as an ordered sequence of pure functions
+    applied to the loaded record slice: (1) strip imprints, (2) filter superseded
+    records keeping the superseding record, (3) promote bug records to blueprint type,
+    (4) clean dangling references (supersedes, related, implements) that point to
+    filtered records, (5) reset all retained records to status open and omit sealed_at_sha.
+  - >
+    SHA-256 is computed from the artifact's byte content immediately after packaging,
+    before any upload occurs. Hash is content-addressed and independent of file location.
+  - >
+    `linespec publish` refuses to overwrite an existing version key in the manifest
+    and exits with a non-zero status. Auto-increment produces v1 → v2 → v3; --version
+    flag overrides auto-increment.
+  - >
+    The provenance layer is required. specs, code, and prompt layers are optional and
+    may be combined in any combination. root_hash is computed from the SHA-256
+    concatenation of all present layer hashes in declaration order: provenance, specs,
+    code, prompt.
+  - >
+    `linespec publish` does not write URL fields. The manifest remains valid with empty
+    URL fields until the author fills them in manually.
+  - >
+    Manifest JSON format: top-level `versions` map keyed by version label, `latest`
+    pointer updated on each publish, and per-version `layers` object with sha256,
+    url, and optional metadata per layer.
+affected_scope:
+  - "pkg/provenance/publish.go"
+  - "pkg/provenance/publish_test.go"
+  - "pkg/provenance/commands.go"
+  - "cmd/linespec/main_stable.go"
+tags:
+  - manifest
+  - publish
+  - distribution
