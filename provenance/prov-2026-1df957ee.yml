@@ -1,6 +1,6 @@
 id: prov-2026-1df957ee
 title: 'v3.6.0 release: document linespec clone and import commands'
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-92f06ee9
