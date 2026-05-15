@@ -93,9 +93,9 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	// - Table OID (4 bytes) - 0 for not associated with a table
 	// - Column number (2 bytes) - 0
 	// - Type OID (4 bytes) - proper OIDs for each type
-	// - Type size (2 bytes) - -1 for variable
+	// - Type size (2 bytes) - type size or -1 for variable
 	// - Type modifier (4 bytes) - -1
-	// - Format code (2 bytes) - 1 for binary (INTEGER, TIMESTAMPTZ), 0 for text (others)
+	// - Format code (2 bytes) - 0 for text (client may override via Bind)
 
 	for _, col := range columns {
 		// Field name
@@ -108,33 +108,59 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		// Column number
 		payload = append(payload, 0, 0)
 
-		// Type OID - always TEXT (25) for mock results
-		// Mock proxy sends text-format values which every driver can decode.
-		// Name-based heuristics (id→INT4, *_at→TIMESTAMPTZ) break when the
-		// actual schema uses UUID/VARCHAR for *_id columns or TIMESTAMP
-		// WITHOUT time zone for *_at columns.
-		typeOID := make([]byte, 4)
-		binary.BigEndian.PutUint32(typeOID, 25) // TEXT
-		payload = append(payload, typeOID...)
+		// Type OID — use name-based heuristics so asyncpg picks the right
+		// native codec (int for id/_id, datetime for _at/time, str for rest).
+		// asyncpg consults the OID to choose binary vs text format in its Bind
+		// request, so matching the actual schema column types here lets asyncpg
+		// return proper Python types (int, datetime) instead of plain strings.
+		oid, typeSize := oidForColumn(col)
+		typeOIDBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(typeOIDBuf, oid)
+		payload = append(payload, typeOIDBuf...)
 
-		// Type size - -1 for variable
-		typeSize := make([]byte, 2)
-		binary.BigEndian.PutUint16(typeSize, 0xFFFF) // -1 as uint16
-		payload = append(payload, typeSize...)
+		// Type size
+		typeSizeBuf := make([]byte, 2)
+		binary.BigEndian.PutUint16(typeSizeBuf, uint16(typeSize))
+		payload = append(payload, typeSizeBuf...)
 
 		// Type modifier - -1
 		typeMod := make([]byte, 4)
 		binary.BigEndian.PutUint32(typeMod, 0xFFFFFFFF) // -1 as uint32
 		payload = append(payload, typeMod...)
 
-		// Format code: 0 = text
-		// Always use text format — matches the TEXT OID declared above.
-		payload = append(payload, 0, 0) // Text format
+		// Format code: 0 = text (client specifies actual format in Bind)
+		payload = append(payload, 0, 0)
 	}
 
 	msg := CreateMessage(MsgRowDescription, payload)
 	_, err := conn.Write(msg)
 	return err
+}
+
+// oidForColumn returns the PostgreSQL OID and type size for a column based on
+// its name heuristics. This gives asyncpg the right codec so it returns native
+// Python types (int for id/_id, datetime for _at/time) instead of plain strings.
+// Type size: 4 for INT4, 8 for TIMESTAMPTZ, 0xFFFF (-1) for variable-length.
+func oidForColumn(col string) (uint32, int) {
+	lower := strings.ToLower(col)
+	// UUID columns: returned as text by asyncpg when OID=2950, binary format is 16 bytes
+	if strings.HasSuffix(lower, "_uuid") || lower == "uuid" {
+		return 2950, 16 // UUID
+	}
+	// Boolean
+	if lower == "is_read" || lower == "enabled" || lower == "active" || lower == "deleted" {
+		return 16, 1 // BOOL
+	}
+	// Integer id columns — use INT4 so asyncpg returns Python int
+	if lower == "id" || strings.HasSuffix(lower, "_id") {
+		return 23, 4 // INT4
+	}
+	// Timestamp columns — use TIMESTAMPTZ so asyncpg returns Python datetime
+	if strings.HasSuffix(lower, "_at") || strings.Contains(lower, "time") || strings.HasSuffix(lower, "_date") {
+		return 1184, 8 // TIMESTAMPTZ
+	}
+	// Everything else: TEXT
+	return 25, -1 // TEXT (variable length → -1)
 }
 
 // SendDataRow sends a single DataRow message using name-based heuristics to

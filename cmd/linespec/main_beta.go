@@ -400,6 +400,11 @@ func runProxy() {
 		resolver.Variables[k] = v
 	}
 
+	// pgProxy is set in the switch below when pType=="postgresql".
+	// The reload handler closes existing connections so the service reconnects
+	// with clean per-connection state between tests.
+	var pgProxy *postgresql.Proxy
+
 	// Start a sidecar HTTP server for verification and registry hot-reload
 	mux := http.NewServeMux()
 	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort, Handler: mux}
@@ -494,9 +499,9 @@ func runProxy() {
 		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "postgresql":
-		p := postgresql.NewProxy(addr, upstream, reg)
-		p.SetResolver(resolver)
-		proxyErr = p.Start(ctx)
+		pgProxy = postgresql.NewProxy(addr, upstream, reg)
+		pgProxy.SetResolver(resolver)
+		proxyErr = pgProxy.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
 		p.SetResolver(resolver)
@@ -1541,4 +1546,33 @@ Options:
   --title "..."              Required. Title for the locked layer record
   --no-edit                  Write without opening editor
   --help                     Show this help message`)
+}
+
+func parseCompileOptions(args []string) provenance.CompileOptions {
+	opts := provenance.CompileOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance compile [options]
+
+Rebuilds the hash manifest (.linespec/hash_manifest.json) from all provenance
+records. Idempotent: if every record hash and both graph hashes already match
+the stored manifest, no file is written.
+
+Options:
+  -c, --config path   Path to custom .linespec.yml file
+  --help              Show this help message
+
+Example:
+  linespec provenance compile          # Rebuild manifest
+  linespec provenance compile -c path/to/.linespec.yml`)
+			os.Exit(0)
+		}
+	}
+	return opts
 }

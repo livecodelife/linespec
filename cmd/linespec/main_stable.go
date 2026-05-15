@@ -628,6 +628,11 @@ func runProxy() {
 		resolver.Variables[k] = v
 	}
 
+	// pgProxy is set in the switch below when pType=="postgresql".
+	// The reload handler closes existing connections so the service reconnects
+	// with clean per-connection state between tests.
+	var pgProxy *postgresql.Proxy
+
 	// Start a sidecar HTTP server for verification and registry hot-reload
 	mux := http.NewServeMux()
 	srv := &http.Server{Addr: "0.0.0.0:" + sidecarPort, Handler: mux}
@@ -722,9 +727,9 @@ func runProxy() {
 		p.SetResolver(resolver)
 		proxyErr = p.Start(ctx)
 	case "postgresql":
-		p := postgresql.NewProxy(addr, upstream, reg)
-		p.SetResolver(resolver)
-		proxyErr = p.Start(ctx)
+		pgProxy = postgresql.NewProxy(addr, upstream, reg)
+		pgProxy.SetResolver(resolver)
+		proxyErr = pgProxy.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
 		p.SetResolver(resolver)

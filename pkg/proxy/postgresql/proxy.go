@@ -42,6 +42,7 @@ type Proxy struct {
 	result       *ResultHandler
 	dbConfig     *base.DatabaseProxyConfig // Configurable database name
 	schemaCache  map[string][]ColumnInfo   // table name -> column definitions
+	activeConns  sync.Map                  // clientConn (net.Conn) -> upstreamConn (net.Conn)
 }
 
 type ColumnInfo struct {
@@ -78,6 +79,7 @@ type ConnectionState struct {
 	mockedPortals       map[string]*MockedPortal // portal name -> mock + actual query
 	justMockedExecute   bool                     // track if we just mocked an Execute
 	mockOnlyStatements  map[string]bool          // statements handled locally (never forwarded to upstream)
+	stmtParamOIDs       map[string][]uint32      // statement name -> OIDs declared in Parse message
 }
 
 // NewConnectionState creates a new connection state
@@ -88,6 +90,7 @@ func NewConnectionState() *ConnectionState {
 		mockedPortals:       make(map[string]*MockedPortal),
 		justMockedExecute:   false,
 		mockOnlyStatements:  make(map[string]bool),
+		stmtParamOIDs:       make(map[string][]uint32),
 	}
 }
 
@@ -354,6 +357,23 @@ func (p *Proxy) Start(ctx context.Context) error {
 	}
 }
 
+// ResetConnections closes all active client and upstream connections.
+// Called on registry reload so that the service's connection pool reconnects
+// with fresh state, eliminating stale mock-only prepared statement mappings
+// that would otherwise persist across test boundaries.
+func (p *Proxy) ResetConnections() {
+	p.activeConns.Range(func(key, value any) bool {
+		if cc, ok := key.(net.Conn); ok {
+			cc.Close()
+		}
+		if uc, ok := value.(net.Conn); ok {
+			uc.Close()
+		}
+		return true
+	})
+	logger.Debug("PostgreSQL Proxy: reset all active connections for test isolation")
+}
+
 // handleConnection handles a single client connection with two-phase proxy:
 // Phase 1: Transparent startup relay, watching for ReadyForQuery
 // Phase 2: Message-framing with query interception
@@ -378,7 +398,11 @@ func (p *Proxy) handleConnection(clientConn net.Conn) {
 		p.logDebug("Failed to connect to upstream: %v\n", err)
 		return
 	}
-	defer upstreamConn.Close()
+	p.activeConns.Store(clientConn, upstreamConn)
+	defer func() {
+		p.activeConns.Delete(clientConn)
+		upstreamConn.Close()
+	}()
 	logger.Debug("PostgreSQL Proxy: Connected to upstream")
 	p.logDebug("Connected to upstream\n")
 
@@ -628,23 +652,45 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		// Handle based on message type
 		switch msgType {
 		case MsgParse:
-			stmtName, query := p.extractParseInfo(payload)
+			stmtName, query, paramOIDs := p.extractParseInfo(payload)
 			if query != "" {
 				state.preparedStatements[stmtName] = query
 				p.logDebug("  -> Tracked Parse: stmtName='%s', query='%s...'\n", stmtName, query[:min(50, len(query))])
 			}
+			// Store explicit parameter OIDs from the Parse message so we can echo
+			// them back in mock-only ParameterDescription responses. When the client
+			// (e.g. tokio-postgres) discovers types via a type-lookup and re-parses
+			// with explicit OIDs, returning OID=0 again would trigger another lookup loop.
+			if len(paramOIDs) > 0 {
+				state.stmtParamOIDs[stmtName] = paramOIDs
+			}
 			// If this query will be mocked, handle ParseComplete locally so we never
 			// forward Parse to upstream. This prevents stale ParseComplete messages from
 			// the relay goroutine arriving on idle connections after mocked Execute completes.
+			//
+			// Exception: if the query has parameters but we cannot resolve their OIDs
+			// (no explicit OIDs in the Parse message and no $N::TYPE casts in the query),
+			// forward Parse to upstream so we can relay the real ParameterDescription.
+			// This is required for drivers like tokio-postgres that send num_params=0 in
+			// Parse and rely on the server's ParameterDescription to determine types; when
+			// the server returns OID=0 (unspecified), tokio-postgres calls typeinfo(0) which
+			// looks up OID 0 in pg_catalog, finds no rows, and raises "unexpected message".
 			if query != "" {
 				if _, mocked := p.peekMock(query, nil); mocked {
-					state.mockOnlyStatements[stmtName] = true
-					p.logDebug("  -> Mock-only Parse for '%s': sending local ParseComplete\n", stmtName)
-					if err := p.writeMessage(clientConn, MsgParseComplete, nil); err != nil {
-						p.logDebug("  -> Error sending ParseComplete: %v\n", err)
-						return
+					canResolveOIDs := len(paramOIDs) > 0 || len(p.extractParameterTypes(query)) > 0 || countSQLParams(query) == 0
+					if canResolveOIDs {
+						state.mockOnlyStatements[stmtName] = true
+						p.logDebug("  -> Mock-only Parse for '%s': sending local ParseComplete\n", stmtName)
+						if err := p.writeMessage(clientConn, MsgParseComplete, nil); err != nil {
+							p.logDebug("  -> Error sending ParseComplete: %v\n", err)
+							return
+						}
+						continue
 					}
-					continue
+					// Cannot resolve OIDs locally — forward Parse to upstream for real
+					// ParameterDescription, but Bind/Execute will still be intercepted.
+					p.logDebug("  -> Mocked '%s' but OIDs unknown, forwarding Parse to upstream\n", stmtName)
+					state.mockOnlyStatements[stmtName] = false
 				}
 			}
 			state.mockOnlyStatements[stmtName] = false
@@ -668,18 +714,31 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 					}
 					if state.mockOnlyStatements[stmtName] {
 						// Respond locally without going to upstream.
-						// Use the actual SQL param count so clients like lib/pq don't reject
-						// the prepared statement due to an arg-count mismatch.
+						// OID resolution priority:
+						//  1. OIDs explicitly sent by the client in the Parse message
+						//     (e.g. tokio-postgres re-parses after a type-lookup with real OIDs)
+						//  2. OIDs inferred from $N::TYPE casts in the query text
+						//  3. Unspecified (OID=0) — client falls back to text format
 						query := state.preparedStatements[stmtName]
-						paramCount := countSQLParams(query)
-						p.logDebug("  -> Mock-only Describe '%s': ParameterDescription(%d)\n", stmtName, paramCount)
-						if err := p.writeMessage(clientConn, MsgParameterDescription, buildParameterDescription(paramCount)); err != nil {
+						var paramDescPayload []byte
+						if clientOIDs := state.stmtParamOIDs[stmtName]; len(clientOIDs) > 0 {
+							p.logDebug("  -> Mock-only Describe '%s': ParameterDescription(clientOIDs=%v)\n", stmtName, clientOIDs)
+							paramDescPayload = buildParameterDescriptionFromOIDs(clientOIDs)
+						} else if oids := p.extractParameterTypes(query); len(oids) > 0 {
+							p.logDebug("  -> Mock-only Describe '%s': ParameterDescription(OIDs=%v)\n", stmtName, oids)
+							paramDescPayload = buildParameterDescriptionFromOIDs(oids)
+						} else {
+							paramCount := countSQLParams(query)
+							p.logDebug("  -> Mock-only Describe '%s': ParameterDescription(%d)\n", stmtName, paramCount)
+							paramDescPayload = buildParameterDescription(paramCount)
+						}
+						if err := p.writeMessage(clientConn, MsgParameterDescription, paramDescPayload); err != nil {
 							p.logDebug("  -> Error sending ParameterDescription: %v\n", err)
 							return
 						}
-						// SELECT queries expect RowDescription so the client can set up the row
-						// scanner before the execute phase. WRITE queries expect NoData.
-						if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "SELECT") {
+						// SELECT and any query with RETURNING expect RowDescription so the client
+						// can set up the row scanner. Pure writes without RETURNING get NoData.
+						if queryReturnsRows(query) {
 							cols := p.extractSelectColumns(query)
 							if len(cols) == 0 {
 								cols = []string{"id"}
@@ -2721,6 +2780,16 @@ func (p *Proxy) countParameters(sql string) int {
 // e.g., "$1::INTEGER" returns [23] for parameter 1
 // e.g., "$1::INTEGER AND $2::VARCHAR" returns [23, 1043]
 // countSQLParams returns the highest $N param index found in sql (so the number of params).
+// queryReturnsRows reports whether the query will return rows — either because it's
+// a SELECT or because it has a RETURNING clause (INSERT/UPDATE/DELETE ... RETURNING).
+func queryReturnsRows(sql string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	if strings.HasPrefix(upper, "SELECT") {
+		return true
+	}
+	return strings.Contains(upper, " RETURNING ")
+}
+
 func countSQLParams(sql string) int {
 	re := regexp.MustCompile(`\$(\d+)`)
 	matches := re.FindAllStringSubmatch(sql, -1)
@@ -2744,6 +2813,18 @@ func buildParameterDescription(n int) []byte {
 	buf[0] = byte(n >> 8)
 	buf[1] = byte(n)
 	// OIDs are 0 (unspecified), already zeroed
+	return buf
+}
+
+// buildParameterDescriptionFromOIDs encodes a ParameterDescription from explicit type OIDs.
+func buildParameterDescriptionFromOIDs(oids []uint32) []byte {
+	n := len(oids)
+	buf := make([]byte, 2+n*4)
+	buf[0] = byte(n >> 8)
+	buf[1] = byte(n)
+	for i, oid := range oids {
+		binary.BigEndian.PutUint32(buf[2+i*4:], oid)
+	}
 	return buf
 }
 
@@ -2936,11 +3017,12 @@ func (p *Proxy) forwardMessage(upstreamConn net.Conn, msgType byte, lengthBuf, p
 	return err
 }
 
-// extractParseInfo extracts statement name and query from a Parse message
-// Parse format: [stmt_name]\0 [query]\0 [num_params] [param_types...]
-func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string) {
+// extractParseInfo extracts statement name, query, and explicit parameter type OIDs
+// from a Parse message.
+// Parse format: [stmt_name]\0 [query]\0 [num_params_int16] [param_type_oid_int32...]
+func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string, paramOIDs []uint32) {
 	if len(payload) == 0 {
-		return "", ""
+		return "", "", nil
 	}
 	pos := 0
 	// Read statement name (until null)
@@ -2949,13 +3031,13 @@ func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string) {
 		pos++
 	}
 	if pos >= len(payload) {
-		return "", ""
+		return "", "", nil
 	}
 	stmtName = string(payload[stmtStart:pos])
 	pos++ // Skip null
 	// Read query (until null)
 	if pos >= len(payload) {
-		return stmtName, ""
+		return stmtName, "", nil
 	}
 	queryStart := pos
 	for pos < len(payload) && payload[pos] != 0 {
@@ -2964,7 +3046,21 @@ func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string) {
 	if pos > queryStart {
 		query = string(payload[queryStart:pos])
 	}
-	return stmtName, query
+	pos++ // Skip null terminator of query
+
+	// Read num_params (Int16) and then each OID (Int32).
+	if pos+2 <= len(payload) {
+		n := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
+		pos += 2
+		if n > 0 && pos+n*4 <= len(payload) {
+			paramOIDs = make([]uint32, n)
+			for i := range paramOIDs {
+				paramOIDs[i] = binary.BigEndian.Uint32(payload[pos : pos+4])
+				pos += 4
+			}
+		}
+	}
+	return stmtName, query, paramOIDs
 }
 
 // --- Semantic SQL matching helpers ---
@@ -3305,7 +3401,9 @@ func (p *Proxy) extractBindResultFormats(payload []byte) []int16 {
 	pos += 2
 
 	if numResultFmts == 0 {
-		return nil
+		// Per PostgreSQL spec, zero format codes means "text format for all columns".
+		// Return a single 0 so callers use text encoding rather than binary heuristics.
+		return []int16{0}
 	}
 
 	codes := make([]int16, numResultFmts)
@@ -3403,8 +3501,15 @@ func (p *Proxy) extractSelectColumns(sql string) []string {
 	selectIdx := strings.Index(upperSQL, "SELECT")
 	fromIdx := strings.Index(upperSQL, "FROM")
 
+	// For INSERT/UPDATE/DELETE ... RETURNING, extract columns after RETURNING.
 	if selectIdx == -1 || fromIdx == -1 || fromIdx <= selectIdx {
-		return nil
+		returningIdx := strings.Index(upperSQL, " RETURNING ")
+		if returningIdx == -1 {
+			return nil
+		}
+		columnsPart := strings.TrimSpace(sql[returningIdx+len(" RETURNING "):])
+		p.logDebug("  -> Extracted RETURNING columns part: %s\n", columnsPart)
+		return splitColumns(columnsPart)
 	}
 
 	// Extract the columns part (between SELECT and FROM) from the original SQL
@@ -3455,6 +3560,32 @@ func (p *Proxy) extractSelectColumns(sql string) []string {
 	}
 
 	p.logDebug("  -> Extracted columns: %v\n", columnNames)
+	return columnNames
+}
+
+// splitColumns parses a comma-separated column list (SELECT or RETURNING clause),
+// stripping qualified names, aliases, and type casts.
+func splitColumns(columnsPart string) []string {
+	columnNames := []string{}
+	for _, col := range strings.Split(columnsPart, ",") {
+		col = strings.TrimSpace(col)
+		if col == "" {
+			continue
+		}
+		if dotIdx := strings.LastIndex(col, "."); dotIdx != -1 {
+			col = col[dotIdx+1:]
+		}
+		if asIdx := strings.Index(strings.ToUpper(col), " AS "); asIdx != -1 {
+			col = strings.TrimSpace(col[:asIdx])
+		}
+		if castIdx := strings.Index(col, "::"); castIdx != -1 {
+			col = col[:castIdx]
+		}
+		col = strings.TrimSpace(col)
+		if col != "" {
+			columnNames = append(columnNames, col)
+		}
+	}
 	return columnNames
 }
 

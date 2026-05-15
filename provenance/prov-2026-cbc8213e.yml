@@ -24,6 +24,9 @@ constraints:
   - No regression in notification, todo, user, or order example test suites
 affected_scope:
   - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
   - .linespec/hash_manifest.json
 forbidden_scope: []
 type: bug
