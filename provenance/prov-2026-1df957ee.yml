@@ -24,7 +24,19 @@ affected_scope:
   - docs/index.html
   - docs/linespec.html
   - docs/docs.html
-associated_specs: []
+associated_specs:
+  - path: CHANGELOG.md
+    type: code
+    run_command: test -f CHANGELOG.md
+  - path: PROVENANCE_RECORDS.md
+    type: code
+    run_command: test -f PROVENANCE_RECORDS.md
+  - path: README.md
+    type: code
+    run_command: test -f README.md
+  - path: docs/provenance.html
+    type: code
+    run_command: test -f docs/provenance.html
 tags:
   - release
   - documentation
