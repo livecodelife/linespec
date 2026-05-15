@@ -29,7 +29,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: skills/provenance/SKILL.md
+    type: code
+    run_command: test -f
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: test -f
 associated_traces: []
 monitors: []
 tags: []
