@@ -253,7 +253,7 @@ type ManifestVersion struct {
 // ManifestLayer holds the hash and optional URL for a single layer artifact.
 type ManifestLayer struct {
 	SHA256   string            `json:"sha256"`
-	URL      string            `json:"url,omitempty"`
+	URL      string            `json:"url"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
