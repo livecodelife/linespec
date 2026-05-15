@@ -82,7 +82,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v3.4.0</div>
+                    <div class="docs-badge stable">Stable v3.5.0</div>
                     <h1>Provenance Records</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Structured YAML artifacts that capture the organizational intent, constraints, and reasoning behind system changes. They live in a <code>provenance/</code> directory and form a queryable graph of architectural decisions.</p>
                 </header>
@@ -121,7 +121,7 @@ brew tap livecodelife/linespec
 brew install linespec
 
 # Or use go install
-go install github.com/livecodelife/linespec/cmd/linespec@v3.4.0
+go install github.com/livecodelife/linespec/cmd/linespec@v3.5.0
 
 # Set up a new project interactively (creates .linespec.yml)
 linespec init
@@ -929,6 +929,30 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force</code></pre>
                         <li><code>--force</code> - Skip LineSpec existence check</li>
                         <li><code>-c, --config path</code> - Use custom config</li>
                     </ul>
+
+                    <h3>Compile</h3>
+                    <p>Rebuild the hash manifest from scratch:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Recompute hashes for all records and update the manifest
+linespec provenance compile
+
+# Use a custom config
+linespec provenance compile -c /path/to/.linespec.yml</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Idempotent:</strong> If every record's hash already matches the stored manifest, no file is written and the command exits 0. Running <code>compile</code> when the manifest is missing or stale writes the full manifest covering every record and recomputes <code>FullGraphHash</code> and <code>ActiveSubsetHash</code>.</p>
+                    <p><strong>When to use:</strong> After accidentally deleting or corrupting <code>.linespec/hash_manifest.json</code>, after a failed <code>complete</code> operation left the manifest incomplete, or as a recovery step when <code>linespec provenance lint</code> reports unexpected <strong>PROV-IMM</strong> errors on records you haven't edited.</p>
 
                     <h3>Generate</h3>
                     <p>Compile a behavioral specification document from provenance records:</p>

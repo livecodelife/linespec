@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-05-15
+
+### Added
+
+- **`RECEIVE JOB` channel** ([prov-2026-bfa97730](./provenance/prov-2026-bfa97730.yml)) — New test trigger channel for background job workers. Tests seed the job payload into the service's backing queue at the wire protocol level — Redis BRPOP/LPOP/BLPOP interception for Redis-backed frameworks (Asynq, Sidekiq, BullMQ, RQ, Dramatiq), existing mock rows for DB-backed frameworks (Oban, GoodJob, River), or Kafka seed for Kafka-backed workers. Scheduled/cron jobs work in observe-only mode: `RECEIVE JOB` with a `TIMEOUT` waits for the service's internal scheduler to fire naturally while EXPECT mocks supply job input data and verify outputs. Completion is detected purely through the proxy polling loop — no service status endpoint required. Configure `job_backend` once in `.linespec.yml`; individual test files stay clean. Three new examples cover Go + Asynq (Redis-backed), Node.js + BullMQ (Redis-backed), and a Go scheduled worker (observe-only with DB reads and outbound HTTP).
+
+- **`linespec provenance compile` command** ([prov-2026-37bea46b](./provenance/prov-2026-37bea46b.yml)) — New command that rebuilds the hash manifest from scratch. Runs idempotently: if every record's hash already matches the stored manifest, no file is written. Useful for recovering from a deleted or corrupted `.linespec/hash_manifest.json` without needing to trigger an unrelated provenance write. After compile, `linespec provenance lint` passes with no integrity errors.
+
+### Fixed
+
+- **PostgreSQL proxy OID resolution for tokio-postgres and asyncpg** ([prov-2026-cbc8213e](./provenance/prov-2026-cbc8213e.yml)) — The proxy now checks whether OIDs can be resolved locally before intercepting Parse. If the client supplied explicit OIDs in Parse, or the query uses `$N::TYPE` casts, or the query has no parameters, the proxy handles Parse locally (mock-only mode). Otherwise Parse is forwarded to upstream so the real server's `ParameterDescription` (with correct OIDs) is relayed — fixing tokio-postgres (Rust) clients that send `num_params=0` and rely on the server to describe parameter types. Bind/Execute are still intercepted and mocked as before.
+
+- **Extended-query protocol for multi-language clients** ([prov-2026-806c453e](./provenance/prov-2026-806c453e.yml)) — Fixed a race condition where the relay goroutine could deliver a stale `ParseComplete` to an idle connection after mock Execute completed. Additionally: `DescribeStatement` for `SELECT` now replies with `RowDescription` (not `NoData`) to match lib/pq expectations; `DescribePortal` for mocked portals is handled locally to avoid "portal does not exist" upstream errors; `Close` for mock-only statements/portals is handled locally. Redis `PopRedisSeed` now reads from the live registry so seeds survive hot-reload via `/reload-registry`.
+
+- **Suppress passthrough warnings for idle pop commands** ([prov-2026-a02e898c](./provenance/prov-2026-a02e898c.yml)) — After a seeded job is consumed, the worker naturally re-issues BRPOP/BLPOP/LPOP to wait for more work. This idle-polling behavior no longer records a passthrough warning. All other unmatched commands continue to produce passthrough warnings as before.
+
+### Changed
+
+- **Lint: downgrade file-path issues to warnings for terminal-state records** ([prov-2026-9ea7c935](./provenance/prov-2026-9ea7c935.yml)) — For records in a terminal state (implemented, superseded, deprecated), missing or inaccessible file paths in `associated_specs`, `affected_scope`, and `forbidden_scope` are now reported as warnings rather than errors. Open and draft records retain the current error behavior. This prevents sealed records from generating lint failures as files are legitimately renamed or deleted after a feature ships.
+
+### Related Provenance Records
+
+- [prov-2026-bfa97730](./provenance/prov-2026-bfa97730.yml) - Blueprint: RECEIVE JOB background job trigger channel
+- [prov-2026-fc2c3aef](./provenance/prov-2026-fc2c3aef.yml) - Imprint: Job channel type, RECEIVE JOB parser branch, and JobBackendConfig
+- [prov-2026-2a95bd72](./provenance/prov-2026-2a95bd72.yml) - Imprint: Redis job seed mechanism — SeedRedisQueue, BRPOP/BLPOP/LPOP intercept
+- [prov-2026-d5afa7b6](./provenance/prov-2026-d5afa7b6.yml) - Imprint: Wire RECEIVE JOB into runner — seed setup, polling loop, container persistence
+- [prov-2026-6b014521](./provenance/prov-2026-6b014521.yml) - Imprint: asynq-worker Go example with RECEIVE JOB linespecs
+- [prov-2026-bab878c6](./provenance/prov-2026-bab878c6.yml) - Imprint: bullmq-worker Node.js example with RECEIVE JOB linespecs
+- [prov-2026-7095694c](./provenance/prov-2026-7095694c.yml) - Imprint: scheduled-worker Go example with observe-only RECEIVE JOB test
+- [prov-2026-806c453e](./provenance/prov-2026-806c453e.yml) - Bug: Fix proxy extended-query protocol for multi-language clients
+- [prov-2026-a02e898c](./provenance/prov-2026-a02e898c.yml) - Imprint: Suppress passthrough warnings for idle pop commands
+- [prov-2026-cbc8213e](./provenance/prov-2026-cbc8213e.yml) - Bug: Fix PostgreSQL proxy OID resolution for tokio-postgres and asyncpg
+- [prov-2026-9ea7c935](./provenance/prov-2026-9ea7c935.yml) - Blueprint: Downgrade missing-file errors to warnings for terminal-state records
+- [prov-2026-2189e586](./provenance/prov-2026-2189e586.yml) - Imprint: Downgrade file-path lint issues to warnings for terminal-state records
+- [prov-2026-37bea46b](./provenance/prov-2026-37bea46b.yml) - Blueprint: Add provenance compile command to regenerate hash manifest
+- [prov-2026-f534cda1](./provenance/prov-2026-f534cda1.yml) - Imprint: Implement compile command — CompileManifest on Hasher + CLI wiring
+
 ## [3.4.0] - 2026-05-14
 
 ### Added

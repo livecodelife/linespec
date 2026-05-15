@@ -501,6 +501,25 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force
 
 **Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`. The manifest is created automatically on first use. The full-graph hash and active-subset hash in the manifest are also recomputed at this time. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
 
+### Compile
+
+Rebuild the hash manifest from scratch:
+
+```bash
+# Recompute hashes for all records and update the manifest
+linespec provenance compile
+
+# Use a custom config
+linespec provenance compile -c /path/to/.linespec.yml
+```
+
+**Options:**
+- `-c, --config path` - Use custom config
+
+**Idempotent:** If every record's hash already matches the stored manifest, no file is written and the command exits 0. Running `compile` when the manifest is missing or stale writes the full manifest covering every record and recomputes `FullGraphHash` and `ActiveSubsetHash`.
+
+**When to use:** After accidentally deleting or corrupting `.linespec/hash_manifest.json`, after a failed `complete` operation left the manifest incomplete, or as a recovery step when `linespec provenance lint` reports unexpected **PROV-IMM** errors on records you haven't edited.
+
 ### Deprecate
 
 Mark record as deprecated:

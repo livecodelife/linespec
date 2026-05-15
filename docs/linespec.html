@@ -75,6 +75,7 @@
                         <li><a href="#verify">VERIFY</a></li>
                         <li><a href="#config">Configuration</a></li>
                         <li><a href="#kafka">Kafka Events</a></li>
+                        <li><a href="#jobs">Background Jobs</a></li>
                         <li><a href="#grpc">gRPC</a></li>
                         <li><a href="#timeout">TIMEOUT</a></li>
                         <li><a href="#examples">Examples</a></li>
@@ -87,7 +88,7 @@
         <main class="docs-content">
             <article class="docs-article">
                 <header class="docs-header">
-                    <div class="docs-badge stable">Stable v3.4.0</div>
+                    <div class="docs-badge stable">Stable v3.5.0</div>
                     <h1>LineSpec DSL Reference</h1>
                     <p class="docs-lead" style="white-space: normal; word-break: normal; display: block; width: 100%;">Deterministic domain-specific language for integration testing. Intercepts database and HTTP traffic at the protocol level for language-agnostic, deterministic test execution.</p>
 
@@ -106,7 +107,7 @@
                                 </button>
                             </div>
                             <div class="command-panel" id="go-stable">
-                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v3.4.0</code>
+                                <code>go install github.com/livecodelife/linespec/cmd/linespec@v3.5.0</code>
                                 <button class="copy-btn" aria-label="Copy command">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
@@ -136,6 +137,7 @@
                         <li><a href="#verify">VERIFY Clause</a></li>
                         <li><a href="#config">Configuration (.linespec.yml)</a></li>
                         <li><a href="#kafka">Kafka Events</a></li>
+                        <li><a href="#jobs">Background Jobs</a></li>
                         <li><a href="#grpc">gRPC Expectations</a></li>
                         <li><a href="#timeout">TIMEOUT Directive</a></li>
                         <li><a href="#examples">Complete Examples</a></li>
@@ -1511,6 +1513,88 @@ WITH {{payloads/notification_insert.yaml}}
 
 RESPOND HTTP:200</code></pre>
                     </div>
+                </section>
+
+                <section id="jobs" class="docs-section">
+                    <h2>Background Jobs</h2>
+                    <p>LineSpec can trigger and verify background job workers without modifying the service under test. The <code>RECEIVE JOB</code> statement replaces <code>RECEIVE HTTP:*</code> as the test trigger, and EXPECT statements serve a dual role: mocking the inputs the job reads and verifying the outputs it produces.</p>
+
+                    <p>Configure the job backend once in <code>.linespec.yml</code>:</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>.linespec.yml</span></div>
+                        <pre><code>job_backend:
+  type: redis       # redis | kafka | scheduled
+  queue: worker:jobs  # Redis queue key or Kafka topic (omit for scheduled)</code></pre>
+                    </div>
+
+                    <h3>Redis-backed workers</h3>
+                    <p>For frameworks that use Redis queues (Asynq, Sidekiq, BullMQ, RQ, Dramatiq, Resque): the proxy seeds the job payload into the configured queue key. The worker picks it up via BRPOP/BLPOP/LPOP as it normally would. Completion is detected when all EXPECT mocks are satisfied — no status endpoint needed.</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>process_email_job.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST process_email_job_success
+
+RECEIVE JOB
+WITH {{payloads/email_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/user_row.yaml}}
+
+EXPECT HTTP:POST /api/send
+RETURNS {{payloads/email_sent.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [email_log]
+VERIFY_OPERATION INSERT</code></pre>
+                    </div>
+
+                    <h3>DB-backed workers</h3>
+                    <p>For frameworks that poll a database table for jobs (Oban, GoodJob, River, Delayed Job, Solid Queue): no special seeding is required. Use <code>EXPECT READ</code> mocks to supply the job row the worker's SELECT returns, then verify outputs with additional EXPECT statements.</p>
+
+                    <h3>Kafka-backed workers</h3>
+                    <p>For Kafka consumer workers: set <code>type: kafka</code> and <code>queue</code> as the topic name. The payload is seeded into the topic using the same mechanism as <code>RECEIVE EVENT</code>.</p>
+
+                    <h3>Scheduled / cron workers (observe-only)</h3>
+                    <p>For jobs triggered by an internal scheduler or cron: omit <code>WITH</code> and use <code>TIMEOUT</code> to allow the scheduler to fire. LineSpec observes the resulting interactions through the proxies without seeding anything.</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>nightly_sync_job.linespec</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>TEST nightly_sync_job_runs
+
+RECEIVE JOB
+TIMEOUT 30s
+
+EXPECT HTTP:GET /api/users
+RETURNS {{payloads/users_list.json}}
+
+EXPECT WRITE:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION INSERT</code></pre>
+                    </div>
+
+                    <h3>Rules</h3>
+                    <ul>
+                        <li>Exactly one <code>RECEIVE</code> per file — use either <code>RECEIVE HTTP:*</code>, <code>RECEIVE EVENT:*</code>, or <code>RECEIVE JOB</code>, not multiple</li>
+                        <li><code>RECEIVE JOB</code> must appear before any EXPECT or EXPECT_NOT</li>
+                        <li><code>WITH</code> is required for <code>redis</code> and <code>kafka</code> types; omit for <code>scheduled</code> (observe-only)</li>
+                        <li><code>TIMEOUT</code> is recommended for all RECEIVE JOB tests; required for <code>scheduled</code> mode</li>
+                        <li><code>RESPOND</code> is not required for RECEIVE JOB tests</li>
+                        <li><code>job_backend</code> must be configured in <code>.linespec.yml</code>; omitting it is an error for redis/kafka types</li>
+                    </ul>
                 </section>
 
 <section id="grpc" class="docs-section">
