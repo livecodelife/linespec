@@ -21,7 +21,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: docs/provenance.html
     type: code
-    run_command: test -f docs/provenance.html
+    run_command: test -f
 associated_traces: []
 monitors: []
 tags: []

@@ -22,10 +22,10 @@ sealed_at_sha: ""
 associated_specs:
   - path: PROVENANCE_RECORDS.md
     type: code
-    run_command: test -f PROVENANCE_RECORDS.md
+    run_command: test -f
   - path: README.md
     type: code
-    run_command: test -f README.md
+    run_command: test -f
 associated_traces: []
 monitors: []
 tags: []

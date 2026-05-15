@@ -28,16 +28,16 @@ affected_scope:
 associated_specs:
   - path: CHANGELOG.md
     type: code
-    run_command: test -f CHANGELOG.md
+    run_command: test -f
   - path: PROVENANCE_RECORDS.md
     type: code
-    run_command: test -f PROVENANCE_RECORDS.md
+    run_command: test -f
   - path: README.md
     type: code
-    run_command: test -f README.md
+    run_command: test -f
   - path: docs/provenance.html
     type: code
-    run_command: test -f docs/provenance.html
+    run_command: test -f
 tags:
   - release
   - documentation

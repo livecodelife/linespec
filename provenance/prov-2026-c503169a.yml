@@ -30,7 +30,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: CHANGELOG.md
     type: code
-    run_command: test -f CHANGELOG.md
+    run_command: test -f
 associated_traces: []
 monitors: []
 tags: []
