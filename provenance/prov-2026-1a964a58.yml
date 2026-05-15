@@ -1,0 +1,53 @@
+id: prov-2026-1a964a58
+title: Pivot layer artifact format to tar archives for path-preserving extraction
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-dac81a68
+intent: >
+  Replace raw byte concatenation with tar archives for all layer artifacts so that
+  linespec clone (prov-2026-92f06ee9) can extract layers to their correct
+  repo-relative paths. The provenance layer becomes a tar of individual
+  prov-YYYY-XXXXXXXX.yml files (one per transformed record); specs and code directory
+  inputs are also packaged as tars. Single-file inputs (prompt, or a single-file
+  specs/code path) remain as raw bytes with their original extension. This makes all
+  directory-based layer artifacts self-describing and extractable without a custom
+  importer.
+constraints:
+  - >
+    packLayer(path string) returns ([]byte, string, error) where string is the file
+    extension. For a directory input it returns a tar archive and ".tar". For a
+    single-file input it returns the raw file bytes and the source file's extension
+    (e.g. ".md", ".go"). For the provenance layer, packProvenanceLayer(records []Record)
+    constructs a tar where each entry is named <record.ID>.yml and contains the
+    YAML-marshaled record.
+  - >
+    Tar entries use only the base file name for single-level inputs and the relative
+    path from the input directory root for directory inputs, preserving the path
+    structure the consumer needs to restore files to their correct locations.
+  - >
+    atomicWrite and newManifestVersion are unchanged; the extension is passed through
+    to determine artifact file names (linespec-provenance-v1.tar,
+    linespec-specs-v1.tar, linespec-prompt-v1.md, etc.).
+  - >
+    layerFileExt is removed; extension is determined by packLayer / packProvenanceLayer
+    at pack time and threaded through to the artifact filename.
+affected_scope:
+  - "pkg/provenance/publish.go"
+  - "pkg/provenance/publish_test.go"
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/publish_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - tar
+  - extraction
