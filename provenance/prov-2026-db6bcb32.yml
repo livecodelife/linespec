@@ -1,6 +1,6 @@
 id: prov-2026-db6bcb32
 title: Document linespec clone and import in PROVENANCE_RECORDS.md and README.md
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-1df957ee
@@ -19,7 +19,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: PROVENANCE_RECORDS.md
+    type: code
+    run_command: test -f PROVENANCE_RECORDS.md
+  - path: README.md
+    type: code
+    run_command: test -f README.md
 associated_traces: []
 monitors: []
 tags: []

@@ -1,6 +1,6 @@
 id: prov-2026-32e9f197
 title: Add Publish, Clone, Import sections to docs/provenance.html
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-1df957ee
@@ -18,7 +18,10 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: docs/provenance.html
+    type: code
+    run_command: test -f docs/provenance.html
 associated_traces: []
 monitors: []
 tags: []
