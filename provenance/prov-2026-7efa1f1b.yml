@@ -1,6 +1,6 @@
 id: prov-2026-7efa1f1b
 title: Add compile, init, publish, import, clone to skill Useful Commands sections
-status: draft
+status: open
 created_at: "2026-05-15"
 author: test@example.com
 intent: >
@@ -21,7 +21,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: skills/provenance/SKILL.md
+    type: code
+    run_command: test -f
+  - path: pkg/provenance/commands.go
+    type: code
+    run_command: test -f
 associated_traces: []
 monitors: []
 tags: []
