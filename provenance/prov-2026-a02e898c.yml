@@ -1,6 +1,6 @@
 id: prov-2026-a02e898c
 title: Suppress passthrough warnings for idle pop commands
-status: open
+status: implemented
 created_at: "2026-05-14"
 author: test@example.com
 intent: >
@@ -21,7 +21,7 @@ implements: prov-2026-bfa97730
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 15030a6f12123d457fd44700593a77bb8bbb6ff5
 associated_specs:
   - path: examples/asynq-worker/linespecs/process_email_job.linespec
     type: code
