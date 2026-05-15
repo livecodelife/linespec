@@ -22,6 +22,7 @@ affected_scope:
   - docs/provenance.html
   - README.md
   - LINESPEC.md
+  - .linespec/hash_manifest.json
 type: imprint
 supersedes: ""
 superseded_by: ""
