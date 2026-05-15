@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`linespec provenance publish` command** ([prov-2026-dac81a68](./provenance/prov-2026-dac81a68.yml)) — Packages a repository's provenance records into a versioned, content-addressed `linespec.manifest.json` artifact. Applies a deterministic transformation pipeline (strip imprints, filter superseded, promote bugs, clean dangling refs, reset status) before packaging. The provenance layer is a tar of individual record YAML files; specs and code directory layers are also tars with repo-relative paths preserved so `linespec clone` can extract them directly. SHA-256 hashes are computed per layer and combined into a `root_hash`. Versions are immutable — publish refuses to overwrite an existing version key. Supports `--specs`, `--code`, and `--prompt` optional layers, explicit `--version` override, and a custom `--manifest` path.
+
 ## [3.5.0] - 2026-05-15
 
 ### Added

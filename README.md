@@ -132,6 +132,9 @@ linespec provenance lock-scope      # Lock scope to allowlist
 linespec provenance complete        # Mark as implemented
 linespec provenance deprecate       # Mark as deprecated
 
+# Manifest distribution
+linespec provenance publish         # Package records into a versioned manifest artifact
+
 # Output formats
 linespec provenance lint --format json     # JSON output for CI
 linespec provenance lint --format sarif    # SARIF output for GitHub Code Scanning

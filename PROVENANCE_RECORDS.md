@@ -520,6 +520,75 @@ linespec provenance compile -c /path/to/.linespec.yml
 
 **When to use:** After accidentally deleting or corrupting `.linespec/hash_manifest.json`, after a failed `complete` operation left the manifest incomplete, or as a recovery step when `linespec provenance lint` reports unexpected **PROV-IMM** errors on records you haven't edited.
 
+### Publish
+
+Package a repository's provenance records into a versioned, content-addressed `linespec.manifest.json` artifact for distribution:
+
+```bash
+# Publish provenance records only (minimum viable publish)
+linespec provenance publish
+
+# Include optional layers
+linespec provenance publish --specs linespecs/ --code pkg/ --prompt PROMPT.md
+
+# Pin to an explicit version instead of auto-incrementing
+linespec provenance publish --version v2
+
+# Write the manifest to a custom path
+linespec provenance publish --manifest dist/linespec.manifest.json
+```
+
+**Options:**
+- `--manifest path` — Path to `linespec.manifest.json` (default: `./linespec.manifest.json`)
+- `--version label` — Explicit version label; default is auto-increment (`v1` → `v2` → `v3`)
+- `--specs path` — Path to a specs artifact file or directory
+- `--code path` — Path to a code artifact file or directory
+- `--prompt path` — Path to a prompt artifact file
+- `--help` — Show help
+
+**What it does:**
+
+1. Loads the existing `linespec.manifest.json` (creates one if it doesn't exist)
+2. Resolves the next version label (or uses `--version`)
+3. Applies a deterministic transformation pipeline to the loaded records, making them consumer-appropriate:
+   - Strips imprint records
+   - Filters superseded records (retains the superseding record)
+   - Promotes bug records to blueprint type
+   - Cleans dangling references left by filtered records
+   - Resets all retained records to `status: open` and removes `sealed_at_sha`
+4. Packages each layer as a local artifact file:
+   - **provenance** (always included) — tar archive of individual `<id>.yml` files
+   - **specs**, **code** — tar archive preserving repo-relative paths (for directories) or raw bytes with original extension (for single files)
+   - **prompt** — raw bytes with original file extension
+5. Computes SHA-256 for each layer artifact and a `root_hash` across all present layers in declaration order (`provenance`, `specs`, `code`, `prompt`)
+6. Appends an immutable version entry to the manifest and updates the `latest` pointer
+
+**Artifact files** are written next to the manifest: `linespec-provenance-v1.tar`, `linespec-specs-v1.tar`, `linespec-prompt-v1.md`, etc.
+
+**URL fields** are always present in the manifest but left as empty strings — fill them in after uploading the artifacts to your hosting location:
+
+```json
+{
+  "latest": "v1",
+  "versions": {
+    "v1": {
+      "created_at": "2026-05-15T12:00:00Z",
+      "root_hash": "a3f2...",
+      "layers": {
+        "provenance": {
+          "sha256": "7b1c...",
+          "url": ""
+        }
+      }
+    }
+  }
+}
+```
+
+**Immutability:** `linespec publish` refuses to overwrite an existing version key and exits non-zero. To publish a new version, run `publish` again — it will auto-increment.
+
+**When to use:** When sharing a governed project with another team or agent. The recipient runs `linespec clone <manifest-url>` to bootstrap a fully-governed local copy with provenance records, hooks, and config already in place.
+
 ### Deprecate
 
 Mark record as deprecated:
