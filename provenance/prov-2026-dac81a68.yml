@@ -1,6 +1,6 @@
 id: prov-2026-dac81a68
 title: 'linespec publish: manifest packaging, transformation, and versioning'
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-d422fec6
