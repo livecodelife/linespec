@@ -24,6 +24,7 @@ affected_scope:
   - docs/index.html
   - docs/linespec.html
   - docs/docs.html
+  - provenance/**
 associated_specs:
   - path: CHANGELOG.md
     type: code

@@ -1,0 +1,24 @@
+id: prov-2026-32e9f197
+title: Add Publish, Clone, Import sections to docs/provenance.html
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-1df957ee
+intent: |
+  Insert Publish, Clone, and Import HTML sections into docs/provenance.html after the
+  Generate section and before Install Hooks. Update the stable version badge to v3.6.0.
+constraints:
+  - Publish, Clone, and Import sections match the structure of existing sections (h3, code-block div, options ul, behavioral description)
+  - Inserted before the Install Hooks h3
+  - Version badge updated from v3.5.0 to v3.6.0
+affected_scope:
+  - docs/provenance.html
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

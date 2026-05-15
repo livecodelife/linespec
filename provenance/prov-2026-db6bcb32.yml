@@ -1,0 +1,25 @@
+id: prov-2026-db6bcb32
+title: Document linespec clone and import in PROVENANCE_RECORDS.md and README.md
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-1df957ee
+intent: |
+  Add ### Clone and ### Import sections to PROVENANCE_RECORDS.md after ### Publish,
+  and add linespec clone and linespec import to the CLI Commands block in README.md.
+constraints:
+  - Clone section covers usage, --version and --dir flags, behavior (git init, hooks, .linespec.yml, layer extraction), and when to use
+  - Import section covers usage, --version flag, behavior (conflict check, atomic write, post-lint), and when to use
+  - README CLI Commands block adds clone and import under the Manifest distribution group
+affected_scope:
+  - PROVENANCE_RECORDS.md
+  - README.md
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
