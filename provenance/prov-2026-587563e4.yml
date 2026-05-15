@@ -1,6 +1,6 @@
 id: prov-2026-587563e4
 title: Implement linespec clone and import commands
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-92f06ee9
@@ -21,9 +21,9 @@ constraints:
   - import runs linespec provenance lint after all records are written to surface reference issues
   - version pinning is supported via @version suffix in the URL and a --version flag; unpinned targets the latest field
 affected_scope:
-  - cmd/linespec/
-  - pkg/manifest/
-  - pkg/provenance/commands.go
+  - cmd/linespec/**
+  - pkg/manifest/**
+  - pkg/provenance/**
 forbidden_scope: []
 type: blueprint
 supersedes: ""
