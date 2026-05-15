@@ -34,6 +34,7 @@ type ProvenanceConfig struct {
 	AutoAffectedScope            bool
 	RunAssociatedSpecsOnComplete bool
 	Embedding                    *config.EmbeddingConfig
+	ManifestURL                  string // source manifest URL, set by linespec clone
 }
 
 // NewCommands creates a new commands instance

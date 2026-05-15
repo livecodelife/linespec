@@ -21,7 +21,7 @@ constraints:
 affected_scope:
   - cmd/linespec/**
   - pkg/config/**
-  - pkg/provenance/clone_test.go
+  - pkg/provenance/**
 forbidden_scope: []
 type: imprint
 supersedes: ""

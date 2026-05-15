@@ -348,6 +348,7 @@ type ProvenanceConfig struct {
 	AutoAffectedScope            bool               `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
 	RunAssociatedSpecsOnComplete bool               `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
 	Embedding                    *EmbeddingConfig   `yaml:"embedding,omitempty"`              // embedding API configuration
+	ManifestURL                  string             `yaml:"manifest_url,omitempty"`           // source manifest URL set by linespec clone
 }
 
 // DependencyConfig defines external service dependencies

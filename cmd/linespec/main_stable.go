@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/pkg/manifest"
 	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/embeddings"
 	"github.com/livecodelife/linespec/pkg/initcmd"
@@ -53,6 +54,8 @@ func main() {
 	switch os.Args[1] {
 	case "init":
 		runInit()
+	case "clone":
+		runClone()
 	case "proxy":
 		runProxy()
 	case "test":
@@ -487,6 +490,133 @@ func embeddedModuleVersion() string {
 	return v
 }
 
+func runClone() {
+	args := os.Args[2:]
+	var manifestURL string
+	var version string
+	var destDir string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--version":
+			i++
+			if i < len(args) {
+				version = args[i]
+			}
+		case "--dir":
+			i++
+			if i < len(args) {
+				destDir = args[i]
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec clone <manifest-url> [options]
+
+Options:
+  --version <ver>   Pin to a specific manifest version (overrides @version suffix)
+  --dir <path>      Destination directory name (default: derived from manifest URL)
+  --help, -h        Show this help message
+
+Examples:
+  linespec clone https://example.com/linespec.manifest.json
+  linespec clone https://example.com/linespec.manifest.json@v3
+  linespec clone https://example.com/linespec.manifest.json --version v2 --dir myproject`)
+			return
+		default:
+			if manifestURL == "" && !strings.HasPrefix(args[i], "-") {
+				manifestURL = args[i]
+			}
+		}
+	}
+
+	if manifestURL == "" {
+		logger.Error("Usage: linespec clone <manifest-url> [--version <ver>] [--dir <path>]")
+		os.Exit(1)
+	}
+
+	if destDir == "" {
+		base := filepath.Base(strings.SplitN(manifestURL, "@", 2)[0])
+		base = strings.TrimSuffix(base, filepath.Ext(base))
+		if base == "" || base == "." {
+			base = "linespec-project"
+		}
+		destDir = base
+	}
+
+	fmt.Printf("Fetching manifest from %s...\n", manifestURL)
+	fetched, err := manifest.Fetch(manifestURL, version)
+	if err != nil {
+		logger.Error("Failed to fetch manifest: %v", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Fetched version %s — all layers verified\n\n", fetched.Version)
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		logger.Error("Failed to create directory %s: %v", destDir, err)
+		os.Exit(1)
+	}
+
+	gitCmd := exec.Command("git", "init", destDir)
+	gitCmd.Stdout = os.Stdout
+	gitCmd.Stderr = os.Stderr
+	if err := gitCmd.Run(); err != nil {
+		logger.Error("git init failed: %v", err)
+		os.RemoveAll(destDir)
+		os.Exit(1)
+	}
+
+	// Strip @version from the URL stored in .linespec.yml
+	baseManifestURL := strings.SplitN(manifestURL, "@", 2)[0]
+	linespecYML := fmt.Sprintf("provenance:\n  dir: provenance\n  manifest_url: %q\n", baseManifestURL)
+	if err := os.WriteFile(filepath.Join(destDir, ".linespec.yml"), []byte(linespecYML), 0644); err != nil {
+		logger.Error("Failed to write .linespec.yml: %v", err)
+		os.Exit(1)
+	}
+
+	// Install git hooks into the cloned project
+	cloneCfg := &provenance.ProvenanceConfig{
+		Dir:         filepath.Join(destDir, "provenance"),
+		Enforcement: "warn",
+		ManifestURL: baseManifestURL,
+	}
+	cloneCmds, err := provenance.NewCommands(cloneCfg, destDir, os.Stdout, true)
+	if err != nil {
+		logger.Error("Failed to initialize provenance for hook installation: %v", err)
+		os.Exit(1)
+	}
+	if err := cloneCmds.InstallHooks(); err != nil {
+		logger.Error("Failed to install git hooks: %v", err)
+		os.Exit(1)
+	}
+	fmt.Println("  ✓ installed git hooks")
+
+	// Extract layers
+	if provData, ok := fetched.Layers["provenance"]; ok {
+		provDir := filepath.Join(destDir, "provenance")
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			logger.Error("Failed to create provenance directory: %v", err)
+			os.Exit(1)
+		}
+		if err := manifest.ExtractProvenance(provData, provDir); err != nil {
+			logger.Error("Failed to extract provenance layer: %v", err)
+			os.Exit(1)
+		}
+		fmt.Println("  ✓ extracted provenance layer")
+	}
+	for _, layerName := range []string{"specs", "code", "prompt"} {
+		data, ok := fetched.Layers[layerName]
+		if !ok {
+			continue
+		}
+		if err := manifest.ExtractSpecs(data, destDir); err != nil {
+			logger.Error("Failed to extract %s layer: %v", layerName, err)
+			os.Exit(1)
+		}
+		fmt.Printf("  ✓ extracted %s layer\n", layerName)
+	}
+
+	fmt.Printf("\n✓ Project ready in ./%s\n", destDir)
+}
+
 func runInit() {
 	args := os.Args[2:]
 	opts := initcmd.Options{}
@@ -528,6 +658,7 @@ Usage: linespec <command> [options]
 
 Commands:
   init                       Interactively create a .linespec.yml for your project
+  clone <manifest-url>       Bootstrap a project from a published manifest
   provenance <subcommand>    Manage provenance records (alias: -p)
   test [--debug] <path>      Run .linespec test files
   build                      Build the linespec:latest Docker image
@@ -1087,6 +1218,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.RunAssociatedSpecsOnComplete = fullConfig.Provenance.RunAssociatedSpecsOnComplete
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
 			cfg.CacheTTLMinutes = fullConfig.Provenance.CacheTTLMinutes
+			cfg.ManifestURL = fullConfig.Provenance.ManifestURL
 
 			if fullConfig.Provenance.Embedding != nil {
 				cfg.Embedding = fullConfig.Provenance.Embedding
