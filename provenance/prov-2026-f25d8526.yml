@@ -1,6 +1,6 @@
 id: prov-2026-f25d8526
 title: Document compile, init, publish, import, and clone commands in provenance skill
-status: draft
+status: open
 created_at: "2026-05-15"
 author: test@example.com
 intent: >
