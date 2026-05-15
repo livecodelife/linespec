@@ -134,6 +134,8 @@ linespec provenance deprecate       # Mark as deprecated
 
 # Manifest distribution
 linespec provenance publish         # Package records into a versioned manifest artifact
+linespec clone <manifest-url>       # Bootstrap a project from a published manifest
+linespec import <manifest-url>      # Import provenance records from a published manifest
 
 # Output formats
 linespec provenance lint --format json     # JSON output for CI

@@ -589,6 +589,68 @@ linespec provenance publish --manifest dist/linespec.manifest.json
 
 **When to use:** When sharing a governed project with another team or agent. The recipient runs `linespec clone <manifest-url>` to bootstrap a fully-governed local copy with provenance records, hooks, and config already in place.
 
+### Clone
+
+Bootstrap a new project directory from a published manifest:
+
+```bash
+# Clone from a manifest URL (destination dir defaults to manifest filename stem)
+linespec clone https://example.com/linespec.manifest.json
+
+# Pin to a specific version
+linespec clone https://example.com/linespec.manifest.json@v2
+linespec clone https://example.com/linespec.manifest.json --version v2
+
+# Specify the destination directory name
+linespec clone https://example.com/linespec.manifest.json --dir myproject
+```
+
+**Options:**
+- `<manifest-url>` — Required. URL to a `linespec.manifest.json` file. Append `@version` to pin to a specific version.
+- `--version label` — Pin to a specific version (overrides `@version` suffix)
+- `--dir path` — Destination directory name (default: derived from the manifest URL's filename stem)
+- `--help` — Show help
+
+**What it does:**
+
+1. Fetches the manifest JSON and resolves the target version (pinned or `latest`)
+2. Verifies `root_hash` against the concatenation of all layer hashes before fetching any artifact — aborts on mismatch
+3. Creates the destination directory and runs `git init`
+4. Writes `.linespec.yml` with `provenance.manifest_url` set to the source URL (without `@version` suffix)
+5. Installs git hooks via `linespec provenance install-hooks`
+6. Downloads each layer artifact, verifies its SHA-256 hash, and extracts it:
+   - **provenance** — extracted into `<dest>/provenance/`
+   - **specs**, **code**, **prompt** — extracted into `<dest>/` preserving repo-relative paths
+
+**When to use:** When a colleague or automated agent has published a governed project and you want a fully development-ready local copy with provenance records, hooks, and `.linespec.yml` already configured.
+
+### Import
+
+Import provenance records from a published manifest into an existing repository:
+
+```bash
+# Import all records from the latest manifest version
+linespec import https://example.com/linespec.manifest.json
+
+# Pin to a specific version
+linespec import https://example.com/linespec.manifest.json@v3
+linespec import https://example.com/linespec.manifest.json --version v2
+```
+
+**Options:**
+- `<manifest-url>` — Required. URL to a `linespec.manifest.json` file. Append `@version` to pin.
+- `--version label` — Pin to a specific version (overrides `@version` suffix)
+- `--help` — Show help
+
+**What it does:**
+
+1. Fetches the manifest and verifies all layer hashes
+2. Reads the record IDs from the provenance layer and checks for conflicts with the local `provenance/` directory — aborts without writing anything if any ID already exists
+3. Extracts all records from the provenance layer into the local `provenance/` directory
+4. Runs `linespec provenance lint` to surface any reference issues introduced by the import
+
+**When to use:** When you want to pull in a set of published records to extend an existing repository's provenance graph. Use `clone` instead when starting from scratch.
+
 ### Deprecate
 
 Mark record as deprecated:
