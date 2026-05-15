@@ -1,0 +1,37 @@
+id: prov-2026-94a4a406
+title: 'pkg/manifest: fetch, verify, and extract manifest layers'
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-587563e4
+intent: >
+  Create the pkg/manifest package that handles all manifest consumption logic:
+  fetching the manifest JSON from a URL, resolving a specific version (@version
+  suffix or --version flag, defaulting to latest), verifying the root_hash against
+  the concatenation of the resolved version's layer hashes before any download,
+  downloading each layer artifact, verifying each layer's SHA256 after download,
+  and extracting layer contents to the correct destination paths. Reuses the
+  Manifest/ManifestVersion/ManifestLayer types from pkg/provenance/publish.go.
+constraints:
+  - root_hash must be verified before any layer is fetched; abort without downloading anything if it does not match
+  - each layer artifact must be SHA256-verified after download and before extraction; abort on mismatch with no files written
+  - "version resolution order: @version URL suffix first, then --version flag, then the manifest's latest field"
+  - specs layer files are extracted to their preserved repo-relative paths without consulting provenance records
+  - no files are written to disk on any verification failure
+affected_scope:
+  - pkg/manifest/**
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/manifest/manifest_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - hash-verification
