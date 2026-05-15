@@ -56,6 +56,8 @@ func main() {
 		runInit()
 	case "clone":
 		runClone()
+	case "import":
+		runImport()
 	case "proxy":
 		runProxy()
 	case "test":
@@ -490,6 +492,106 @@ func embeddedModuleVersion() string {
 	return v
 }
 
+func runImport() {
+	args := os.Args[2:]
+	var manifestURL string
+	var version string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--version":
+			i++
+			if i < len(args) {
+				version = args[i]
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec import <manifest-url> [options]
+
+Options:
+  --version <ver>   Pin to a specific manifest version (overrides @version suffix)
+  --help, -h        Show this help message
+
+Examples:
+  linespec import https://example.com/linespec.manifest.json
+  linespec import https://example.com/linespec.manifest.json@v3
+  linespec import https://example.com/linespec.manifest.json --version v2`)
+			return
+		default:
+			if manifestURL == "" && !strings.HasPrefix(args[i], "-") {
+				manifestURL = args[i]
+			}
+		}
+	}
+
+	if manifestURL == "" {
+		logger.Error("Usage: linespec import <manifest-url> [--version <ver>]")
+		os.Exit(1)
+	}
+
+	cfg := loadProvenanceConfig()
+	provDir := cfg.Dir
+	if provDir == "" {
+		provDir = "provenance"
+	}
+
+	fmt.Printf("Fetching manifest from %s...\n", manifestURL)
+	fetched, err := manifest.Fetch(manifestURL, version)
+	if err != nil {
+		logger.Error("Failed to fetch manifest: %v", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Fetched version %s — all layers verified\n\n", fetched.Version)
+
+	provData, ok := fetched.Layers["provenance"]
+	if !ok {
+		logger.Error("Manifest version %s has no provenance layer", fetched.Version)
+		os.Exit(1)
+	}
+
+	// Check for conflicts before writing anything
+	ids, err := manifest.ProvenanceRecordIDs(provData)
+	if err != nil {
+		logger.Error("Failed to read provenance layer: %v", err)
+		os.Exit(1)
+	}
+	var conflicts []string
+	for _, id := range ids {
+		dest := filepath.Join(provDir, id+".yml")
+		if _, err := os.Stat(dest); err == nil {
+			conflicts = append(conflicts, id)
+		}
+	}
+	if len(conflicts) > 0 {
+		logger.Error("Import aborted — the following record IDs already exist locally (resolve manually):")
+		for _, id := range conflicts {
+			fmt.Fprintf(os.Stderr, "  · %s\n", id)
+		}
+		os.Exit(1)
+	}
+
+	if err := os.MkdirAll(provDir, 0755); err != nil {
+		logger.Error("Failed to create provenance directory: %v", err)
+		os.Exit(1)
+	}
+	if err := manifest.ExtractProvenance(provData, provDir); err != nil {
+		logger.Error("Failed to extract provenance layer: %v", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Imported %d record(s) into %s\n\n", len(ids), provDir)
+
+	// Run lint to surface reference issues with the local graph
+	fmt.Println("Running provenance lint...")
+	repoRoot, _ := os.Getwd()
+	cmds, err := provenance.NewCommands(cfg, repoRoot, os.Stdout, true)
+	if err != nil {
+		logger.Error("Failed to initialize provenance for lint: %v", err)
+		os.Exit(1)
+	}
+	if err := cmds.Lint(provenance.LintOptions{}); err != nil {
+		fmt.Fprintln(os.Stderr, "\nLint reported issues (see above). Records were imported — resolve reference issues manually.")
+	}
+}
+
 func runClone() {
 	args := os.Args[2:]
 	var manifestURL string
@@ -659,6 +761,7 @@ Usage: linespec <command> [options]
 Commands:
   init                       Interactively create a .linespec.yml for your project
   clone <manifest-url>       Bootstrap a project from a published manifest
+  import <manifest-url>      Import provenance records from a published manifest
   provenance <subcommand>    Manage provenance records (alias: -p)
   test [--debug] <path>      Run .linespec test files
   build                      Build the linespec:latest Docker image

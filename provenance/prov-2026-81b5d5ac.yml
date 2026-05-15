@@ -19,6 +19,7 @@ constraints:
   - version pinning via @version URL suffix or --version flag; unpinned targets latest
 affected_scope:
   - cmd/linespec/**
+  - pkg/manifest/**
 forbidden_scope: []
 type: imprint
 supersedes: ""

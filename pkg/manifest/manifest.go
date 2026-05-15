@@ -120,6 +120,25 @@ func ExtractRaw(data []byte, destPath string) error {
 	return os.WriteFile(destPath, data, 0644)
 }
 
+// ProvenanceRecordIDs returns the list of record IDs (filenames without .yml)
+// present in a provenance layer tar, without extracting anything to disk.
+func ProvenanceRecordIDs(data []byte) ([]string, error) {
+	var ids []string
+	tr := tar.NewReader(bytes.NewReader(data))
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read tar: %w", err)
+		}
+		name := filepath.Base(hdr.Name)
+		ids = append(ids, strings.TrimSuffix(name, ".yml"))
+	}
+	return ids, nil
+}
+
 // verifyRootHash checks that mv.RootHash equals SHA256 of the concatenation
 // of layer SHA256 hex strings in canonical layerOrder.
 func verifyRootHash(mv ManifestVersion) error {
