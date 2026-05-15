@@ -1,6 +1,6 @@
 id: prov-2026-80dd9b11
 title: 'Publish command: manifest read/write and version management'
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-dac81a68
@@ -39,7 +39,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1e14014d0896cf33ebb171e83731fecbf60e661c
 associated_specs:
   - path: pkg/provenance/publish_test.go
     type: go_test
