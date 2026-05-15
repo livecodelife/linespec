@@ -1,0 +1,52 @@
+id: prov-2026-80dd9b11
+title: 'Publish command: manifest read/write and version management'
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+implements: prov-2026-dac81a68
+intent: >
+  Implement the Publish method on Commands and its PublishOptions struct. The method
+  loads or creates linespec.manifest.json, resolves the next version label, applies
+  the transformation pipeline to loaded records, serializes the provenance layer,
+  computes hashes, appends the immutable version entry, and writes the manifest.
+  Also wire the `linespec provenance publish` subcommand in main_stable.go.
+constraints:
+  - >
+    PublishOptions carries: ManifestPath string, Version string (empty = auto-increment),
+    SpecsDir string, CodeDir string, PromptFile string. Only ManifestPath is required;
+    omitting layer paths skips those layers.
+  - >
+    Publish errors and exits non-zero if the resolved version key already exists in
+    the manifest. Auto-increment reads existing keys and applies nextVersion.
+  - >
+    The provenance layer artifact is a JSON array of the transformed records,
+    marshaled with encoding/json. Other layers (specs, code, prompt) read their
+    artifact bytes from disk. Absent optional layers are silently skipped.
+  - >
+    The manifest file is written atomically (write to temp file, rename) to avoid
+    partial writes.
+  - >
+    CLI subcommand: `linespec provenance publish [--manifest <path>] [--version <v>]
+    [--specs <dir>] [--code <dir>] [--prompt <file>]`. Default manifest path is
+    linespec.manifest.json in the working directory.
+affected_scope:
+  - "pkg/provenance/publish.go"
+  - "pkg/provenance/publish_test.go"
+  - "pkg/provenance/commands.go"
+  - "cmd/linespec/main_stable.go"
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/publish_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - publish
+  - cli
