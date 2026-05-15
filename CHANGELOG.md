@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-05-15
+
+### Changed
+
+- **Provenance skill** ([prov-2026-f25d8526](./provenance/prov-2026-f25d8526.yml)) — The `provenance` Claude Code skill (both the embedded constant installed via `linespec provenance install-skills` and the `skills/provenance/SKILL.md` file) now documents five previously undocumented commands in its Useful Commands section: `linespec init`, `linespec provenance compile`, `linespec provenance publish`, `linespec import`, and `linespec clone`.
+
+### Related Provenance Records
+
+- [prov-2026-f25d8526](./provenance/prov-2026-f25d8526.yml) - Blueprint: Document compile, init, publish, import, and clone commands in provenance skill
+- [prov-2026-7efa1f1b](./provenance/prov-2026-7efa1f1b.yml) - Imprint: Add compile, init, publish, import, clone to skill Useful Commands sections
+
 ## [3.6.0] - 2026-05-15
 
 ### Added
