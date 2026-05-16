@@ -1,6 +1,6 @@
 id: prov-2026-dac887f7
 title: fetchBytes helper and local path auto-resolution in Fetch
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 intent: |
@@ -19,7 +19,7 @@ implements: prov-2026-fde4ee3a
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 815ee507f21c62b262c1ab4c66f7e7a19dbd68c2
 associated_specs:
   - type: go_test
     path: pkg/manifest/manifest_test.go
