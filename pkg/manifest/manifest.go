@@ -129,10 +129,77 @@ func ExtractProvenance(data []byte, destDir string) error {
 	return extractTar(data, destDir)
 }
 
-// ExtractSpecs unpacks the specs layer tar into destDir, preserving the
-// repo-relative paths recorded at publish time.
+// ExtractSpecs unpacks the specs layer tar into destDir. If all entries share
+// a single common top-level directory component (e.g. "linespec.manifest/"),
+// that prefix is stripped so files land directly in destDir.
 func ExtractSpecs(data []byte, destDir string) error {
-	return extractTar(data, destDir)
+	prefix := commonTopDir(data)
+	if prefix == "" {
+		return extractTar(data, destDir)
+	}
+	return extractTarStripping(data, destDir, prefix)
+}
+
+// commonTopDir returns the single top-level directory component shared by all
+// entries in the tar, or "" if entries have mixed or no top-level directories.
+func commonTopDir(data []byte) string {
+	tr := tar.NewReader(bytes.NewReader(data))
+	var common string
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return ""
+		}
+		parts := strings.SplitN(filepath.ToSlash(hdr.Name), "/", 2)
+		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+			return ""
+		}
+		if common == "" {
+			common = parts[0]
+		} else if parts[0] != common {
+			return ""
+		}
+	}
+	return common
+}
+
+// extractTarStripping unpacks a tar archive into destDir, stripping the given
+// top-level directory prefix from every entry path before writing.
+func extractTarStripping(data []byte, destDir, prefix string) error {
+	tr := tar.NewReader(bytes.NewReader(data))
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read tar: %w", err)
+		}
+		stripped := strings.TrimPrefix(filepath.ToSlash(hdr.Name), prefix+"/")
+		if stripped == "" {
+			continue
+		}
+		dest := filepath.Join(destDir, filepath.FromSlash(filepath.Clean(stripped)))
+		if !strings.HasPrefix(dest, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("tar entry %q escapes destination directory", hdr.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return err
+		}
+		f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0777)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(f, tr); err != nil {
+			f.Close()
+			return fmt.Errorf("write %s: %w", dest, err)
+		}
+		f.Close()
+	}
+	return nil
 }
 
 // ExtractRaw writes a single-file layer directly to destPath.

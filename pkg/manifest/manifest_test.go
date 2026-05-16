@@ -383,6 +383,67 @@ func TestFetch_RemoteManifest_EmptyURLErrors(t *testing.T) {
 	}
 }
 
+func TestExtractSpecs_StripsCommonTopLevelPrefix(t *testing.T) {
+	files := map[string][]byte{
+		"linespec.manifest/specs/foo.linespec": []byte("test spec"),
+		"linespec.manifest/specs/sub/bar.linespec": []byte("nested spec"),
+		"linespec.manifest/prompt.md": []byte("# prompt"),
+	}
+	dest := t.TempDir()
+	if err := ExtractSpecs(makeTar(files), dest); err != nil {
+		t.Fatalf("ExtractSpecs: %v", err)
+	}
+	want := map[string]string{
+		"specs/foo.linespec":     "test spec",
+		"specs/sub/bar.linespec": "nested spec",
+		"prompt.md":              "# prompt",
+	}
+	for path, wantContent := range want {
+		got, err := os.ReadFile(filepath.Join(dest, path))
+		if err != nil {
+			t.Errorf("missing file %s: %v", path, err)
+			continue
+		}
+		if string(got) != wantContent {
+			t.Errorf("file %s: got %q, want %q", path, got, wantContent)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dest, "linespec.manifest")); !os.IsNotExist(err) {
+		t.Error("linespec.manifest/ subdirectory should not exist after extraction")
+	}
+}
+
+func TestExtractSpecs_NoStrippingWhenFlatPaths(t *testing.T) {
+	files := map[string][]byte{
+		"specs/foo.linespec": []byte("flat spec"),
+		"prompt.md":          []byte("# prompt"),
+	}
+	dest := t.TempDir()
+	if err := ExtractSpecs(makeTar(files), dest); err != nil {
+		t.Fatalf("ExtractSpecs: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(dest, "specs/foo.linespec")); err != nil {
+		t.Errorf("expected specs/foo.linespec at root: %v", err)
+	}
+}
+
+func TestExtractSpecs_NoStrippingWhenMixedPrefixes(t *testing.T) {
+	files := map[string][]byte{
+		"dirA/file1.txt": []byte("a"),
+		"dirB/file2.txt": []byte("b"),
+	}
+	dest := t.TempDir()
+	if err := ExtractSpecs(makeTar(files), dest); err != nil {
+		t.Fatalf("ExtractSpecs: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(dest, "dirA/file1.txt")); err != nil {
+		t.Errorf("expected dirA/file1.txt: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(dest, "dirB/file2.txt")); err != nil {
+		t.Errorf("expected dirB/file2.txt: %v", err)
+	}
+}
+
 func TestExtractProvenance(t *testing.T) {
 	files := map[string][]byte{
 		"prov-2026-aaa.yml": []byte("id: prov-2026-aaa"),
