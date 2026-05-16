@@ -171,8 +171,8 @@ func packProvenanceLayer(records []Record) ([]byte, error) {
 }
 
 // packLayer packages a file or directory as a layer artifact.
-// Returns (bytes, extension, error). Directories become tar archives (".tar");
-// single files are returned as raw bytes with their original extension.
+// Returns (bytes, ".tar", error). Both files and directories become tar archives
+// so all layer artifacts have a consistent format for clone/import extraction.
 func packLayer(path string) ([]byte, string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -180,7 +180,26 @@ func packLayer(path string) ([]byte, string, error) {
 	}
 	if !info.IsDir() {
 		data, err := os.ReadFile(path)
-		return data, filepath.Ext(path), err
+		if err != nil {
+			return nil, "", err
+		}
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		hdr := &tar.Header{
+			Name: filepath.Base(path),
+			Mode: int64(info.Mode()),
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, "", err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return nil, "", err
+		}
+		if err := tw.Close(); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), ".tar", nil
 	}
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)

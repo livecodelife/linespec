@@ -423,7 +423,7 @@ func TestPackProvenanceLayer_EntryContainsValidYAML(t *testing.T) {
 
 // --- packLayer ---
 
-func TestPackLayer_FileReturnsRawBytesAndExt(t *testing.T) {
+func TestPackLayer_FileReturnsTarWithOriginalFilename(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "prompt.md")
 	os.WriteFile(path, []byte("hello prompt"), 0644)
@@ -432,11 +432,12 @@ func TestPackLayer_FileReturnsRawBytesAndExt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ext != ".md" {
-		t.Errorf("expected .md extension, got %q", ext)
+	if ext != ".tar" {
+		t.Errorf("expected .tar extension, got %q", ext)
 	}
-	if string(data) != "hello prompt" {
-		t.Errorf("expected raw file bytes, got %q", data)
+	entries := readTarEntries(t, data)
+	if string(entries["prompt.md"]) != "hello prompt" {
+		t.Errorf("expected prompt.md entry with original content, got %q", entries["prompt.md"])
 	}
 }
 
