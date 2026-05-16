@@ -1,0 +1,43 @@
+id: prov-2026-fde4ee3a
+title: Support local file paths in linespec clone and import
+status: draft
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+intent: |
+  linespec clone and import currently require HTTP/HTTPS URLs for both the manifest and all
+  layer artifacts. This makes local testing impossible without a file server. Add support for
+  local file paths so that engineers can run `linespec clone ./linespec.manifest.json` after a
+  local publish and have it work exactly like a remote clone.
+
+  The manifest fetcher must detect whether a location is a local path or a URL and read from
+  disk instead of making an HTTP request. Layer artifacts referenced by empty URLs in the
+  manifest should be auto-resolved from the manifest's directory using the publish naming
+  convention (linespec-{layer}-{version}.tar), enabling a zero-configuration local clone
+  immediately after `linespec provenance publish`.
+constraints:
+  - A location is treated as a local path if it does not have an http:// or https:// scheme; all other locations use HTTP
+  - When a layer URL is empty in the manifest AND the manifest was loaded from a local file path, the layer artifact is auto-resolved from the manifest's directory using the naming pattern linespec-{layerName}-{version}.tar
+  - Auto-resolved local layer paths are hash-verified against the declared SHA256 before extraction, identical to the remote flow
+  - root_hash verification must run before any layer is read, identical to the remote flow
+  - If a layer URL is empty and the manifest was loaded from a URL (not a local path), the existing error ("layer X has no URL") is preserved
+  - The @version suffix and --version flag must continue to work for local manifest paths
+  - No changes to the clone or import command CLIs; the path/URL distinction is handled entirely inside Fetch
+affected_scope:
+  - pkg/manifest/manifest.go
+  - pkg/manifest/manifest_test.go
+forbidden_scope: []
+type: blueprint
+implements: prov-2026-92f06ee9
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-4b89538a
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - clone
+  - import
+  - local-testing
