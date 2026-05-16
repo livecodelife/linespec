@@ -1,0 +1,50 @@
+id: prov-2026-a6be4165
+title: 'Fix clone: strip common top-level prefix from extracted layers'
+status: draft
+created_at: "2026-05-16"
+author: calebcowen@gmail.com
+intent: |
+  The clone command extracts specs, code, and prompt layer tarballs into the destination
+  directory, but files end up nested inside a subdirectory (e.g., linespec.manifest/) instead
+  of the destination root. This happens because tar entries in published layer artifacts carry
+  a leading directory prefix from the source repository's layout. The fix strips any common
+  single top-level directory component from tar entries when extracting non-provenance layers,
+  so files land directly in the destination root.
+
+  After the fix, a cloned project directory should have this structure:
+    <manifest_name>/
+      <spec_directory>/
+      <code_files_and_directories>
+      <prompt_file>
+constraints:
+  - |
+    Only strip a leading prefix when ALL entries in the tar share the same single top-level
+    directory component. If entries have mixed top-level paths, extract without stripping.
+  - |
+    Provenance layer extraction must remain unchanged — provenance records are always flat
+    <id>.yml entries with no leading directory prefix.
+  - |
+    If tar entries have no common top-level prefix (they start at root), extraction is unchanged.
+  - |
+    Existing tests for ExtractProvenance and extractTar must continue to pass. New tests must
+    cover: stripping when all entries share a prefix, no-op when entries are already flat.
+affected_scope:
+  - pkg/manifest/**
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-587563e4
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/manifest/manifest_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - clone
+  - manifest
+  - extraction
