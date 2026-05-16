@@ -1,6 +1,6 @@
 id: prov-2026-ff9c2b9a
 title: Update CHANGELOG and bump version to v3.8.0
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 intent: |
@@ -25,7 +25,7 @@ implements: prov-2026-d73bacc1
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f3279f99dbaaf9ae4aac9ddeedf2fd7055f0dcea
 associated_specs:
   - type: changelog
     path: CHANGELOG.md
