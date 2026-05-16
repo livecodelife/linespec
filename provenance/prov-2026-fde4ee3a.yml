@@ -1,6 +1,6 @@
 id: prov-2026-fde4ee3a
 title: Support local file paths in linespec clone and import
-status: draft
+status: open
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 intent: |
@@ -33,7 +33,10 @@ superseded_by: ""
 related:
   - prov-2026-4b89538a
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: go_test
+    path: pkg/manifest/manifest_test.go
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
