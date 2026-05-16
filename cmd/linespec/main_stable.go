@@ -691,6 +691,11 @@ Examples:
 	}
 	fmt.Println("  ✓ installed git hooks")
 
+	if err := cloneCmds.InstallSkills(provenance.InstallSkillsOptions{}); err != nil {
+		logger.Error("Failed to install skills: %v", err)
+		os.Exit(1)
+	}
+
 	// Extract layers
 	if provData, ok := fetched.Layers["provenance"]; ok {
 		provDir := filepath.Join(destDir, "provenance")
