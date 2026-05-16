@@ -22,9 +22,11 @@ constraints:
   - If a layer URL is empty and the manifest was loaded from a URL (not a local path), the existing error ("layer X has no URL") is preserved
   - The @version suffix and --version flag must continue to work for local manifest paths
   - No changes to the clone or import command CLIs; the path/URL distinction is handled entirely inside Fetch
+  - linespec clone must call InstallSkills after InstallHooks so the provenance and linespec-testing skills are present in the cloned project; without skills the installed hooks reference commands that Claude Code cannot invoke
 affected_scope:
   - pkg/manifest/manifest.go
   - pkg/manifest/manifest_test.go
+  - cmd/linespec/main_stable.go
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-92f06ee9
