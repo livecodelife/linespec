@@ -1,0 +1,27 @@
+id: prov-2026-0742993e
+title: Install skills during linespec clone
+status: open
+created_at: "2026-05-15"
+author: calebcowen@gmail.com
+intent: |
+  Call cloneCmds.InstallSkills after InstallHooks in runClone so the provenance and
+  linespec-testing skills are written to .claude/skills/ in the cloned project. Without
+  skills the installed git hooks reference provenance commands that Claude Code cannot
+  invoke, making the hooks effectively useless.
+constraints: []
+affected_scope:
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-fde4ee3a
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/manifest/manifest_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
