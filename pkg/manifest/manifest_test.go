@@ -252,6 +252,137 @@ func TestExtractTar_RejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestIsLocalPath(t *testing.T) {
+	cases := []struct {
+		loc   string
+		local bool
+	}{
+		{"http://example.com/manifest.json", false},
+		{"https://example.com/manifest.json", false},
+		{"/abs/path/manifest.json", true},
+		{"./relative/manifest.json", true},
+		{"manifest.json", true},
+	}
+	for _, tc := range cases {
+		if got := isLocalPath(tc.loc); got != tc.local {
+			t.Errorf("isLocalPath(%q) = %v, want %v", tc.loc, got, tc.local)
+		}
+	}
+}
+
+func TestFetch_LocalManifest_AutoResolvesLayers(t *testing.T) {
+	dir := t.TempDir()
+
+	provData := makeTar(map[string][]byte{"prov-2026-aaa.yml": []byte("id: prov-2026-aaa")})
+	promptData := makeTar(map[string][]byte{"prompt.md": []byte("# hello")})
+	provHash := testHash(provData)
+	promptHash := testHash(promptData)
+	rootH := testHash([]byte(provHash + promptHash)) // canonical order: provenance, prompt
+
+	// Write artifacts using publish naming convention
+	os.WriteFile(filepath.Join(dir, "linespec-provenance-v1.tar"), provData, 0644)
+	os.WriteFile(filepath.Join(dir, "linespec-prompt-v1.tar"), promptData, 0644)
+
+	// Write manifest with empty URLs
+	manifestBytes := buildManifest("v1", rootH, map[string]ManifestLayer{
+		"provenance": {SHA256: provHash, URL: ""},
+		"prompt":     {SHA256: promptHash, URL: ""},
+	})
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+	os.WriteFile(manifestPath, manifestBytes, 0644)
+
+	got, err := Fetch(manifestPath, "")
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got.Version != "v1" {
+		t.Errorf("expected version v1, got %s", got.Version)
+	}
+	if len(got.Layers["provenance"]) == 0 {
+		t.Error("expected provenance layer data")
+	}
+	if len(got.Layers["prompt"]) == 0 {
+		t.Error("expected prompt layer data")
+	}
+}
+
+func TestFetch_LocalManifest_VersionSuffix(t *testing.T) {
+	dir := t.TempDir()
+
+	provData := makeTar(map[string][]byte{"prov-2026-aaa.yml": []byte("id: prov-2026-aaa")})
+	provHash := testHash(provData)
+	rootH := testHash([]byte(provHash))
+
+	os.WriteFile(filepath.Join(dir, "linespec-provenance-v2.tar"), provData, 0644)
+
+	m := Manifest{
+		Latest: "v2",
+		Versions: map[string]ManifestVersion{
+			"v1": {RootHash: "irrelevant"},
+			"v2": {
+				RootHash: rootH,
+				Layers:   map[string]ManifestLayer{"provenance": {SHA256: provHash, URL: ""}},
+			},
+		},
+	}
+	manifestBytes, _ := json.Marshal(m)
+	manifestPath := filepath.Join(dir, "linespec.manifest.json")
+	os.WriteFile(manifestPath, manifestBytes, 0644)
+
+	got, err := Fetch(manifestPath+"@v2", "")
+	if err != nil {
+		t.Fatalf("Fetch with @version suffix: %v", err)
+	}
+	if got.Version != "v2" {
+		t.Errorf("expected version v2, got %s", got.Version)
+	}
+}
+
+func TestFetch_LocalManifest_HashMismatchAborts(t *testing.T) {
+	dir := t.TempDir()
+
+	provData := makeTar(map[string][]byte{"prov-2026-aaa.yml": []byte("id: prov-2026-aaa")})
+	provHash := testHash(provData)
+	rootH := testHash([]byte(provHash))
+
+	// Write tampered artifact
+	os.WriteFile(filepath.Join(dir, "linespec-provenance-v1.tar"), []byte("tampered"), 0644)
+
+	manifestBytes := buildManifest("v1", rootH, map[string]ManifestLayer{
+		"provenance": {SHA256: provHash, URL: ""},
+	})
+	os.WriteFile(filepath.Join(dir, "linespec.manifest.json"), manifestBytes, 0644)
+
+	_, err := Fetch(filepath.Join(dir, "linespec.manifest.json"), "")
+	if err == nil {
+		t.Fatal("expected error for hash mismatch on local artifact")
+	}
+	if !strings.Contains(err.Error(), "hash mismatch") {
+		t.Errorf("expected hash mismatch error, got: %v", err)
+	}
+}
+
+func TestFetch_RemoteManifest_EmptyURLErrors(t *testing.T) {
+	provHash := testHash([]byte("prov data"))
+	rootH := testHash([]byte(provHash))
+
+	manifestBytes := buildManifest("v1", rootH, map[string]ManifestLayer{
+		"provenance": {SHA256: provHash, URL: ""},
+	})
+	mSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(manifestBytes)
+	}))
+	defer mSrv.Close()
+
+	_, err := Fetch(mSrv.URL, "")
+	if err == nil {
+		t.Fatal("expected error for empty layer URL on remote manifest")
+	}
+	if !strings.Contains(err.Error(), "has no URL") {
+		t.Errorf("expected 'has no URL' error, got: %v", err)
+	}
+}
+
 func TestExtractProvenance(t *testing.T) {
 	files := map[string][]byte{
 		"prov-2026-aaa.yml": []byte("id: prov-2026-aaa"),

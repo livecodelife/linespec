@@ -44,10 +44,14 @@ type FetchedManifest struct {
 	Layers  map[string][]byte // layer name → raw artifact bytes
 }
 
-// Fetch downloads the manifest from manifestURL, resolves the target version,
-// verifies the root_hash against the layer hashes (aborting before any layer
-// download on mismatch), then downloads and SHA256-verifies each layer.
-// Nothing is written to disk on any verification failure.
+// Fetch downloads or reads the manifest from manifestURL (HTTP/HTTPS URL or local file
+// path), resolves the target version, verifies the root_hash against the layer hashes
+// (aborting before any layer download on mismatch), then fetches and SHA256-verifies
+// each layer. Nothing is written to disk on any verification failure.
+//
+// When manifestURL is a local file path and a layer's URL field is empty, the layer
+// artifact is auto-resolved from the manifest's directory using the naming convention
+// linespec-{layerName}-{version}.tar (matching the output of linespec provenance publish).
 //
 // Version resolution order: @version URL suffix → version argument → manifest.latest.
 func Fetch(manifestURL, version string) (*FetchedManifest, error) {
@@ -56,7 +60,9 @@ func Fetch(manifestURL, version string) (*FetchedManifest, error) {
 		version = urlVersion
 	}
 
-	manifestData, err := httpGet(baseURL)
+	local := isLocalPath(baseURL)
+
+	manifestData, err := fetchBytes(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch manifest: %w", err)
 	}
@@ -84,10 +90,14 @@ func Fetch(manifestURL, version string) (*FetchedManifest, error) {
 
 	layers := make(map[string][]byte, len(mv.Layers))
 	for name, layer := range mv.Layers {
-		if layer.URL == "" {
-			return nil, fmt.Errorf("layer %q has no URL", name)
+		loc := layer.URL
+		if loc == "" {
+			if !local {
+				return nil, fmt.Errorf("layer %q has no URL", name)
+			}
+			loc = filepath.Join(filepath.Dir(baseURL), fmt.Sprintf("linespec-%s-%s.tar", name, version))
 		}
-		data, err := httpGet(layer.URL)
+		data, err := fetchBytes(loc)
 		if err != nil {
 			return nil, fmt.Errorf("download layer %q: %w", name, err)
 		}
@@ -98,6 +108,19 @@ func Fetch(manifestURL, version string) (*FetchedManifest, error) {
 	}
 
 	return &FetchedManifest{Version: version, Layers: layers}, nil
+}
+
+// isLocalPath reports whether location is a local file path rather than an HTTP/HTTPS URL.
+func isLocalPath(location string) bool {
+	return !strings.HasPrefix(location, "http://") && !strings.HasPrefix(location, "https://")
+}
+
+// fetchBytes retrieves bytes from location: HTTP GET for http/https URLs, os.ReadFile otherwise.
+func fetchBytes(location string) ([]byte, error) {
+	if !isLocalPath(location) {
+		return httpGet(location)
+	}
+	return os.ReadFile(location)
 }
 
 // ExtractProvenance unpacks the provenance layer tar into destDir.
