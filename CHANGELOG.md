@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-05-15
+
+### Fixed
+
+- **Publish/clone format mismatch for single-file layers** ([prov-2026-4b89538a](./provenance/prov-2026-4b89538a.yml)) — `linespec provenance publish` previously wrote single-file layers (e.g. `prompt.md`) as raw bytes with the original file extension. `linespec clone` passed all non-provenance layers to `extractTar`, which failed when given raw bytes. `packLayer` now always wraps single files in a one-entry tar archive using the original filename as the entry name, making all layer artifacts uniformly `.tar` and eliminating the format mismatch.
+
+### Added
+
+- **Local file path support for `linespec clone` and `linespec import`** ([prov-2026-fde4ee3a](./provenance/prov-2026-fde4ee3a.yml)) — Both commands now accept a local file path in addition to an HTTP/HTTPS URL. When the manifest is a local path and a layer's `url` field is empty, the layer artifact is auto-resolved from the manifest's directory using the publish naming convention (`linespec-{layer}-{version}.tar`). This enables a zero-configuration local clone immediately after `linespec provenance publish` — no file server required. All hash verification is identical to the remote path. Remote manifests with missing layer URLs continue to produce an error.
+
+- **Skills installed automatically during `linespec clone`** ([prov-2026-fde4ee3a](./provenance/prov-2026-fde4ee3a.yml)) — `linespec clone` now calls `InstallSkills` immediately after `InstallHooks`, writing the `provenance` and `linespec-testing` Claude Code skills to `.claude/skills/` in the cloned project. Without this, the installed git hooks referenced provenance commands that Claude Code could not invoke because the skills were absent.
+
+### Related Provenance Records
+
+- [prov-2026-4b89538a](./provenance/prov-2026-4b89538a.yml) - Bug: Fix publish/clone format mismatch: single-file layers published as raw bytes but clone expects tar
+- [prov-2026-fde4ee3a](./provenance/prov-2026-fde4ee3a.yml) - Blueprint: Support local file paths in linespec clone and import
+
 ## [3.7.0] - 2026-05-15
 
 ### Changed
