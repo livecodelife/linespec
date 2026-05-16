@@ -1,6 +1,6 @@
 id: prov-2026-0742993e
 title: Install skills during linespec clone
-status: open
+status: implemented
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 intent: |
@@ -17,7 +17,7 @@ implements: prov-2026-fde4ee3a
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d0a94340ca351619cb7cbd5b695e6242faf43080
 associated_specs:
   - type: go_test
     path: pkg/manifest/manifest_test.go
