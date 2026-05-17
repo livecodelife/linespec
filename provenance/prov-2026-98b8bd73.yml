@@ -1,6 +1,6 @@
 id: prov-2026-98b8bd73
 title: Fix TestParser_AllLineSpecs matching .linespec cache directory
-status: draft
+status: open
 created_at: "2026-05-17"
 author: calebcowen@gmail.com
 intent: |
