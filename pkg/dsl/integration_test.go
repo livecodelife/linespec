@@ -16,7 +16,7 @@ func TestParser_AllLineSpecs(t *testing.T) {
 		}
 
 		for _, file := range files {
-			if filepath.Ext(file.Name()) != ".linespec" {
+			if file.IsDir() || filepath.Ext(file.Name()) != ".linespec" {
 				continue
 			}
 
