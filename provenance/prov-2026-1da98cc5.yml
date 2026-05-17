@@ -1,6 +1,6 @@
 id: prov-2026-1da98cc5
 title: Release v3.8.1
-status: open
+status: implemented
 created_at: "2026-05-17"
 author: calebcowen@gmail.com
 intent: |
@@ -33,7 +33,7 @@ superseded_by: ""
 related:
   - prov-2026-a6be4165
   - prov-2026-98b8bd73
-sealed_at_sha: ""
+sealed_at_sha: f63dec5bd066e822083955bc9aa236a787ee223e
 associated_specs:
   - type: changelog
     path: CHANGELOG.md
