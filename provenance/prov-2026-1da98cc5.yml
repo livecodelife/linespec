@@ -1,0 +1,43 @@
+id: prov-2026-1da98cc5
+title: Release v3.8.1
+status: draft
+created_at: "2026-05-17"
+author: calebcowen@gmail.com
+intent: |
+  Publish v3.8.1 with two bug fixes:
+  - Bug fix: linespec clone now extracts layer tarballs directly into the project root
+    instead of leaving files inside a nested linespec.manifest/ subdirectory. ExtractSpecs
+    detects a common top-level directory prefix in tar entries and strips it on extraction.
+  - Bug fix: TestParser_AllLineSpecs no longer picks up the .linespec schema-cache directory
+    as a spec file (Go's filepath.Ext returns ".linespec" for that directory name).
+constraints:
+  - make test must pass before tagging
+  - CHANGELOG.md [Unreleased] must be promoted to [3.8.1] - 2026-05-17 with a new empty [Unreleased] section above it
+  - make bump-version NEW=3.8.1 handles VERSION, docs/index.html, docs/linespec.html, docs/docs.html, docs/provenance.html, README.md, LINESPEC.md
+  - linespec provenance compile must run to rebuild the hash manifest
+  - git tag v3.8.1 must be created and pushed to trigger the release workflow
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a6be4165
+  - prov-2026-98b8bd73
+sealed_at_sha: ""
+associated_specs:
+  - type: changelog
+    path: CHANGELOG.md
+associated_traces: []
+monitors: []
+tags:
+  - release

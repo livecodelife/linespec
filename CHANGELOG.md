@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.1] - 2026-05-17
+
+### Fixed
+
+- **Clone extracts layer files into destination root, not a nested subdirectory** ([prov-2026-a6be4165](./provenance/prov-2026-a6be4165.yml)) — `linespec clone` previously left extracted files inside a `linespec.manifest/` subdirectory within the cloned project directory because the published layer tarballs carry a leading directory component from the source repository's layout. `ExtractSpecs` now detects when all tar entries share a common top-level directory prefix and strips it, so files land directly in the project root as expected.
+
+- **Fix `TestParser_AllLineSpecs` matching `.linespec` schema-cache directory** ([prov-2026-98b8bd73](./provenance/prov-2026-98b8bd73.yml)) — Go's `filepath.Ext` returns `".linespec"` for a directory named `.linespec`, causing the DSL integration test to attempt parsing the schema-cache directory as a spec file. Added `file.IsDir()` guard to skip directories.
+
+### Related Provenance Records
+
+- [prov-2026-a6be4165](./provenance/prov-2026-a6be4165.yml) - Bug: Fix clone: strip common top-level prefix from extracted layers
+- [prov-2026-98b8bd73](./provenance/prov-2026-98b8bd73.yml) - Bug: Fix TestParser_AllLineSpecs matching .linespec cache directory
+
 ## [3.8.0] - 2026-05-15
 
 ### Fixed
