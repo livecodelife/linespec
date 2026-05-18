@@ -1,0 +1,44 @@
+id: prov-2026-7841e2b2
+title: Add name field to manifest for project identity
+status: draft
+created_at: "2026-05-18"
+author: calebcowen@gmail.com
+intent: |
+  Add a top-level `name` field to linespec.manifest.json so that the manifest carries
+  its own project identity. `linespec provenance publish` gains a `--name` flag; when
+  omitted, the user is prompted with a default derived from service.name in .linespec.yml
+  (if present) or the current directory name. `linespec clone` uses the `name` field as
+  the destination directory name when present, eliminating the awkward filename-derived
+  default (e.g. "linespec.manifest").
+constraints:
+  - name is a top-level field on the Manifest struct, not per-version
+  - publish reads the existing manifest name as the prompt default when --name is omitted
+    and a manifest already exists, so re-publishing does not silently reset the name
+  - the prompt falls back to the computed default silently when stdin is not a terminal
+    (CI-safe; non-interactive publish just uses the default)
+  - clone falls back to the current filename-derived directory name when name is absent
+    (backward compatibility with manifests published before this change)
+  - name must be propagated through FetchedManifest so clone can access it after Fetch
+affected_scope:
+  - pkg/manifest/manifest.go
+  - pkg/manifest/manifest_test.go
+  - pkg/provenance/publish.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: blueprint
+implements: prov-2026-d422fec6
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-92f06ee9
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/manifest/manifest_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - manifest
+  - publish
+  - clone
