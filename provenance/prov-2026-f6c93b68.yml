@@ -1,0 +1,40 @@
+id: prov-2026-f6c93b68
+title: Release v3.9.0
+status: draft
+created_at: "2026-05-18"
+author: calebcowen@gmail.com
+intent: |
+  Publish v3.9.0 adding the name field to linespec.manifest.json. publish gains a
+  --name flag and prompts the user when omitted (defaulting to service.name from
+  .linespec.yml or the directory name). clone uses the manifest name field as the
+  destination directory name, eliminating the filename-derived default.
+constraints:
+  - make test must pass before tagging
+  - CHANGELOG.md [Unreleased] must be promoted to [3.9.0] with a new empty [Unreleased] section above it
+  - make bump-version NEW=3.9.0 handles VERSION, docs/, README.md, LINESPEC.md
+  - linespec provenance compile must run to rebuild the hash manifest
+  - git tag v3.9.0 must be created and pushed to trigger the release workflow
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7841e2b2
+sealed_at_sha: ""
+associated_specs:
+  - type: changelog
+    path: CHANGELOG.md
+associated_traces: []
+monitors: []
+tags:
+  - release
