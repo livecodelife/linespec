@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-05-18
+
+### Added
+
+- **`name` field in `linespec.manifest.json` for project identity** ([prov-2026-7841e2b2](./provenance/prov-2026-7841e2b2.yml)) — `linespec provenance publish` now accepts a `--name` flag. When omitted, the user is prompted with a default derived from `service.name` in `.linespec.yml` (if present) or the current directory name. The name is written to a new top-level `name` field in the manifest. `linespec clone` uses this field as the destination directory name when present, replacing the awkward filename-derived default (e.g. `linespec.manifest`). Manifests without a `name` field continue to work as before.
+
+### Related Provenance Records
+
+- [prov-2026-7841e2b2](./provenance/prov-2026-7841e2b2.yml) - Blueprint: Add name field to manifest for project identity
+
 ## [3.8.1] - 2026-05-17
 
 ### Fixed
