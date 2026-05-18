@@ -1,6 +1,6 @@
 id: prov-2026-7841e2b2
 title: Add name field to manifest for project identity
-status: open
+status: implemented
 created_at: "2026-05-18"
 author: calebcowen@gmail.com
 intent: |
@@ -31,7 +31,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-92f06ee9
-sealed_at_sha: ""
+sealed_at_sha: a8a3d374a80732b46ef2f019156460d54ecf5f68
 associated_specs:
   - path: pkg/manifest/manifest_test.go
     type: go_test
