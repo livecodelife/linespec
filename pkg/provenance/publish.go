@@ -17,6 +17,7 @@ import (
 // PublishOptions controls the linespec provenance publish command.
 type PublishOptions struct {
 	ManifestPath string // path to linespec.manifest.json; defaults to ./linespec.manifest.json
+	Name         string // project name written to the manifest top-level name field
 	Version      string // explicit version label; empty means auto-increment
 	SpecsPath    string // optional path to specs artifact (file or directory)
 	CodePath     string // optional path to code artifact (file or directory)
@@ -98,6 +99,9 @@ func (c *Commands) Publish(opts PublishOptions) error {
 		fmt.Fprintf(os.Stdout, "  wrote %s\n", artifactPath)
 	}
 
+	if opts.Name != "" {
+		m.Name = opts.Name
+	}
 	if m.Versions == nil {
 		m.Versions = make(map[string]ManifestVersion)
 	}
@@ -258,6 +262,7 @@ func atomicWrite(path string, data []byte) error {
 
 // Manifest is the top-level structure for linespec.manifest.json.
 type Manifest struct {
+	Name     string                     `json:"name,omitempty"`
 	Latest   string                     `json:"latest"`
 	Versions map[string]ManifestVersion `json:"versions"`
 }

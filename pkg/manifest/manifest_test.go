@@ -383,6 +383,75 @@ func TestFetch_RemoteManifest_EmptyURLErrors(t *testing.T) {
 	}
 }
 
+func TestFetch_PropagatesNameFromManifest(t *testing.T) {
+	provData := makeTar(map[string][]byte{"prov-2026-aaa.yml": []byte("id: prov-2026-aaa")})
+	provHash := testHash(provData)
+	rootH := testHash([]byte(provHash))
+
+	layerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(provData)
+	}))
+	defer layerSrv.Close()
+
+	m := Manifest{
+		Name:   "my-service",
+		Latest: "v1",
+		Versions: map[string]ManifestVersion{
+			"v1": {
+				RootHash: rootH,
+				Layers:   map[string]ManifestLayer{"provenance": {SHA256: provHash, URL: layerSrv.URL}},
+			},
+		},
+	}
+	manifestBytes, _ := json.Marshal(m)
+	mSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(manifestBytes)
+	}))
+	defer mSrv.Close()
+
+	got, err := Fetch(mSrv.URL, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Name != "my-service" {
+		t.Errorf("expected Name %q, got %q", "my-service", got.Name)
+	}
+}
+
+func TestFetch_NameEmptyWhenNotSet(t *testing.T) {
+	provData := makeTar(map[string][]byte{"prov-2026-aaa.yml": []byte("id: prov-2026-aaa")})
+	provHash := testHash(provData)
+	rootH := testHash([]byte(provHash))
+
+	layerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(provData)
+	}))
+	defer layerSrv.Close()
+
+	m := Manifest{
+		Latest: "v1",
+		Versions: map[string]ManifestVersion{
+			"v1": {
+				RootHash: rootH,
+				Layers:   map[string]ManifestLayer{"provenance": {SHA256: provHash, URL: layerSrv.URL}},
+			},
+		},
+	}
+	manifestBytes, _ := json.Marshal(m)
+	mSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(manifestBytes)
+	}))
+	defer mSrv.Close()
+
+	got, err := Fetch(mSrv.URL, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Name != "" {
+		t.Errorf("expected empty Name for manifest without name field, got %q", got.Name)
+	}
+}
+
 func TestExtractSpecs_StripsCommonTopLevelPrefix(t *testing.T) {
 	files := map[string][]byte{
 		"linespec.manifest/specs/foo.linespec": []byte("test spec"),

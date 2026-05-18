@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -635,15 +636,6 @@ Examples:
 		os.Exit(1)
 	}
 
-	if destDir == "" {
-		base := filepath.Base(strings.SplitN(manifestURL, "@", 2)[0])
-		base = strings.TrimSuffix(base, filepath.Ext(base))
-		if base == "" || base == "." {
-			base = "linespec-project"
-		}
-		destDir = base
-	}
-
 	fmt.Printf("Fetching manifest from %s...\n", manifestURL)
 	fetched, err := manifest.Fetch(manifestURL, version)
 	if err != nil {
@@ -651,6 +643,19 @@ Examples:
 		os.Exit(1)
 	}
 	fmt.Printf("✓ Fetched version %s — all layers verified\n\n", fetched.Version)
+
+	if destDir == "" {
+		if fetched.Name != "" {
+			destDir = fetched.Name
+		} else {
+			base := filepath.Base(strings.SplitN(manifestURL, "@", 2)[0])
+			base = strings.TrimSuffix(base, filepath.Ext(base))
+			if base == "" || base == "." {
+				base = "linespec-project"
+			}
+			destDir = base
+		}
+	}
 
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		logger.Error("Failed to create directory %s: %v", destDir, err)
@@ -1271,6 +1276,9 @@ func runProvenance() {
 		if err := reloadConfigIfNeeded(&cfg, &cmds, "", repoRoot); err != nil {
 			logger.Error("Failed to reload config: %v", err)
 			os.Exit(1)
+		}
+		if opts.Name == "" {
+			opts.Name = resolvePublishName(opts.ManifestPath)
 		}
 		if err := cmds.Publish(opts); err != nil {
 			os.Exit(1)
@@ -2126,6 +2134,11 @@ func parsePublishOptions(args []string) provenance.PublishOptions {
 				opts.ManifestPath = args[i+1]
 				i++
 			}
+		case "--name":
+			if i+1 < len(args) {
+				opts.Name = args[i+1]
+				i++
+			}
 		case "--version":
 			if i+1 < len(args) {
 				opts.Version = args[i+1]
@@ -2156,6 +2169,7 @@ computes a root_hash. URL fields are left empty for the author to fill in after 
 
 Options:
   --manifest path    Path to linespec.manifest.json (default: ./linespec.manifest.json)
+  --name name        Project name written to the manifest (prompted if omitted)
   --version label    Explicit version label (default: auto-increment v1, v2, v3...)
   --specs path       Path to specs artifact (file or directory)
   --code path        Path to code artifact (file or directory)
@@ -2164,12 +2178,53 @@ Options:
 
 Examples:
   linespec provenance publish
+  linespec provenance publish --name my-service
   linespec provenance publish --manifest dist/linespec.manifest.json
   linespec provenance publish --version v2 --specs linespecs/ --prompt PROMPT.md`)
 			os.Exit(0)
 		}
 	}
 	return opts
+}
+
+// resolvePublishName determines the project name to write into the manifest.
+// Priority: existing manifest name → service.name from .linespec.yml → directory name.
+// When stdin is a terminal the user is prompted; otherwise the default is used silently.
+func resolvePublishName(manifestPath string) string {
+	if manifestPath == "" {
+		manifestPath = "linespec.manifest.json"
+	}
+
+	// Use existing manifest name as the default if the manifest already exists.
+	defaultName := ""
+	if data, err := os.ReadFile(manifestPath); err == nil {
+		var existing struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(data, &existing) == nil && existing.Name != "" {
+			defaultName = existing.Name
+		}
+	}
+
+	// Fall back to service.name from .linespec.yml, then directory name.
+	if defaultName == "" {
+		cwd, _ := os.Getwd()
+		if cfg, err := config.LoadConfig(cwd); err == nil && cfg.Service.Name != "" {
+			defaultName = cfg.Service.Name
+		} else {
+			defaultName = filepath.Base(cwd)
+		}
+	}
+
+	// Prompt user; falls back to default when stdin is not a terminal (CI-safe).
+	fmt.Fprintf(os.Stdout, "Project name [%s]: ", defaultName)
+	sc := bufio.NewScanner(os.Stdin)
+	if sc.Scan() {
+		if line := strings.TrimSpace(sc.Text()); line != "" {
+			return line
+		}
+	}
+	return defaultName
 }
 
 func parseLockLayerOptions(args []string) provenance.LockLayerOptions {

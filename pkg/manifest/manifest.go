@@ -19,6 +19,7 @@ var layerOrder = []string{"provenance", "specs", "code", "prompt"}
 
 // Manifest is the top-level structure of linespec.manifest.json.
 type Manifest struct {
+	Name     string                     `json:"name,omitempty"`
 	Latest   string                     `json:"latest"`
 	Versions map[string]ManifestVersion `json:"versions"`
 }
@@ -41,6 +42,7 @@ type ManifestLayer struct {
 // and hash-verified, ready to be extracted to disk.
 type FetchedManifest struct {
 	Version string
+	Name    string            // project name from the manifest, empty if not set
 	Layers  map[string][]byte // layer name → raw artifact bytes
 }
 
@@ -107,7 +109,7 @@ func Fetch(manifestURL, version string) (*FetchedManifest, error) {
 		layers[name] = data
 	}
 
-	return &FetchedManifest{Version: version, Layers: layers}, nil
+	return &FetchedManifest{Version: version, Name: m.Name, Layers: layers}, nil
 }
 
 // isLocalPath reports whether location is a local file path rather than an HTTP/HTTPS URL.
