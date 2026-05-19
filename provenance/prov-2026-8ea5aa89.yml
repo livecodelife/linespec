@@ -1,0 +1,29 @@
+id: prov-2026-8ea5aa89
+title: Auto-commit on provenance record status change
+status: draft
+created_at: "2026-05-19"
+author: test@example.com
+intent: |
+  Add a commit_on_status_change boolean option to the provenance section of .linespec.yml. When enabled, the open, complete, and deprecate commands automatically stage the modified record file and create a git commit with the appropriate conventional message after a successful status transition. The create command is explicitly excluded because records are not fully filled out at creation time and would fail git hooks.
+constraints:
+  - Auto-commit must not apply to the create command; only to open, complete, and deprecate.
+  - Commit messages must match the existing convention for each transition — open uses "Open provenance record <id> [<id>]", complete uses "Complete provenance record [<id>]", deprecate uses "Deprecate provenance record [<id>]".
+  - If the git commit fails (e.g. hook rejection), the error must be surfaced to the user; the status change on disk is already applied so the user can resolve and commit manually.
+  - The feature must be opt-in via the commit_on_status_change boolean in .linespec.yml provenance section; default is false so existing users see no behavior change.
+  - The field must be wired through both main_stable.go and main_beta.go config loaders.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
