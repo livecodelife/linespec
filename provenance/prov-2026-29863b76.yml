@@ -1,0 +1,37 @@
+id: prov-2026-29863b76
+title: Exclude hash manifest from scope enforcement in CheckStaged and CheckCommit
+status: draft
+created_at: "2026-05-19"
+author: test@example.com
+intent: >
+  When `linespec provenance complete` seals a record, it writes `.linespec/hash_manifest.json`.
+  That file is then staged alongside the record's YAML, but it is not (and should not be)
+  listed in the record's `affected_scope`. In allowlist mode this triggers a spurious scope
+  violation in CheckStaged and CheckCommit, preventing the completion commit from succeeding.
+
+  The hash manifest is a system-managed artifact — not application code — and should be
+  silently skipped in scope enforcement, exactly as provenance record YAML files themselves
+  are treated. Hash integrity for individual records is already independently enforced by
+  the linter's PROV-IMM check (checkHashIntegrity), so no tamper guarantee is lost.
+constraints:
+  - The exclusion must apply in both CheckStaged and CheckCommit, covering the path
+    `.linespec/hash_manifest.json` (relative to repo root, as returned by git).
+  - The linter's PROV-IMM integrity check must remain unchanged — this fix must not
+    weaken the guarantee that a sealed record's content cannot be altered undetected.
+  - No new configuration knob or user-visible setting should be introduced; the hash
+    manifest is a hard system path and should be treated as a built-in exclusion.
+  - Tests must cover the case where the hash manifest is staged alongside a
+    completion commit without a scope violation being raised.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
