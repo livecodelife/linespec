@@ -1,6 +1,6 @@
 id: prov-2026-d9f69b27
 title: Lint error when imprint scope exceeds blueprint scope
-status: open
+status: implemented
 created_at: "2026-05-19"
 author: test@example.com
 intent: >
@@ -39,7 +39,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 46782979165b5d047eff76a84eafe6682db952d6
 associated_specs:
   - type: go_test
     path: pkg/provenance/linter_test.go
