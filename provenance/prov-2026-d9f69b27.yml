@@ -1,0 +1,46 @@
+id: prov-2026-d9f69b27
+title: Lint error when imprint scope exceeds blueprint scope
+status: draft
+created_at: "2026-05-19"
+author: test@example.com
+intent: >
+  The linter currently validates that imprint records reference a blueprint via `implements`,
+  but does not verify that the imprint's `affected_scope` is a subset of its blueprint's
+  `affected_scope`. This allows an imprint to silently govern files the blueprint never
+  claimed, breaking the invariant that the blueprint's scope fully covers all work done
+  under it. Add a lint error (not a warning) when any file matched by an imprint's
+  `affected_scope` patterns is not matched by any of its blueprint's `affected_scope` patterns.
+constraints:
+  - >
+    The check must enumerate actual files matched by the imprint's affected_scope patterns
+    and test each against the blueprint's patterns using the existing MatchPattern / IsInScope
+    machinery. Purely syntactic pattern comparison is not acceptable.
+  - >
+    The violation must be an error, not a warning. Imprint scope that exceeds blueprint
+    scope is a structural integrity failure, not an advisory.
+  - >
+    Draft imprint records are exempt from this check (consistent with how draft records
+    are exempt from other scope-enforcement rules).
+  - >
+    Blueprint records with an empty affected_scope should be treated as "unconstrained"
+    and not trigger this error — this preserves backward compatibility with records that
+    omit scope entirely.
+  - >
+    The new lint rule must be assigned a PROV error code consistent with the existing
+    numbering scheme. Inspect the linter to find the next available code.
+  - >
+    All existing unit and integration tests must continue to pass. Add test coverage for
+    the new rule: at minimum one case where the imprint scope is fully within the blueprint,
+    one where it exceeds it, and one where the blueprint has no affected_scope.
+affected_scope:
+  - pkg/provenance/linter.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
