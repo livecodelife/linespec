@@ -208,6 +208,29 @@ func (g *Git) GetHeadSHA() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// CommitRecord stages the given record file and creates a commit with the provided message.
+// Used by commands that have commit_on_status_change enabled.
+func (g *Git) CommitRecord(recordFilePath, message string) error {
+	add := exec.Command("git", "add", recordFilePath)
+	if g.RepoRoot != "" {
+		add.Dir = g.RepoRoot
+	}
+	if out, err := add.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add failed: %w\n%s", err, out)
+	}
+
+	commit := exec.Command("git", "commit", "-m", message)
+	if g.RepoRoot != "" {
+		commit.Dir = g.RepoRoot
+	}
+	commit.Stdout = os.Stdout
+	commit.Stderr = os.Stderr
+	if err := commit.Run(); err != nil {
+		return fmt.Errorf("git commit failed: %w", err)
+	}
+	return nil
+}
+
 // GetFilesChangedSince returns files that have changed between two SHAs
 func (g *Git) GetFilesChangedSince(fromSHA, toSHA string) ([]string, error) {
 	cmd := exec.Command("git", "diff", "--name-only", fmt.Sprintf("%s..%s", fromSHA, toSHA))

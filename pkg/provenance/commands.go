@@ -33,6 +33,7 @@ type ProvenanceConfig struct {
 	CommitTagRequired            bool
 	AutoAffectedScope            bool
 	RunAssociatedSpecsOnComplete bool
+	CommitOnStatusChange         bool
 	Embedding                    *config.EmbeddingConfig
 	ManifestURL                  string // source manifest URL, set by linespec clone
 }
@@ -742,6 +743,15 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 
 	c.Formatter.FormatCompleteSuccess(record)
 
+	if c.Config.CommitOnStatusChange {
+		msg := fmt.Sprintf("Complete provenance record [%s]", opts.RecordID)
+		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
+			return err
+		}
+	}
+
 	// Generate and store embedding for the implemented record
 	if c.Embedder != nil && c.Embedder.IsConfigured() && c.Embedder.IndexOnComplete() {
 		text := embeddings.ExtractTextFromRecord(record.Title, record.Intent, record.Constraints)
@@ -811,6 +821,15 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\n✓ %s marked as deprecated\n\n", opts.RecordID)
 
+	if c.Config.CommitOnStatusChange {
+		msg := fmt.Sprintf("Deprecate provenance record [%s]", opts.RecordID)
+		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -854,6 +873,15 @@ func (c *Commands) Open(opts OpenOptions) error {
 	fmt.Fprintf(os.Stdout, "\n✓ %s transitioned from draft → open\n\n", opts.RecordID)
 	fmt.Fprintln(os.Stdout, "  Scope and spec enforcement now apply to this record.")
 	fmt.Fprintln(os.Stdout)
+
+	if c.Config.CommitOnStatusChange {
+		msg := fmt.Sprintf("Open provenance record %s [%s]", opts.RecordID, opts.RecordID)
+		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
+			return err
+		}
+	}
 
 	return nil
 }
