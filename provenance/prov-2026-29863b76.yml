@@ -25,6 +25,7 @@ constraints:
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/git_test.go
+  - provenance/*.yml
 forbidden_scope: []
 type: blueprint
 supersedes: ""
