@@ -1,6 +1,6 @@
 id: prov-2026-8ea5aa89
 title: Auto-commit on provenance record status change
-status: open
+status: implemented
 created_at: "2026-05-19"
 author: test@example.com
 intent: |
@@ -23,7 +23,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cbc17683c2b7f86710e3377b05f8fabf4dddd49c
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: go_test
