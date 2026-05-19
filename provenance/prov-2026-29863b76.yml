@@ -32,9 +32,6 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/provenance/git.go
-    type: code
-    run_command: make test
   - path: pkg/provenance/git_test.go
     type: go_test
     run_command: make test
