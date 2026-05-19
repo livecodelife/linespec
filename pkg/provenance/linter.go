@@ -1385,6 +1385,10 @@ func (l *Linter) validateImprintScopeContainment(record *Record, result *LintRes
 	if effectiveType != RecordTypeImprint {
 		return
 	}
+	// Only enforce on open imprints — terminal records predate this rule.
+	if record.Status != StatusOpen {
+		return
+	}
 	if record.Implements == "" || len(record.AffectedScope) == 0 {
 		return
 	}

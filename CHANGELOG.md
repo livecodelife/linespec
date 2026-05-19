@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.1] - 2026-05-19
+
+### Fixed
+
+- **PROV023 fired on sealed imprints, breaking existing records** ([prov-2026-d9f69b27](./provenance/prov-2026-d9f69b27.yml)) — The PROV023 scope containment check introduced in v3.10.0 was applied to all imprint records regardless of status, retroactively flagging dozens of implemented imprints that predate the rule. The check now only runs on `open` imprints, consistent with how other enforcement-sensitive checks (`validateScopePaths`, `validateAssociatedSpecs`) handle terminal-state records.
+
 ## [3.10.0] - 2026-05-19
 
 ### Added
