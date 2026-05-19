@@ -1,0 +1,31 @@
+id: prov-2026-197c9845
+title: Fix PROV023 firing on sealed imprints
+status: draft
+created_at: "2026-05-19"
+author: test@example.com
+intent: >
+  PROV023 introduced in v3.10.0 was applied to all imprint records regardless of
+  status, retroactively flagging implemented imprints that predate the rule. The fix
+  guards the check with record.Status == StatusOpen so only open imprints are evaluated.
+constraints: []
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+  - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+forbidden_scope: []
+type: bug
+extends: prov-2026-d9f69b27
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
