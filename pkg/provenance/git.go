@@ -159,6 +159,13 @@ func isRecordFile(filePath string, record *Record) bool {
 	return fileBase == recordBase
 }
 
+// isHashManifest reports whether filePath is the system-managed hash manifest.
+// The manifest is updated automatically on every complete and must never be
+// subject to scope enforcement.
+func isHashManifest(filePath string) bool {
+	return filepath.ToSlash(filePath) == ".linespec/hash_manifest.json"
+}
+
 // isFileForbiddenForRecord checks if a file is in the record's forbidden_scope
 func isFileForbiddenForRecord(filePath string, record *Record) (bool, error) {
 	for _, pattern := range record.ForbiddenScope {
@@ -385,6 +392,11 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 				}
 			}
 
+			// The hash manifest is system-managed and exempt from scope enforcement.
+			if isHashManifest(file) {
+				continue
+			}
+
 			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
@@ -563,6 +575,11 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 						continue // Allowed - valid supersession transition of old record
 					}
 				}
+			}
+
+			// The hash manifest is system-managed and exempt from scope enforcement.
+			if isHashManifest(file) {
+				continue
 			}
 
 			// Check if file is in scope

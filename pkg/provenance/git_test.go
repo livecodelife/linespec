@@ -420,3 +420,107 @@ func TestCheckStaged_DraftSelfModification(t *testing.T) {
 		t.Errorf("Expected no violations for draft self-modification, got %d: %v", len(violations), violations)
 	}
 }
+
+// TestCheckStaged_HashManifestExempt verifies that .linespec/hash_manifest.json staged
+// alongside a completion commit never triggers a scope violation, even when the record
+// has a restricted affected_scope that does not include the manifest.
+func TestCheckStaged_HashManifestExempt(t *testing.T) {
+	const recID = "prov-2026-hm00001"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	// Re-write the committed record with a narrow affected_scope (allowlist mode).
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open record ["+recID+"]")
+
+	// Stage the hash manifest (simulating what `linespec provenance complete` writes).
+	manifestDir := filepath.Join(tmpDir, ".linespec")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	manifestRelPath := ".linespec/hash_manifest.json"
+	manifestPath := filepath.Join(tmpDir, manifestRelPath)
+	if err := os.WriteFile(manifestPath, []byte(`{"records":{},"full_graph_hash":"abc","active_subset_hash":"def"}`), 0644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+	gitExec(t, tmpDir, "add", manifestRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Complete provenance record ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for hash manifest staged with completion, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckCommit_HashManifestExempt verifies that .linespec/hash_manifest.json in a
+// historical commit does not trigger a scope violation.
+func TestCheckCommit_HashManifestExempt(t *testing.T) {
+	const recID = "prov-2026-hm00002"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	// Re-commit the record with a narrow affected_scope.
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open record ["+recID+"]")
+
+	// Commit the hash manifest — tagged with the record ID.
+	manifestDir := filepath.Join(tmpDir, ".linespec")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	manifestRelPath := ".linespec/hash_manifest.json"
+	manifestPath := filepath.Join(tmpDir, manifestRelPath)
+	if err := os.WriteFile(manifestPath, []byte(`{"records":{},"full_graph_hash":"abc","active_subset_hash":"def"}`), 0644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+	gitExec(t, tmpDir, "add", manifestRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Complete provenance record ["+recID+"]")
+
+	// Get the SHA of the commit we just made.
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = tmpDir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	commitSHA := strings.TrimSpace(string(out))
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	violations, err := checker.CheckCommit(commitSHA)
+	if err != nil {
+		t.Fatalf("CheckCommit returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for hash manifest in completion commit, got %d: %v", len(violations), violations)
+	}
+}
