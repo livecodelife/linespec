@@ -1448,3 +1448,90 @@ func TestValidateImmutability_Tampered(t *testing.T) {
 		t.Errorf("expected PROV-IMM in error message, got: %s", result.Issues[0].Message)
 	}
 }
+
+// --- prov-2026-d9f69b27: imprint scope containment (PROV023) ---
+
+func TestValidateImprintScopeContainment_WithinBlueprintScope_Passes(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	file := filepath.Join(tmpDir, "foo.go")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	loader := NewLoader(tmpDir, nil)
+	bp := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint, Status: StatusOpen, AffectedScope: []string{file}}
+	imp := &Record{ID: "prov-2026-imp1", Type: RecordTypeImprint, Status: StatusOpen, Implements: "prov-2026-bp1", AffectedScope: []string{file}}
+	loader.Records = []*Record{bp, imp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": bp, "prov-2026-imp1": imp}
+
+	result := &LintResult{}
+	NewLinter(loader, "strict").validateImprintScopeContainment(imp, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("expected no errors when imprint scope is within blueprint scope, got: %v", result.Issues)
+	}
+}
+
+func TestValidateImprintScopeContainment_ExceedsBlueprintScope_Errors(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	bpFile := filepath.Join(tmpDir, "bp.go")
+	impFile := filepath.Join(tmpDir, "other.go")
+	for _, f := range []string{bpFile, impFile} {
+		if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+	}
+
+	loader := NewLoader(tmpDir, nil)
+	bp := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint, Status: StatusOpen, AffectedScope: []string{bpFile}}
+	imp := &Record{ID: "prov-2026-imp1", Type: RecordTypeImprint, Status: StatusOpen, Implements: "prov-2026-bp1", AffectedScope: []string{impFile}}
+	loader.Records = []*Record{bp, imp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": bp, "prov-2026-imp1": imp}
+
+	result := &LintResult{}
+	NewLinter(loader, "strict").validateImprintScopeContainment(imp, result)
+
+	if result.ErrorCount != 1 {
+		t.Errorf("expected 1 PROV023 error when imprint scope exceeds blueprint scope, got %d: %v", result.ErrorCount, result.Issues)
+	}
+	if len(result.Issues) > 0 && !strings.Contains(result.Issues[0].Message, "PROV023") {
+		t.Errorf("expected PROV023 in error message, got: %s", result.Issues[0].Message)
+	}
+}
+
+func TestValidateImprintScopeContainment_BlueprintNoScope_Passes(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "linter-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	file := filepath.Join(tmpDir, "any.go")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	loader := NewLoader(tmpDir, nil)
+	// Blueprint has no affected_scope → unconstrained
+	bp := &Record{ID: "prov-2026-bp1", Type: RecordTypeBlueprint, Status: StatusOpen, AffectedScope: nil}
+	imp := &Record{ID: "prov-2026-imp1", Type: RecordTypeImprint, Status: StatusOpen, Implements: "prov-2026-bp1", AffectedScope: []string{file}}
+	loader.Records = []*Record{bp, imp}
+	loader.RecordsByID = map[string]*Record{"prov-2026-bp1": bp, "prov-2026-imp1": imp}
+
+	result := &LintResult{}
+	NewLinter(loader, "strict").validateImprintScopeContainment(imp, result)
+
+	if result.ErrorCount != 0 {
+		t.Errorf("expected no errors when blueprint has no affected_scope, got: %v", result.Issues)
+	}
+}

@@ -189,6 +189,9 @@ func (l *Linter) lintRecord(record *Record, result *LintResult) {
 	// Validate scope paths exist (only for open records)
 	l.validateScopePaths(record, result)
 
+	// Validate imprint scope is contained within its blueprint's scope
+	l.validateImprintScopeContainment(record, result)
+
 	// Validate associated_specs
 	l.validateAssociatedSpecs(record, result)
 
@@ -1368,6 +1371,106 @@ func (l *Linter) validateExtends(record *Record, result *LintResult) {
 			Severity: SeverityError,
 		})
 	}
+}
+
+// validateImprintScopeContainment checks that every file matched by an imprint's
+// affected_scope is also matched by its blueprint's affected_scope (PROV023).
+// Exempt when the imprint is draft/remote (handled by callers), the imprint has
+// no affected_scope, or the blueprint has no affected_scope (unconstrained).
+func (l *Linter) validateImprintScopeContainment(record *Record, result *LintResult) {
+	effectiveType := record.Type
+	if effectiveType == "" {
+		effectiveType = RecordTypeBlueprint
+	}
+	if effectiveType != RecordTypeImprint {
+		return
+	}
+	if record.Implements == "" || len(record.AffectedScope) == 0 {
+		return
+	}
+
+	blueprint, exists := l.Loader.GetRecord(record.Implements)
+	if !exists || len(blueprint.AffectedScope) == 0 {
+		return
+	}
+
+	for _, file := range l.filesMatchingPatterns(record.AffectedScope) {
+		covered := false
+		for _, bpPattern := range blueprint.AffectedScope {
+			if ok, _ := MatchPattern(file, bpPattern); ok {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "affected_scope",
+				Message: fmt.Sprintf(
+					"PROV023: imprint scope exceeds blueprint scope — %q is governed by this imprint but not covered by any pattern in %s's affected_scope. Widen the blueprint's scope first.",
+					file, blueprint.ID,
+				),
+				Severity: SeverityError,
+			})
+		}
+	}
+}
+
+// filesMatchingPatterns returns all files on disk matched by any of the given patterns.
+func (l *Linter) filesMatchingPatterns(patterns []string) []string {
+	seen := make(map[string]bool)
+	var files []string
+
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+
+		if len(pattern) > 3 && pattern[:3] == "re:" {
+			re, err := regexp.Compile(pattern[3:])
+			if err != nil {
+				continue
+			}
+			filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				if re.MatchString(path) && !seen[path] {
+					seen[path] = true
+					files = append(files, path)
+				}
+				return nil
+			})
+			continue
+		}
+
+		if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
+			globRegex := GlobToRegex(pattern)
+			re, err := regexp.Compile(globRegex)
+			if err != nil {
+				continue
+			}
+			filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				if re.MatchString(path) && !seen[path] {
+					seen[path] = true
+					files = append(files, path)
+				}
+				return nil
+			})
+			continue
+		}
+
+		// Exact path
+		if _, err := os.Stat(pattern); err == nil && !seen[pattern] {
+			seen[pattern] = true
+			files = append(files, pattern)
+		}
+	}
+
+	return files
 }
 
 // containsString returns true if the slice contains the string
