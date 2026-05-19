@@ -1,6 +1,6 @@
 id: prov-2026-7d4b93f6
 title: Add CommitOnStatusChange field to config and provenance structs
-status: open
+status: implemented
 created_at: "2026-05-19"
 author: test@example.com
 intent: Add CommitOnStatusChange bool to config.ProvenanceConfig (types.go) and provenance.ProvenanceConfig (commands.go), and wire it through both main_stable.go and main_beta.go loadProvenanceConfigFromFile.
@@ -16,7 +16,7 @@ implements: prov-2026-8ea5aa89
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2e02ccf5d91b1c1a0a1e57880172a3e41075d14d
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: go_test
