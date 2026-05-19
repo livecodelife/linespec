@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-05-19
+
+### Added
+
+- **PROV023: lint error when imprint scope exceeds blueprint scope** ([prov-2026-d9f69b27](./provenance/prov-2026-d9f69b27.yml)) — The linter now enforces that every file matched by an imprint's `affected_scope` is also matched by at least one pattern in its blueprint's `affected_scope`. Previously, an imprint could silently govern files outside its blueprint's claimed surface. Blueprints with no `affected_scope` are treated as unconstrained and exempt. Draft and remote imprints are also exempt, consistent with existing enforcement rules.
+
+### Related Provenance Records
+
+- [prov-2026-d9f69b27](./provenance/prov-2026-d9f69b27.yml) - Blueprint: Lint error when imprint scope exceeds blueprint scope
+
 ## [3.9.0] - 2026-05-18
 
 ### Added
