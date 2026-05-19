@@ -1,6 +1,6 @@
 id: prov-2026-9c0de23b
 title: Implement PROV023 imprint scope containment check
-status: open
+status: implemented
 created_at: "2026-05-19"
 author: test@example.com
 intent: >
@@ -22,7 +22,7 @@ implements: prov-2026-d9f69b27
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4f423f7a5ad9bf9638ec13db8bb9484f38e77d5a
 associated_specs:
   - type: go_test
     path: pkg/provenance/linter_test.go
