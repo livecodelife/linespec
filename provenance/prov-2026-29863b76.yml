@@ -1,6 +1,6 @@
 id: prov-2026-29863b76
 title: Exclude hash manifest from scope enforcement in CheckStaged and CheckCommit
-status: open
+status: implemented
 created_at: "2026-05-19"
 author: test@example.com
 intent: >
@@ -31,7 +31,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4520721eb2788d4b5f19c2c1a503ae1508d0fc21
 associated_specs:
   - path: pkg/provenance/git_test.go
     type: go_test
