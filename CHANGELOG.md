@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.2] - 2026-05-20
+
+### Fixed
+
+- **Supersession scope bypass now requires old record to be implemented** ([prov-2026-382ea200](./provenance/prov-2026-382ea200.yml)) — The git hook exception that allows supersession transition commits (`open → superseded` on the old record file) was incorrectly keyed on the old record being `open`. Open records are still mutable and should not be superseded. The bypass now fires only when the old record is `implemented`, which is the only valid state for supersession.
+
 ## [3.10.1] - 2026-05-19
 
 ### Fixed
