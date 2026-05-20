@@ -1,6 +1,6 @@
 id: prov-2026-fadc2c53
 title: Release v3.10.2 - fix supersession scope bypass to require implemented status
-status: open
+status: implemented
 created_at: "2026-05-20"
 author: test@example.com
 intent: >
@@ -29,7 +29,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8ad94e8cf90a8f036a104d7c33e5054c05293ca4
 associated_specs:
   - path: CHANGELOG.md
     type: code
