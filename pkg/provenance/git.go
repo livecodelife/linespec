@@ -689,7 +689,7 @@ func (c *CommitChecker) isSupersessionTransitionBetween(beforeRef, afterRef, fil
 		return false, fmt.Errorf("failed to parse before record: %w", err)
 	}
 
-	if beforeRecord.Status != StatusOpen {
+	if beforeRecord.Status != StatusImplemented {
 		return false, nil
 	}
 

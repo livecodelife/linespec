@@ -71,7 +71,7 @@ func setupSupersessionRepo(t *testing.T, oldID string) (string, string, string) 
 
 	oldRelPath := "provenance/" + oldID + ".yml"
 	oldPath := filepath.Join(tmpDir, oldRelPath)
-	if err := os.WriteFile(oldPath, []byte(makeProvRecord(oldID, "open", `""`, `""`, nil)), 0644); err != nil {
+	if err := os.WriteFile(oldPath, []byte(makeProvRecord(oldID, "implemented", `""`, `""`, nil)), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -358,6 +358,56 @@ func TestCheckCommit_SupersessionTransition(t *testing.T) {
 	}
 	if len(violations) != 0 {
 		t.Errorf("Expected no violations for valid supersession commit, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckStaged_SupersessionTransition_OpenRecordRejected verifies that the supersession
+// exception does not fire when the old record is open (only implemented records may be superseded).
+func TestCheckStaged_SupersessionTransition_OpenRecordRejected(t *testing.T) {
+	const oldID = "prov-2026-aaa00010"
+	const newID = "prov-2026-bbb00011"
+
+	// setupSupersessionRepo creates the old record as implemented; override it to open.
+	tmpDir, provDir, oldRelPath := setupSupersessionRepo(t, oldID)
+	defer os.RemoveAll(tmpDir)
+
+	// Overwrite the already-committed record so HEAD has it as open.
+	oldPath := filepath.Join(tmpDir, oldRelPath)
+	if err := os.WriteFile(oldPath, []byte(makeProvRecord(oldID, "open", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile old record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", oldRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "reset old record to open ["+oldID+"]")
+
+	// Now stage the old record as superseded and add the new record.
+	if err := os.WriteFile(oldPath, []byte(makeProvRecord(oldID, "superseded", `""`, newID, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile old record superseded: %v", err)
+	}
+	newRelPath := "provenance/" + newID + ".yml"
+	newPath := filepath.Join(tmpDir, newRelPath)
+	if err := os.WriteFile(newPath, []byte(makeProvRecord(newID, "open", oldID, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile new record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", oldRelPath, newRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Supersede open record ["+newID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) == 0 {
+		t.Error("Expected violations when superseding an open record, got none")
 	}
 }
 
