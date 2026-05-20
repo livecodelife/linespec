@@ -136,6 +136,10 @@ func (h *Hasher) ManifestExists() bool {
 	return err == nil
 }
 
+func (h *Hasher) ManifestPath() string {
+	return h.manifestPath
+}
+
 // isActiveRecord returns true for records that are not superseded or deprecated.
 func isActiveRecord(r *Record) bool {
 	return r.Status != StatusSuperseded && r.Status != StatusDeprecated

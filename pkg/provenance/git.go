@@ -208,10 +208,11 @@ func (g *Git) GetHeadSHA() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// CommitRecord stages the given record file and creates a commit with the provided message.
+// CommitRecord stages the given files and creates a commit with the provided message.
 // Used by commands that have commit_on_status_change enabled.
-func (g *Git) CommitRecord(recordFilePath, message string) error {
-	add := exec.Command("git", "add", recordFilePath)
+func (g *Git) CommitRecord(message string, filePaths ...string) error {
+	args := append([]string{"add"}, filePaths...)
+	add := exec.Command("git", args...)
 	if g.RepoRoot != "" {
 		add.Dir = g.RepoRoot
 	}

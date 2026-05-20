@@ -745,7 +745,11 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Complete provenance record [%s]", opts.RecordID)
-		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+		files := []string{record.FilePath}
+		if c.Linter != nil && c.Linter.Hasher != nil && c.Linter.Hasher.ManifestExists() {
+			files = append(files, c.Linter.Hasher.ManifestPath())
+		}
+		if err := c.Git.CommitRecord(msg, files...); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
 			return err
@@ -823,7 +827,7 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Deprecate provenance record [%s]", opts.RecordID)
-		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
 			return err
@@ -876,7 +880,7 @@ func (c *Commands) Open(opts OpenOptions) error {
 
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Open provenance record %s [%s]", opts.RecordID, opts.RecordID)
-		if err := c.Git.CommitRecord(record.FilePath, msg); err != nil {
+		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
 			return err
