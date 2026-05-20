@@ -1,6 +1,6 @@
 id: prov-2026-bed8d01c
 title: Release v3.10.3 - fix complete command to include hash manifest in auto-commit
-status: open
+status: implemented
 created_at: "2026-05-20"
 author: test@example.com
 intent: >
@@ -27,7 +27,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a06795476caf26062187ab6d98f5fb406d94a4e4
 associated_specs:
   - path: CHANGELOG.md
     type: code
