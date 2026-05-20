@@ -1,0 +1,38 @@
+id: prov-2026-077a7629
+title: Fix complete command to include hash manifest in auto-commit
+status: draft
+created_at: "2026-05-20"
+author: test@example.com
+intent: |
+  The complete command calls SealRecord to write the correct hash of the newly-implemented
+  record to the hash manifest on disk, but CommitRecord only stages the record YAML file.
+  The manifest update is left unstaged, so the committed manifest always has a stale hash
+  for the just-completed record. PROV-IMM then fires in CI because the stored hash (from
+  the last explicit compile run) does not match the current file content (which was modified
+  by complete). The fix makes CommitRecord variadic and passes the manifest path alongside
+  the record file in the Complete command's auto-commit.
+constraints:
+  - CommitRecord signature must become variadic (message string, filePaths ...string) to avoid breaking Open and Deprecate callers
+  - Complete must include the manifest path in the commit only when a manifest exists (ManifestExists check)
+  - make test must pass
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/hasher.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-60ef0cfa
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - enforcement
