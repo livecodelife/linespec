@@ -1,6 +1,6 @@
 id: prov-2026-382ea200
 title: Fix supersession transition to require implemented status, not open
-status: open
+status: implemented
 created_at: "2026-05-20"
 author: test@example.com
 intent: |
@@ -24,7 +24,7 @@ extends: prov-2026-b0e44331
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 365de6b9608d1e87e8d0eb4cf2bc1f1ce8025594
 associated_specs:
   - path: pkg/provenance/git_test.go
     type: go_test
