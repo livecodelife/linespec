@@ -1,0 +1,38 @@
+id: prov-2026-fadc2c53
+title: Release v3.10.2 - fix supersession scope bypass to require implemented status
+status: draft
+created_at: "2026-05-20"
+author: test@example.com
+intent: >
+  Publish v3.10.2 with one bug fix: the supersession transition scope bypass in the
+  git hook now requires the old record to be implemented (not open). Previously, the
+  bypass only fired for open → superseded transitions; the correct behavior is to only
+  allow supersession of fully implemented records.
+constraints:
+  - make test must pass before tagging
+  - CHANGELOG.md [Unreleased] must be promoted to [3.10.2] - 2026-05-20 with a new empty [Unreleased] section above it
+  - make bump-version NEW=3.10.2 handles VERSION, docs/index.html, docs/linespec.html, docs/docs.html, docs/provenance.html, README.md, LINESPEC.md
+  - linespec provenance compile must run to rebuild the hash manifest
+  - git tag v3.10.2 must be created and pushed to trigger the release workflow
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: code
+    run_command: make test
+tags:
+  - release
