@@ -1,6 +1,6 @@
 id: prov-2026-077a7629
 title: Fix complete command to include hash manifest in auto-commit
-status: draft
+status: open
 created_at: "2026-05-20"
 author: test@example.com
 intent: |
