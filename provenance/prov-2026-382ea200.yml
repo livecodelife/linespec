@@ -1,0 +1,33 @@
+id: prov-2026-382ea200
+title: Fix supersession transition to require implemented status, not open
+status: draft
+created_at: "2026-05-20"
+author: test@example.com
+intent: |
+  The supersession transition exception in isSupersessionTransitionBetween checks
+  beforeRecord.Status != StatusOpen and returns false for anything else, including
+  StatusImplemented. This means the git hook scope bypass only fires when superseding
+  an open record. But open records are still mutable — a valid supersession should only
+  target records that are fully implemented (not superseded or deprecated). The fix
+  changes the guard to require StatusImplemented, which is the only valid state a
+  record should be in before it can be superseded.
+constraints:
+  - isSupersessionTransitionBetween must check beforeRecord.Status == StatusImplemented (not StatusOpen)
+  - The same fix must be applied to both CheckStaged and CheckCommit paths (both call isSupersessionTransitionBetween)
+  - make test must pass
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-b0e44331
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - enforcement
