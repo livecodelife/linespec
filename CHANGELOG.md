@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.3] - 2026-05-20
+
+### Fixed
+
+- **complete command now includes hash manifest in auto-commit** ([prov-2026-077a7629](./provenance/prov-2026-077a7629.yml)) — The `complete` command called `SealRecord` to write the correct hash of the newly-implemented record to the manifest on disk, but `CommitRecord` only staged the record YAML. The manifest update was left unstaged, causing PROV-IMM failures in CI after every release completion. The fix makes `CommitRecord` variadic and passes the manifest path alongside the record file in the `Complete` auto-commit. Also resolves the stale manifest from the v3.10.2 release.
+
 ## [3.10.2] - 2026-05-20
 
 ### Fixed
