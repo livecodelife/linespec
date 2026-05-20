@@ -1,6 +1,6 @@
 id: prov-2026-bed8d01c
 title: Release v3.10.3 - fix complete command to include hash manifest in auto-commit
-status: draft
+status: open
 created_at: "2026-05-20"
 author: test@example.com
 intent: >
