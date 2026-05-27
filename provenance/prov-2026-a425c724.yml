@@ -1,0 +1,31 @@
+id: prov-2026-a425c724
+title: Normalize aggregate function column names in SQL extraction
+status: draft
+created_at: "2026-05-27"
+author: calebcowen@gmail.com
+intent: |
+  The proxy's SQL column extractor returns raw expressions like "COUNT(*)" as column names.
+  Real PostgreSQL names these columns by the function name in lowercase (e.g. "count").
+  When the proxy uses "COUNT(*)" as the column name, the RowDescription and DataRow
+  column labels don't match the payload keys, causing NULL values on scan.
+  Normalize aggregate function column names in extractColumnsFromSQL by stripping the
+  argument list and lowercasing, matching PostgreSQL's implicit column naming behaviour.
+constraints:
+  - Any column expression containing "(" is normalized to lowercase text before the "("
+  - Aliases (AS ...) continue to take precedence over normalization
+  - COUNT(*) -> count, SUM(amount) -> sum, MAX(id) -> max, etc.
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-258574ee
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/asynq-worker/linespecs/count_users.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags: []
