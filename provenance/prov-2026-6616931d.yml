@@ -32,14 +32,21 @@ constraints:
 affected_scope:
   - pkg/proxy/postgresql/proxy.go
   - pkg/proxy/postgresql/startup.go
+  - examples/order-linespecs/cancel_order_success.linespec
+  - examples/order-linespecs/payloads/pending_order.json
+  - examples/order-linespecs/payloads/cancelled_order.json
+  - examples/order-service/src/main.rs
 forbidden_scope: []
-type: blueprint
+type: bug
+extends: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-005
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/order-linespecs/cancel_order_success.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags:

@@ -115,6 +115,38 @@ async fn get_order(
     }
 }
 
+async fn cancel_order(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<CreateOrderResponse>, StatusCode> {
+    info!("Cancelling order: {}", id);
+
+    state.db.execute("BEGIN", &[]).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let row = state.db.query_one(
+        "SELECT id, customer_name, total_amount, status, created_at FROM orders WHERE id = $1",
+        &[&id],
+    ).await.map_err(|_| StatusCode::NOT_FOUND)?;
+
+    state.db.execute(
+        "UPDATE orders SET status = 'cancelled' WHERE id = $1",
+        &[&id],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    state.db.execute("COMMIT", &[]).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    info!("Order {} cancelled successfully", id);
+    Ok(Json(CreateOrderResponse {
+        id: row.get(0),
+        customer_name: row.get(1),
+        total_amount: row.get(2),
+        status: "cancelled".to_string(),
+        created_at: row.get(4),
+    }))
+}
+
 async fn list_orders(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CreateOrderResponse>>, StatusCode> {
@@ -182,6 +214,7 @@ async fn main() {
         .route("/health", get(health_check))
         .route("/orders", post(create_order).get(list_orders))
         .route("/orders/:id", get(get_order))
+        .route("/orders/:id/cancel", post(cancel_order))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
     

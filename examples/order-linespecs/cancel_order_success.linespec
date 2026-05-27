@@ -1,0 +1,15 @@
+TEST cancel_order_success
+
+VARS
+  ORDER_ID: uuid
+
+RECEIVE HTTP:POST /orders/${ORDER_ID}/cancel
+
+EXPECT READ:POSTGRESQL orders
+RETURNS {{payloads/pending_order.json}}
+
+EXPECT WRITE:POSTGRESQL orders
+VERIFY query CONTAINS 'cancelled'
+
+RESPOND HTTP:200
+WITH {{payloads/cancelled_order.json}}
