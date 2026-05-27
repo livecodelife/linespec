@@ -1,0 +1,53 @@
+id: prov-2026-258574ee
+title: Fix PostgreSQL proxy binary encoding for integer types and COUNT(*)
+status: draft
+created_at: "2026-05-27"
+author: calebcowen@gmail.com
+intent: |
+  The PostgreSQL proxy does not correctly honour the result format codes that clients
+  supply in their Bind messages for integer types. The root cause is two related gaps:
+
+  1. oidForColumn returns TEXT (OID 25) for count-like column names (e.g. "count",
+     "total", "num_rows"). When a client like lib/pq reads OID 25 in the RowDescription
+     it requests text format in its Bind — so the proxy and client agree on text, but
+     the result does not match what real PostgreSQL sends for COUNT(*) (which has OID 20,
+     INT8). The OID mismatch means COUNT(*) values scanned into int64 work via text
+     parsing but any client that drives format selection from the OID gets the wrong type.
+
+  2. The binary encoding path in sendDataRowInternal (fmtCode == 1, default branch)
+     calls toInt32, which encodes all integers as 4-byte big-endian INT4. INT8 columns
+     (OID 20, 8 bytes) require 8-byte big-endian encoding. When lib/pq (or any client)
+     requests binary format for an int8 column it expects 8 bytes; receiving 4 bytes
+     causes a decode error or silent data corruption.
+
+  Fix oidForColumn to return INT8 (OID 20, size 8) for count/aggregate column names,
+  and fix sendDataRowInternal to encode integers as int64 (8 bytes) when the client
+  requests binary format for a column whose OID is INT8.
+
+  Add a COUNT(*) test case to the asynq-worker example suite so the fix has a
+  regression harness.
+constraints:
+  - oidForColumn must return OID 20 (INT8, size 8) for column names "count", "total",
+    and names with prefix "num_" or suffix "_count"
+  - sendDataRowInternal binary path must encode integer values as int64 (8 bytes big-endian)
+    when the column OID is INT8; INT4 columns (OID 23) continue to use 4-byte encoding
+  - The OID-to-size mapping must be consistent between oidForColumn (RowDescription)
+    and the binary encoding in sendDataRowInternal (DataRow)
+  - All existing example test suites must continue to pass (make test + all 4 example suites)
+  - No changes to the DSL, MySQL proxy, HTTP proxy, Kafka proxy, or Redis proxy
+affected_scope:
+  - pkg/proxy/postgresql/result.go
+  - examples/asynq-worker/main.go
+  - examples/asynq-worker/linespecs/
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-1aac1dc7
+  - prov-2026-6165b458
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
