@@ -1,0 +1,48 @@
+id: prov-2026-6616931d
+title: 'Fix PostgreSQL proxy transaction state: send ReadyForQuery(''T'') inside active transactions'
+status: draft
+created_at: "2026-05-27"
+author: calebcowen@gmail.com
+intent: >
+  The PostgreSQL proxy always sends ReadyForQuery('I') (Idle) after a mocked
+  query response, even when that query was executed inside an active BEGIN
+  transaction. PostgreSQL client drivers (pgx, pq, sqlx, tokio-postgres, etc.)
+  use the transaction status byte in ReadyForQuery to track connection state.
+  When they see 'I' after a query that was sent inside a BEGIN block, they
+  conclude the transaction has ended — causing errors like "transaction already
+  committed", silent rollbacks, or connection invalidation on the next COMMIT.
+  This forces users to avoid transactions entirely when using the proxy, which
+  is an unacceptable constraint.
+
+  The fix is to track per-connection transaction state in ConnectionState and
+  send ReadyForQuery('T') (in transaction) instead of 'I' whenever a mocked
+  response is sent within an active transaction block. BEGIN/COMMIT/ROLLBACK
+  continue to pass through to upstream unchanged per prov-2026-005.
+constraints:
+  - BEGIN, COMMIT, and ROLLBACK must continue to pass through to upstream
+    without modification — the pass-through list defined in prov-2026-005
+    must not change
+  - Transaction state tracking must be per-connection, not global
+  - "The fix must cover all three places ReadyForQuery is sent for mocked
+    responses: sendMockResultSimple (simple query protocol), the MsgSync
+    handler in handleClientMessagesWithInterception (extended query protocol),
+    and sendReadyForQuery in startup.go (called from the same path)"
+  - Nested transactions (SAVEPOINT) are out of scope — only top-level
+    BEGIN/COMMIT/ROLLBACK state tracking is required
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/startup.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-005
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - proxy
+  - transactions
