@@ -2382,24 +2382,12 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 			return p.sendErrorResponseWithCode(conn, code, msg)
 		}
 		if mock.ReturnsEmpty {
-			// For empty results, we need to send RowDescription with a dummy NULL row
-			// SQLAlchemy ORM requires at least one row to properly set up the result processing
-			// The application will handle the NULLs correctly (e.g., scalar_one_or_none() returns None)
-			// Extract columns from SQL query to ensure proper schema
 			if actualQuery != "" {
-				sqlColumns := p.extractSelectColumns(actualQuery)
-				p.logDebug("  -> Empty result: Extracted columns from SQL: %v\n", sqlColumns)
-				if len(sqlColumns) > 0 {
+				if sqlColumns := p.extractSelectColumns(actualQuery); len(sqlColumns) > 0 {
 					columns = sqlColumns
 				}
 			}
-			// Create a dummy row with all NULL values
-			dummyRow := make(map[string]interface{})
-			for _, col := range columns {
-				dummyRow[col] = nil
-			}
-			rows = []map[string]interface{}{dummyRow}
-			p.logDebug("  -> Empty result: Sending dummy NULL row\n")
+			// rows stays nil — RowDescription is sent but no DataRow, producing SELECT 0
 		}
 
 		if mock.ReturnsFile != "" {
