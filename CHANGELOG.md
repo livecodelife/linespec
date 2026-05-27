@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.3] - 2026-05-27
+
+### Fixed
+
+- **PostgreSQL proxy now sends correct ReadyForQuery transaction status byte inside active transactions** ([prov-2026-6616931d](./provenance/prov-2026-6616931d.yml)) — The proxy always sent `ReadyForQuery('I')` (Idle) after a mocked query response, even when the query was executed inside a `BEGIN` block. PostgreSQL client drivers use the transaction status byte to track connection state; seeing `'I'` inside a transaction caused errors like "transaction already committed", silent rollbacks, or connection invalidation on the next `COMMIT`. The fix tracks per-connection transaction state (`'I'`/`'T'`) and sends the correct status byte in all mocked responses. Additionally, a bug where `mock.SQL = query` back-fill mutated the shared registry mock in place was removed — this mutation changed the `mockHitKey` on the proxy sidecar so hit counts were never transferred to the runner, causing verification to always report mocks as uncalled.
+
 ## [3.11.2] - 2026-05-27
 
 ### Fixed
