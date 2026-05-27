@@ -91,6 +91,8 @@ func processJob(job Job) error {
 		return handleSendEmail(job)
 	case "generate_report":
 		return handleGenerateReport(job)
+	case "count_users":
+		return handleCountUsers(job)
 	default:
 		return fmt.Errorf("unknown job type: %s", job.Type)
 	}
@@ -149,6 +151,21 @@ func handleGenerateReport(job Job) error {
 		"event": "report_generated", "user_id": job.UserID,
 		"month": job.Month, "total_amount": totalAmount,
 	})
+	resp, err := http.Post(webhookURL+"/api/notify", "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		return fmt.Errorf("webhook: %w", err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+func handleCountUsers(_ Job) error {
+	var count int64
+	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		return fmt.Errorf("count users: %w", err)
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{"event": "users_counted", "count": count})
 	resp, err := http.Post(webhookURL+"/api/notify", "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("webhook: %w", err)

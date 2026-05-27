@@ -1,0 +1,12 @@
+TEST count_users
+
+RECEIVE JOB
+WITH {{payloads/count_users_job.json}}
+
+EXPECT READ:POSTGRESQL
+ACCESSING_TABLES [users]
+VERIFY_OPERATION SELECT
+RETURNS {{payloads/count_result.yaml}}
+
+EXPECT HTTP:POST /api/notify
+RETURNS {{payloads/webhook_response.json}}
