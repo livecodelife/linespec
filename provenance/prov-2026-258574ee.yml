@@ -37,6 +37,7 @@ constraints:
   - No changes to the DSL, MySQL proxy, HTTP proxy, Kafka proxy, or Redis proxy
 affected_scope:
   - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/proxy.go
   - examples/asynq-worker/main.go
   - examples/asynq-worker/linespecs/**
 forbidden_scope: []
