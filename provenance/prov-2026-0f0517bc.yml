@@ -1,6 +1,6 @@
 id: prov-2026-0f0517bc
 title: Release v3.11.0
-status: open
+status: implemented
 created_at: "2026-05-27"
 author: test@example.com
 intent: Version bump and release artifacts for v3.11.0
@@ -20,7 +20,7 @@ implements: prov-2026-9368095a
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: bd0edcd6cb7893f64d00ab06c36b69b447b96fda
 associated_specs:
   - path: CHANGELOG.md
     type: code
