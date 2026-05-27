@@ -16,6 +16,15 @@ constraints:
   - Shared repo loading must also recurse
 affected_scope:
   - pkg/provenance/loader.go
+  - provenance/**
+  - VERSION
+  - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
 forbidden_scope: []
 type: blueprint
 supersedes: ""
