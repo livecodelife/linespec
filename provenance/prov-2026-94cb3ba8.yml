@@ -1,6 +1,6 @@
 id: prov-2026-94cb3ba8
 title: Fix oidForColumn and binary int64 encoding in result.go
-status: open
+status: implemented
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: |
@@ -18,7 +18,7 @@ implements: prov-2026-258574ee
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1d2cedac58eae2e346da213469e490e84ded2231
 associated_specs:
   - path: pkg/proxy/postgresql/result.go
     type: code
