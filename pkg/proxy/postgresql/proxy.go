@@ -857,10 +857,6 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			p.checkNegativeMocksForQuery(query, bindParams)
 			if mock, found := p.findMock(query, bindParams); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
-				// Back-fill mock.SQL for legacy mocks without explicit SQL constraint.
-				if mock.SQL == "" && mock.SQLContains == "" && len(mock.AccessingTables) == 0 {
-					mock.SQL = query
-				}
 
 				// Execute VERIFY rules if any
 				if len(mock.Verify) > 0 {
