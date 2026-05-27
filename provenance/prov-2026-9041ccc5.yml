@@ -30,7 +30,10 @@ superseded_by: ""
 related:
   - prov-2026-3ee4a606
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: test
+    path: examples/notification-linespecs/get_notification_not_found.linespec
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
