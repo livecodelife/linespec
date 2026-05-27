@@ -3541,6 +3541,13 @@ func (p *Proxy) extractSelectColumns(sql string) []string {
 			col = col[:castIdx]
 		}
 
+		// Normalize aggregate function calls to their implicit result column name.
+		// PostgreSQL names COUNT(*) -> "count", SUM(x) -> "sum", etc. (lowercase
+		// function name, no arguments). Aliases defined above take precedence.
+		if parenIdx := strings.Index(col, "("); parenIdx != -1 {
+			col = strings.ToLower(strings.TrimSpace(col[:parenIdx]))
+		}
+
 		col = strings.TrimSpace(col)
 		if col != "" {
 			columnNames = append(columnNames, col)
