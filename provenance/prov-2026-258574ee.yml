@@ -1,6 +1,6 @@
 id: prov-2026-258574ee
 title: Fix PostgreSQL proxy binary encoding for integer types and COUNT(*)
-status: draft
+status: open
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: |
@@ -38,7 +38,7 @@ constraints:
 affected_scope:
   - pkg/proxy/postgresql/result.go
   - examples/asynq-worker/main.go
-  - examples/asynq-worker/linespecs/
+  - examples/asynq-worker/linespecs/**
 forbidden_scope: []
 type: blueprint
 supersedes: ""
@@ -47,7 +47,14 @@ related:
   - prov-2026-1aac1dc7
   - prov-2026-6165b458
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/proxy/postgresql/result.go
+    type: code
+    run_command: make test
+  - path: examples/asynq-worker/linespecs/process_email_job.linespec
+    type: linespec
+  - path: examples/asynq-worker/linespecs/process_report_job.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags: []
