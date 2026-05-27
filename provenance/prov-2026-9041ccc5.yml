@@ -1,0 +1,39 @@
+id: prov-2026-9041ccc5
+title: Fix PostgreSQL RETURNS EMPTY to send protocol-correct empty result set
+status: draft
+created_at: "2026-05-27"
+author: calebcowen@gmail.com
+intent: |
+  The PostgreSQL proxy's RETURNS EMPTY handler sends a dummy all-NULL DataRow instead of
+  a proper empty result set. This is protocol-incorrect: a SELECT with zero results should
+  produce RowDescription + CommandComplete "SELECT 0" + ReadyForQuery with no DataRow.
+  The workaround was justified by a comment claiming SQLAlchemy ORM requires at least one
+  row to set up result processing, but this is not accurate — real PostgreSQL sends proper
+  empty result sets and SQLAlchemy handles them correctly (scalar_one_or_none() returns None
+  from zero rows, not from a NULL row). The dummy-row approach causes downstream problems
+  for clients that inspect rowcount or use fetchall(), and misrepresents query semantics.
+  Fix: replace the dummy-row path with a call to the existing SendEmptyResultSet function,
+  which already implements the correct protocol sequence. Apply the same fix to both the
+  simple (sendMockResultSet) and extended query protocol (sendMockResultSetForExtended) paths.
+constraints:
+  - RETURNS EMPTY must produce RowDescription + CommandComplete "SELECT 0" + ReadyForQuery with zero DataRow messages
+  - The existing SendEmptyResultSet function in result.go must be used — no new protocol logic
+  - Both the simple query path (sendMockResultSet) and extended query protocol path (sendMockResultSetForExtended) must be fixed
+  - All existing example test suites must continue to pass (make test + all 4 example suites)
+  - No changes to the DSL or any other proxy (MySQL, HTTP, Kafka, Redis, MongoDB)
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-3ee4a606
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - postgresql
+  - bug
