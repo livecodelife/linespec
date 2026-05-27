@@ -2,6 +2,7 @@ package provenance
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,42 +50,33 @@ func (l *Loader) LoadAll() error {
 	return nil
 }
 
-// LoadFromDir loads all .yml files from the given directory
+// LoadFromDir loads all prov-*.yml files from the given directory and its subdirectories.
 func (l *Loader) LoadFromDir(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Directory doesn't exist, that's ok
-			return nil
-		}
-		return err
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
-			continue
+		if d.IsDir() {
+			return nil
 		}
-
-		// Check if it's a provenance file (prov-YYYY-NNN.yml)
+		name := d.Name()
 		if !strings.HasPrefix(name, "prov-") {
-			continue
+			return nil
 		}
-
-		path := filepath.Join(dir, name)
+		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
+			return nil
+		}
 		record, err := l.LoadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to load %s: %w", path, err)
 		}
-
 		l.Records = append(l.Records, record)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // LoadFile loads a single provenance record from a YAML file
