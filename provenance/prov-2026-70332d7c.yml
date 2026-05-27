@@ -1,6 +1,6 @@
 id: prov-2026-70332d7c
 title: Replace dummy NULL row with SendEmptyResultSet on both query protocol paths
-status: draft
+status: open
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: |
@@ -19,7 +19,9 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: linespec
+    path: examples/notification-linespecs/get_notification_not_found.linespec
 associated_traces: []
 monitors: []
 tags: []
