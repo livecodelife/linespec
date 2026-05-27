@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.2] - 2026-05-27
+
+### Fixed
+
+- **PostgreSQL proxy now correctly names and encodes COUNT(*) columns** ([prov-2026-258574ee](./provenance/prov-2026-258574ee.yml)) — Three coordinated gaps caused `SELECT COUNT(*) FROM users` scanned into `int64` to return NULL when the client requested binary format. First, `extractColumnsFromSQL` returned the raw expression `COUNT(*)` as the column name instead of normalising it to `count` (PostgreSQL's implicit naming rule for aggregate functions). Second, `oidForColumn` returned TEXT (OID 25) for count-like names, so lib/pq never requested binary format. Third, the binary encoding path in `sendDataRowInternal` used 4-byte INT4 encoding for all integers; INT8 columns (OID 20) require 8-byte big-endian encoding. All three gaps are now fixed: aggregate function calls are normalised to lowercase function name, count columns advertise OID 20 (INT8) in RowDescription, and binary DataRow encoding uses 8 bytes for INT8 columns.
+
 ## [3.11.1] - 2026-05-27
 
 ### Fixed
