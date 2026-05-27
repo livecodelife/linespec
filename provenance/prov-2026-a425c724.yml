@@ -1,6 +1,6 @@
 id: prov-2026-a425c724
 title: Normalize aggregate function column names in SQL extraction
-status: open
+status: implemented
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: |
@@ -22,7 +22,7 @@ implements: prov-2026-258574ee
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f9b60c82e105360229a861648a7e191306133734
 associated_specs:
   - path: examples/asynq-worker/linespecs/count_users.linespec
     type: linespec
