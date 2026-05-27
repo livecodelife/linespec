@@ -1,6 +1,6 @@
 id: prov-2026-258574ee
 title: Fix PostgreSQL proxy binary encoding for integer types and COUNT(*)
-status: open
+status: implemented
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: |
@@ -47,7 +47,7 @@ superseded_by: ""
 related:
   - prov-2026-1aac1dc7
   - prov-2026-6165b458
-sealed_at_sha: ""
+sealed_at_sha: 7e5cc818b516cc54bac4e1f07206d5e3a6f24c82
 associated_specs:
   - path: pkg/proxy/postgresql/result.go
     type: code
