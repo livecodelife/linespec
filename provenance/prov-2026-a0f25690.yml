@@ -1,6 +1,6 @@
 id: prov-2026-a0f25690
 title: Release v3.11.1
-status: draft
+status: open
 created_at: "2026-05-27"
 author: calebcowen@gmail.com
 intent: Version bump and release artifacts for v3.11.1
@@ -17,11 +17,11 @@ affected_scope:
   - docs/docs.html
   - docs/provenance.html
 forbidden_scope: []
-type: imprint
-implements: prov-2026-9041ccc5
+type: blueprint
 supersedes: ""
+related:
+  - prov-2026-9041ccc5
 superseded_by: ""
-related: []
 sealed_at_sha: ""
 associated_specs:
   - type: code
