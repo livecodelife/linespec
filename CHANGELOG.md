@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.1] - 2026-05-27
+
+### Fixed
+
+- **PostgreSQL proxy RETURNS EMPTY now sends a protocol-correct empty result set** ([prov-2026-9041ccc5](./provenance/prov-2026-9041ccc5.yml)) — The proxy was sending a dummy all-NULL `DataRow` instead of zero rows, based on an inaccurate claim that SQLAlchemy ORM requires at least one row. Real PostgreSQL sends `RowDescription` + `CommandComplete "SELECT 0"` + `ReadyForQuery` with no `DataRow`, and SQLAlchemy's `scalar_one_or_none()` correctly returns `None` from zero rows. The fix removes the dummy-row path; non-SQLAlchemy clients that inspect `rowcount` or use `fetchall()` now receive correct results.
+
 ## [3.11.0] - 2026-05-27
 
 ### Added
