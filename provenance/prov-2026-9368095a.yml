@@ -1,6 +1,6 @@
 id: prov-2026-9368095a
 title: Support nested subdirectories in provenance loader
-status: open
+status: implemented
 created_at: "2026-05-27"
 author: test@example.com
 intent: |
@@ -30,7 +30,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6ae736c7f2dba103f0bb6e55a32c509e1348ff7e
 associated_specs:
   - type: code
     path: pkg/provenance/loader.go
