@@ -80,6 +80,16 @@ type ConnectionState struct {
 	justMockedExecute   bool                     // track if we just mocked an Execute
 	mockOnlyStatements  map[string]bool          // statements handled locally (never forwarded to upstream)
 	stmtParamOIDs       map[string][]uint32      // statement name -> OIDs declared in Parse message
+	inTransaction       bool                     // true between BEGIN and COMMIT/ROLLBACK
+}
+
+// txStatus returns the PostgreSQL transaction status byte for ReadyForQuery.
+// 'T' = in transaction, 'I' = idle.
+func (s *ConnectionState) txStatus() byte {
+	if s.inTransaction {
+		return 'T'
+	}
+	return 'I'
 }
 
 // NewConnectionState creates a new connection state
@@ -194,7 +204,7 @@ func (p *Proxy) handleQueryMessage(query string, msg []byte, clientConn, upstrea
 		logger.Debug("PostgreSQL Proxy: Mocking simple query for table %s", p.extractTable(query))
 
 		// Send mock response
-		if err := p.sendMockResponse(clientConn, mock, MsgQuery, query); err != nil {
+		if err := p.sendMockResponse(clientConn, mock, MsgQuery, query, 'I'); err != nil {
 			return err
 		}
 		// Don't forward to upstream - we mocked it
@@ -281,7 +291,7 @@ func (p *Proxy) handleMockedExtendedFlow(clientConn net.Conn, mock *types.Expect
 
 			case MsgExecute:
 				// Send mock result
-				if err := p.sendMockResponse(clientConn, mock, MsgParse, query); err != nil {
+				if err := p.sendMockResponse(clientConn, mock, MsgParse, query, 'I'); err != nil {
 					return err
 				}
 
@@ -656,6 +666,13 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			if query != "" {
 				state.preparedStatements[stmtName] = query
 				p.logDebug("  -> Tracked Parse: stmtName='%s', query='%s...'\n", stmtName, query[:min(50, len(query))])
+				// Track transaction state so mocked responses carry the correct status byte.
+				q := strings.TrimSpace(strings.ToUpper(query))
+				if strings.HasPrefix(q, "BEGIN") {
+					state.inTransaction = true
+				} else if strings.HasPrefix(q, "COMMIT") || strings.HasPrefix(q, "ROLLBACK") {
+					state.inTransaction = false
+				}
 			}
 			// Store explicit parameter OIDs from the Parse message so we can echo
 			// them back in mock-only ParameterDescription responses. When the client
@@ -908,7 +925,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// If we just mocked an Execute, send ReadyForQuery ourselves
 			if state.justMockedExecute {
 				p.logDebug("  -> Sending ReadyForQuery after mocked Execute\n")
-				if err := p.sendReadyForQuery(clientConn); err != nil {
+				if err := p.sendReadyForQuery(clientConn, state.txStatus()); err != nil {
 					p.logDebug("  -> Error sending ReadyForQuery: %v\n", err)
 					return
 				}
@@ -925,10 +942,17 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		case MsgQuery:
 			// Simple query protocol - check if we should mock
 			query := string(payload)
+			// Track transaction state so mocked responses carry the correct status byte.
+			q := strings.TrimSpace(strings.ToUpper(query))
+			if strings.HasPrefix(q, "BEGIN") {
+				state.inTransaction = true
+			} else if strings.HasPrefix(q, "COMMIT") || strings.HasPrefix(q, "ROLLBACK") {
+				state.inTransaction = false
+			}
 			p.checkNegativeMocksForQuery(query, nil)
 			if mock, found := p.findMock(query, nil); found {
 				p.logDebug("  -> Mocking simple query for table %s\n", p.extractTable(query))
-				if err := p.sendMockResponse(clientConn, mock, MsgQuery, query); err != nil {
+				if err := p.sendMockResponse(clientConn, mock, MsgQuery, query, state.txStatus()); err != nil {
 					p.logDebug("  -> Error sending mock response: %v\n", err)
 					return
 				}
@@ -1041,8 +1065,10 @@ func (p *Proxy) handleMockedExtendedMessage(msgType byte, clientConn net.Conn) e
 	return fmt.Errorf("mocked extended flow not yet implemented")
 }
 
-// sendMockResponse sends a mock response to the client
-func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatement, msgType byte, query string) error {
+// sendMockResponse sends a mock response to the client.
+// txStatus is the PostgreSQL transaction status byte ('T' = in transaction, 'I' = idle)
+// to include in the ReadyForQuery message.
+func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatement, msgType byte, query string, txStatus byte) error {
 	logger.Debug("PostgreSQL Proxy: Sending mock response for %s query", msgType)
 
 	// Execute VERIFY rules if any
@@ -1055,7 +1081,7 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 
 	if msgType == MsgQuery {
 		// Simple query protocol response
-		return p.sendMockResultSimple(clientConn, mock, query)
+		return p.sendMockResultSimple(clientConn, mock, query, txStatus)
 	} else if msgType == MsgParse {
 		// Extended query: Send ParseComplete
 		// The actual result will be sent when Execute arrives
@@ -1065,8 +1091,9 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 	return nil
 }
 
-// sendMockResultSimple sends a complete mock result for simple query protocol
-func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStatement, query string) error {
+// sendMockResultSimple sends a complete mock result for simple query protocol.
+// txStatus is the transaction status byte for the ReadyForQuery message.
+func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStatement, query string, txStatus byte) error {
 	// Determine columns
 	columns := []string{"id", "name", "email"}
 	if mock.Table != "" {
@@ -1141,8 +1168,8 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 		return err
 	}
 
-	// Send ReadyForQuery
-	return p.writeMessage(clientConn, MsgReadyForQuery, []byte{'I'})
+	// Send ReadyForQuery with the caller-supplied transaction status byte.
+	return p.writeMessage(clientConn, MsgReadyForQuery, []byte{txStatus})
 }
 
 // proxyStartupDirect proxies the startup phase without using a buffered reader
@@ -1930,7 +1957,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 		}
 
 		p.logDebug("  -> Mocking query for table %s\n", mock.Table)
-		return p.sendMockResponse(clientConn, mock, MsgQuery, query)
+		return p.sendMockResponse(clientConn, mock, MsgQuery, query, 'I')
 
 	case MsgParse:
 		// Extended query protocol: Handle Parse/Bind/Execute/Sync cycle
@@ -2031,7 +2058,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 			case MsgSync:
 				p.logDebug("  -> Got Sync message after Parse\n") // Client is synchronizing after Parse without Bind/Execute
 				// Send ReadyForQuery but continue reading for more messages (e.g., Close)
-				if err := p.sendReadyForQuery(clientConn); err != nil {
+				if err := p.sendReadyForQuery(clientConn, 'I'); err != nil {
 					return fmt.Errorf("error sending ReadyForQuery after Parse+Sync: %w", err)
 				}
 				// Continue reading for Close or other messages
@@ -2052,7 +2079,7 @@ func (p *Proxy) handleInterceptedMessage(msg *Message, clientReader *bufio.Reade
 						p.logDebug("  -> CloseComplete sent\n")
 					case MsgSync:
 						p.logDebug("  -> Got Sync message after Close, sending ReadyForQuery\n")
-						if err := p.sendReadyForQuery(clientConn); err != nil {
+						if err := p.sendReadyForQuery(clientConn, 'I'); err != nil {
 							return fmt.Errorf("error sending ReadyForQuery after Close: %w", err)
 						}
 						p.logDebug("  -> ReadyForQuery sent after Close, returning\n")
@@ -2964,9 +2991,9 @@ func (p *Proxy) sendRowDescription(conn net.Conn, mock *types.ExpectStatement) e
 	return p.result.SendRowDescription(conn, columns)
 }
 
-// sendReadyForQuery sends ReadyForQuery message to indicate transaction is idle
-func (p *Proxy) sendReadyForQuery(conn net.Conn) error {
-	return p.startup.sendReadyForQuery(conn)
+// sendReadyForQuery sends a ReadyForQuery message with the given transaction status byte.
+func (p *Proxy) sendReadyForQuery(conn net.Conn, txStatus byte) error {
+	return p.startup.sendReadyForQuery(conn, txStatus)
 }
 
 // handleSimpleQuery handles a simple Query message and sends the mock response

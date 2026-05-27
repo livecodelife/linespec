@@ -52,7 +52,7 @@ func (h *StartupHandler) HandleStartup(conn net.Conn) (map[string]string, error)
 	}
 
 	// Send ReadyForQuery
-	if err := h.sendReadyForQuery(conn); err != nil {
+	if err := h.sendReadyForQuery(conn, 'I'); err != nil {
 		return nil, fmt.Errorf("error sending ready for query: %w", err)
 	}
 
@@ -153,9 +153,9 @@ func (h *StartupHandler) sendBackendKeyData(conn net.Conn) error {
 	return err
 }
 
-// sendReadyForQuery sends ReadyForQuery message
-func (h *StartupHandler) sendReadyForQuery(conn net.Conn) error {
-	msg := CreateReadyForQuery('I') // 'I' = idle (not in a transaction block)
+// sendReadyForQuery sends a ReadyForQuery message with the given transaction status byte.
+func (h *StartupHandler) sendReadyForQuery(conn net.Conn, txStatus byte) error {
+	msg := CreateReadyForQuery(txStatus)
 	_, err := conn.Write(msg)
 	return err
 }
@@ -192,7 +192,7 @@ func (h *StartupHandler) HandleStartupWithReader(reader *bufio.Reader, conn net.
 	}
 
 	// Send ReadyForQuery
-	if err := h.sendReadyForQuery(conn); err != nil {
+	if err := h.sendReadyForQuery(conn, 'I'); err != nil {
 		return nil, fmt.Errorf("error sending ready for query: %w", err)
 	}
 
