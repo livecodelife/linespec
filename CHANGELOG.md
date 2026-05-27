@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.0] - 2026-05-27
+
+### Added
+
+- **Provenance loader now recursively scans subdirectories** ([prov-2026-9368095a](./provenance/prov-2026-9368095a.yml)) — `LoadFromDir` previously skipped all subdirectories, requiring all records to live flat in the configured provenance directory. It now uses `filepath.WalkDir` to discover `prov-*.yml` files at any depth, enabling teams to organize records into subdirectories by feature, team, or time period without losing discoverability by any CLI command.
+
 ## [3.10.3] - 2026-05-20
 
 ### Fixed
