@@ -55,6 +55,8 @@ associated_specs:
     type: linespec
   - path: examples/asynq-worker/linespecs/process_report_job.linespec
     type: linespec
+  - path: examples/asynq-worker/linespecs/count_users.linespec
+    type: linespec
 associated_traces: []
 monitors: []
 tags: []
