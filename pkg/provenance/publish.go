@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,6 +57,7 @@ func (c *Commands) Publish(opts PublishOptions) error {
 		records[i] = *r
 	}
 	transformed := applyTransformPipeline(records)
+	transformed = expandScopePatterns(transformed, c.RepoRoot)
 	provBytes, err := packProvenanceLayer(transformed)
 	if err != nil {
 		c.Formatter.FormatError(fmt.Sprintf("Failed to package provenance layer: %v", err))
@@ -365,6 +368,89 @@ func resetStatus(records []Record) []Record {
 		out[i].SealedAtSHA = ""
 	}
 	return out
+}
+
+// expandScopePatterns replaces glob, regex, and exact-path patterns in
+// AffectedScope and ForbiddenScope with the actual file paths they match
+// under root. Called after applyTransformPipeline so the published artifact
+// captures a point-in-time file list rather than patterns the consumer can't evaluate.
+func expandScopePatterns(records []Record, root string) []Record {
+	if root == "" {
+		root = "."
+	}
+	out := make([]Record, len(records))
+	copy(out, records)
+	for i := range out {
+		out[i].AffectedScope = resolvePatterns(out[i].AffectedScope, root)
+		out[i].ForbiddenScope = resolvePatterns(out[i].ForbiddenScope, root)
+	}
+	return out
+}
+
+// resolvePatterns walks root and returns a sorted list of file paths (relative
+// to root) that match any of the given patterns. Patterns that match no files
+// are silently dropped. Supports glob (contains * or ?), re:-prefixed regex,
+// and exact paths.
+func resolvePatterns(patterns []string, root string) []string {
+	if len(patterns) == 0 {
+		return patterns
+	}
+	seen := make(map[string]bool)
+	var files []string
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+		if len(pattern) > 3 && pattern[:3] == "re:" {
+			re, err := regexp.Compile(pattern[3:])
+			if err != nil {
+				continue
+			}
+			filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				rel, rerr := filepath.Rel(root, path)
+				if rerr != nil || seen[rel] {
+					return nil
+				}
+				if re.MatchString(rel) {
+					seen[rel] = true
+					files = append(files, rel)
+				}
+				return nil
+			})
+			continue
+		}
+		if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
+			re, err := regexp.Compile(GlobToRegex(pattern))
+			if err != nil {
+				continue
+			}
+			filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				rel, rerr := filepath.Rel(root, path)
+				if rerr != nil || seen[rel] {
+					return nil
+				}
+				if re.MatchString(rel) {
+					seen[rel] = true
+					files = append(files, rel)
+				}
+				return nil
+			})
+			continue
+		}
+		// Exact path: include if it exists under root.
+		if _, err := os.Stat(filepath.Join(root, pattern)); err == nil && !seen[pattern] {
+			seen[pattern] = true
+			files = append(files, pattern)
+		}
+	}
+	sort.Strings(files)
+	return files
 }
 
 // hashBytes returns the lowercase hex SHA-256 of data.

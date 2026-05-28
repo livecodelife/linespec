@@ -480,6 +480,128 @@ func TestPublish_URLsEmptyAfterPublish(t *testing.T) {
 	}
 }
 
+// --- expandScopePatterns ---
+
+func makeFileTree(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "pkg", "foo"), 0755)
+	os.WriteFile(filepath.Join(root, "pkg", "foo", "a.go"), []byte("a"), 0644)
+	os.WriteFile(filepath.Join(root, "pkg", "foo", "b.go"), []byte("b"), 0644)
+	os.WriteFile(filepath.Join(root, "pkg", "foo", "a_test.go"), []byte("at"), 0644)
+	os.WriteFile(filepath.Join(root, "exact.go"), []byte("e"), 0644)
+	return root
+}
+
+func TestExpandScopePatterns_GlobExpansion(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:            "prov-2026-aaa00001",
+		Type:          RecordTypeBlueprint,
+		Status:        StatusOpen,
+		AffectedScope: []string{"pkg/foo/*.go"},
+	}}
+	out := expandScopePatterns(records, root)
+	got := out[0].AffectedScope
+	// pkg/foo/*.go matches a.go, a_test.go, b.go
+	if len(got) != 3 {
+		t.Fatalf("expected 3 files from glob, got %v", got)
+	}
+	for _, f := range got {
+		if !strings.HasSuffix(f, ".go") {
+			t.Errorf("unexpected file in glob result: %s", f)
+		}
+	}
+}
+
+func TestExpandScopePatterns_DoubleStarGlob(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:            "prov-2026-aaa00001",
+		Type:          RecordTypeBlueprint,
+		Status:        StatusOpen,
+		AffectedScope: []string{"pkg/**"},
+	}}
+	out := expandScopePatterns(records, root)
+	if len(out[0].AffectedScope) != 3 {
+		t.Errorf("expected 3 files from **, got %v", out[0].AffectedScope)
+	}
+}
+
+func TestExpandScopePatterns_RegexExpansion(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:             "prov-2026-aaa00001",
+		Type:           RecordTypeBlueprint,
+		Status:         StatusOpen,
+		ForbiddenScope: []string{"re:.*_test\\.go"},
+	}}
+	out := expandScopePatterns(records, root)
+	got := out[0].ForbiddenScope
+	if len(got) != 1 || !strings.HasSuffix(got[0], "_test.go") {
+		t.Errorf("expected exactly 1 test file from regex, got %v", got)
+	}
+}
+
+func TestExpandScopePatterns_ExactPathPassthrough(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:            "prov-2026-aaa00001",
+		Type:          RecordTypeBlueprint,
+		Status:        StatusOpen,
+		AffectedScope: []string{"exact.go"},
+	}}
+	out := expandScopePatterns(records, root)
+	got := out[0].AffectedScope
+	if len(got) != 1 || got[0] != "exact.go" {
+		t.Errorf("expected [exact.go], got %v", got)
+	}
+}
+
+func TestExpandScopePatterns_NoMatchDropped(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:            "prov-2026-aaa00001",
+		Type:          RecordTypeBlueprint,
+		Status:        StatusOpen,
+		AffectedScope: []string{"nonexistent/*.go"},
+	}}
+	out := expandScopePatterns(records, root)
+	if len(out[0].AffectedScope) != 0 {
+		t.Errorf("expected empty slice for no-match pattern, got %v", out[0].AffectedScope)
+	}
+}
+
+func TestExpandScopePatterns_EmptyScopeUnchanged(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:     "prov-2026-aaa00001",
+		Type:   RecordTypeBlueprint,
+		Status: StatusOpen,
+	}}
+	out := expandScopePatterns(records, root)
+	if len(out[0].AffectedScope) != 0 || len(out[0].ForbiddenScope) != 0 {
+		t.Errorf("expected empty scope fields to remain empty")
+	}
+}
+
+func TestExpandScopePatterns_OutputIsSorted(t *testing.T) {
+	root := makeFileTree(t)
+	records := []Record{{
+		ID:            "prov-2026-aaa00001",
+		Type:          RecordTypeBlueprint,
+		Status:        StatusOpen,
+		AffectedScope: []string{"pkg/**"},
+	}}
+	out := expandScopePatterns(records, root)
+	files := out[0].AffectedScope
+	for i := 1; i < len(files); i++ {
+		if files[i] < files[i-1] {
+			t.Errorf("output not sorted: %v", files)
+		}
+	}
+}
+
 func TestPublish_RootHashMatchesProvenance(t *testing.T) {
 	dir := t.TempDir()
 	r := Record{ID: "prov-2026-aaa00001", Type: RecordTypeBlueprint, Status: StatusOpen}
