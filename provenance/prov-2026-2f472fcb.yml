@@ -1,6 +1,6 @@
 id: prov-2026-2f472fcb
 title: Fix example service to reconnect after proxy resets connections
-status: draft
+status: open
 created_at: "2026-05-28"
 author: calebcowen@gmail.com
 intent: |
@@ -39,8 +39,8 @@ related:
   - prov-2026-9b938965
 sealed_at_sha: ""
 associated_specs:
-  - type: go_test
-    path: examples/order-linespecs/
+  - type: code
+    path: examples/order-service/src/main.rs
     run_command: make test
 associated_traces: []
 monitors: []
