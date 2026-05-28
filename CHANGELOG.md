@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.5] - 2026-05-28
+
+### Fixed
+
+- **PostgreSQL proxy now declares UUID-valued id columns with the correct OID in RowDescription** ([prov-2026-3b396f68](./provenance/prov-2026-3b396f68.yml)) — The proxy's `oidForColumn` heuristic returned INT4 (OID 23) for any column named `id` or ending in `_id`. When the actual column type is UUID and the client is tokio-postgres, the INT4 OID causes `row.get::<_, Uuid>(0)` to fail the `Uuid::accepts(&Type::INT4)` check before decoding, panicking the handler and dropping the HTTP connection as EOF. The fix adds value-based OID inference: when the sample payload row contains a UUID-formatted string for a column, that column is declared as OID 2950 (UUID) in RowDescription. This is applied at the Describe step (extended protocol) and the Execute step (simple query protocol) so tokio-postgres requests the correct binary UUID format and decodes successfully.
+
 ## [3.11.4] - 2026-05-28
 
 ### Fixed
