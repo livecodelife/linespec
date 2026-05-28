@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.6] - 2026-05-28
+
+### Fixed
+
+- **Example order-service now reconnects automatically after proxy resets connections** ([prov-2026-2f472fcb](./provenance/prov-2026-2f472fcb.yml)) — When the test runner reuses persistent containers between tests, it calls `/reload-registry` which invokes `ResetConnections()` to close all active proxy TCP connections for test isolation. The example service held a single `Arc<Client>` with no reconnect logic; once the proxy closed the connection, the tokio-postgres background `Connection` task exited permanently and all subsequent DB calls returned `Error::is_closed()`, causing HTTP 500. The fix wraps the client in a `tokio::sync::Mutex<Client>` and adds `execute`, `query_one`, and `query` helpers on `AppState` that detect `is_closed()` and reconnect + retry once before propagating the error.
+
 ## [3.11.5] - 2026-05-28
 
 ### Fixed
