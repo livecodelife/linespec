@@ -910,6 +910,9 @@ func runProxy() {
 			return
 		}
 		reg.ClearState()
+		if pgProxy != nil {
+			pgProxy.ResetConnections()
+		}
 		// Rebuild the resolver from the new registry's variables so that ${VAR}
 		// tokens in RETURNS payload files resolve to the current test's values.
 		// Without this, persistent proxy containers would keep resolving variables
