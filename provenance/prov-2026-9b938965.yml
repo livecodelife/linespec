@@ -1,0 +1,49 @@
+id: prov-2026-9b938965
+title: Fix missing pgProxy.ResetConnections in reload-registry handler
+status: draft
+created_at: "2026-05-28"
+author: calebcowen@gmail.com
+intent: |
+  The /reload-registry HTTP handler in the sidecar process is responsible for hot-reloading
+  the mock registry between test runs. A comment in the code explicitly states that the
+  handler should close existing PostgreSQL proxy connections so that the service reconnects
+  with clean per-connection state for each test. However, the handler never calls
+  pgProxy.ResetConnections() — the code declares the pgProxy variable with that comment
+  describing the intent, but the handler closure never uses it.
+
+  Without resetting connections, the service's PostgreSQL connection pool retains connections
+  that were established under the previous test's registry. When the service reuses these
+  stale connections, or when the proxy is in an inconsistent state relative to the newly
+  loaded registry, the service can encounter protocol-level errors such as:
+  "pq: unknown response for startup: \"(I) EmptyQueryResponse\""
+
+  The fix is to call pgProxy.ResetConnections() inside the /reload-registry handler after
+  reg.ClearState(), guarded by a nil check since pgProxy is only set when the proxy type
+  is postgresql.
+constraints:
+  - |
+    Add `if pgProxy != nil { pgProxy.ResetConnections() }` after reg.ClearState() in the
+    /reload-registry handler in cmd/linespec/main_stable.go. The pgProxy variable is already
+    declared in the enclosing scope and captured by the closure; no structural changes needed.
+  - |
+    Do not modify pkg/proxy/postgresql/proxy.go — ResetConnections() already exists and is
+    correct. The fix is purely in the call site.
+  - |
+    The fix must apply only when pType == "postgresql". The nil guard on pgProxy handles this
+    since pgProxy is only set in that branch of the switch.
+affected_scope:
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-4bf54660
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/postgresql/proxy_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
