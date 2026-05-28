@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.4] - 2026-05-28
+
+### Fixed
+
+- **PostgreSQL proxy now resets connections on registry hot-reload** ([prov-2026-9b938965](./provenance/prov-2026-9b938965.yml)) — The `/reload-registry` handler included a comment stating it would close existing PostgreSQL proxy connections between test runs, but `pgProxy.ResetConnections()` was never called. Stale connections from the previous test's registry state caused protocol desynchronisation errors on reconnect, including `pq: unknown response for startup: "(I) EmptyQueryResponse"`. The fix adds the missing call after `reg.ClearState()`.
+
+- **`linespec publish` now expands scope patterns to file lists in the manifest artifact** ([prov-2026-fca900ac](./provenance/prov-2026-fca900ac.yml)) — `affected_scope` and `forbidden_scope` fields on provenance records may contain globs, `re:`-prefixed regexes, or exact paths. These patterns are meaningful in the context of the source repository but opaque to manifest consumers who do not have the original file tree. The publish pipeline now runs an `expandScopePatterns` step between `applyTransformPipeline` and `packProvenanceLayer`, replacing patterns with the sorted list of file paths that matched at publish time.
+
 ## [3.11.3] - 2026-05-27
 
 ### Fixed
