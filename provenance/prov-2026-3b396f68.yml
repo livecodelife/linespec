@@ -1,0 +1,59 @@
+id: prov-2026-3b396f68
+title: Fix proxy RowDescription OID for UUID-valued id columns
+status: draft
+created_at: "2026-05-28"
+author: calebcowen@gmail.com
+intent: |
+  The PostgreSQL proxy's oidForColumn heuristic returns OID 23 (INT4) for any
+  column named "id" or ending in "_id", because it was originally written for
+  asyncpg (Python) where integer primary keys are the common case. When a service
+  uses UUID primary keys and reads them back via tokio-postgres, the declared OID
+  in RowDescription is INT4 but the Go type requested is Uuid. tokio-postgres
+  checks Uuid::accepts(&Type::INT4) before decoding, which returns false, causing
+  row.get::<_, Uuid>(0) to panic. The panic propagates out of the axum handler
+  (no CatchPanic middleware), dropping the HTTP connection with EOF.
+
+  The fix introduces value-based OID inference: when building RowDescription and
+  the sample payload row contains a UUID-formatted string for a column, declare
+  that column as OID 2950 (UUID) instead of INT4. tokio-postgres then requests
+  binary UUID format in Bind, the proxy's existing encodeUUIDBinary path encodes
+  it as 16 bytes, and Uuid::from_sql succeeds.
+constraints:
+  - |
+    Add oidForColumnWithValueHint(col string, val interface{}) (uint32, int) to
+    result.go. If val is a string matching isUUIDString, return OID 2950 (UUID).
+    Otherwise delegate to oidForColumn. This preserves existing behaviour for
+    integer-valued id columns.
+  - |
+    Add SendRowDescriptionWithHints(conn, columns, sampleRow) to ResultHandler.
+    When sampleRow is non-nil, use oidForColumnWithValueHint per column.
+    Fall back to SendRowDescription when sampleRow is nil.
+  - |
+    Apply SendRowDescriptionWithHints in three call sites in proxy.go:
+    (1) the mock-only Describe handler (extended protocol — critical, this is
+    what tokio-postgres uses to decide Bind format codes);
+    (2) the DescribePortal handler (direct portal describe);
+    (3) sendMockResultSetForExtended when skipRowDescription is false
+    (simple query protocol path).
+  - |
+    Do not change oidForColumn itself — it is used by asyncpg-facing services
+    where INT4 for integer id columns is correct. The value hint is only applied
+    when sample row data is available.
+affected_scope:
+  - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-4bf54660
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9b938965
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/postgresql/proxy_startup_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
