@@ -1,0 +1,47 @@
+id: prov-2026-2f472fcb
+title: Fix example service to reconnect after proxy resets connections
+status: draft
+created_at: "2026-05-28"
+author: calebcowen@gmail.com
+intent: |
+  When running the order-linespecs test suite, the runner reuses Docker containers
+  between tests (persistent container optimization). Between tests, /reload-registry
+  is called, which invokes ResetConnections() to close all active proxy connections
+  for test isolation. This kills the example service's single tokio-postgres Client.
+  The service has no reconnect logic, so subsequent DB calls in create_order_success
+  fail with a closed-connection error, returning HTTP 500.
+
+  The fix: add automatic reconnection to the example order-service. Wrap the
+  Client in a Mutex so it can be replaced when a closed-connection error is detected,
+  and retry each DB operation once after reconnecting.
+constraints:
+  - |
+    Change AppState.db from Arc<Client> to Arc<tokio::sync::Mutex<Client>> and add
+    database_url: Arc<String> so the service can reconnect.
+  - |
+    Add execute, query_one, and query helper methods on AppState that detect
+    closed-connection errors (e.is_closed()) and reconnect + retry once before
+    propagating the error.
+  - |
+    Update all handlers (create_order, cancel_order, get_order, list_orders) to use
+    the new helper methods instead of state.db.execute/query_one/query directly.
+  - |
+    Do not change the test linespecs, proxy code, or runner; only the example
+    service needs to change.
+affected_scope:
+  - examples/order-service/src/main.rs
+forbidden_scope: []
+type: bug
+extends: prov-2026-3b396f68
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9b938965
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: examples/order-linespecs/
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
