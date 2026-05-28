@@ -30,6 +30,9 @@ constraints:
     service needs to change.
 affected_scope:
   - examples/order-service/src/main.rs
+  - examples/order-linespecs/cancel_order_success.linespec
+  - examples/order-linespecs/payloads/cancelled_order.json
+  - examples/order-linespecs/payloads/pending_order.json
 forbidden_scope: []
 type: bug
 extends: prov-2026-3b396f68

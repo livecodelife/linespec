@@ -13,3 +13,6 @@ VERIFY query CONTAINS 'cancelled'
 
 RESPOND HTTP:200
 WITH {{payloads/cancelled_order.json}}
+NOISE
+  body.id
+  body.created_at
