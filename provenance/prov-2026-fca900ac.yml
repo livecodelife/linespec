@@ -1,6 +1,6 @@
 id: prov-2026-fca900ac
 title: Expand scope patterns to file lists in publish
-status: open
+status: implemented
 created_at: "2026-05-28"
 author: calebcowen@gmail.com
 intent: |
@@ -51,7 +51,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-d422fec6
-sealed_at_sha: ""
+sealed_at_sha: 401398f13375c6e6cd56408552ff73fbf62de879
 associated_specs:
   - type: go_test
     path: pkg/provenance/publish_test.go
