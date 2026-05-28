@@ -137,6 +137,57 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	return err
 }
 
+// oidForColumnWithValueHint is like oidForColumn but checks the actual value
+// first to detect UUID-formatted strings that would otherwise be misidentified
+// as INT4. This is needed because id columns are commonly UUID in practice, and
+// typed clients (tokio-postgres, psycopg3) check the declared OID against the
+// requested Go/Rust type before decoding — a mismatch causes a type error.
+func oidForColumnWithValueHint(col string, val interface{}) (uint32, int) {
+	if s, ok := val.(string); ok && isUUIDString(s) {
+		return 2950, 16 // UUID
+	}
+	return oidForColumn(col)
+}
+
+// SendRowDescriptionWithHints sends a RowDescription, using the provided sample
+// row to refine per-column OID inference. Falls back to SendRowDescription when
+// sampleRow is nil.
+func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, columns []string, sampleRow map[string]interface{}) error {
+	if sampleRow == nil {
+		return r.SendRowDescription(conn, columns)
+	}
+
+	fieldCount := uint16(len(columns))
+	payload := make([]byte, 0, 2+len(columns)*20)
+
+	fieldCountBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(fieldCountBytes, fieldCount)
+	payload = append(payload, fieldCountBytes...)
+
+	for _, col := range columns {
+		payload = append(payload, []byte(col)...)
+		payload = append(payload, 0)           // null terminator
+		payload = append(payload, 0, 0, 0, 0) // table OID
+		payload = append(payload, 0, 0)        // column number
+
+		oid, typeSize := oidForColumnWithValueHint(col, sampleRow[col])
+		typeOIDBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(typeOIDBuf, oid)
+		payload = append(payload, typeOIDBuf...)
+
+		typeSizeBuf := make([]byte, 2)
+		binary.BigEndian.PutUint16(typeSizeBuf, uint16(typeSize))
+		payload = append(payload, typeSizeBuf...)
+
+		payload = append(payload, 0xFF, 0xFF, 0xFF, 0xFF) // type modifier -1
+		payload = append(payload, 0, 0)                   // format code 0 (text default)
+	}
+
+	msg := CreateMessage(MsgRowDescription, payload)
+	_, err := conn.Write(msg)
+	return err
+}
+
 // oidForColumn returns the PostgreSQL OID and type size for a column based on
 // its name heuristics. This gives asyncpg the right codec so it returns native
 // Python types (int for id/_id, datetime for _at/time) instead of plain strings.

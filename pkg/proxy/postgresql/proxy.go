@@ -761,7 +761,19 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 								cols = []string{"id"}
 							}
 							p.logDebug("  -> Mock-only Describe '%s': sending RowDescription %v\n", stmtName, cols)
-							if err := p.result.SendRowDescription(clientConn, cols); err != nil {
+							// Load the mock payload to use value-based OID hints (e.g. UUID-valued
+							// id columns must be declared as OID 2950 so typed clients like
+							// tokio-postgres accept the value without a type-mismatch error).
+							var sampleRow map[string]interface{}
+							if mock, found := p.peekMock(query, nil); found && mock.ReturnsFile != "" {
+								p.loader.BaseDir = mock.BaseDir
+								if pld, err := p.loader.Load(mock.ReturnsFile); err == nil {
+									if rows := p.extractRowsFromPayload(pld); len(rows) > 0 {
+										sampleRow = rows[0]
+									}
+								}
+							}
+							if err := p.result.SendRowDescriptionWithHints(clientConn, cols, sampleRow); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -791,7 +803,19 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 						p.logDebug("  -> Mock-only Describe Portal for '%s': responding locally\n", portalName)
 						if mp.Mock.Channel == types.ReadPostgreSQL {
 							// READ mock: send RowDescription so Execute can skip it.
-							if err := p.sendRowDescription(clientConn, mp.Mock); err != nil {
+							// Use value-based hints so UUID-valued id columns are declared
+							// as OID 2950 rather than INT4.
+							cols := p.inferColumnsForTable(mp.Mock.Table)
+							var sampleRow map[string]interface{}
+							if mp.Mock.ReturnsFile != "" {
+								p.loader.BaseDir = mp.Mock.BaseDir
+								if pld, err := p.loader.Load(mp.Mock.ReturnsFile); err == nil {
+									if rows := p.extractRowsFromPayload(pld); len(rows) > 0 {
+										sampleRow = rows[0]
+									}
+								}
+							}
+							if err := p.result.SendRowDescriptionWithHints(clientConn, cols, sampleRow); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -2469,7 +2493,11 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 
 	// Send RowDescription unless the client already received it via a forwarded Describe.
 	if !skipRowDescription {
-		if err := p.result.SendRowDescription(conn, columns); err != nil {
+		var sampleRow map[string]interface{}
+		if len(rows) > 0 {
+			sampleRow = rows[0]
+		}
+		if err := p.result.SendRowDescriptionWithHints(conn, columns, sampleRow); err != nil {
 			return fmt.Errorf("error sending RowDescription: %w", err)
 		}
 	} else {
