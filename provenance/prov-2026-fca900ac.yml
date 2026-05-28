@@ -52,7 +52,10 @@ superseded_by: ""
 related:
   - prov-2026-d422fec6
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: go_test
+    path: pkg/provenance/publish_test.go
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
