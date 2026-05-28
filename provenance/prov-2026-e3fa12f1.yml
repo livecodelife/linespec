@@ -1,0 +1,46 @@
+id: prov-2026-e3fa12f1
+title: Release v3.11.4
+status: draft
+created_at: "2026-05-28"
+author: calebcowen@gmail.com
+intent: |
+  Version bump and release artifacts for v3.11.4. Patch release containing two bug fixes:
+  1. pgProxy.ResetConnections() was never called from the /reload-registry handler despite
+     a comment saying it would be, causing stale PostgreSQL connections across test runs.
+  2. expandScopePatterns was added to the publish pipeline so scope patterns in provenance
+     records are expanded to real file lists in published manifest artifacts.
+constraints:
+  - |
+    Promote [Unreleased] in CHANGELOG.md to [3.11.4] - 2026-05-28 with entries for
+    both fixes; add a fresh empty [Unreleased] section above it.
+  - |
+    make bump-version NEW=3.11.4 handles VERSION, docs/index.html, docs/linespec.html,
+    docs/docs.html, docs/provenance.html, README.md, LINESPEC.md.
+  - |
+    Run linespec provenance compile to rebuild the hash manifest.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9b938965
+  - prov-2026-fca900ac
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - release
