@@ -1,6 +1,6 @@
 id: prov-2026-fd08b0a9
 title: Add expandScopePatterns step to publish pipeline
-status: open
+status: implemented
 created_at: "2026-05-28"
 author: calebcowen@gmail.com
 intent: |
@@ -16,7 +16,7 @@ implements: prov-2026-fca900ac
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 79a29e354cb76a55110e1fb18e8c48f8f4f3391c
 associated_specs:
   - type: go_test
     path: pkg/provenance/publish_test.go
