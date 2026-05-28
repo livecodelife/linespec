@@ -1,6 +1,6 @@
 id: prov-2026-c839dcaf
 title: Release v3.11.5
-status: open
+status: implemented
 created_at: "2026-05-28"
 author: calebcowen@gmail.com
 intent: |
@@ -31,7 +31,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-3b396f68
-sealed_at_sha: ""
+sealed_at_sha: 989f68b52defae65b9765d125e9324df1e2ad792
 associated_specs:
   - type: code
     path: CHANGELOG.md
