@@ -1,6 +1,6 @@
 id: prov-2026-9b938965
 title: Fix missing pgProxy.ResetConnections in reload-registry handler
-status: draft
+status: open
 created_at: "2026-05-28"
 author: calebcowen@gmail.com
 intent: |
@@ -42,7 +42,7 @@ related: []
 sealed_at_sha: ""
 associated_specs:
   - type: go_test
-    path: pkg/proxy/postgresql/proxy_test.go
+    path: pkg/proxy/postgresql/proxy_startup_test.go
     run_command: make test
 associated_traces: []
 monitors: []
