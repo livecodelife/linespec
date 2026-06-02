@@ -1,0 +1,50 @@
+id: prov-2026-0714ca9d
+title: Commit missing asynq-worker go.sum for lib/pq dependency
+status: draft
+created_at: "2026-06-02"
+author: calebcowen@gmail.com
+intent: |
+  The count_users job handler added to the asynq-worker example (prov-2026-02213cc0)
+  introduced a PostgreSQL dependency — github.com/lib/pq v1.10.9 in
+  examples/asynq-worker/go.mod, used by main.go for sql.Open("postgres", ...) and the
+  SELECT COUNT(*) FROM users query. The regenerated examples/asynq-worker/go.sum was
+  never committed: it remains an untracked file in the working tree, and it was not
+  listed in the affected_scope of prov-2026-02213cc0 (which covered only main.go, the
+  count_users linespec, and payloads/).
+
+  As a result a fresh checkout has go.mod requiring lib/pq with no matching go.sum
+  entry; the build only succeeds because the Docker build regenerates go.sum at image
+  build time, which masks the gap. Every sibling Go example (catalog-service,
+  multi-db-service) commits its go.sum; this one should too.
+
+  The fix simply commits the existing, complete examples/asynq-worker/go.sum (it
+  already contains the lib/pq checksums) so the example builds reproducibly without
+  relying on on-the-fly regeneration.
+constraints:
+  - |
+    Commit examples/asynq-worker/go.sum as-is; it must contain the github.com/lib/pq
+    v1.10.9 entries already present in the working tree.
+  - |
+    go.sum must be consistent with examples/asynq-worker/go.mod (no module additions or
+    removals as part of this fix).
+  - |
+    No source, proxy, runner, or linespec changes — this is purely the missing build
+    artifact.
+affected_scope:
+  - examples/asynq-worker/go.sum
+forbidden_scope: []
+type: bug
+extends: prov-2026-258574ee
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-02213cc0
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - asynq-worker
+  - go.sum
+  - dependencies
+  - build
