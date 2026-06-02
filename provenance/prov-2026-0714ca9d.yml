@@ -1,32 +1,37 @@
 id: prov-2026-0714ca9d
 title: Commit missing asynq-worker go.sum for lib/pq dependency
-status: draft
+status: open
 created_at: "2026-06-02"
 author: calebcowen@gmail.com
 intent: |
   The count_users job handler added to the asynq-worker example (prov-2026-02213cc0)
   introduced a PostgreSQL dependency — github.com/lib/pq v1.10.9 in
   examples/asynq-worker/go.mod, used by main.go for sql.Open("postgres", ...) and the
-  SELECT COUNT(*) FROM users query. The regenerated examples/asynq-worker/go.sum was
-  never committed: it remains an untracked file in the working tree, and it was not
-  listed in the affected_scope of prov-2026-02213cc0 (which covered only main.go, the
-  count_users linespec, and payloads/).
+  SELECT COUNT(*) FROM users query. The corresponding examples/asynq-worker/go.sum was
+  never committed, and it was not listed in the affected_scope of prov-2026-02213cc0
+  (which covered only main.go, the count_users linespec, and payloads/).
 
-  As a result a fresh checkout has go.mod requiring lib/pq with no matching go.sum
-  entry; the build only succeeds because the Docker build regenerates go.sum at image
-  build time, which masks the gap. Every sibling Go example (catalog-service,
-  multi-db-service) commits its go.sum; this one should too.
+  Worse, the go.sum left untracked in the working tree is incomplete: it carries only
+  the /go.mod hashes for lib/pq and go-redis and none of the h1: build hashes or the
+  transitive dependencies (cespare/xxhash, dgryski/go-rendezvous, bsm/ginkgo,
+  bsm/gomega). `go build ./...` against it fails with "missing go.sum entry". A fresh
+  checkout therefore cannot build the worker; it only succeeds today because the Docker
+  build regenerates go.sum at image build time, which masks the gap. Every sibling Go
+  example (catalog-service, multi-db-service) commits a complete go.sum; this one
+  should too.
 
-  The fix simply commits the existing, complete examples/asynq-worker/go.sum (it
-  already contains the lib/pq checksums) so the example builds reproducibly without
-  relying on on-the-fly regeneration.
+  The fix regenerates a complete examples/asynq-worker/go.sum via `go mod tidy` (adding
+  the missing h1: hashes and transitive-dependency entries) and commits it so the
+  example builds reproducibly without relying on on-the-fly regeneration.
 constraints:
   - |
-    Commit examples/asynq-worker/go.sum as-is; it must contain the github.com/lib/pq
-    v1.10.9 entries already present in the working tree.
+    Regenerate examples/asynq-worker/go.sum with `go mod tidy` so it contains complete
+    entries (both h1: and /go.mod hashes) for github.com/lib/pq v1.10.9 and
+    github.com/redis/go-redis/v9 v9.7.3 plus their transitive dependencies.
   - |
     go.sum must be consistent with examples/asynq-worker/go.mod (no module additions or
-    removals as part of this fix).
+    removals as part of this fix); `cd examples/asynq-worker && go build ./...` must
+    succeed against the committed go.sum.
   - |
     No source, proxy, runner, or linespec changes — this is purely the missing build
     artifact.
@@ -40,7 +45,10 @@ superseded_by: ""
 related:
   - prov-2026-02213cc0
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: examples/asynq-worker/go.sum
+    type: code
+    run_command: cd examples/asynq-worker && go build ./...
 associated_traces: []
 monitors: []
 tags:
