@@ -1,0 +1,55 @@
+id: prov-2026-e85895b5
+title: Fix notification-service to reconnect after proxy resets connections (pool_pre_ping)
+status: draft
+created_at: "2026-06-02"
+author: calebcowen@gmail.com
+intent: |
+  The notification-linespecs suite reuses Docker containers between tests (persistent
+  container optimization). Between tests the runner calls /reload-registry, which invokes
+  ResetConnections() to close all active PostgreSQL proxy connections for test isolation.
+  This kills the connections held in the notification-service's SQLAlchemy async engine
+  pool (create_async_engine over asyncpg). The engine has no liveness check, so the next
+  request is handed a dead pooled connection and the query fails, returning HTTP 500.
+
+  This manifests as order-dependent failures: get_notification_success and
+  list_notifications_semantic pass when run in isolation (1/1) but 500 in-suite, because
+  they are the first DB-touching request after a between-test connection reset. Suites
+  that hit Redis cache or fail auth before the DB (cache_hit, unauthenticated) are
+  unaffected.
+
+  This is the same class of defect as prov-2026-2f472fcb (order-service reconnect after
+  proxy reset); that fix was never applied to the FastAPI notification-service. The fix
+  here is the idiomatic SQLAlchemy equivalent of detect-dead-connection-and-reconnect:
+  enable pool_pre_ping=True on the async engine so SQLAlchemy issues a lightweight
+  liveness check and transparently replaces a stale connection before each use.
+constraints:
+  - |
+    Enable pool_pre_ping=True on create_async_engine in
+    examples/notification-service/app/database.py so stale pooled connections are detected
+    and replaced after the proxy resets connections between tests.
+  - |
+    No change to the proxy, runner, test linespecs, or other services — only the example
+    notification-service engine configuration.
+  - |
+    After the fix, the full notification-linespecs suite passes (8/8) with persistent
+    container reuse; behavior of services not using this engine is unchanged.
+affected_scope:
+  - examples/notification-service/app/database.py
+forbidden_scope: []
+type: bug
+extends: prov-2026-2f472fcb
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9b938965
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/notification-linespecs/get_notification_success.linespec
+    type: linespec
+associated_traces: []
+monitors: []
+tags:
+  - notification-service
+  - reconnect
+  - asyncpg
+  - sqlalchemy
