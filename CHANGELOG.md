@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.7] - 2026-06-02
+
+### Fixed
+
+- **`linespec clone` now extracts the specs layer into a `linespecs/` directory** ([prov-2026-ba855ac7](./provenance/prov-2026-ba855ac7.yml)) — Cloning a manifest correctly placed provenance records under `provenance/`, but the specs layer (the `.linespec` test files and their payloads) was extracted directly into the destination root, dumping loose files alongside the project. Layer extraction is now routed through `manifest.ExtractLayer`/`LayerTargetDir`: provenance records land flat in `provenance/`, the specs layer in a dedicated `linespecs/` directory (mirroring the provenance convention, with common-prefix stripping preserved), and the code/prompt layers continue to extract at the project root.
+
+- **Example notification-service now reconnects after the proxy resets connections** ([prov-2026-e85895b5](./provenance/prov-2026-e85895b5.yml)) — When the test runner reuses persistent containers between tests, `/reload-registry` calls `ResetConnections()` to close all active proxy connections for isolation. This killed the connections pooled by the FastAPI service's SQLAlchemy async engine, so the first DB-touching request after a reset was handed a dead connection and returned HTTP 500 (order-dependent: a spec passing in isolation would fail in-suite). The fix enables `pool_pre_ping=True` on the async engine so SQLAlchemy validates and transparently replaces stale connections before use — the SQLAlchemy equivalent of the order-service reconnect fix in 3.11.6.
+
+- **Example asynq-worker now builds reproducibly** ([prov-2026-0714ca9d](./provenance/prov-2026-0714ca9d.yml), [prov-2026-d4538081](./provenance/prov-2026-d4538081.yml)) — The `count_users` job introduced a `github.com/lib/pq` PostgreSQL dependency, but the worker's `go.sum` was never committed (and was incomplete, carrying only `/go.mod` hashes) and `go.mod` lacked the `// indirect` block for go-redis's transitive dependencies. `go build -mod=readonly` (the Go and CI default) failed with "missing go.sum entry"/"updates to go.mod needed". A complete `go.sum` and the `go.mod` indirect require block are now committed.
+
 ## [3.11.6] - 2026-05-28
 
 ### Fixed

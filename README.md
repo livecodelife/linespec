@@ -1,4 +1,4 @@
-# LineSpec v3.11.6
+# LineSpec v3.11.7
 
 [![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
@@ -13,7 +13,7 @@
 
 LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
 
-As of v3.11.6, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
+As of v3.11.7, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
 ---
 
@@ -35,7 +35,7 @@ linespec build
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/cmd/linespec@v3.11.6
+go install github.com/livecodelife/linespec/cmd/linespec@v3.11.7
 ```
 
 ### GitHub Releases
@@ -385,4 +385,4 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
-**LineSpec v3.11.6** - Built with Provenance Records
+**LineSpec v3.11.7** - Built with Provenance Records
