@@ -131,6 +131,41 @@ func ExtractProvenance(data []byte, destDir string) error {
 	return extractTar(data, destDir)
 }
 
+// LayerTargetDir returns the directory, relative to a cloned project's root
+// destDir, into which the named manifest layer is extracted:
+//   - "provenance" → destDir/provenance (flat record files)
+//   - "specs"      → destDir/linespecs (.linespec test files and payloads)
+//   - any other    → destDir (service source, prompt artifacts at the root)
+//
+// The specs layer is given its own directory so cloned .linespec files are
+// contained rather than dumped loose into the project root, mirroring the
+// provenance/ convention.
+func LayerTargetDir(layerName, destDir string) string {
+	switch layerName {
+	case "provenance":
+		return filepath.Join(destDir, "provenance")
+	case "specs":
+		return filepath.Join(destDir, "linespecs")
+	default:
+		return destDir
+	}
+}
+
+// ExtractLayer unpacks the named manifest layer into its target directory under
+// destDir (see LayerTargetDir), creating the directory if absent. The provenance
+// layer is extracted with flat record files preserved; all other layers strip a
+// common top-level directory prefix so files land directly under their target.
+func ExtractLayer(layerName string, data []byte, destDir string) error {
+	target := LayerTargetDir(layerName, destDir)
+	if err := os.MkdirAll(target, 0755); err != nil {
+		return err
+	}
+	if layerName == "provenance" {
+		return ExtractProvenance(data, target)
+	}
+	return ExtractSpecs(data, target)
+}
+
 // ExtractSpecs unpacks the specs layer tar into destDir. If all entries share
 // a single common top-level directory component (e.g. "linespec.manifest/"),
 // that prefix is stripped so files land directly in destDir.

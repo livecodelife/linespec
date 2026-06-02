@@ -701,25 +701,16 @@ Examples:
 		os.Exit(1)
 	}
 
-	// Extract layers
-	if provData, ok := fetched.Layers["provenance"]; ok {
-		provDir := filepath.Join(destDir, "provenance")
-		if err := os.MkdirAll(provDir, 0755); err != nil {
-			logger.Error("Failed to create provenance directory: %v", err)
-			os.Exit(1)
-		}
-		if err := manifest.ExtractProvenance(provData, provDir); err != nil {
-			logger.Error("Failed to extract provenance layer: %v", err)
-			os.Exit(1)
-		}
-		fmt.Println("  ✓ extracted provenance layer")
-	}
-	for _, layerName := range []string{"specs", "code", "prompt"} {
+	// Extract layers into their correct locations under destDir. Provenance records
+	// land flat in provenance/, the specs layer (.linespec test files and their
+	// payloads) in a dedicated linespecs/ directory mirroring the provenance/
+	// convention, and code/prompt artifacts at the project root.
+	for _, layerName := range []string{"provenance", "specs", "code", "prompt"} {
 		data, ok := fetched.Layers[layerName]
 		if !ok {
 			continue
 		}
-		if err := manifest.ExtractSpecs(data, destDir); err != nil {
+		if err := manifest.ExtractLayer(layerName, data, destDir); err != nil {
 			logger.Error("Failed to extract %s layer: %v", layerName, err)
 			os.Exit(1)
 		}

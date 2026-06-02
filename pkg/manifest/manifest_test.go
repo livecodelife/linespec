@@ -454,9 +454,9 @@ func TestFetch_NameEmptyWhenNotSet(t *testing.T) {
 
 func TestExtractSpecs_StripsCommonTopLevelPrefix(t *testing.T) {
 	files := map[string][]byte{
-		"linespec.manifest/specs/foo.linespec": []byte("test spec"),
+		"linespec.manifest/specs/foo.linespec":     []byte("test spec"),
 		"linespec.manifest/specs/sub/bar.linespec": []byte("nested spec"),
-		"linespec.manifest/prompt.md": []byte("# prompt"),
+		"linespec.manifest/prompt.md":              []byte("# prompt"),
 	}
 	dest := t.TempDir()
 	if err := ExtractSpecs(makeTar(files), dest); err != nil {
@@ -523,5 +523,92 @@ func TestExtractProvenance(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "prov-2026-aaa.yml")); err != nil {
 		t.Errorf("expected file not found: %v", err)
+	}
+}
+
+func TestLayerTargetDir(t *testing.T) {
+	dest := "/tmp/project"
+	cases := map[string]string{
+		"provenance": filepath.Join(dest, "provenance"),
+		"specs":      filepath.Join(dest, "linespecs"),
+		"code":       dest,
+		"prompt":     dest,
+		"unknown":    dest,
+	}
+	for layer, want := range cases {
+		if got := LayerTargetDir(layer, dest); got != want {
+			t.Errorf("LayerTargetDir(%q): got %q, want %q", layer, got, want)
+		}
+	}
+}
+
+// TestExtractLayer_SpecsLandInLinespecsDir verifies the specs layer is extracted
+// into a dedicated linespecs/ directory with the common top-level prefix stripped,
+// rather than dumped into the destination root.
+func TestExtractLayer_SpecsLandInLinespecsDir(t *testing.T) {
+	files := map[string][]byte{
+		"linespec.manifest/get_todo.linespec":  []byte("get spec"),
+		"linespec.manifest/payloads/todo.yaml": []byte("id: 1"),
+	}
+	dest := t.TempDir()
+	if err := ExtractLayer("specs", makeTar(files), dest); err != nil {
+		t.Fatalf("ExtractLayer specs: %v", err)
+	}
+	want := map[string]string{
+		"linespecs/get_todo.linespec":  "get spec",
+		"linespecs/payloads/todo.yaml": "id: 1",
+	}
+	for path, wantContent := range want {
+		got, err := os.ReadFile(filepath.Join(dest, path))
+		if err != nil {
+			t.Errorf("missing file %s: %v", path, err)
+			continue
+		}
+		if string(got) != wantContent {
+			t.Errorf("file %s: got %q, want %q", path, got, wantContent)
+		}
+	}
+	// Files must not leak into the destination root.
+	if _, err := os.Stat(filepath.Join(dest, "get_todo.linespec")); !os.IsNotExist(err) {
+		t.Error("specs file should not be extracted into the destination root")
+	}
+	// The stripped manifest prefix must not survive under linespecs/.
+	if _, err := os.Stat(filepath.Join(dest, "linespecs", "linespec.manifest")); !os.IsNotExist(err) {
+		t.Error("linespec.manifest/ prefix should be stripped under linespecs/")
+	}
+}
+
+// TestExtractLayer_ProvenanceLandsFlat verifies the provenance layer is extracted
+// flat into provenance/ (no prefix stripping, behavior unchanged).
+func TestExtractLayer_ProvenanceLandsFlat(t *testing.T) {
+	files := map[string][]byte{
+		"prov-2026-aaa.yml": []byte("id: prov-2026-aaa"),
+	}
+	dest := t.TempDir()
+	if err := ExtractLayer("provenance", makeTar(files), dest); err != nil {
+		t.Fatalf("ExtractLayer provenance: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "provenance", "prov-2026-aaa.yml")); err != nil {
+		t.Errorf("expected provenance/prov-2026-aaa.yml: %v", err)
+	}
+}
+
+// TestExtractLayer_CodeAndPromptLandAtRoot verifies non-specs, non-provenance
+// layers continue to extract directly into the destination root.
+func TestExtractLayer_CodeAndPromptLandAtRoot(t *testing.T) {
+	for _, layer := range []string{"code", "prompt"} {
+		dest := t.TempDir()
+		files := map[string][]byte{
+			"main.go": []byte("package main"),
+		}
+		if err := ExtractLayer(layer, makeTar(files), dest); err != nil {
+			t.Fatalf("ExtractLayer %s: %v", layer, err)
+		}
+		if _, err := os.Stat(filepath.Join(dest, "main.go")); err != nil {
+			t.Errorf("%s layer: expected main.go at root: %v", layer, err)
+		}
+		if _, err := os.Stat(filepath.Join(dest, "linespecs")); !os.IsNotExist(err) {
+			t.Errorf("%s layer: should not create linespecs/", layer)
+		}
 	}
 }
