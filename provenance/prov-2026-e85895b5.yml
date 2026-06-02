@@ -1,6 +1,6 @@
 id: prov-2026-e85895b5
 title: Fix notification-service to reconnect after proxy resets connections (pool_pre_ping)
-status: open
+status: implemented
 created_at: "2026-06-02"
 author: calebcowen@gmail.com
 intent: |
@@ -42,7 +42,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-9b938965
-sealed_at_sha: ""
+sealed_at_sha: b8633f0b9eab1839cd23c1c42919de33cc2f364d
 associated_specs:
   - path: examples/notification-linespecs/get_notification_success.linespec
     type: linespec
