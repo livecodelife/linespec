@@ -11,8 +11,12 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://notification_user:notification_password@db:5432/notification_service"
 )
 
-# Create async engine
-engine = create_async_engine(DATABASE_URL, echo=True)
+# Create async engine.
+# pool_pre_ping issues a lightweight liveness check before handing out a pooled
+# connection, so a connection killed out-of-band (e.g. the LineSpec proxy calling
+# ResetConnections between tests) is transparently detected and replaced instead of
+# surfacing as a 500 on the next request.
+engine = create_async_engine(DATABASE_URL, echo=True, pool_pre_ping=True)
 
 # Create session factory
 AsyncSessionLocal = async_sessionmaker(
