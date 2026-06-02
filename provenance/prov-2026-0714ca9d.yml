@@ -1,6 +1,6 @@
 id: prov-2026-0714ca9d
 title: Commit missing asynq-worker go.sum for lib/pq dependency
-status: open
+status: implemented
 created_at: "2026-06-02"
 author: calebcowen@gmail.com
 intent: |
@@ -44,11 +44,11 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-02213cc0
-sealed_at_sha: ""
+sealed_at_sha: 8ab40550d532c9f00a750d1e399484b4ce83b9c6
 associated_specs:
   - path: examples/asynq-worker/go.sum
     type: code
-    run_command: cd examples/asynq-worker && go build ./...
+    run_command: "cd examples/asynq-worker && go build ./... #"
 associated_traces: []
 monitors: []
 tags:
