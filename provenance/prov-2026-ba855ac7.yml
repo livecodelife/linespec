@@ -1,0 +1,64 @@
+id: prov-2026-ba855ac7
+title: 'Fix clone: extract specs layer into linespecs/ directory instead of root'
+status: draft
+created_at: "2026-06-02"
+author: calebcowen@gmail.com
+intent: |
+  When `linespec clone` bootstraps a project from a manifest, the provenance layer is
+  correctly extracted into a dedicated provenance/ directory, but the specs layer (the
+  .linespec test files and their payloads) is extracted directly into the destination
+  root. This dumps loose .linespec files and payload directories alongside the project
+  files at the top level, which is messy and inconsistent with how provenance records
+  are cloned.
+
+  The fix makes the specs layer extract into a dedicated linespecs/ subdirectory of the
+  destination, mirroring the provenance/ convention. After the fix, a cloned project
+  directory should look like:
+    <manifest_name>/
+      provenance/
+        <id>.yml
+      linespecs/
+        <spec files and payload subdirectories>
+      .linespec.yml
+
+  This is scoped to the clone command only. The code and prompt layers retain their
+  current extraction behavior (extracted to the destination root), since they represent
+  service source and prompt artifacts that belong at the repo root, not test specs.
+constraints:
+  - |
+    The specs layer is extracted into a fixed linespecs/ subdirectory of the clone
+    destination (created if absent), not into the destination root.
+  - |
+    Within linespecs/, the existing common-top-level-prefix stripping behavior is
+    preserved so files do not end up double-nested (e.g. linespecs/linespec.manifest/...).
+  - |
+    Provenance layer extraction is unchanged — records continue to land flat in
+    provenance/.
+  - |
+    The code and prompt layers continue to extract to the destination root; only the
+    specs layer target changes.
+  - |
+    Tests must cover: specs layer lands under linespecs/ with prefix stripping applied,
+    and provenance/code/prompt targets are unaffected.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/manifest/**
+forbidden_scope: []
+type: bug
+extends: prov-2026-587563e4
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a6be4165
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/manifest/manifest_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - clone
+  - manifest
+  - extraction
+  - linespecs
