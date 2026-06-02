@@ -1,6 +1,6 @@
 id: prov-2026-d4538081
 title: Commit asynq-worker go.mod indirect block for reproducible readonly build
-status: draft
+status: open
 created_at: "2026-06-02"
 author: calebcowen@gmail.com
 intent: |
