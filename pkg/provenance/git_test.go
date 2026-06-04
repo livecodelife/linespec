@@ -9,14 +9,67 @@ import (
 	"testing"
 )
 
+// cleanGitEnv returns os.Environ() with all GIT_* variables removed so that
+// subprocess git commands are not misdirected by a parent git hook's GIT_DIR.
+func cleanGitEnv() []string {
+	env := os.Environ()
+	out := env[:0]
+	for _, e := range env {
+		if !strings.HasPrefix(e, "GIT_") {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // gitExec runs a git command in the given directory and fails the test on error.
 func gitExec(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Env = cleanGitEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+}
+
+// gitOutput runs a git command in the given directory and returns its stdout.
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = cleanGitEnv()
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// clearGitEnvForTest temporarily removes all GIT_* environment variables from
+// the process environment for the duration of the test. This prevents a parent
+// git hook's GIT_DIR or GIT_INDEX_FILE from misdirecting provenance functions
+// that spawn git subprocesses internally.
+func clearGitEnvForTest(t *testing.T) {
+	t.Helper()
+	type kv struct{ k, v string }
+	var saved []kv
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "GIT_") {
+			parts := strings.SplitN(e, "=", 2)
+			val := ""
+			if len(parts) == 2 {
+				val = parts[1]
+			}
+			os.Unsetenv(parts[0])
+			saved = append(saved, kv{parts[0], val})
+		}
+	}
+	t.Cleanup(func() {
+		for _, pair := range saved {
+			os.Setenv(pair.k, pair.v)
+		}
+	})
 }
 
 // makeProvRecord returns a minimal provenance record YAML string.
@@ -82,38 +135,18 @@ func setupSupersessionRepo(t *testing.T, oldID string) (string, string, string) 
 }
 
 func TestCheckForStaleScopeWarnings_MessageFormat(t *testing.T) {
-	// Create a temporary git repo
+	clearGitEnvForTest(t)
 	tmpDir, err := os.MkdirTemp("", "stale-scope-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to init git repo: %v", err)
-	}
+	gitExec(t, tmpDir, "init")
+	gitExec(t, tmpDir, "config", "user.email", "test@example.com")
+	gitExec(t, tmpDir, "config", "user.name", "Test User")
+	gitExec(t, tmpDir, "config", "commit.gpgsign", "false")
 
-	// Configure git user
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git email: %v", err)
-	}
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git name: %v", err)
-	}
-	cmd = exec.Command("git", "config", "commit.gpgsign", "false")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to disable commit signing: %v", err)
-	}
-
-	// Create a test file
 	testFile := filepath.Join(tmpDir, "pkg", "test.go")
 	if err := os.MkdirAll(filepath.Dir(testFile), 0755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
@@ -122,26 +155,10 @@ func TestCheckForStaleScopeWarnings_MessageFormat(t *testing.T) {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	// Make initial commit
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to add files: %v", err)
-	}
-	cmd = exec.Command("git", "commit", "-m", "Initial commit")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
+	gitExec(t, tmpDir, "add", ".")
+	gitExec(t, tmpDir, "commit", "-m", "Initial commit")
 
-	// Get the sealed SHA (current HEAD)
-	cmd = exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = tmpDir
-	sealedSHABytes, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to get HEAD SHA: %v", err)
-	}
-	sealedSHA := strings.TrimSpace(string(sealedSHABytes))
+	sealedSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
 
 	// Create a CommitChecker
 	git := NewGit(tmpDir)
@@ -208,6 +225,7 @@ func TestCheckForStaleScopeWarnings_MessageFormat(t *testing.T) {
 // TestCheckStaged_SupersessionTransition verifies that CheckStaged allows the old record
 // file to be staged when a new record with --supersedes is being committed.
 func TestCheckStaged_SupersessionTransition(t *testing.T) {
+	clearGitEnvForTest(t)
 	const oldID = "prov-2026-aaa00001"
 	const newID = "prov-2026-bbb00002"
 
@@ -257,6 +275,7 @@ func TestCheckStaged_SupersessionTransition(t *testing.T) {
 // TestCheckStaged_SupersessionTransition_WrongSupersededBy verifies that CheckStaged still
 // rejects the old record file when superseded_by points to a different record.
 func TestCheckStaged_SupersessionTransition_WrongSupersededBy(t *testing.T) {
+	clearGitEnvForTest(t)
 	const oldID = "prov-2026-aaa00003"
 	const newID = "prov-2026-bbb00004"
 	const otherID = "prov-2026-ccc00005"
@@ -313,6 +332,7 @@ func TestCheckStaged_SupersessionTransition_WrongSupersededBy(t *testing.T) {
 // TestCheckCommit_SupersessionTransition verifies that CheckCommit allows the old record
 // file in a historical supersession commit.
 func TestCheckCommit_SupersessionTransition(t *testing.T) {
+	clearGitEnvForTest(t)
 	const oldID = "prov-2026-aaa00006"
 	const newID = "prov-2026-bbb00007"
 
@@ -336,14 +356,7 @@ func TestCheckCommit_SupersessionTransition(t *testing.T) {
 	gitExec(t, tmpDir, "add", oldRelPath, newRelPath)
 	gitExec(t, tmpDir, "commit", "-m", "Supersede old record ["+newID+"]")
 
-	// Get the commit SHA
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = tmpDir
-	shaBytes, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("rev-parse HEAD: %v", err)
-	}
-	commitSHA := strings.TrimSpace(string(shaBytes))
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
 
 	loader := NewLoader(provDir, nil)
 	if err := loader.LoadAll(); err != nil {
@@ -364,6 +377,7 @@ func TestCheckCommit_SupersessionTransition(t *testing.T) {
 // TestCheckStaged_SupersessionTransition_OpenRecordRejected verifies that the supersession
 // exception does not fire when the old record is open (only implemented records may be superseded).
 func TestCheckStaged_SupersessionTransition_OpenRecordRejected(t *testing.T) {
+	clearGitEnvForTest(t)
 	const oldID = "prov-2026-aaa00010"
 	const newID = "prov-2026-bbb00011"
 
@@ -415,6 +429,7 @@ func TestCheckStaged_SupersessionTransition_OpenRecordRejected(t *testing.T) {
 // is allowed in a commit tagged with that record's ID, even when affected_scope is
 // set to specific files that do not include the record file itself.
 func TestCheckStaged_DraftSelfModification(t *testing.T) {
+	clearGitEnvForTest(t)
 	const draftID = "prov-2026-ddd00001"
 
 	tmpDir, err := os.MkdirTemp("", "draft-self-mod-test")
@@ -475,6 +490,7 @@ func TestCheckStaged_DraftSelfModification(t *testing.T) {
 // alongside a completion commit never triggers a scope violation, even when the record
 // has a restricted affected_scope that does not include the manifest.
 func TestCheckStaged_HashManifestExempt(t *testing.T) {
+	clearGitEnvForTest(t)
 	const recID = "prov-2026-hm00001"
 
 	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
@@ -524,6 +540,7 @@ func TestCheckStaged_HashManifestExempt(t *testing.T) {
 // TestCheckCommit_HashManifestExempt verifies that .linespec/hash_manifest.json in a
 // historical commit does not trigger a scope violation.
 func TestCheckCommit_HashManifestExempt(t *testing.T) {
+	clearGitEnvForTest(t)
 	const recID = "prov-2026-hm00002"
 
 	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
@@ -550,14 +567,7 @@ func TestCheckCommit_HashManifestExempt(t *testing.T) {
 	gitExec(t, tmpDir, "add", manifestRelPath)
 	gitExec(t, tmpDir, "commit", "-m", "Complete provenance record ["+recID+"]")
 
-	// Get the SHA of the commit we just made.
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = tmpDir
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("rev-parse HEAD: %v", err)
-	}
-	commitSHA := strings.TrimSpace(string(out))
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
 
 	loader := NewLoader(provDir, nil)
 	if err := loader.LoadAll(); err != nil {

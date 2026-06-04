@@ -1,6 +1,6 @@
 id: prov-2026-31955362
 title: 'Fix staticcheck findings: unused vars, deprecated API, error strings, simplifications'
-status: open
+status: implemented
 created_at: "2026-06-04"
 author: test@example.com
 intent: >
@@ -19,6 +19,7 @@ affected_scope:
   - pkg/dsl/dsl_test.go
   - pkg/provenance/formatter.go
   - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
   - pkg/provenance/linter.go
   - pkg/provenance/loader.go
   - pkg/runner/runner.go
@@ -28,7 +29,7 @@ implements: prov-2026-53a12672
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 26a5f111a6417b10e778032a4d5ded3051e982ba
 associated_specs:
   - type: go_test
     path: pkg/dsl/dsl_test.go
