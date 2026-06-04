@@ -17,34 +17,6 @@ func NewResultHandler() *ResultHandler {
 	return &ResultHandler{}
 }
 
-// SendResultSet sends a complete result set to the client
-func (r *ResultHandler) SendResultSet(conn net.Conn, columns []string, rows []map[string]interface{}) error {
-	// 1. Send RowDescription
-	if err := r.SendRowDescription(conn, columns); err != nil {
-		return fmt.Errorf("error sending row description: %w", err)
-	}
-
-	// 2. Send DataRows
-	for _, row := range rows {
-		if err := r.SendDataRow(conn, columns, row); err != nil {
-			return fmt.Errorf("error sending data row: %w", err)
-		}
-	}
-
-	// 3. Send CommandComplete
-	cmdTag := fmt.Sprintf("SELECT %d", len(rows))
-	if _, err := conn.Write(CreateCommandComplete(cmdTag)); err != nil {
-		return fmt.Errorf("error sending command complete: %w", err)
-	}
-
-	// 4. Send ReadyForQuery
-	if _, err := conn.Write(CreateReadyForQuery('I')); err != nil {
-		return fmt.Errorf("error sending ready for query: %w", err)
-	}
-
-	return nil
-}
-
 // SendEmptyResultSet sends an empty result set
 func (r *ResultHandler) SendEmptyResultSet(conn net.Conn, columns []string) error {
 	// Send RowDescription
@@ -222,13 +194,6 @@ func oidForColumn(col string) (uint32, int) {
 // choose binary vs text format per column (legacy behaviour).
 func (r *ResultHandler) SendDataRow(conn net.Conn, columns []string, values map[string]interface{}) error {
 	return r.sendDataRowInternal(conn, columns, values, nil)
-}
-
-// SendDataRowTextOnly sends all column values in text format.
-// Use this when the RowDescription was already sent by the real upstream and
-// you cannot change the per-column format codes.
-func (r *ResultHandler) SendDataRowTextOnly(conn net.Conn, columns []string, values map[string]interface{}) error {
-	return r.sendDataRowInternal(conn, columns, values, []int16{0})
 }
 
 // SendDataRowWithFormats sends a DataRow honouring the per-column result
