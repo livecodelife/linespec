@@ -1,0 +1,39 @@
+id: prov-2026-66472f50
+title: Remove dead code from PostgreSQL proxy and base packages
+status: draft
+created_at: "2026-06-04"
+author: test@example.com
+intent: >
+  Delete all functions confirmed unreachable by staticcheck (U1000) and deadcode in
+  pkg/proxy/postgresql/proxy.go, protocol.go, result.go, startup.go, and
+  pkg/proxy/base/base.go and connection.go. These are superseded implementation
+  strata from earlier proxy designs. Only functions that are unreachable from the
+  live code path are removed.
+constraints:
+  - Do not modify any function that is currently called from the live execution path
+  - All proxy unit tests must still pass after removal
+  - All linespec example test suites must still pass
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/protocol.go
+  - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/startup.go
+  - pkg/proxy/base/base.go
+  - pkg/proxy/base/connection.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-c013b085
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/postgresql/proxy_startup_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/proxy/base/database_proxy_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
