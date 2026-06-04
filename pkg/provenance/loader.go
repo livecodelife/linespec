@@ -128,12 +128,7 @@ func (l *Loader) BuildGraph() error {
 		}
 
 		// Validate related references
-		for _, relatedID := range record.Related {
-			if _, exists := l.RecordsByID[relatedID]; !exists {
-				// Don't fail for missing related records, just log a warning later
-				// Related is informational only
-			}
-		}
+
 	}
 
 	return nil

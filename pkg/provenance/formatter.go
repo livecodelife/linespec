@@ -1179,10 +1179,7 @@ func (f *Formatter) FormatContextJSON(result *ContextResult) error {
 
 	// Convert conflicts
 	for _, conflict := range result.Conflicts {
-		jsonResult.Conflicts = append(jsonResult.Conflicts, JSONScopeConflict{
-			File:      conflict.File,
-			RecordIDs: conflict.RecordIDs,
-		})
+		jsonResult.Conflicts = append(jsonResult.Conflicts, JSONScopeConflict(conflict))
 	}
 
 	encoder := json.NewEncoder(f.Output)

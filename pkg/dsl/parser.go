@@ -162,7 +162,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 	} else if reReceiveJob.MatchString(receiveToken.Literal) {
 		spec.Receive.Channel = types.Job
 	} else {
-		return nil, fmt.Errorf("Invalid RECEIVE format at line %d: %s", receiveToken.Line, receiveToken.Literal)
+		return nil, fmt.Errorf("invalid RECEIVE format at line %d: %s", receiveToken.Line, receiveToken.Literal)
 	}
 
 	if p.peek().Type == TokenWith {
@@ -178,7 +178,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		timeoutToken := p.consume()
 		d, err := time.ParseDuration(timeoutToken.Literal)
 		if err != nil {
-			return nil, fmt.Errorf("Invalid TIMEOUT value at line %d: %q (use Go duration syntax, e.g. 5m, 30s)", timeoutToken.Line, timeoutToken.Literal)
+			return nil, fmt.Errorf("invalid TIMEOUT value at line %d: %q (use Go duration syntax, e.g. 5m, 30s)", timeoutToken.Line, timeoutToken.Literal)
 		}
 		spec.Timeout = d
 	}
@@ -205,7 +205,7 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 
 		mStatus := reRespondStatus.FindStringSubmatch(respondToken.Literal)
 		if mStatus == nil {
-			return nil, fmt.Errorf("Invalid RESPOND format at line %d: %s", respondToken.Line, respondToken.Literal)
+			return nil, fmt.Errorf("invalid RESPOND format at line %d: %s", respondToken.Line, respondToken.Literal)
 		}
 
 		statusCode, _ := strconv.Atoi(mStatus[1])
@@ -532,7 +532,7 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		channelPart == "WRITE:POSTGRESQL" || channelPart == "READ:POSTGRESQL" ||
 		channelPart == "WRITE:MONGODB" || channelPart == "READ:MONGODB"
 	if len(parts) < 2 && !isDBChannel {
-		return nil, fmt.Errorf("Invalid EXPECT channel format at line %d: %s", line, value)
+		return nil, fmt.Errorf("invalid EXPECT channel format at line %d: %s", line, value)
 	}
 
 	if m := reExpectHTTP.FindStringSubmatch(channelPart); m != nil {
@@ -610,7 +610,7 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 		}, nil
 	}
 
-	return nil, fmt.Errorf("Unrecognized EXPECT channel at line %d: %s", line, channelPart)
+	return nil, fmt.Errorf("unrecognized EXPECT channel at line %d: %s", line, channelPart)
 }
 
 func parseVerifyRule(value string, line int) (*types.VerifyRule, error) {
@@ -724,5 +724,5 @@ func parseVerifyRule(value string, line int) (*types.VerifyRule, error) {
 		return &types.VerifyRule{Type: "MATCHES", Target: "command", Pattern: m[1]}, nil
 	}
 
-	return nil, fmt.Errorf("Invalid VERIFY format at line %d: %s", line, value)
+	return nil, fmt.Errorf("invalid VERIFY format at line %d: %s", line, value)
 }

@@ -644,28 +644,16 @@ func generateSamplePaths(pattern string) []string {
 
 	// For glob patterns, replace wildcards with plausible values
 	path := pattern
-	if strings.Contains(path, "**") {
-		path = strings.Replace(path, "**", "pkg/module", 1)
-	}
-	if strings.Contains(path, "*") {
-		path = strings.Replace(path, "*", "file", 1)
-	}
-	if strings.Contains(path, "?") {
-		path = strings.Replace(path, "?", "f", 1)
-	}
+	path = strings.Replace(path, "**", "pkg/module", 1)
+	path = strings.Replace(path, "*", "file", 1)
+	path = strings.Replace(path, "?", "f", 1)
 	samples = append(samples, path)
 
 	// Also try with different replacements
 	path2 := pattern
-	if strings.Contains(path2, "**") {
-		path2 = strings.Replace(path2, "**", "src/sub", 1)
-	}
-	if strings.Contains(path2, "*") {
-		path2 = strings.Replace(path2, "*", "test", 1)
-	}
-	if strings.Contains(path2, "?") {
-		path2 = strings.Replace(path2, "?", "t", 1)
-	}
+	path2 = strings.Replace(path2, "**", "src/sub", 1)
+	path2 = strings.Replace(path2, "*", "test", 1)
+	path2 = strings.Replace(path2, "?", "t", 1)
 	samples = append(samples, path2)
 
 	return samples

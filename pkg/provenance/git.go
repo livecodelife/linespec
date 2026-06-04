@@ -626,28 +626,6 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 	return violations, nil
 }
 
-// loadStagedRecord loads a record from the staged version of a file
-func (c *CommitChecker) loadStagedRecord(filePath string) (*Record, error) {
-	// Read the staged content using git show
-	cmd := exec.Command("git", "show", ":"+filePath)
-	if c.Git.RepoRoot != "" {
-		cmd.Dir = c.Git.RepoRoot
-	}
-
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read staged file: %w", err)
-	}
-
-	// Parse the YAML
-	var record Record
-	if err := yaml.Unmarshal(output, &record); err != nil {
-		return nil, fmt.Errorf("failed to parse staged record: %w", err)
-	}
-
-	return &record, nil
-}
-
 // isCompletionTransition checks if the file is transitioning from open to implemented
 // by comparing the HEAD version with the staged version
 func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {

@@ -67,7 +67,6 @@ type TestSuite struct {
 	cwd             string
 	tempDir         string                            // Temp directory for shared files like schema cache
 	serviceConfigs  map[string]*config.LineSpecConfig // Discovered service configurations
-	defaultDBConfig *config.DatabaseConfig            // Default database configuration for shared infrastructure
 	containerNaming    *config.ContainerNaming           // Container naming configuration
 	sharedSchemaJSON []byte // Raw JSON schema written to per-test tempDir and passed to MySQL proxies via --schema-file
 	persistentContainers map[string]*persistentServiceContainers
@@ -242,7 +241,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		_, err = s.orch.StartContainer(ctx, &container.Config{
 			Image: "mysql:8.4",
 			Env: []string{
-				fmt.Sprintf("MYSQL_ROOT_PASSWORD=rootpassword"),
+				"MYSQL_ROOT_PASSWORD=rootpassword",
 				fmt.Sprintf("MYSQL_DATABASE=%s", dbConfig.Database),
 				fmt.Sprintf("MYSQL_USER=%s", dbConfig.Username),
 				fmt.Sprintf("MYSQL_PASSWORD=%s", dbConfig.Password),
@@ -388,7 +387,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	// Wait for Kafka to be ready (actual TCP connection check)
 	logger.Debug("Waiting for Kafka to be ready")
 	if err := s.orch.WaitTCPInternal(ctx, s.networkName, "localhost:"+kafkaHostPort, 60*time.Second); err != nil {
-		return fmt.Errorf("Kafka not ready: %w", err)
+		return fmt.Errorf("kafka not ready: %w", err)
 	}
 	s.kafkaReady = true
 
@@ -2607,27 +2606,6 @@ type ColumnInfo struct {
 	Comment    string         `json:"Comment"`
 }
 
-// extractTableNamesFromSpec extracts table names from EXPECT statements in the spec
-func extractTableNamesFromSpec(spec *types.TestSpec) []string {
-	tableMap := make(map[string]bool)
-
-	for _, expect := range spec.Expects {
-		switch expect.Channel {
-		case types.ReadMySQL, types.WriteMySQL:
-			if expect.Table != "" {
-				tableMap[expect.Table] = true
-			}
-		}
-	}
-
-	// Convert map to slice
-	tables := make([]string, 0, len(tableMap))
-	for table := range tableMap {
-		tables = append(tables, table)
-	}
-
-	return tables
-}
 
 // fetchSchemaFromDatabase queries the real database for schema of specified tables
 func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string, dbHost, dbPort, dbUser, dbPass, dbName string) (SchemaCache, error) {
