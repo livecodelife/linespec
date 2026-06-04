@@ -33,7 +33,16 @@ superseded_by: ""
 related:
   - prov-2026-c013b085
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: go_test
+    path: pkg/dsl/dsl_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/provenance/linter_test.go
+    run_command: make test
+  - type: code
+    path: pkg/runner/runner.go
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
