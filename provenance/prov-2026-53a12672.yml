@@ -1,0 +1,41 @@
+id: prov-2026-53a12672
+title: Staticcheck code quality fixes
+status: draft
+created_at: "2026-06-04"
+author: test@example.com
+intent: >
+  Fix all remaining staticcheck findings across the codebase excluding the PostgreSQL
+  proxy dead code (covered by prov-2026-c013b085). Issues include: unused variables
+  and struct fields (U1000/SA4006), deprecated Docker API usage (SA1019), error strings
+  that should not be capitalized (ST1005), code that can use unconditional strings.Replace
+  (S1017), a type conversion that should use a named conversion instead of struct literal
+  (S1016), an unnecessary fmt.Sprintf call (S1039), and unused functions outside the proxy
+  packages also caught by deadcode. Goal is a clean staticcheck ./... run.
+constraints:
+  - All existing unit tests (make test) must continue to pass
+  - All linespec example suite tests must continue to pass
+  - Fixes must be semantically equivalent — no behavior changes, only code quality
+  - Do not remove exported functions that form a public API surface (keep pkg/embeddings, pkg/logger, pkg/manifest exports)
+  - Only remove unexported or clearly-internal dead code functions
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/docker/orchestrator.go
+  - pkg/dsl/parser.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/git.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/loader.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c013b085
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - maintenance
+  - staticcheck
