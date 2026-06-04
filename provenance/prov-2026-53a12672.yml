@@ -24,6 +24,7 @@ affected_scope:
   - pkg/dsl/dsl_test.go
   - pkg/provenance/formatter.go
   - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
   - pkg/provenance/linter.go
   - pkg/provenance/loader.go
   - pkg/runner/runner.go
