@@ -480,8 +480,8 @@ RESPOND HTTP:200`
 		t.Error("Expected parse to fail with invalid VERIFY syntax, but it succeeded")
 	}
 
-	if !strings.Contains(err.Error(), "VERIFY") || !strings.Contains(err.Error(), "Invalid") {
-		t.Errorf("Expected error message to mention 'Invalid VERIFY', got: %v", err)
+	if !strings.Contains(err.Error(), "VERIFY") || !strings.Contains(err.Error(), "invalid") {
+		t.Errorf("Expected error message to mention 'invalid VERIFY', got: %v", err)
 	}
 }
 

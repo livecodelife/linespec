@@ -11,6 +11,7 @@ import (
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -41,7 +42,7 @@ func (d *DockerOrchestrator) RemoveNetwork(ctx context.Context, id string) error
 }
 
 func (d *DockerOrchestrator) PullImage(ctx context.Context, imageName string) error {
-	reader, err := d.cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
+	reader, err := d.cli.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return err
 	}
