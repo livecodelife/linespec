@@ -1,6 +1,6 @@
 id: prov-2026-66472f50
 title: Remove dead code from PostgreSQL proxy and base packages
-status: open
+status: implemented
 created_at: "2026-06-04"
 author: test@example.com
 intent: >
@@ -26,7 +26,7 @@ implements: prov-2026-c013b085
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 4f12439994db5d3aa1d4d1145cbdbc559aa67c08
 associated_specs:
   - type: go_test
     path: pkg/proxy/postgresql/proxy_startup_test.go
