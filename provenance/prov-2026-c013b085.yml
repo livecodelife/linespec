@@ -1,0 +1,38 @@
+id: prov-2026-c013b085
+title: PostgreSQL proxy dead code compaction
+status: draft
+created_at: "2026-06-04"
+author: test@example.com
+intent: >
+  Remove the large body of unreachable/unused functions in pkg/proxy/postgresql/
+  that accumulated during iterative proxy implementation. Both staticcheck (U1000)
+  and deadcode report 40+ unused methods across proxy.go, protocol.go, result.go,
+  startup.go, and the pkg/proxy/base/ shared connection layer. These are superseded
+  implementation strata from earlier proxy designs that are no longer called. Removing
+  them reduces the file from ~4700 lines to only the live code paths, making the
+  proxy implementation maintainable and navigable.
+constraints:
+  - All existing integration tests (make test-integration, make test-integration-mysql, make test-integration-postgres) must continue to pass
+  - All linespec example suite tests must continue to pass after removal
+  - Only delete functions confirmed unreachable by both staticcheck and/or deadcode; do not delete any function that might be reachable under beta build tag
+  - The live proxy connection path (the functions actually called during test execution) must not be modified
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/protocol.go
+  - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/startup.go
+  - pkg/proxy/base/base.go
+  - pkg/proxy/base/connection.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-53a12672
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - maintenance
+  - compaction
