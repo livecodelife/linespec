@@ -21,6 +21,7 @@ affected_scope:
   - cmd/linespec/main_stable.go
   - pkg/docker/orchestrator.go
   - pkg/dsl/parser.go
+  - pkg/dsl/dsl_test.go
   - pkg/provenance/formatter.go
   - pkg/provenance/git.go
   - pkg/provenance/linter.go
