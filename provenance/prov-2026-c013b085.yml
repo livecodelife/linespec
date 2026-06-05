@@ -1,6 +1,6 @@
 id: prov-2026-c013b085
 title: PostgreSQL proxy dead code compaction
-status: open
+status: implemented
 created_at: "2026-06-04"
 author: test@example.com
 intent: >
@@ -30,7 +30,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-53a12672
-sealed_at_sha: ""
+sealed_at_sha: 0a431d3ebaf6cb0501ee6e8bd652d189c1d8be93
 associated_specs:
   - type: go_test
     path: pkg/proxy/postgresql/proxy_startup_test.go
