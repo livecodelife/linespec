@@ -1,6 +1,6 @@
 id: prov-2026-fb664a1b
 title: Fix integer overflow in writeMessage allocation
-status: open
+status: implemented
 created_at: "2026-06-09"
 author: test@example.com
 intent: >
@@ -17,7 +17,7 @@ implements: prov-2026-c013b085
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: fc3c974db6687c086c76ea26d8f720ced31bc204
 associated_specs:
   - type: go_test
     path: pkg/proxy/postgresql/proxy_startup_test.go
