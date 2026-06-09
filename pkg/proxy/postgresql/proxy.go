@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -948,6 +949,9 @@ func (p *Proxy) createCommandCompleteTag(sql string, rowCount int) string {
 
 // writeMessage writes a message to the connection
 func (p *Proxy) writeMessage(conn net.Conn, msgType byte, payload []byte) error {
+	if len(payload) > math.MaxUint32-4 {
+		return fmt.Errorf("postgresql: message too large (%d bytes)", len(payload))
+	}
 	length := uint32(len(payload) + 4)
 
 	msg := make([]byte, 0, 1+4+len(payload))
