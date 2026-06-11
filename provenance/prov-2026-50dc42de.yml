@@ -1,6 +1,6 @@
 id: prov-2026-50dc42de
 title: Quality gate script, pre-push hook, and Makefile targets
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -35,7 +35,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 11a0edbf8d4882755d37ffd35c55d11aa042f7b5
 associated_specs:
   - path: scripts/go-quality.sh
     type: code
