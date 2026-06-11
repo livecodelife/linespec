@@ -1,6 +1,6 @@
 id: prov-2026-da5fd142
 title: Fix embeddings workflow for branch protection compatibility
-status: implemented
+status: superseded
 created_at: "2026-04-03"
 author: calebcowen@gmail.com
 intent: >
@@ -14,7 +14,7 @@ affected_scope:
   - .github/workflows/index-provenance.yml
 forbidden_scope: []
 supersedes: prov-2026-c5facf10
-superseded_by: ""
+superseded_by: prov-2026-65782c0e
 related:
   - prov-2026-940c45c8
 sealed_at_sha: a4e39b8dcd4083aa0371fc157d67b235c2c8fd7d
