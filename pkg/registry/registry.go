@@ -67,17 +67,6 @@ func (r *MockRegistry) SetVarTypes(types map[string]string) {
 	r.varTypes = types
 }
 
-// GetVarTypes returns a copy of the declared variable types.
-func (r *MockRegistry) GetVarTypes() map[string]string {
-	r.RLock()
-	defer r.RUnlock()
-	out := make(map[string]string, len(r.varTypes))
-	for k, v := range r.varTypes {
-		out[k] = v
-	}
-	return out
-}
-
 // SeedTopic adds a raw payload to be served to Kafka consumers on a given topic.
 func (r *MockRegistry) SeedTopic(topic string, value []byte) {
 	r.Lock()
@@ -104,19 +93,6 @@ func (r *MockRegistry) SeedRedisQueue(key string, value []byte) {
 	r.Lock()
 	defer r.Unlock()
 	r.redisSeeds[key] = append(r.redisSeeds[key], value)
-}
-
-// GetRedisSeeds returns a copy of all seeded Redis queue payloads.
-func (r *MockRegistry) GetRedisSeeds() map[string][][]byte {
-	r.RLock()
-	defer r.RUnlock()
-	out := make(map[string][][]byte, len(r.redisSeeds))
-	for key, msgs := range r.redisSeeds {
-		cp := make([][]byte, len(msgs))
-		copy(cp, msgs)
-		out[key] = cp
-	}
-	return out
 }
 
 // PopRedisSeed atomically removes and returns the first seeded payload for key, or nil.
@@ -149,13 +125,6 @@ func (r *MockRegistry) ClearState() {
 	r.hits = make(map[*types.ExpectStatement]int)
 	r.passthroughs = make([]string, 0)
 	r.verifyErrors = make([]string, 0)
-}
-
-// ToBytes serialises the registry mocks and seeds to JSON.
-func (r *MockRegistry) ToBytes() ([]byte, error) {
-	r.RLock()
-	defer r.RUnlock()
-	return json.Marshal(registryFile{Mocks: r.mocks, Seeds: r.seeds, RedisSeeds: r.redisSeeds})
 }
 
 // LoadFromBytes replaces the registry contents from JSON bytes (same format as SaveToFile).
@@ -237,13 +206,6 @@ func (r *MockRegistry) AddVerifyErrors(errors []string) {
 	r.Lock()
 	defer r.Unlock()
 	r.verifyErrors = append(r.verifyErrors, errors...)
-}
-
-// IncrementHit increments the hit count for a specific mock (thread-safe)
-func (r *MockRegistry) IncrementHit(mock *types.ExpectStatement) {
-	r.Lock()
-	defer r.Unlock()
-	r.hits[mock]++
 }
 
 func (r *MockRegistry) Register(spec *types.TestSpec) {
@@ -784,38 +746,6 @@ func (r *MockRegistry) FindHTTPMock(url string, method string) (*types.ExpectSta
 			continue
 		}
 		if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
-			r.hits[mock]++
-			return mock, true
-		}
-	}
-
-	return nil, false
-}
-
-// FindHTTPMockWithHeaders finds an HTTP mock matching URL, method, and headers
-func (r *MockRegistry) FindHTTPMockWithHeaders(url string, method string, headers map[string]string) (*types.ExpectStatement, bool) {
-	r.Lock()
-	defer r.Unlock()
-
-	mocks, ok := r.mocks[url]
-	if !ok {
-		return nil, false
-	}
-
-	for _, mock := range mocks {
-		if mock.Negative {
-			continue
-		}
-		if r.hits[mock] > 0 {
-			continue
-		}
-		if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
-			// Check if headers match (if mock has header expectations)
-			if len(mock.Headers) > 0 {
-				if !r.matchHeaders(mock.Headers, headers) {
-					continue
-				}
-			}
 			r.hits[mock]++
 			return mock, true
 		}

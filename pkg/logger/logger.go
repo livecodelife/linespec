@@ -52,14 +52,6 @@ func SetLevel(level Level) {
 	globalLevel = level
 }
 
-// SetOutput sets the output writers
-func SetOutput(stdout, stderr io.Writer) {
-	mu.Lock()
-	defer mu.Unlock()
-	globalOutput = stdout
-	globalErrorOut = stderr
-}
-
 // IsDebug returns true if debug mode is enabled
 func IsDebug() bool {
 	mu.RLock()

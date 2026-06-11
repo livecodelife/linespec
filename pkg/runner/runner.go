@@ -804,30 +804,6 @@ func (s *TestSuite) waitForDBInit(ctx context.Context) error {
 	return fmt.Errorf("timeout waiting for DB initialization")
 }
 
-func (s *TestSuite) ResetDatabase(ctx context.Context) error {
-	if s.dbHostPort == "" {
-		return nil
-	}
-
-	dbConfig := s.getSharedDatabaseConfig()
-	if dbConfig == nil {
-		return nil
-	}
-
-	// For now, we'll just re-run init.sql by executing it via mysql client in the container
-	resetSQL := fmt.Sprintf(`
-SET FOREIGN_KEY_CHECKS = 0;
-SELECT CONCAT('TRUNCATE TABLE ', table_name, ';') 
-FROM information_schema.tables 
-WHERE table_schema = '%s' AND table_type = 'BASE TABLE';
-SET FOREIGN_KEY_CHECKS = 1;
-`, dbConfig.Database)
-
-	_ = resetSQL // We'll implement this if needed, for now rely on clean test data
-
-	return nil
-}
-
 func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, serviceDir string, migrationCmd []string, cfg *config.LineSpecConfig) error {
 	containerName := s.containerNaming.GetMigrateContainer(config.ContainerNameParams{ServiceName: serviceName})
 
@@ -2883,16 +2859,4 @@ func (s *TestSuite) truncateMongoDBCollections(ctx context.Context, dbConfig *co
 		}
 	}
 	return nil
-}
-
-// Deprecated: Use NewTestSuite instead
-func NewRunner() (*Runner, error) {
-	return nil, fmt.Errorf("NewRunner is deprecated, use NewTestSuite instead")
-}
-
-// Deprecated: Use TestSuite.RunTest instead
-type Runner struct{}
-
-func (r *Runner) RunTest(ctx context.Context, specPath string) error {
-	return fmt.Errorf("Runner.RunTest is deprecated, use TestSuite.RunTest instead")
 }
