@@ -24,7 +24,37 @@ go test -tags integration ./pkg/proxy/postgresql/... -v
 
 # Lint
 make lint                # Runs: ./linespec provenance lint
+
+# Code quality (Go)
+make quality             # staticcheck (hard) + deadcode (hard) + dupl (warn)
+make install-hooks-quality  # Install the pre-push code-quality hook
 ```
+
+## Code Quality
+
+A code-quality gate keeps the codebase compact by blocking dead code and lint
+regressions before they are pushed. It runs as a **pre-push** git hook and as
+the `code-quality` CI job; both delegate to the single script
+`scripts/go-quality.sh`.
+
+- **staticcheck** `./...` — hard gate; any finding blocks the push.
+- **deadcode** — hard gate, but only on functions unreachable in *every* build
+  configuration. The script runs deadcode across `default`, `-test`,
+  `-test -tags beta`, `-test -tags integration`, and
+  `-test -tags 'integration beta'`, then reports the intersection. A function
+  used only by tests or only under a build tag is therefore treated as live,
+  not dead. Remove genuinely-dead functions (or wire up a caller) to pass.
+- **dupl** — warn only; reports copy-paste duplication but never blocks.
+
+Run `make install-hooks-quality` once per clone/worktree to install the
+pre-push hook (`.git/hooks` is not version-controlled). The hook is separate
+from the linespec-managed pre-commit/commit-msg hooks, so `linespec
+install-hooks` never overwrites it. Missing tools are installed automatically
+via `go install`.
+
+Env overrides for `scripts/go-quality.sh`: `QUALITY_DEADCODE=warn` (downgrade
+deadcode to warn-only), `QUALITY_SKIP_DUPL=1` (skip duplication),
+`DUPL_THRESHOLD=<n>` (dupl token threshold, default 75).
 
 ## Provenance Records
 
