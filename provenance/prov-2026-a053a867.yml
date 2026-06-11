@@ -1,6 +1,6 @@
 id: prov-2026-a053a867
 title: 'Advice engine design: pure Advise(NextState) with ordered precedence (Phase 2a)'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -48,7 +48,10 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/next_test.go
+    type: go_test
+    run_command: make test # {{path}}
 associated_traces: []
 monitors: []
 tags:
