@@ -1,6 +1,6 @@
 id: prov-2026-a241eaa6
 title: 'Go code-quality git hooks: staticcheck, deadcode, dupl'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -86,7 +86,13 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: scripts/go-quality.sh
+    type: code
+    run_command: ./scripts/go-quality.sh
+  - path: Makefile
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
