@@ -481,7 +481,24 @@ RETURNS {{orders_with_user.yaml}}</code></pre>
 [HEADERS
   <header_name>: <header_value>
   ...]
-RETURNS {{<response_body>}}</code></pre>
+[WITH {{<request_body>}}]
+RETURNS {{<response_body>}}
+[RESPONSE_HEADERS
+  <header_name>: <header_value>
+  ...]</code></pre>
+                    </div>
+                    <p><code>WITH</code> on an EXPECT asserts the <strong>outbound request body</strong> the service sends to the dependency — it is <em>not</em> the response. <code>RETURNS</code> is the mocked response. Assert that the service calls a downstream service with a specific request body:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>LineSpec</span>
+                        </div>
+                        <pre><code>EXPECT HTTP:POST http://payment-service.local/charge
+HEADERS
+  Idempotency-Key: ${KEY}        # matched against the actual request headers
+WITH {{payloads/charge_request.json}}   # the request body must match this
+RETURNS {{payloads/charge_response.json}}   # mocked response body
+RESPONSE_HEADERS
+  Content-Type: application/json</code></pre>
                     </div>
                     <p><strong>Simulating dependency failures:</strong></p>
                     <div class="code-block">
@@ -492,21 +509,22 @@ RETURNS {{<response_body>}}</code></pre>
 EXPECT HTTP:GET http://user-service.local/users/42
 RETURNS ERROR
 
-# Return a non-200 HTTP status from the dependency
+# Return a non-200 HTTP status (no body)
 EXPECT HTTP:POST http://payment-service.local/charge
 RETURNS HTTP:429
 
-# Non-200 status with a response body
+# Non-200 status WITH a response body: put a `status` field in the RETURNS payload
 EXPECT HTTP:GET http://auth-service.local/validate
-RETURNS HTTP:401
-WITH {{payloads/auth_error.json}}</code></pre>
+RETURNS {{payloads/auth_error.json}}   # auth_error.json contains `status: 401` plus the body</code></pre>
                     </div>
                     <p><strong>Rules:</strong></p>
                     <ul>
                         <li>RETURNS is required for HTTP expectations; use <code>{{file}}</code>, <code>ERROR</code>, <code>ERROR &lt;code&gt;</code>, or <code>HTTP:NNN</code></li>
+                        <li><code>WITH {{file}}</code> is optional and matches the <strong>outbound request body</strong>; omit it to match any body for that method/URL</li>
                         <li><code>RETURNS ERROR</code> closes the TCP connection immediately — the service sees an <code>io.EOF</code></li>
-                        <li><code>RETURNS HTTP:NNN</code> sends the given status code; combine with <code>WITH {{file}}</code> for a response body</li>
+                        <li><code>RETURNS HTTP:NNN</code> sends just the status code (no body). To return a non-200 <strong>with</strong> a body, use <code>RETURNS {{file}}</code> and include a <code>status:</code> field in that payload</li>
                         <li>HEADERS is optional; headers are matched against the actual request</li>
+                        <li><code>RESPONSE_HEADERS</code> is optional; it sets explicit headers on the mocked response. Without it, <code>Content-Type</code> is inferred from the payload file extension (<code>.json</code> → <code>application/json</code>, <code>.yaml</code>/<code>.yml</code> → <code>application/yaml</code>, <code>.xml</code> → <code>application/xml</code>)</li>
                         <li>The proxy intercepts calls to the hostname and returns the mocked response</li>
                         <li>Tests fail if the HTTP mock is defined but not invoked</li>
                     </ul>
@@ -559,7 +577,6 @@ RETURNS {{&lt;response_file&gt;}}</code></pre>
   ...]
 [WITH {{&lt;input_payload&gt;}}]
 [RETURNS {{&lt;write_result_file&gt;}}]
-[NO TRANSACTION]
 [VERIFY query CONTAINS '&lt;string&gt;']
 [VERIFY query NOT_CONTAINS '&lt;string&gt;']
 [VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
@@ -577,7 +594,6 @@ RETURNS {{&lt;response_file&gt;}}</code></pre>
 """]
 [WITH {{&lt;input_payload&gt;}}]
 [RETURNS {{&lt;write_result_file&gt;}}]
-[NO TRANSACTION]
 [VERIFY query CONTAINS '&lt;string&gt;']
 [VERIFY query NOT_CONTAINS '&lt;string&gt;']
 [VERIFY query MATCHES /&lt;regex&gt;/]</code></pre>
@@ -608,7 +624,6 @@ RETURNS {{order_update_result.yaml}}</code></pre>
                     <ul>
                         <li><code>WITH</code> is optional</li>
                         <li><code>RETURNS</code> is optional. Omitting it defaults to <code>affected_rows=0, last_insert_id=0</code></li>
-                        <li><code>NO TRANSACTION</code> is parsed but has no effect (transactions pass through)</li>
                         <li><code>VERIFY</code> clauses validate the actual SQL executed at runtime</li>
                     </ul>
 
@@ -681,7 +696,7 @@ EXPECT READ:REDIS &lt;COMMAND&gt; &lt;key&gt;
 RETURNS EMPTY</code></pre>
                     </div>
 
-                    <p><strong>Supported read commands:</strong> <code>GET</code>, <code>MGET</code>, <code>HGET</code>, <code>HGETALL</code>, <code>HMGET</code>, <code>LRANGE</code>, <code>LLEN</code>, <code>SMEMBERS</code>, <code>SISMEMBER</code>, <code>ZRANGE</code>, <code>ZRANGEBYSCORE</code>, <code>EXISTS</code>, <code>TTL</code>, <code>TYPE</code>, <code>KEYS</code>, <code>STRLEN</code>, <code>LINDEX</code></p>
+                    <p><strong>Supported read commands:</strong> <code>GET</code>, <code>MGET</code>, <code>HGET</code>, <code>HGETALL</code>, <code>HMGET</code>, <code>LRANGE</code>, <code>LLEN</code>, <code>SMEMBERS</code>, <code>SISMEMBER</code>, <code>ZRANGE</code>, <code>ZRANGEBYSCORE</code>, <code>EXISTS</code>, <code>TTL</code>, <code>TYPE</code>, <code>KEYS</code>, <code>STRLEN</code>, <code>LINDEX</code>, <code>BRPOP</code>, <code>BLPOP</code>, <code>LPOP</code> (the blocking/pop commands also seed Redis-backed background-job workers — see <code>RECEIVE JOB</code>)</p>
 
                     <p><strong>Rules:</strong></p>
                     <ul>
@@ -878,7 +893,7 @@ service:
 
                 <section id="verify" class="docs-section">
                     <h2>VERIFY Clause</h2>
-                    <p>The <code>VERIFY</code> clause validates the actual query or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, and Redis EXPECT statements.</p>
+                    <p>The <code>VERIFY</code> clause validates the actual query, request, message, or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, HTTP, Kafka/EVENT, gRPC, and Redis EXPECT statements.</p>
 
                     <p><strong>Use cases include:</strong></p>
                     <ul>
@@ -895,6 +910,9 @@ service:
                         </thead>
                         <tbody>
                             <tr><td>MySQL / PostgreSQL</td><td><code>query</code></td></tr>
+                            <tr><td>HTTP</td><td><code>headers.&lt;name&gt;</code>, <code>body</code>, <code>url</code>, <code>path</code></td></tr>
+                            <tr><td>Kafka / EVENT / MESSAGE</td><td><code>key</code>, <code>value</code>, <code>headers.&lt;name&gt;</code></td></tr>
+                            <tr><td>gRPC</td><td><code>request_body</code>, <code>metadata.&lt;name&gt;</code></td></tr>
                             <tr><td>Redis</td><td><code>command</code>, <code>key</code>, <code>value</code></td></tr>
                         </tbody>
                     </table>
@@ -976,6 +994,7 @@ RESPOND HTTP:204</code></pre>
 <raw-sql-query>
 """]</code></pre>
                     </div>
+                    <p><code>EXPECT_NOT</code> and <code>EXPECT NOT</code> (space form) are equivalent. Negative expectations are enforced for the SQL and MongoDB stores: <code>READ:MYSQL</code>/<code>WRITE:MYSQL</code>, <code>READ:POSTGRESQL</code>/<code>WRITE:POSTGRESQL</code>, and <code>READ:MONGODB</code>/<code>WRITE:MONGODB</code> &lt;table/collection&gt;.</p>
 
                     <h3>Example — Testing Efficient Queries</h3>
                     <div class="code-block">
@@ -1009,9 +1028,8 @@ WITH {{user_response.yaml}}</code></pre>
 
                     <h3>Rules</h3>
                     <ul>
-                        <li>Exactly one of READ_MYSQL or WRITE_MYSQL</li>
                         <li>USING_SQL is optional; if provided, matches that specific query</li>
-                        <li>If no USING_SQL, matches any read/write on the table</li>
+                        <li>If no USING_SQL, matches any read/write on the table/collection</li>
                         <li>Test fails if the forbidden operation is detected</li>
                     </ul>
                 </section>
@@ -1342,6 +1360,17 @@ user_id: 123</code></pre>
   enforcement: warn          # none | warn | strict
   commit_tag_required: true  # Commits must reference a provenance record ID
   auto_affected_scope: true  # Auto-populate affected_scope from git diffs
+  run_associated_specs_on_complete: true  # Run associated_specs on open→implemented
+  commit_on_status_change: true           # Auto-commit after open/complete/deprecate
+  manifest_url: ""                         # Source manifest URL (set by `linespec clone`)
+
+  # Cross-repo provenance (monorepos / shared product repos)
+  cache_ttl_minutes: 60      # shared_repos cache freshness TTL (default: 60)
+  shared_repos:              # Named remote repositories for cross-repo records
+    - name: product
+      url: https://github.com/acme/product-provenance
+      ref: main              # branch or tag (default: main)
+      dir: provenance        # subdirectory containing records (default: provenance)
 
   embedding:                 # Voyage AI — enables linespec provenance search
     provider: voyage
@@ -1371,8 +1400,8 @@ container_naming:
 # Dynamic port allocation
 ports:
   dynamic_ports: true   # Allocate random host ports (default: true)
-  min_port: 20000
-  max_port: 30000
+  min_port: 20000       # Lower bound for random port range (default: 10000)
+  max_port: 30000       # Upper bound for random port range (default: 65535)
   fixed_proxy_port: 0   # Pin the verify sidecar to a specific port (0 = dynamic)
 
 # Schema discovery (MySQL / PostgreSQL)
@@ -1386,10 +1415,11 @@ schema_discovery:
 # Payload loading
 payload:
   directory: payloads   # Subdirectory name for payload files (default: payloads)
-  status_field: status  # JSON field path used to extract HTTP status
+# The HTTP proxy reads the response status from a `status` field in the RETURNS
+# payload itself (e.g. status: 401). This field name is fixed.
 
 # Misc
-timeout_seconds: 60         # Per-test timeout (default: 30)
+timeout_seconds: 60         # Per-test timeout in seconds (default: 180)
 strict_passthrough: false   # true = fail on any unmatched proxy interaction</code></pre>
                     </div>
 
