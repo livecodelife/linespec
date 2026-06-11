@@ -1,0 +1,54 @@
+id: prov-2026-79ce86dc
+title: 'Make status-change commit atomic: roll back record on hook rejection'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  The auto-commit-on-status-change flow (open, complete, deprecate) mutates the
+  record on disk and only afterwards runs `git commit`, which fires the pre-commit
+  hooks. When a hook rejects the commit, the status change has already been written
+  to disk with no matching commit, leaving the repository in an inconsistent state.
+
+  This is especially damaging for the complete command: before committing it sets
+  status to implemented, writes sealed_at_sha, and calls SealRecord to write the
+  record's content hash into the manifest. A rejected commit therefore leaves the
+  record sealed-and-implemented on disk but uncommitted. Re-running complete fails
+  with "already implemented", and the now-immutable record cannot be cleanly
+  re-edited — the user is stuck reconciling the state by hand.
+
+  This bug overturns the original blueprint constraint that deliberately left the
+  on-disk change applied after a failed commit (prov-2026-8ea5aa89). The status
+  change and its commit must instead be atomic: if the commit fails, the on-disk
+  record file (and, for complete, the hash manifest) must be restored to their
+  pre-transition contents and any staging undone, so the operation behaves as if it
+  never happened. The error is still surfaced to the user.
+constraints:
+  - When the auto-commit fails for open, complete, or deprecate, the record file must be restored to its exact pre-transition contents on disk.
+  - For complete, the hash manifest must also be restored to its pre-seal contents when the commit fails, so no stale or orphaned seal is left behind.
+  - After a failed auto-commit, the affected files must be unstaged so the working tree and index match the pre-transition state.
+  - The in-memory record returned/handled after a failed transition must reflect the rolled-back (original) status, not the attempted new status.
+  - On a successful commit, behavior is unchanged from today (status changed, sealed, committed).
+  - The rollback must only run when commit_on_status_change is enabled and the commit actually fails; the manual (non-auto-commit) path is unaffected.
+  - make test must pass.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-8ea5aa89
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/provenance_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - enforcement
