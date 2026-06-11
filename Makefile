@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-integration-mysql test-integration-postgres clean bump-version
+.PHONY: test test-integration test-integration-mysql test-integration-postgres clean bump-version quality install-hooks-quality
 
 # Run all unit tests (fast, no external dependencies)
 test:
@@ -86,3 +86,16 @@ lint:
 # Quick test - unit tests only (for pre-commit)
 test-quick:
 	go test -short ./...
+
+# Go code-quality gate: staticcheck (hard), deadcode intersection (hard), dupl (warn).
+# Single source of truth shared by the pre-push hook and CI.
+quality:
+	./scripts/go-quality.sh
+
+# Install the pre-push code-quality hook into this repo/worktree's hooks dir.
+# Separate from the linespec-managed pre-commit/commit-msg hooks.
+install-hooks-quality:
+	@hooks="$$(git rev-parse --git-path hooks)"; \
+		cp scripts/pre-push "$$hooks/pre-push"; \
+		chmod +x "$$hooks/pre-push"; \
+		echo "Installed pre-push quality hook -> $$hooks/pre-push"

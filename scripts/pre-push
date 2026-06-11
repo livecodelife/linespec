@@ -1,0 +1,19 @@
+#!/bin/sh
+# LineSpec Go code-quality pre-push hook.
+#
+# Thin shim that delegates to scripts/go-quality.sh (the single source of truth
+# shared with `make quality` and CI). Installed into .git/hooks/pre-push by
+# `make install-hooks-quality`. Separate from the linespec-managed
+# pre-commit/commit-msg hooks, so `linespec install-hooks` never clobbers it.
+#
+# Bypass for a single push with: git push --no-verify (use sparingly).
+
+repo_root=$(git rev-parse --show-toplevel)
+script="$repo_root/scripts/go-quality.sh"
+
+if [ ! -x "$script" ]; then
+    echo "pre-push: $script not found or not executable; skipping quality gate." >&2
+    exit 0
+fi
+
+exec "$script"
