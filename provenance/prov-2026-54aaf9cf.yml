@@ -1,0 +1,87 @@
+id: prov-2026-54aaf9cf
+title: Build the 'next' advice engine and 'linespec provenance next' command (Phase 2)
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Replace error-driven navigation with computed, state-aware guidance. Build ONE
+  engine that answers: "given the current provenance state (and optionally the
+  files I intend to change), what is the correct next action?" Every guidance
+  surface — the new `next` command, the CLI error hints, the skill, and any future
+  plugin — renders from this single engine. This permanently kills "skill says X
+  but the CLI prints Y" drift: guidance only has to be correct in one place.
+
+  This is the keystone of the larger agent-guidance effort. Phase 1 (rewording the
+  supersede-only messages + skill happy-path) already shipped; this phase makes the
+  guidance computed rather than hand-written per call site.
+
+  Three parts:
+
+  (2a) Advice engine. A pure function: (current state [, intended files]) ->
+  ordered next action(s) with concrete record IDs filled in. State = records +
+  statuses (Loader.LoadAll), staged files (Git.GetStagedFiles), branch diff
+  (Git.DiffFiles). The function has no side effects and does no I/O itself — state
+  is gathered by the caller and passed in, so it is unit-testable in isolation.
+  Output covers at least these state branches:
+    - no governing record for the intended/changed files -> `create`
+    - a draft record exists -> `open` it
+    - an open record with no associated_specs -> add an associated_spec (show shape)
+    - an open record, specs present, changes staged -> commit tagged [prov-...]
+    - all imprints of a blueprint implemented -> `complete` the blueprint
+
+  (2b) Expose as `linespec provenance next`:
+    - `next` (ambient) -> reads current state, prints the single correct command.
+    - `next --files X Y` (alias `--plan`) -> intent-aware; folds a context lookup
+      per named file so governance surfaces during planning, before editing.
+    - `--json` -> machine-readable output for hook/agent consumption.
+
+  (2c) Route the existing error hints through the same engine, so a blocked agent
+  (hit an enforcement wall) and a proactive agent (asked `next`) receive identical
+  advice. The reworded Phase 1 strings become renderings of the engine output, not
+  independent hand-written text.
+constraints:
+  - The advice engine MUST be a pure function with no I/O and no side effects — it
+    receives already-gathered state (records, statuses, staged files, diff,
+    optional intended-files) and returns ordered actions. This is what makes it
+    unit-testable and reusable across every surface.
+  - There must be exactly ONE engine. The `next` command, the CLI error hints
+    (2c), and any later surface must all render from it — no second copy of the
+    decision logic anywhere.
+  - From any provenance state, `next` prints the single correct next command with
+    real record IDs substituted (not a placeholder). The same text must appear
+    whether the advice was reached via an enforcement error or via asking `next`.
+  - The `next --files`/`--plan` form must surface governing records for the named
+    files using the existing context lookup, and must NOT recommend superseding
+    records that merely govern those files (consistent with Phase 1 framing).
+  - The `--json` output must be stable and machine-consumable (documented shape),
+    since Phase 5 hooks will depend on it.
+  - The `next` subcommand must be wired into BOTH cmd/linespec/main_stable.go and
+    cmd/linespec/main_beta.go dispatch (kept in sync), following the existing
+    parse<Cmd>Options + cmds.<Cmd>(opts) pattern.
+  - Phase 2 must not change enforcement severity or control flow of the existing
+    checks; routing hints through the engine (2c) reproduces the current Phase 1
+    wording as engine output, it does not newly block or unblock anything.
+  - Engine behavior must be covered by Go unit tests asserting the correct action
+    for each state branch listed in the intent.
+affected_scope:
+  - pkg/provenance/next.go
+  - pkg/provenance/next_test.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/git.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - provenance-ux
+  - phase-2
+  - keystone
