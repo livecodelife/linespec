@@ -1,0 +1,51 @@
+id: prov-2026-01b4026c
+title: Route commit-violation hint and stale-scope warning through engine-owned wording (Phase 2c)
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Implements prov-2026-54aaf9cf (Phase 2c). Kills "skill says X but CLI prints Y"
+  drift by making the advice engine the SINGLE owner of the create-not-supersede
+  wording, then having every error-hint site render from it.
+
+  The two sites that previously carried their own hand-written copies of the
+  Phase 1 framing:
+    - formatter.go FormatCheckResult — the commit-violation "Hint:" lines.
+    - git.go buildStaleScopeWarnings — the non-blocking stale-scope message.
+
+  Change: next.go gains exported canonical-wording functions
+  (HintCreateNotSupersede, HintStaleScope) that the engine itself uses for the
+  create advice. formatter.go and git.go call those functions instead of inlining
+  the text. A blocked agent (hit the commit hook) and a proactive agent (ran
+  `next`) now read identical, single-sourced advice.
+constraints:
+  - This is a wording-routing change only — no enforcement severity or control-flow
+    change. The stale-scope warning stays non-blocking; the violation hint stays a
+    hint on an already-failing check.
+  - The canonical create-not-supersede wording exists in exactly one place
+    (next.go); formatter.go and git.go must not re-inline it.
+  - The stale-scope message keeps its per-file/per-record specificity (file, record
+    ID, sealed SHA) while sourcing its wording from the engine.
+  - A unit test asserts the canonical hint never presents `--supersedes` as the
+    default remedy and frames supersede as the deliberate-revision branch only.
+affected_scope:
+  - pkg/provenance/next.go
+  - pkg/provenance/next_test.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/git.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-54aaf9cf
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/next_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - phase-2
