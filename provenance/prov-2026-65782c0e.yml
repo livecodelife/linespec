@@ -1,6 +1,6 @@
 id: prov-2026-65782c0e
 title: 'Embeddings workflow: direct-push via bypass App instead of self-approved PR'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -53,7 +53,10 @@ supersedes: prov-2026-da5fd142
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: .github/workflows/index-provenance.yml
+    type: code
+    run_command: python3 -c "import yaml; yaml.safe_load(open('.github/workflows/index-provenance.yml')); print('workflow yaml ok')"
 associated_traces: []
 monitors: []
 tags: []
