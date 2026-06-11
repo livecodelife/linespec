@@ -1,0 +1,56 @@
+id: prov-2026-a053a867
+title: 'Advice engine design: pure Advise(NextState) with ordered precedence (Phase 2a)'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Records the design of the Phase 2a advice engine (implements prov-2026-54aaf9cf).
+
+  Shape: a pure function `Advise(state NextState) []NextAction`. NextState is an
+  already-gathered, side-effect-free snapshot (Records, StagedFiles, ChangedFiles,
+  optional IntendedFiles, CommitTagRequired). The engine does no I/O so it is
+  unit-testable and reusable from every surface (the `next` command, error hints,
+  hooks).
+
+  Precedence (first match wins; index 0 of the returned slice is the single
+  primary recommendation):
+    1. Determine relevant files = IntendedFiles, else StagedFiles ∪ ChangedFiles.
+    2. If exactly one OPEN top-level record (blueprint/bug) governs those files ->
+       that is the active record; advise on it (below). If more than one open
+       record governs -> ambiguous: advise working under/tagging one of them
+       (explicitly NOT supersede — Phase 1 framing).
+    3. Else if a DRAFT top-level record governs the files (or, ambient with a clean
+       tree, a lone draft exists) -> `open` it.
+    4. Else -> `create` a new blueprint covering the files. If sealed/implemented
+       records govern those files, list them as advisory governing records with a
+       note that they do NOT need superseding.
+
+  Advise-on-active record precedence:
+    a. No associated_specs -> add an associated_spec (show YAML shape). (Under
+       strict this is already enforced at open; matters under warn/none.)
+    b. Staged changes present -> commit them tagged `[<record-id>]`.
+    c. Unimplemented imprints implementing this blueprint -> complete the next one.
+    d. Otherwise (specs present, nothing staged, no pending imprints) -> complete
+       the blueprint.
+constraints:
+  - Advise must be a pure function — no filesystem, git, or network access inside it.
+  - The primary recommendation is element 0 of the returned slice; callers may show
+    follow-ups but must treat index 0 as THE next step.
+  - No branch may recommend supersede as the remedy for merely touching governed
+    files; supersede is only ever the deliberate-revision path (Phase 1 framing).
+affected_scope:
+  - pkg/provenance/next.go
+  - pkg/provenance/next_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-54aaf9cf
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - phase-2
