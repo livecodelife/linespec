@@ -1,6 +1,6 @@
 id: prov-2026-9c109575
 title: "Won't-fix: overlap selector intentionally requires sealed_at_sha"
-status: draft
+status: deprecated
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
