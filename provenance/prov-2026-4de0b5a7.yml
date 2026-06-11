@@ -1,6 +1,6 @@
 id: prov-2026-4de0b5a7
 title: 'Update docs/linespec.html to mirror v3.11.7 DSL/config: RESPONSE_HEADERS, WITH request-body, multi-channel EXPECT_NOT/VERIFY, RETURNS EMPTY, Redis pops, config keys; remove NO_TRANSACTION'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
