@@ -95,29 +95,6 @@ func (d *DockerOrchestrator) WaitForContainer(ctx context.Context, id string) (<
 	return d.cli.ContainerWait(ctx, id, container.WaitConditionNotRunning)
 }
 
-func (d *DockerOrchestrator) GetNetworkGateway(ctx context.Context, id string) (string, error) {
-	inspect, err := d.cli.NetworkInspect(ctx, id, types.NetworkInspectOptions{})
-	if err != nil {
-		return "", err
-	}
-	if len(inspect.IPAM.Config) > 0 {
-		return inspect.IPAM.Config[0].Gateway, nil
-	}
-	return "", fmt.Errorf("no gateway found for network %s", id)
-}
-
-func (d *DockerOrchestrator) GetContainerIP(ctx context.Context, id string, networkName string) (string, error) {
-	inspect, err := d.cli.ContainerInspect(ctx, id)
-	if err != nil {
-		return "", err
-	}
-	netSettings := inspect.NetworkSettings.Networks[networkName]
-	if netSettings == nil {
-		return "", fmt.Errorf("container not in network %s", networkName)
-	}
-	return netSettings.IPAddress, nil
-}
-
 // Prober methods
 
 // expBackoff returns the next retry delay using exponential backoff, capped at max.
@@ -149,25 +126,6 @@ func (d *DockerOrchestrator) WaitTCPInternal(ctx context.Context, networkName, a
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(expBackoff(attempt, 10*time.Millisecond, 500*time.Millisecond)):
-		}
-		attempt++
-	}
-	return fmt.Errorf("timeout waiting for TCP %s", address)
-}
-
-func (d *DockerOrchestrator) WaitTCP(ctx context.Context, address string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	var attempt int
-	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", address, 1*time.Second)
-		if err == nil {
-			conn.Close()
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 10*time.Millisecond, 2*time.Second)):
 		}
 		attempt++
 	}

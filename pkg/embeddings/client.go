@@ -53,11 +53,6 @@ func (c *Client) IsConfigured() bool {
 	return c != nil && c.config.Provider != "" && c.apiKey != ""
 }
 
-// Generate creates an embedding vector for the given text (backward compatibility)
-func (c *Client) Generate(text string) ([]float32, error) {
-	return c.GenerateDocument(text)
-}
-
 // GenerateDocument creates an embedding using 'document' input_type (for indexing)
 func (c *Client) GenerateDocument(text string) ([]float32, error) {
 	switch c.config.Provider {

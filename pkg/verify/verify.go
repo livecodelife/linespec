@@ -2,7 +2,6 @@ package verify
 
 import (
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
 
@@ -347,21 +346,3 @@ func ExtractVerifyRulesForTarget(rules []types.VerifyRule, targetType string) []
 	return filtered
 }
 
-// CreateHTTPRequestFromRequest creates an HTTPRequest from an http.Request
-// This is a convenience function for the HTTP proxy
-func CreateHTTPRequestFromRequest(r *http.Request, body string) *HTTPRequest {
-	headers := make(map[string]string)
-	for key, values := range r.Header {
-		if len(values) > 0 {
-			headers[key] = values[0]
-		}
-	}
-
-	return &HTTPRequest{
-		Method:  r.Method,
-		URL:     r.URL.String(),
-		Path:    r.URL.Path,
-		Headers: headers,
-		Body:    body,
-	}
-}

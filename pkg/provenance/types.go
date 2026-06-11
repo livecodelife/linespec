@@ -112,26 +112,6 @@ func IsValidID(id string) bool {
 	return IDPattern.MatchString(id)
 }
 
-// ParseID extracts year and sequence number from a valid ID
-func ParseID(id string) (year int, seq int, err error) {
-	matches := IDPattern.FindStringSubmatch(id)
-	if matches == nil {
-		return 0, 0, fmt.Errorf("invalid ID format: %s", id)
-	}
-
-	year, err = fmt.Sscanf(matches[1], "%d", &year)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid year in ID: %s", matches[1])
-	}
-
-	seq, err = fmt.Sscanf(matches[2], "%d", &seq)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid sequence in ID: %s", matches[2])
-	}
-
-	return year, seq, nil
-}
-
 // IsMutableAfterImplemented returns true if the field can be modified after status is 'implemented'
 func (r *Record) IsMutableAfterImplemented(fieldName string) bool {
 	switch fieldName {

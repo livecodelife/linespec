@@ -239,14 +239,6 @@ func extractTarStripping(data []byte, destDir, prefix string) error {
 	return nil
 }
 
-// ExtractRaw writes a single-file layer directly to destPath.
-func ExtractRaw(data []byte, destPath string) error {
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(destPath, data, 0644)
-}
-
 // ProvenanceRecordIDs returns the list of record IDs (filenames without .yml)
 // present in a provenance layer tar, without extracting anything to disk.
 func ProvenanceRecordIDs(data []byte) ([]string, error) {
