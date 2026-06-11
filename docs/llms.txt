@@ -1,0 +1,18 @@
+# LineSpec
+
+> LineSpec is a CLI for **Provenance Records** — structured, queryable YAML decision documents that capture the intent, constraints, and reasoning behind architectural changes — and **LineSpec Testing**, a protocol-level integration-testing DSL that runs the real service in a container and intercepts its database, HTTP, Redis, Kafka, and gRPC traffic at the wire level (no mocks in the service code). As of v3.11.7, both subsystems ship in the default binary.
+
+## Documentation
+
+- [Overview & installation](https://linespec.dev/index.html): What LineSpec is, install via Homebrew or `go install`, and the two subsystems.
+- [Docs home](https://linespec.dev/docs.html): Entry point linking the Provenance and LineSpec Testing references.
+- [Provenance Records reference](https://linespec.dev/provenance.html): Record schema, lifecycle (draft → open → implemented → superseded/deprecated), tiers (brief/blueprint/bug/imprint), the full CLI, scope enforcement, and the workflow for working within enforced scope.
+- [LineSpec Testing (DSL) reference](https://linespec.dev/linespec.html): The `.linespec` DSL — RECEIVE/EXPECT/RESPOND, channels (HTTP, MySQL, PostgreSQL, Redis, MongoDB, gRPC, Kafka events, background jobs), semantic SQL matching, VERIFY, payloads, variable interpolation, and `.linespec.yml` configuration.
+
+## For AI agents working in a LineSpec repo
+
+- [Provenance workflow & scope enforcement](https://linespec.dev/provenance.html): How to make a change without getting blocked — investigate with `provenance context -f <file>`, create ONE record covering your files, set its `affected_scope`, add a proof spec, open, commit tagged, complete. The scope check only validates the record you tag; overlapping records (even implemented ones) do not need to be superseded. Never use `--no-verify`; never relax enforcement to get unblocked.
+
+## Full text
+
+- [llms-full.txt](https://linespec.dev/llms-full.txt): The complete LineSpec documentation concatenated as a single Markdown file for full-context ingestion.
