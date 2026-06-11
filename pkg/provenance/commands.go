@@ -1185,515 +1185,504 @@ when_to_use: "When starting any new work, modifying files covered by provenance 
 
 Follow these rules precisely whenever working with provenance records or making code changes in this repo.
 
+## TL;DR — the happy path
+
+Before touching anything, follow this sequence and you will not get stuck on enforcement:
+
+1. **Investigate.** Run ` + "`" + `linespec provenance context -f <file>` + "`" + ` for every file you plan to change. This shows which records govern them. (Those governing records do **not** need to be superseded — see below.)
+2. **Create one record:** ` + "`" + `linespec provenance create --type blueprint --no-edit --title "…"` + "`" + `.
+3. **Set its ` + "`" + `affected_scope` + "`" + `** to exactly the files you will change.
+4. **Create your proof artifact, then ` + "`" + `open` + "`" + `** the record with that spec referenced in ` + "`" + `associated_specs` + "`" + `.
+5. **Make changes; commit** tagged with the record ID ` + "`" + `[prov-YYYY-XXXXXXXX]` + "`" + `.
+6. **Show proof, then ` + "`" + `complete` + "`" + `.**
+
 ## Step 1 — Investigate Before Creating
 
 **Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code.
 
-If embeddings are configured (` + "`.linespec/embeddings.bin`" + ` exists), search semantically:
-
-` + "```bash" + `
-linespec provenance search "<description of the work or feature area>" [-c <config>]
-` + "```" + `
-
 For every file you plan to touch, check which records govern it:
 
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec provenance context -f <file> [-c <config>]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-Look up specific records by ID using ` + "`status --record`" + ` (this also finds remote records from shared_repos cache):
+If embeddings are configured, search semantically:
 
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
+linespec provenance search --query "<description of the work or feature area>" [-c <config>]
+` + "`" + `` + "`" + `` + "`" + `
+
+Look up a record by ID with ` + "`" + `status --record` + "`" + ` (this also finds remote records from the shared_repos cache):
+
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec provenance status --record prov-YYYY-XXXXXXXX [-c <config>]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-If an open record already covers the work, prefer working within that record.
+**Important:** discovering that several records govern your files does NOT mean you must supersede them. The scope check only validates the record you tag. You will create one new record covering your files (Step 2). See "Scope Enforcement & When You're Blocked" below.
 
 ## Step 2 — Create a Blueprint Record (Draft)
 
-Create a ` + "`blueprint`" + ` record to capture the scope and success criteria **before writing any code**:
+Create a ` + "`" + `blueprint` + "`" + ` record to capture the scope and success criteria **before writing any code**:
 
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec provenance create --title "..." --type blueprint --no-edit [-c <config>]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-Valid types: ` + "`brief`" + `, ` + "`blueprint`" + `, ` + "`bug`" + `, ` + "`imprint`" + `.
+Valid types: ` + "`" + `brief` + "`" + `, ` + "`" + `blueprint` + "`" + `, ` + "`" + `bug` + "`" + `, ` + "`" + `imprint` + "`" + `.
 
-**Always pass ` + "`--no-edit`" + `.** Omitting it opens an interactive editor that hangs in non-TTY environments.
+**Always pass ` + "`" + `--no-edit` + "`" + `.** Omitting it opens an interactive editor that hangs in non-TTY environments.
 
-Fill in ` + "`intent`" + `, ` + "`constraints`" + `, and ` + "`affected_scope`" + ` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning with the user.
-
-Commit the draft in a standalone commit:
-` + "```" + `
-Create provenance record [prov-YYYY-XXXXXXXX]
-` + "```" + `
-
-**Then present the draft record to the user for review.** Show the intent and constraints. Do not write any implementation code until the user confirms the blueprint is correct.
+Fill in ` + "`" + `intent` + "`" + `, ` + "`" + `constraints` + "`" + `, and ` + "`" + `affected_scope` + "`" + ` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning with the user. Commit the draft in a standalone commit, then **present it to the user for review.** Do not write implementation code until the user confirms.
 
 ## Step 3 — Open the Blueprint (After User Confirmation)
 
-Once the user confirms the blueprint is correct, transition it to open:
-
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec provenance open --record prov-YYYY-XXXXXXXX [-c <config>]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-Add ` + "`affected_scope`" + ` and ` + "`associated_specs`" + ` to the record at this point. Commit the open transition as a standalone commit:
-
-` + "```" + `
-Open provenance record prov-YYYY-XXXXXXXX [prov-YYYY-XXXXXXXX]
-` + "```" + `
-
-Scope and spec enforcement are now active for this record.
+Add ` + "`" + `affected_scope` + "`" + ` and ` + "`" + `associated_specs` + "`" + ` at this point (create the proof files first — see associated_specs below). Commit the open transition as a standalone commit.
 
 ## Step 4 — Implement with Imprint Records
 
-As you work, create ` + "`imprint`" + ` records to log micro-decisions, trade-offs, considerations, pivots, and learnings. An imprint must set ` + "`implements`" + ` pointing at the parent blueprint:
+As you work, create ` + "`" + `imprint` + "`" + ` records to log micro-decisions, trade-offs, pivots, and learnings. An imprint must set ` + "`" + `implements` + "`" + ` pointing at the parent blueprint:
 
-` + "```yaml" + `
+` + "`" + `` + "`" + `` + "`" + `yaml
 type: imprint
 implements: prov-YYYY-XXXXXXXX   # the blueprint ID
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-Imprints can be freely opened, implemented, superseded, and deprecated as the implementation evolves. **All imprints must be implemented before the blueprint can be completed.**
-
-Imprint lifecycle is lightweight — create and complete them in quick succession as decisions are made. Tag every implementation commit with the relevant record ID (blueprint or imprint).
+**All imprints must be implemented before the blueprint can be completed.** Tag every implementation commit with the relevant record ID.
 
 ## Step 5 — Show Proof and Complete the Blueprint
 
-Before completing the blueprint, verify all imprints are implemented. Then **show the user the proof** — demonstrate that the blueprint's constraints are met (test output, lint output, working commands, etc.).
+Verify all imprints are implemented, **show the user the proof** (test/lint output, working commands), and **ask for explicit permission before completing.** Then:
 
-**Ask the user for explicit permission before completing the blueprint.** Do not complete it automatically.
-
-Once the user confirms, complete in a standalone commit:
-
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec provenance complete --record prov-YYYY-XXXXXXXX [-c <config>]
-` + "```" + `
-
-Commit message:
-` + "```" + `
-Complete provenance record [prov-YYYY-XXXXXXXX]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
 ## Commit Message Format
 
 Every commit (except standalone provenance management commits) must include the governing record ID in square brackets:
 
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 Short description of what changed [prov-YYYY-XXXXXXXX]
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-The pre-commit hook enforces this when ` + "`commit_tag_required: true`" + ` is set in ` + "`.linespec.yml`" + `.
+The pre-commit hook enforces this when ` + "`" + `commit_tag_required: true` + "`" + ` is set in ` + "`" + `.linespec.yml` + "`" + `.
 
 ## Pre-Commit Checks
 
-Before any create, open, or complete commit:
-` + "```bash" + `
-linespec provenance lint [-c <config>]
-linespec provenance check [-c <config>]
-` + "```" + `
+Before any create, open, or complete commit: ` + "`" + `linespec provenance lint` + "`" + ` and ` + "`" + `linespec provenance check` + "`" + `. Before each implementation commit: ` + "`" + `linespec provenance check --staged` + "`" + `. Always include ` + "`" + `-c <path>` + "`" + ` when the relevant ` + "`" + `.linespec.yml` + "`" + ` is not at the repo root.
 
-Before each implementation commit:
-` + "```bash" + `
-linespec provenance check --staged [-c <config>]
-` + "```" + `
+## Scope Enforcement & When You're Blocked
 
-Always include ` + "`-c <path>`" + ` when the relevant ` + "`.linespec.yml`" + ` is not at the repo root.
+**The single most important rule:** the pre-commit scope check validates your changed files **only against the record you tag** in the commit message. It does **not** consult other records that happen to govern those files. So implemented/sealed records whose ` + "`" + `affected_scope` + "`" + ` overlaps your files do **not** block your commit and do **not** need to be superseded. Create **one** new record covering exactly your files, open it, and tag your commits with it. Supersede a record *only* when you are deliberately revising the decision it captured.
 
-## Superseding Records
+### Scope modes
 
-When a record supersedes an existing one:
+- A record with an **empty ` + "`" + `affected_scope` + "`" + `** is **observed** — its check permits any file (except ` + "`" + `forbidden_scope` + "`" + `).
+- A record with a **non-empty ` + "`" + `affected_scope` + "`" + `** is **allowlist** — it permits only files matching that scope. So a "scope violation" on *your tagged record* means its ` + "`" + `affected_scope` + "`" + ` is missing one of your changed files → widen that record's scope (free to edit while ` + "`" + `draft` + "`" + `), don't touch other records.
+- ` + "`" + `lock-scope` + "`" + ` auto-populates a record's ` + "`" + `affected_scope` + "`" + ` from the files it changed in git. ` + "`" + `lock-layer` + "`" + ` creates a ` + "`" + `locked` + "`" + ` governance record — advanced and uncommon; only when locked records exist can an overlapping open record hard-fail lint.
 
-1. Set ` + "`supersedes: prov-YYYY-XXXXXXXX`" + ` on the **new** record
-2. Update the **old** record's ` + "`superseded_by`" + ` field to the new record ID
-3. Commit both records together in the standalone create commit
+### When you're blocked — decision tree
 
-Both directions must be set before committing.
+| Message | Do this |
+|---------|---------|
+| ` + "`" + `Commit tag required but no provenance ID found` + "`" + ` | Tag the commit with your record ID ` + "`" + `[prov-YYYY-XXXXXXXX]` + "`" + `. |
+| ` + "`" + `X is already implemented - cannot commit with this ID` + "`" + ` | Implemented records are immutable. Create **one new record** covering your files and tag that — do **not** supersede the records that govern the files. |
+| ` + "`" + `forbids changes to <file>` + "`" + ` / scope violation | Add ` + "`" + `<file>` + "`" + ` to **your tagged record's** ` + "`" + `affected_scope` + "`" + ` (editable in draft). |
+| ` + "`" + `No associated specs (open) [strict]` + "`" + ` | Add ` + "`" + `associated_specs` + "`" + ` (proof) to the open record before committing/completing. |
+| ` + "`" + `overlaps with locked record Y` + "`" + ` | A deliberate governance gate (only if locked layers exist). **Stop and ask the maintainer** — do not blindly supersede multiple records. |
+
+> **Stale-scope warnings are non-blocking.** When you edit a file governed by an *implemented* record you may see a warning that the file "is governed by implemented record … create a superseding record." This is informational only — the commit still succeeds, no action is required, and it is **not** a reason to supersede anything. Proceed under your own new record.
+
+**Hard rules:** Never use ` + "`" + `--no-verify` + "`" + `. Never relax enforcement (` + "`" + `strict` + "`" + ` → ` + "`" + `warn` + "`" + `/` + "`" + `none` + "`" + `) to get unblocked — that is a maintainer + settings-level decision, not yours. When a wall is genuinely a governance call, stop and ask rather than brute-forcing.
+
+## Use Commands, Not Manual YAML Edits
+
+Let the CLI update records — hand-editing managed fields corrupts the graph.
+
+| Instead of manually editing… | Use |
+|------------------------------|-----|
+| ` + "`" + `supersedes` + "`" + ` + the old record's ` + "`" + `superseded_by` + "`" + ` + ` + "`" + `status: superseded` + "`" + ` | ` + "`" + `create --supersedes <old-id>` + "`" + ` (sets all of it and stages both files) |
+| ` + "`" + `status: open` + "`" + ` | ` + "`" + `open --record <id>` + "`" + ` |
+| ` + "`" + `status: implemented` + "`" + ` + ` + "`" + `sealed_at_sha` + "`" + ` | ` + "`" + `complete --record <id>` + "`" + ` |
+| ` + "`" + `status: deprecated` + "`" + ` | ` + "`" + `deprecate --record <id> --reason "…"` + "`" + ` |
+| listing changed files into ` + "`" + `affected_scope` + "`" + ` | ` + "`" + `lock-scope --record <id>` + "`" + ` (auto-populates from git) |
+| the hash manifest | ` + "`" + `compile` + "`" + ` |
+
+Never hand-edit ` + "`" + `status` + "`" + `, ` + "`" + `superseded_by` + "`" + `, ` + "`" + `sealed_at_sha` + "`" + `, or the hash manifest.
+
+### Superseding records
+
+To supersede an existing record, run ` + "`" + `create --supersedes` + "`" + `:
+
+` + "`" + `` + "`" + `` + "`" + `bash
+linespec provenance create --title "Better approach" --supersedes prov-YYYY-XXXXXXXX --no-edit
+` + "`" + `` + "`" + `` + "`" + `
+
+This sets ` + "`" + `supersedes` + "`" + ` on the new record AND automatically updates the old record's ` + "`" + `superseded_by` + "`" + ` and ` + "`" + `status: superseded` + "`" + `, staging both files together. Do **not** edit those fields by hand.
+
+## associated_specs — Proof Artifacts
+
+` + "`" + `associated_specs` + "`" + ` attach proof that a record's constraints are met. Each entry:
+
+- **` + "`" + `path` + "`" + `** — required. Must point to a file that *exists* (lint fails otherwise). Any file type: a test, a ` + "`" + `.linespec` + "`" + `, a config, a doc, a screenshot, a log.
+- **` + "`" + `type` + "`" + `** — optional. These auto-run with no ` + "`" + `run_command` + "`" + `: ` + "`" + `linespec` + "`" + ` → ` + "`" + `linespec test <path>` + "`" + `, ` + "`" + `rspec` + "`" + ` → ` + "`" + `bundle exec rspec <path>` + "`" + `, ` + "`" + `pytest` + "`" + ` → ` + "`" + `pytest <path>` + "`" + `, ` + "`" + `jest` + "`" + ` → ` + "`" + `npx jest <path>` + "`" + `. Any other type with no ` + "`" + `run_command` + "`" + ` is recorded as proof but **skipped** (not executed).
+- **` + "`" + `run_command` + "`" + `** — optional; overrides ` + "`" + `type` + "`" + `. Runs as ` + "`" + `<run_command> <path>` + "`" + ` (path appended) **unless** the command contains ` + "`" + `{{path}}` + "`" + `, which is substituted instead.
+
+**Strict order of operations:** under strict enforcement an open record with no ` + "`" + `associated_specs` + "`" + ` is a hard error, and a referenced spec path that does not exist also fails lint — so create the proof file *first*, then reference it, then ` + "`" + `open` + "`" + `:
+
+` + "`" + `` + "`" + `` + "`" + `yaml
+# 1. write the proof file first (e.g. spec/models/user_spec.rb)
+# 2. reference it:
+associated_specs:
+  - path: spec/models/user_spec.rb   # must already exist
+    type: rspec                       # auto-runs ` + "`" + `bundle exec rspec <path>` + "`" + `
+  - path: linespecs/create_user.linespec
+    type: linespec                    # auto-runs ` + "`" + `linespec test <path>` + "`" + `
+  - path: docs/architecture.md
+    run_command: test -f {{path}}     # non-test proof: just assert it exists
+# 3. then ` + "`" + `linespec provenance open --record <id>` + "`" + `
+` + "`" + `` + "`" + `` + "`" + `
+
+To author the ` + "`" + `.linespec` + "`" + ` files that back ` + "`" + `type: linespec` + "`" + ` specs, use the **linespec-testing** skill (` + "`" + `/linespec-testing` + "`" + `).
 
 ## Tier Hierarchy Rules (Enforced by Linter)
 
-- ` + "`brief`" + ` → top-level intent, cannot use ` + "`implements`" + `
-- ` + "`blueprint`" + ` → design decision, may ` + "`implements`" + ` a brief
-- ` + "`bug`" + ` → defect or regression record, uses ` + "`extends`" + ` or ` + "`supersedes`" + ` (not ` + "`implements`" + `)
-- ` + "`imprint`" + ` → implementation record, must ` + "`implements`" + ` a blueprint
-- ` + "`supersedes`" + ` must stay within the same tier (exception: ` + "`bug`" + ` may supersede a ` + "`blueprint`" + `) — PROV020
-- ` + "`implements`" + ` must point exactly one tier up — PROV021
-- ` + "`implements`" + ` reference must resolve locally or via configured shared_repos cache — PROV022
-- ` + "`extends`" + ` is only valid on ` + "`bug`" + ` records; target must be a ` + "`blueprint`" + ` or ` + "`bug`" + `
-- ` + "`bug`" + ` must have exactly one of ` + "`supersedes`" + ` or ` + "`extends`" + ` (not both, not neither)
+- ` + "`" + `brief` + "`" + ` → top-level intent, cannot use ` + "`" + `implements` + "`" + `
+- ` + "`" + `blueprint` + "`" + ` → design decision, may ` + "`" + `implements` + "`" + ` a brief
+- ` + "`" + `bug` + "`" + ` → defect/regression record, uses ` + "`" + `extends` + "`" + ` or ` + "`" + `supersedes` + "`" + ` (not ` + "`" + `implements` + "`" + `)
+- ` + "`" + `imprint` + "`" + ` → implementation record, must ` + "`" + `implements` + "`" + ` a blueprint
+- ` + "`" + `supersedes` + "`" + ` must stay within the same tier (exception: ` + "`" + `bug` + "`" + ` may supersede a ` + "`" + `blueprint` + "`" + `) — PROV020
+- ` + "`" + `implements` + "`" + ` must point exactly one tier up — PROV021
+- ` + "`" + `implements` + "`" + ` must resolve locally or via configured shared_repos cache — PROV022
+- ` + "`" + `extends` + "`" + ` is only valid on ` + "`" + `bug` + "`" + ` records; target must be a ` + "`" + `blueprint` + "`" + ` or ` + "`" + `bug` + "`" + `
+- ` + "`" + `bug` + "`" + ` must have exactly one of ` + "`" + `supersedes` + "`" + ` or ` + "`" + `extends` + "`" + `
 
 ## Cross-Repo Provenance (shared_repos)
 
-When ` + "`.linespec.yml`" + ` configures ` + "`shared_repos`" + `, records in those remote repositories are available for cross-repo relationships:
+When ` + "`" + `.linespec.yml` + "`" + ` configures ` + "`" + `shared_repos` + "`" + `, records in those remote repositories are available for cross-repo relationships. Resolution: local ` + "`" + `provenance/` + "`" + ` first, then each shared repo cache in order; first match wins. Remote records are **read-only**. Sync the cache before working: ` + "`" + `linespec provenance sync` + "`" + `. The linter warns if the cache is older than ` + "`" + `cache_ttl_minutes` + "`" + ` (default 60).
 
-- A ` + "`blueprint`" + ` in a service repo may ` + "`implements`" + ` a ` + "`brief`" + ` in a shared product repo
-- Resolution order: local ` + "`provenance/`" + ` directory first, then each configured shared repo cache in declaration order; first match wins
-- Remote records are **read-only** — write commands (` + "`complete`" + `, ` + "`deprecate`" + `, ` + "`open`" + `) reject cache-sourced records; to modify, work in the origin repository
-- Before working, sync the cache: ` + "`linespec provenance sync`" + `
-- The linter warns if the cache is older than ` + "`cache_ttl_minutes`" + ` (default 60)
+## Multi-Pack Projects and the ` + "`" + `-c` + "`" + ` Flag
 
-## Multi-Pack Projects and the ` + "`-c`" + ` Flag
-
-In monorepos or multi-pack setups where multiple ` + "`.linespec.yml`" + ` files exist (e.g., a root config plus per-service configs in subdirectories), **always use ` + "`-c <path>`" + ` to target the correct config file** for the service you are working on. Without it, commands default to the repo-root ` + "`.linespec.yml`" + `, which may report records, scope, and enforcement from the wrong service.
-
-Apply ` + "`-c`" + ` to every provenance command when working outside the root config:
-
-` + "```bash" + `
-linespec provenance status -c path/to/.linespec.yml
-linespec provenance create --title "..." --type blueprint --no-edit -c path/to/.linespec.yml
-linespec provenance open --record <id> -c path/to/.linespec.yml
-linespec provenance lint -c path/to/.linespec.yml
-linespec provenance check --staged -c path/to/.linespec.yml
-linespec provenance complete --record <id> -c path/to/.linespec.yml
-` + "```" + `
-
-If working on the root service, ` + "`-c`" + ` is optional (it is the default). When in doubt, check which ` + "`.linespec.yml`" + ` governs the files you are changing and use ` + "`-c`" + ` accordingly.
-
-## Finding Records
-
-When you need to look up a specific record by ID, use ` + "`status --record`" + ` rather than searching the provenance directory directly. This ensures remote records (from shared_repos cache) are also discoverable:
-
-` + "```bash" + `
-linespec provenance status --record prov-YYYY-XXXXXXXX [-c <config>]
-` + "```" + `
-
-For semantic discovery, use search:
-
-` + "```bash" + `
-linespec provenance search --query "<description>" [-c <config>]
-` + "```" + `
+In monorepos with multiple ` + "`" + `.linespec.yml` + "`" + ` files, **always use ` + "`" + `-c <path>` + "`" + `** to target the correct config for the service you are working on. Without it, commands default to the repo-root config and may report records, scope, and enforcement from the wrong service.
 
 ## Hard Rules
 
-- **Never use ` + "`--no-verify`" + `** to skip git hooks. If a hook fails, fix the issue.
+- **Never use ` + "`" + `--no-verify` + "`" + `** to skip git hooks. If a hook fails, fix the issue.
+- **Never relax enforcement** (` + "`" + `strict` + "`" + ` → ` + "`" + `warn` + "`" + `/` + "`" + `none` + "`" + `) to get unblocked — that is a maintainer + settings-level decision.
 - **Never complete the blueprint without user confirmation.**
-- **Always use ` + "`-c <path>`" + ` when working on a service that has its own ` + "`.linespec.yml`" + `.** Without it, provenance commands may read the wrong config and produce misleading output.
-- Records are named ` + "`prov-YYYY-XXXXXXXX.yml`" + ` using crypto-random hex (not sequential).
-- Draft records are for planning — freely edit all fields including ` + "`affected_scope`" + `.
+- **Never hand-edit** ` + "`" + `status` + "`" + `, ` + "`" + `superseded_by` + "`" + `, ` + "`" + `sealed_at_sha` + "`" + `, or the hash manifest — use the command that manages them.
+- Records are named ` + "`" + `prov-YYYY-XXXXXXXX.yml` + "`" + ` using crypto-random hex (not sequential).
+- Draft records are for planning — freely edit all fields including ` + "`" + `affected_scope` + "`" + `.
 
 ## Useful Commands
 
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 # Investigation
-linespec provenance status [-c <config>]                 # list all records and status
-linespec provenance status --record <id> [-c <config>]   # detailed view of one record
-linespec provenance search --query "<query>" [-c <config>] # semantic search (requires embeddings)
-linespec provenance context -f <file> [-c <config>]      # which records govern a file
-linespec provenance audit [-c <config>]                  # audit recent changes against provenance
-linespec provenance graph [--root <id>] [-c <config>]    # render provenance graph
+linespec provenance status [--record <id>] [-c <config>]   # list records / detail
+linespec provenance search --query "<query>" [-c <config>] # semantic search
+linespec provenance context -f <file> [-c <config>]        # which records govern a file
+linespec provenance audit [-c <config>]                    # audit recent changes
+linespec provenance graph [--root <id>] [-c <config>]      # render the graph
 
-# Record lifecycle
+# Record lifecycle (these update state for you — don't hand-edit YAML)
 linespec provenance create --title "..." --type <tier> --no-edit [-c <config>]
-linespec provenance open --record <id> [-c <config>]     # draft → open
-linespec provenance complete --record <id> [-c <config>] # open → implemented
+linespec provenance create --supersedes <old-id> --title "..." --no-edit  # supersede correctly
+linespec provenance open --record <id> [-c <config>]       # draft → open
+linespec provenance complete --record <id> [-c <config>]   # open → implemented (+ seals SHA)
 linespec provenance deprecate --record <id> --reason "..." [-c <config>]
 
 # Validation and enforcement
-linespec provenance lint [-c <config>]                   # validate all records
-linespec provenance check [--staged] [-c <config>]       # check commits for violations
-linespec provenance lock-scope --record <id> [-c <config>] # lock scope to allowlist
+linespec provenance lint [--warn|--info|--all] [-c <config>]  # validate; filter output
+linespec provenance check [--staged] [-c <config>]            # check commits for violations
+linespec provenance run-specs --record <id> [-c <config>]     # run a record's associated_specs
+linespec provenance lock-scope --record <id> [-c <config>]    # freeze affected_scope from git
+linespec provenance lock-layer --title "..." --no-edit        # create a locked governance layer
 
-# Cross-repo
-linespec provenance sync                                # refresh shared_repos cache
-linespec provenance index [-c <config>]                 # index records for semantic search
+# Cross-repo and maintenance
+linespec provenance sync [--force]                         # refresh shared_repos cache
+linespec provenance index [-c <config>]                    # index records for semantic search
+linespec provenance compile [-c <config>]                  # rebuild the hash manifest
+linespec provenance generate [--record <id>]               # generate a behavioral spec doc
 
-# Project setup and distribution
-linespec init                                           # interactively bootstrap a .linespec.yml for a new project
-linespec provenance compile [-c <config>]               # rebuild the hash manifest from all loaded records (idempotent)
-linespec provenance publish [-c <config>]               # package records into a versioned, content-addressed manifest
-linespec import <manifest-url>                          # import provenance records from a published manifest into the local provenance directory
-linespec clone <manifest-url>                           # bootstrap a new project directory from a published manifest (git init, hooks, .linespec.yml, all layers)
-` + "```" + `
+# Setup, distribution, and tooling
+linespec init                                              # bootstrap a .linespec.yml
+linespec provenance install-hooks                          # install pre-commit + commit-msg hooks
+linespec provenance install-skills                         # install the Claude Code skills
+linespec provenance publish [-c <config>]                  # package records into a manifest
+linespec import <manifest-url>                             # import records from a manifest
+linespec clone <manifest-url>                              # bootstrap a project from a manifest
+` + "`" + `` + "`" + `` + "`" + `
 `
 
 const linespecTestingSkillMD = `---
 name: linespec-testing
-description: How to run, write, and debug LineSpec integration tests. Covers the test runner CLI, DSL structure, payload files, variable interpolation, channel types, and common failure patterns.
+description: How to run, write, and debug LineSpec integration tests. Covers the test runner CLI, DSL structure, payload files, variable interpolation, channel types, semantic SQL matching, and common failure patterns.
 when_to_use: "When running linespec tests, writing or modifying .linespec files, debugging test failures, setting up a new test suite, or understanding how the test infrastructure works."
 ---
 
 # LineSpec Testing
 
-LineSpec is a protocol-level integration testing DSL. Tests run the real service inside a Docker container and intercept its external calls (database queries, HTTP requests, Redis commands, Kafka messages) at the wire protocol level — no mocks baked into the service code, no changes to the service under test.
+LineSpec is a protocol-level integration testing DSL. Tests run the real service inside a Docker container and intercept its external calls (database queries, HTTP requests, Redis commands, Kafka messages, gRPC calls) at the wire protocol level — no mocks baked into the service code, no changes to the service under test.
 
 ## Mental Model
 
-A linespec test defines one request/response cycle:
+A linespec test defines one trigger/response cycle:
 
-1. **RECEIVE** — the HTTP request (or Kafka message) that triggers the service
-2. **EXPECT** — every external interaction the service must make, in order, with what to return
-3. **RESPOND** — the HTTP response the service must produce
+1. **RECEIVE** — the trigger: an HTTP request, a Kafka/event message, a gRPC call, or a background job
+2. **EXPECT** — every external interaction the service must make, in order, and what to return for each
+3. **RESPOND** — the HTTP response the service must produce (for HTTP triggers)
 
-The runner fires the trigger, the proxy sidecars intercept traffic from the service, and at the end it verifies every EXPECT was hit and the response matched.
+The runner fires the trigger, proxy sidecars intercept the service's outbound traffic, and at the end it verifies every EXPECT was hit and the response matched.
 
 ## Running Tests
 
-` + "```bash" + `
-# Run all specs in a directory (uses .linespec.yml in that directory)
+` + "`" + `` + "`" + `` + "`" + `bash
+# Run every spec in a directory
 linespec test path/to/linespecs/
 
 # Run a single spec file
 linespec test path/to/linespecs/create_user_success.linespec
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-The runner:
-1. Builds and starts the service container (and its database/Redis/Kafka dependencies)
-2. For each spec: clears the mock registry → fires the trigger → verifies all interactions
-3. Tears down containers when done
+The runner builds and starts the service container (plus its database/Redis/Kafka/gRPC dependencies), and for each spec clears the mock registry → fires the trigger → verifies interactions → tears down.
 
-Tests are independent and isolated: the registry is cleared between runs, and database tables are truncated.
+## Configuration: where ` + "`" + `.linespec.yml` + "`" + ` lives
 
-## Project Structure
+The runner finds config by **walking UP the directory tree** from the spec path to the repo root, using the **nearest** ` + "`" + `.linespec.yml` + "`" + ` (or ` + "`" + `.linespec.yaml` + "`" + `). You can also point at one explicitly with the ` + "`" + `LINESPEC_CONFIG` + "`" + ` environment variable.
 
-` + "```" + `
-my-linespecs/
-  .linespec.yml          # Config: service, database, infrastructure, dependencies
-  create_user.linespec   # One test per file
-  get_user.linespec
-  payloads/
-    create_user_request.yaml
-    user_db_row.yaml
-    user_response.json
-` + "```" + `
+**You do NOT need a ` + "`" + `.linespec.yml` + "`" + ` in every directory.** One at the root of your project (or spec tree) covers specs in all subdirectories. Put it wherever it logically governs your specs; nested configs are only for multi-service / multi-pack setups.
 
-The ` + "`.linespec.yml`" + ` file tells the runner how to build and wire up the service. Every linespecs directory needs one. Key sections:
-
-` + "```yaml" + `
+` + "`" + `` + "`" + `` + "`" + `yaml
 service:
   name: my-service
-  service_dir: ../my-service   # Path to source code (relative to .linespec.yml)
+  service_dir: ../my-service   # source code path, relative to this .linespec.yml
   framework: rails             # rails | fastapi | django | express | chi | custom
   port: 3000
-  health_endpoint: /up
-  start_command: bundle exec rails server -b 0.0.0.0 -p 3000  # optional override
+  health_endpoint: /up         # framework default if omitted
 
 database:
   type: mysql                  # mysql | postgresql | mongodb
   image: mysql:8.4
-  port: 3306
-  container: db
   database: mydb
   username: myuser
   password: mypassword
-  init_script: ../my-service/init.sql   # Seeds schema on first boot
+  init_script: ../my-service/init.sql
 
 infrastructure:
   database: true
-  kafka: true      # Enable if tests use EVENT/MESSAGE expectations
-  redis: true      # Enable if tests use READ/WRITE:REDIS expectations
+  kafka: true     # enable for EVENT/MESSAGE expectations
+  redis: true     # enable for READ/WRITE:REDIS expectations
+  grpc: true      # enable for GRPC expectations
 
 dependencies:
   - name: user-service
     type: http
-    host: user-service.local   # Hostname the SUT dials to reach this service
-    port: 3001
-    proxy: true                # Intercept calls to this host
-` + "```" + `
+    host: user-service.local   # hostname the SUT dials
+    proxy: true                # intercept calls to this host
+` + "`" + `` + "`" + `` + "`" + `
+
+Multiple databases: use a ` + "`" + `databases:` + "`" + ` list (each entry gets its own container + proxy). ` + "`" + `job_backend:` + "`" + ` configures background-job workers (see below).
 
 ## DSL Structure
 
-Every ` + "`.linespec`" + ` file follows this exact order — no exceptions:
+Every ` + "`" + `.linespec` + "`" + ` file follows this exact order:
 
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 TEST <name>          (optional — defaults to filename)
-VARS                 (optional — declare typed variables)
+VARS                 (optional — typed variables)
 RECEIVE              (exactly one)
 EXPECT               (zero or more)
 EXPECT_NOT           (zero or more)
-RESPOND              (exactly one, must be last)
-` + "```" + `
+RESPOND              (exactly one, last)
+` + "`" + `` + "`" + `` + "`" + `
 
-### RECEIVE
+### RECEIVE — the trigger
 
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
+# HTTP
 RECEIVE HTTP:POST /api/v1/users
 WITH {{payloads/create_user_request.yaml}}
 HEADERS
   Authorization: Bearer ${AUTH_TOKEN}
-` + "```" + `
+
+# Kafka / event consumer (KAFKA: and EVENT: are equivalent)
+RECEIVE KAFKA:user-events
+WITH {{payloads/user_created_event.json}}
+
+# gRPC
+RECEIVE GRPC:user.UserService/CreateUser
+WITH {{payloads/create_user.json}}
+
+# Background job (no HTTP response; see job_backend config)
+RECEIVE JOB
+` + "`" + `` + "`" + `` + "`" + `
+
+` + "`" + `TIMEOUT <duration>` + "`" + ` (e.g. ` + "`" + `TIMEOUT 30s` + "`" + `) may follow RECEIVE to override the per-test timeout.
 
 ### EXPECT channels
 
-| Channel | What it intercepts |
-|---------|-------------------|
-| ` + "`READ:MYSQL <table>`" + ` | SELECT queries on the table |
-| ` + "`WRITE:MYSQL <table>`" + ` | INSERT/UPDATE/DELETE on the table |
-| ` + "`READ:POSTGRESQL <table>`" + ` | SELECT queries |
-| ` + "`WRITE:POSTGRESQL <table>`" + ` | INSERT/UPDATE/DELETE |
-| ` + "`READ:REDIS <CMD> <key>`" + ` | GET, HGET, LRANGE, etc. |
-| ` + "`WRITE:REDIS <CMD> <key>`" + ` | SET, DEL, HSET, etc. |
-| ` + "`READ:MONGODB <collection>`" + ` | Find queries |
-| ` + "`WRITE:MONGODB <collection>`" + ` | Insert/update/delete |
-| ` + "`HTTP:GET <url>`" + ` | Outbound HTTP calls to a declared dependency |
-| ` + "`EVENT:<topic>`" + ` / ` + "`MESSAGE:<topic>`" + ` | Kafka messages produced to a topic |
+| Channel | Intercepts |
+|---|---|
+| ` + "`" + `HTTP:<METHOD> <url>` + "`" + ` | outbound HTTP calls to a declared dependency |
+| ` + "`" + `READ:MYSQL <table>` + "`" + ` / ` + "`" + `WRITE:MYSQL <table>` + "`" + ` | SELECT / INSERT·UPDATE·DELETE |
+| ` + "`" + `READ:POSTGRESQL <table>` + "`" + ` / ` + "`" + `WRITE:POSTGRESQL <table>` + "`" + ` | SELECT / write |
+| ` + "`" + `READ:REDIS <CMD> <key>` + "`" + ` / ` + "`" + `WRITE:REDIS <CMD> <key>` + "`" + ` | GET/HGET/… / SET/DEL/… |
+| ` + "`" + `READ:MONGODB <coll>` + "`" + ` / ` + "`" + `WRITE:MONGODB <coll>` + "`" + ` | find / insert·update·delete |
+| ` + "`" + `GRPC:<package.Service/Method>` + "`" + ` | gRPC calls |
+| ` + "`" + `EVENT:<topic>` + "`" + ` / ` + "`" + `MESSAGE:<topic>` + "`" + ` | Kafka messages produced to a topic |
 
-Multiple EXPECT blocks on the same table are matched in declaration order (first declared, first consumed). This is how INSERT + UPDATE sequences are distinguished.
+Multiple EXPECTs on the same table match in declaration order. Use ` + "`" + `CALL N` + "`" + ` to disambiguate repeated identical queries (e.g. ` + "`" + `EXPECT READ:MYSQL users CALL 2` + "`" + `).
 
-### SQL matching
+### EXPECT options
 
-Two keywords control how database queries are matched:
+` + "`" + `` + "`" + `` + "`" + `
+EXPECT HTTP:POST http://payment-service.local/charge
+WITH {{payloads/charge_request.json}}      # assert the outbound REQUEST body
+HEADERS
+  Idempotency-Key: ${KEY}                  # match request headers
+RETURNS {{payloads/charge_response.json}}  # mocked RESPONSE body
+RESPONSE_HEADERS
+  Content-Type: application/json           # set response headers explicitly
+` + "`" + `` + "`" + `` + "`" + `
 
-- **` + "`USING_SQL`" + `** — exact match after normalization (backticks stripped, whitespace collapsed, ` + "`table.*`" + ` → ` + "`*`" + `)
-- **` + "`USING_SQL_CONTAINS`" + `** — substring match after normalization
+- **` + "`" + `WITH {{file}}` + "`" + `** — matches the **outbound request body** the service sends. Omit it to match any body. (It is *not* the response.)
+- **` + "`" + `RETURNS` + "`" + `** — the mocked response. Forms: ` + "`" + `{{file}}` + "`" + `, ` + "`" + `EMPTY` + "`" + `, ` + "`" + `ERROR` + "`" + ` (close the connection — service sees ` + "`" + `io.EOF` + "`" + `), ` + "`" + `ERROR <label>` + "`" + `, ` + "`" + `HTTP:NNN` + "`" + ` (status code). For a non-200 HTTP response with a body, use ` + "`" + `RETURNS {{file}}` + "`" + ` and include a ` + "`" + `status:` + "`" + ` field in that payload.
+- **` + "`" + `RESPONSE_HEADERS` + "`" + `** — explicit response headers. Without it, ` + "`" + `Content-Type` + "`" + ` is **inferred from the payload file extension** (` + "`" + `.json` + "`" + `→` + "`" + `application/json` + "`" + `, ` + "`" + `.yaml` + "`" + `/` + "`" + `.yml` + "`" + `→` + "`" + `application/yaml` + "`" + `, ` + "`" + `.xml` + "`" + `→` + "`" + `application/xml` + "`" + `).
 
-**Use ` + "`USING_SQL_CONTAINS`" + ` when:**
-- ORM may append ` + "`ORDER BY`" + `, ` + "`LIMIT`" + `, or change column lists
-- Driver uses prepared statements with ` + "`?`" + ` placeholders (Go MySQL driver)
-- Rails ` + "`where(...).first`" + ` appends ` + "`ORDER BY id ASC`" + `
+### SQL matching — semantic (recommended)
 
-` + "```" + `
-# Fragile — breaks if ORM adds ORDER BY
-EXPECT READ:MYSQL users
-USING_SQL """
-SELECT * FROM users WHERE id = 42 LIMIT 1
-"""
-RETURNS {{user.yaml}}
+Match queries by structure, not brittle text. This is stable against ORM-added ` + "`" + `ORDER BY` + "`" + `/` + "`" + `LIMIT` + "`" + `, column reordering, and ` + "`" + `$1` + "`" + `/` + "`" + `?` + "`" + ` placeholder styles:
 
-# Stable — only checks the part you control
-EXPECT READ:MYSQL users
-USING_SQL_CONTAINS """
-WHERE users.id = 42
-"""
-RETURNS {{user.yaml}}
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
+EXPECT READ:POSTGRESQL users
+ACCESSING_TABLES users
+VERIFY_OPERATION SELECT
+VERIFY_WHERE_COLUMNS id
+VERIFY_WHERE
+  id: 42
+RETURNS {{payloads/user.yaml}}
+
+EXPECT WRITE:MYSQL users
+VERIFY_OPERATION INSERT
+VERIFY_WRITTEN_VALUES
+  email: ${EMAIL}
+RETURNS {{payloads/insert_result.yaml}}
+` + "`" + `` + "`" + `` + "`" + `
+
+- ` + "`" + `ACCESSING_TABLES` + "`" + ` — tables the query must touch (list two for a JOIN)
+- ` + "`" + `VERIFY_OPERATION` + "`" + ` — ` + "`" + `SELECT` + "`" + ` | ` + "`" + `INSERT` + "`" + ` | ` + "`" + `UPDATE` + "`" + ` | ` + "`" + `DELETE` + "`" + `
+- ` + "`" + `VERIFY_WHERE_COLUMNS` + "`" + ` — columns that must appear in the WHERE clause
+- ` + "`" + `VERIFY_WHERE` + "`" + ` — specific WHERE column = value pairs
+- ` + "`" + `VERIFY_WRITTEN_VALUES` + "`" + ` — column = value pairs for INSERT/UPDATE
+
+**Legacy (deprecated):** ` + "`" + `USING_SQL """…"""` + "`" + ` (exact match after normalization) and ` + "`" + `USING_SQL_CONTAINS """…"""` + "`" + ` (substring). Prefer semantic matching; reach for these only for queries semantic matching can't express.
+
+### VERIFY — validate intercepted data
+
+` + "`" + `` + "`" + `` + "`" + `
+EXPECT WRITE:MYSQL users
+VERIFY query MATCHES /\bpassword_digest\b/
+VERIFY query NOT_CONTAINS ` + "`" + `password` + "`" + `
+` + "`" + `` + "`" + `` + "`" + `
+
+Operators: ` + "`" + `CONTAINS` + "`" + `, ` + "`" + `NOT_CONTAINS` + "`" + `, ` + "`" + `MATCHES` + "`" + ` (Go regexp). Targets by channel:
+
+| Channel | VERIFY targets |
+|---|---|
+| MySQL / PostgreSQL | ` + "`" + `query` + "`" + ` |
+| HTTP | ` + "`" + `headers.<name>` + "`" + `, ` + "`" + `body` + "`" + `, ` + "`" + `url` + "`" + `, ` + "`" + `path` + "`" + ` |
+| Kafka / EVENT | ` + "`" + `key` + "`" + `, ` + "`" + `value` + "`" + `, ` + "`" + `headers.<name>` + "`" + ` |
+| gRPC | ` + "`" + `request_body` + "`" + `, ` + "`" + `metadata.<name>` + "`" + ` |
+| Redis | ` + "`" + `command` + "`" + `, ` + "`" + `key` + "`" + `, ` + "`" + `value` + "`" + ` |
+
+### EXPECT_NOT — assert an interaction did NOT happen
+
+` + "`" + `` + "`" + `` + "`" + `
+EXPECT_NOT WRITE:MYSQL users          # underscore or "EXPECT NOT" both work
+EXPECT_NOT READ:POSTGRESQL audit_log
+EXPECT_NOT WRITE:MONGODB sessions
+EXPECT_NOT HTTP:GET ${AUTH_URL}
+` + "`" + `` + "`" + `` + "`" + `
+
+Negative expectations are enforced for the SQL and MongoDB stores (MySQL, PostgreSQL, MongoDB read/write) and HTTP.
 
 ### RESPOND
 
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 RESPOND HTTP:201
 WITH {{payloads/created_user.yaml}}
 NOISE
   body.id
   body.created_at
-  body.updated_at
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
-` + "`NOISE`" + ` lists fields to exclude from the response comparison. Use it for IDs and timestamps that are generated at runtime.
+` + "`" + `NOISE` + "`" + ` lists response fields to exclude from comparison (runtime-generated IDs, timestamps).
 
-### EXPECT_NOT
+## Background Jobs
 
-Asserts an interaction must NOT occur:
+For worker services, set ` + "`" + `RECEIVE JOB` + "`" + ` and configure ` + "`" + `job_backend` + "`" + `:
 
-` + "```" + `
-EXPECT_NOT WRITE:MYSQL users    # No write should happen
-EXPECT_NOT HTTP:GET ${AUTH_URL} # Cached response should not re-fetch
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `yaml
+job_backend:
+  type: redis        # redis | kafka | scheduled
+  queue: queue:default   # Redis queue key or Kafka topic (omit for scheduled)
+` + "`" + `` + "`" + `` + "`" + `
 
-### VERIFY
+The runner enqueues the job (Redis BRPOP/BLPOP/LPOP-based workers, Kafka consumers) or, for ` + "`" + `scheduled` + "`" + `, observes a cron-triggered run without seeding. EXPECT blocks then assert the work the job performs.
 
-Validates the actual intercepted query or command at runtime:
+## gRPC
 
-` + "```" + `
-EXPECT WRITE:MYSQL users
-VERIFY query MATCHES /\bpassword_digest\b/
-VERIFY query NOT_CONTAINS ` + "`" + `password` + "`" + `
-` + "```" + `
-
-Operators: ` + "`CONTAINS`" + `, ` + "`NOT_CONTAINS`" + `, ` + "`MATCHES`" + ` (Go regexp). Targets: ` + "`query`" + ` (SQL), ` + "`command`" + `/` + "`key`" + `/` + "`value`" + ` (Redis).
+Set ` + "`" + `infrastructure.grpc: true` + "`" + `. JSON ` + "`" + `RETURNS` + "`" + ` payloads are sent as ` + "`" + `application/grpc+json` + "`" + ` by default; to emit binary protobuf (` + "`" + `application/grpc` + "`" + `), configure a compiled descriptor set via ` + "`" + `grpc_descriptor_set` + "`" + ` (service-level or per-dependency). Unmocked calls pass through to the real upstream when configured. Use ` + "`" + `RETURNS EMPTY` + "`" + ` for a method that returns an empty message.
 
 ## Variable Interpolation
 
-` + "`${VAR_NAME}`" + ` is substituted everywhere — URLs, headers, SQL, payload files. Rules:
-- Variable names must be uppercase with underscores
-- If the variable is set in the environment, that value is used
-- Otherwise a random value is generated and injected into the service container — this forces the service to read from the environment rather than having hardcoded secrets
+` + "`" + `${VAR_NAME}` + "`" + ` is substituted everywhere — URLs, headers, SQL, payload files. If the variable is set in the environment, that value is used; otherwise a random value is generated and injected into the service container (forcing the service to read from the environment rather than hardcoding secrets). Declare types explicitly when needed:
 
-To declare typed variables explicitly (required for integer-typed JSON numbers):
-
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 VARS
   AUTH_TOKEN: string
-  USER_ID: integer    # Renders as a JSON number, not a quoted string
+  USER_ID: integer            # renders as a JSON number, not a quoted string
   ITEM_UUID: uuid
-` + "```" + `
+  STATUS: enum(active,banned) # constrained set
+` + "`" + `` + "`" + `` + "`" + `
 
-Without ` + "`VARS`" + `, a name ending in ` + "`_UUID`" + ` gets a UUID; everything else gets a random string.
+Typed constraints are supported: integer ` + "`" + `min` + "`" + `/` + "`" + `max` + "`" + `, string ` + "`" + `length` + "`" + `/` + "`" + `charset` + "`" + `/` + "`" + `pattern` + "`" + `, and ` + "`" + `enum` + "`" + `.
 
 ## Payload Files
 
-Payloads are YAML or JSON files referenced with ` + "`{{payloads/file.yaml}}`" + ` syntax. They can contain ` + "`${VAR_NAME}`" + ` interpolation. Files must exist at parse time — the runner fails immediately if a referenced file is missing.
+Referenced as ` + "`" + `{{payloads/file.yaml}}` + "`" + ` (JSON, YAML, or XML). They may contain ` + "`" + `${VAR}` + "`" + ` interpolation. Files must exist at parse time. Write-result payloads:
 
-Write result payloads for MySQL/PostgreSQL writes:
-
-` + "```yaml" + `
-# order_insert_result.yaml
+` + "`" + `` + "`" + `` + "`" + `yaml
+# mysql_write_result.yaml
 affected_rows: 1
 last_insert_id: 42
-` + "```" + `
-
-` + "```yaml" + `
-# postgres_write_result.yaml
-affected_rows: 3
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 
 ## Debugging Failures
 
-### "expectation failed: [WRITE:MYSQL] on [users] was never called"
-
-The service ran but never made this database call. Possible causes:
-- The service returned early (check auth/validation logic)
-- The ORM is calling a different table or operation type
-- A prior EXPECT's SQL didn't match, so the mock was never consumed and the service got an unexpected response
-
-To see the actual SQL being sent, check the proxy container logs:
-` + "```bash" + `
-docker logs <proxy-container-name>
-` + "```" + `
-Container names follow the naming template in ` + "`.linespec.yml`" + ` (default pattern: ` + "`proxy-mysql-<spec-name>`" + `).
-
-### "expectation failed: [HTTP:GET] on [user-service.local] was never called"
-
-The service didn't call the expected HTTP dependency. Check:
-- The dependency hostname in ` + "`dependencies:`" + ` matches what the service actually dials
-- The ` + "`service.environment`" + ` has the correct URL variable pointing to that hostname
-
-### "negative expectation failed: [WRITE:MYSQL] on [users] was called 1 times"
-
-An ` + "`EXPECT_NOT`" + ` block was violated — the service made a call it shouldn't have. Usually a logic bug in the service.
-
-### "VERIFY failed: query does not contain 'password_digest'"
-
-The actual intercepted query didn't satisfy a ` + "`VERIFY`" + ` rule. The error message includes the actual query text. Check the service's write logic.
-
-### Response body mismatch
-
-The service returned a different body than what ` + "`RESPOND WITH {{file}}`" + ` specified. The error shows a diff. Common fixes:
-- Add ` + "`NOISE`" + ` for fields that vary (IDs, timestamps)
-- Update the payload file to match the service's actual response shape
-- Check that variable interpolation is working as expected
-
-### "failed to load service config" / service won't start
-
-Check:
-- ` + "`service_dir`" + ` path is correct relative to ` + "`.linespec.yml`" + `
-- ` + "`start_command`" + ` is correct for the framework
-- ` + "`health_endpoint`" + ` actually returns 2xx when the service is up
-- ` + "`init_script`" + ` path is valid if specified
-
-### SQL didn't match / proxy returned wrong data
-
-Enable ` + "`USING_SQL_CONTAINS`" + ` with just a stable fragment of the query. To find the actual query the service sends, check proxy container logs or add a ` + "`VERIFY query CONTAINS 'something'`" + ` rule intentionally so the error output shows the real query.
-
-### Variable values don't match across the spec
-
-If a ` + "`${VAR}`" + ` appears in the RECEIVE and in a RETURNS payload, both must resolve to the same value. The first use in the spec defines the value for the entire test. If the service's response doesn't contain the expected variable value, check the payload file is using ` + "`${VAR_NAME}`" + ` (not a hardcoded value) and that the service is reading from the environment rather than hardcoding.
+- **` + "`" + `[WRITE:MYSQL] on [users] was never called` + "`" + `** — the service returned early, hit a different table/op, or a prior EXPECT didn't match (so its mock was never consumed). Check proxy logs: ` + "`" + `docker logs <proxy-container>` + "`" + `.
+- **` + "`" + `[HTTP:GET] on [host] was never called` + "`" + `** — the dependency hostname in ` + "`" + `dependencies:` + "`" + ` doesn't match what the service dials, or the service's URL env var is wrong.
+- **` + "`" + `negative expectation failed: [WRITE:MYSQL] … was called` + "`" + `** — an ` + "`" + `EXPECT_NOT` + "`" + ` was violated; usually a service logic bug.
+- **` + "`" + `VERIFY failed` + "`" + `** — the intercepted query/body didn't satisfy a ` + "`" + `VERIFY` + "`" + ` rule; the error includes the actual value.
+- **Response body mismatch** — add ` + "`" + `NOISE` + "`" + ` for varying fields, or fix the payload to match the service's real response shape.
+- **SQL didn't match** — prefer semantic matching (` + "`" + `ACCESSING_TABLES` + "`" + ` + ` + "`" + `VERIFY_*` + "`" + `); if using legacy text matching, use ` + "`" + `USING_SQL_CONTAINS` + "`" + ` with a stable fragment.
 
 ## Example Suites
 
-Look at these example suites for reference patterns:
+| Suite | Demonstrates |
+|---|---|
+| ` + "`" + `examples/todo-linespecs/` + "`" + ` | Rails + MySQL + HTTP dep + Kafka events |
+| ` + "`" + `examples/user-linespecs/` + "`" + ` | Rails + MySQL, CRUD, auth, VARS |
+| ` + "`" + `examples/notification-linespecs/` + "`" + ` | FastAPI + PostgreSQL + Redis cache hit/miss |
+| ` + "`" + `examples/multi-db-linespecs/` + "`" + ` | Go + MySQL + MongoDB simultaneously |
 
-| Suite | What it demonstrates |
-|-------|---------------------|
-| ` + "`examples/todo-linespecs/`" + ` | Rails + MySQL + HTTP dep + Kafka events |
-| ` + "`examples/user-linespecs/`" + ` | Rails + MySQL, CRUD operations, auth, VARS |
-| ` + "`examples/notification-linespecs/`" + ` | FastAPI + PostgreSQL + Redis cache hit/miss |
-| ` + "`examples/multi-db-linespecs/`" + ` | Go service + MySQL + MongoDB simultaneously |
-
-Run an example suite (requires Docker):
-` + "```bash" + `
+` + "`" + `` + "`" + `` + "`" + `bash
 linespec test examples/todo-linespecs/
-` + "```" + `
+` + "`" + `` + "`" + `` + "`" + `
 `
 
 // ContextOptions holds options for the context command
