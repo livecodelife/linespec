@@ -826,11 +826,12 @@ func (c *CommitChecker) CheckForStaleScopeWarnings(record *Record, changedFiles 
 			// File hasn't changed since record was sealed - this is a stale scope warning
 			shortSHA := record.SealedAtSHA[:7]
 			warning := fmt.Sprintf(
-				"You are modifying '%s' which is governed by implemented record %s (sealed at %s). "+
-					"Implemented records should not need further changes. "+
-					"If your changes conflict with the original decision, create a superseding record:\n"+
+				"Note: '%s' is governed by implemented record %s (sealed at %s). "+
+					"This is informational and non-blocking — no action is required. "+
+					"Make your change under your own new record and tag your commit with it. "+
+					"Supersede %s only if you are intentionally revising that record's decision:\n"+
 					"  linespec provenance create --title \"Your change description\" --supersedes %s",
-				changedFile, record.ID, shortSHA, record.ID,
+				changedFile, record.ID, shortSHA, record.ID, record.ID,
 			)
 			warnings = append(warnings, StaleScopeWarning{
 				RecordID: record.ID,

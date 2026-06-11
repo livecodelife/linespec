@@ -193,8 +193,8 @@ func TestCheckForStaleScopeWarnings_MessageFormat(t *testing.T) {
 	}
 
 	// Verify message contains required elements per prov-2026-032
-	if !strings.Contains(warning.Message, "You are modifying") {
-		t.Errorf("Message should indicate user is modifying a file")
+	if !strings.Contains(warning.Message, "is governed by implemented record") {
+		t.Errorf("Message should indicate the file is governed by an implemented record")
 	}
 
 	if !strings.Contains(warning.Message, "prov-2026-032") {
@@ -205,12 +205,12 @@ func TestCheckForStaleScopeWarnings_MessageFormat(t *testing.T) {
 		t.Errorf("Message should contain the sealed SHA short form")
 	}
 
-	if !strings.Contains(warning.Message, "Implemented records should not need further changes") {
-		t.Errorf("Message should explain that implemented records shouldn't need changes")
+	if !strings.Contains(warning.Message, "non-blocking") {
+		t.Errorf("Message should state that the stale-scope warning is non-blocking")
 	}
 
-	if !strings.Contains(warning.Message, "create a superseding record") {
-		t.Errorf("Message should suggest creating a superseding record")
+	if !strings.Contains(warning.Message, "only if you are intentionally revising") {
+		t.Errorf("Message should frame superseding as conditional on revising the decision, not required")
 	}
 
 	if !strings.Contains(warning.Message, "linespec provenance create") {
