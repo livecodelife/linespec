@@ -486,10 +486,26 @@ EXPECT HTTP:<METHOD> <URL>
 [HEADERS
   <header_name>: <header_value>
   ...]
+[WITH {{<request_body>}}]
 RETURNS {{<response_body>}}
+[RESPONSE_HEADERS
+  <header_name>: <header_value>
+  ...]
 ```
 
-Example:
+`WITH` on an EXPECT asserts the **outbound request body** the service sends to the dependency — it is *not* the response. `RETURNS` is the mocked response. Assert that the service calls a downstream service with a specific request body:
+
+```
+EXPECT HTTP:POST http://payment-service.local/charge
+HEADERS
+  Idempotency-Key: ${KEY}        # matched against the actual request headers
+WITH {{payloads/charge_request.json}}   # the request body must match this
+RETURNS {{payloads/charge_response.json}}   # mocked response body
+RESPONSE_HEADERS
+  Content-Type: application/json
+```
+
+Simpler GET with no request body:
 
 ```
 EXPECT HTTP:GET http://user-service.local/users/42
@@ -505,27 +521,28 @@ Simulating dependency failures:
 EXPECT HTTP:GET http://user-service.local/users/42
 RETURNS ERROR
 
-# Simulate a specific error condition
+# Simulate a specific error condition (label is for readability)
 EXPECT HTTP:POST http://temporal.local/workflows
 RETURNS ERROR cycle_detected
 
-# Return a non-200 HTTP status from the dependency
+# Return a non-200 HTTP status (no body)
 EXPECT HTTP:POST http://payment-service.local/charge
 RETURNS HTTP:429
 
-# Non-200 status with a response body
+# Non-200 status WITH a response body: put a `status` field in the RETURNS payload
 EXPECT HTTP:GET http://auth-service.local/validate
-RETURNS HTTP:401
-WITH {{payloads/auth_error.json}}
+RETURNS {{payloads/auth_error.json}}   # auth_error.json contains `status: 401` plus the body
 ```
 
 Rules:
 
 * RETURNS is required for HTTP expectations; use `{{file}}`, `ERROR`, `ERROR <code>`, or `HTTP:NNN`
+* `WITH {{file}}` is optional and matches the **outbound request body**; omit it to match any body for that method/URL
 * `RETURNS ERROR` closes the TCP connection immediately — the service sees an `io.EOF`
 * `RETURNS ERROR <code>` does the same; `<code>` is a label for test readability (e.g. `cycle_detected`)
-* `RETURNS HTTP:NNN` sends the given status code; combine with `WITH {{file}}` for a response body
+* `RETURNS HTTP:NNN` sends just the status code (no body). To return a non-200 **with** a body, use `RETURNS {{file}}` and include a `status:` field in that payload
 * HEADERS is optional; headers are matched against the actual request
+* `RESPONSE_HEADERS` is optional; it sets explicit headers on the mocked response. Without it, `Content-Type` is inferred from the payload file extension (`.json` → `application/json`, `.yaml`/`.yml` → `application/yaml`, `.xml` → `application/xml`)
 * The proxy intercepts calls to the hostname and returns the mocked response
 * Tests fail if the HTTP mock is defined but not invoked
 
@@ -610,7 +627,6 @@ EXPECT WRITE:MYSQL [<table_name>] [CALL N]
   ...]
 [WITH {{<input_payload>}}]
 [RETURNS {{<write_result_file>}}]
-[NO TRANSACTION]
 [VERIFY query CONTAINS '<string>']
 [VERIFY query NOT_CONTAINS '<string>']
 [VERIFY query MATCHES /<regex>/]
@@ -628,7 +644,6 @@ EXPECT WRITE:MYSQL <table_name>
 """]
 [WITH {{<input_payload>}}]
 [RETURNS {{<write_result_file>}}]
-[NO TRANSACTION]
 [VERIFY query CONTAINS '<string>']
 [VERIFY query NOT_CONTAINS '<string>']
 [VERIFY query MATCHES /<regex>/]
@@ -682,7 +697,6 @@ Rules:
 * When `ACCESSING_TABLES` is used the table name on the EXPECT line may be omitted
 * RETURNS is optional. When present, the payload must be a YAML object with optional `affected_rows` and `last_insert_id` fields. Omitting RETURNS defaults to `affected_rows=0, last_insert_id=0`.
 * Multiple WRITE mocks on the same table can be disambiguated by `VERIFY_OPERATION` or `CALL N`
-* NO TRANSACTION is parsed but has no effect (transactions always pass through)
 * VERIFY clauses validate the actual SQL executed at runtime
 
 ---
@@ -801,7 +815,7 @@ EXPECT READ:REDIS GET session:${SESSION_ID}
 RETURNS EMPTY
 ```
 
-Supported read commands: `GET`, `MGET`, `HGET`, `HGETALL`, `HMGET`, `LRANGE`, `LLEN`, `SMEMBERS`, `SISMEMBER`, `ZRANGE`, `ZRANGEBYSCORE`, `EXISTS`, `TTL`, `TYPE`, `KEYS`, `STRLEN`, `LINDEX`
+Supported read commands: `GET`, `MGET`, `HGET`, `HGETALL`, `HMGET`, `LRANGE`, `LLEN`, `SMEMBERS`, `SISMEMBER`, `ZRANGE`, `ZRANGEBYSCORE`, `EXISTS`, `TTL`, `TYPE`, `KEYS`, `STRLEN`, `LINDEX`, `BRPOP`, `BLPOP`, `LPOP` (the blocking/pop commands are also used to seed Redis-backed background-job workers — see `RECEIVE JOB`)
 
 Rules:
 
@@ -907,7 +921,7 @@ Rules:
 ```
 EXPECT GRPC:<ServiceName>/<MethodName>
 [WITH {{<request_payload>}}]
-RETURNS {{<response_payload>}}
+RETURNS {{<response_payload>}} | EMPTY
 ```
 
 LineSpec intercepts outbound gRPC calls using an HTTP/2 proxy. The service under test must point its gRPC client at the proxy host — no code changes to the service are required.
@@ -937,7 +951,7 @@ Rules:
 
 * `ServiceName/MethodName` matches the gRPC route (e.g. `UserService/GetUser` or `users.UserService/GetUser`)
 * `WITH` is optional; omit it to match any request body for that method
-* `RETURNS` is required; the proxy returns it as the gRPC response
+* `RETURNS` is required; the proxy returns it as the gRPC response. Use `RETURNS EMPTY` for an empty (nil) response body
 * Test fails if the expected gRPC call is not observed
 
 #### Content-Type handling
@@ -993,7 +1007,7 @@ Behavior:
 
 ### VERIFY (Validation Rules)
 
-The `VERIFY` clause validates the actual query or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, and Redis EXPECT statements.
+The `VERIFY` clause validates the actual query, request, message, or command intercepted at runtime. It can be attached to MySQL, PostgreSQL, HTTP, Kafka/EVENT, gRPC, and Redis EXPECT statements.
 
 Use cases include:
 - Security: Ensuring passwords are hashed before storage
@@ -1006,6 +1020,9 @@ Use cases include:
 | Channel | Valid VERIFY targets |
 |---------|----------------------|
 | MySQL / PostgreSQL | `query` |
+| HTTP | `headers.<name>`, `body`, `url`, `path` |
+| Kafka / EVENT / MESSAGE | `key`, `value`, `headers.<name>` |
+| gRPC | `request_body`, `metadata.<name>` |
 | Redis | `command`, `key`, `value` |
 
 Operators:
@@ -1145,6 +1162,8 @@ Rules:
 
 Defines an external dependency interaction that must NOT occur during execution. Useful for testing query optimization and ensuring certain operations are avoided.
 
+`EXPECT_NOT` and `EXPECT NOT` (space form) are equivalent — both are accepted.
+
 Syntax:
 
 ```
@@ -1157,9 +1176,12 @@ EXPECT_NOT <CHANNEL> <resource>
 """]
 ```
 
-Supported channels:
-- `READ_MYSQL <table>` — Assert that a SELECT query does NOT occur
-- `WRITE_MYSQL <table>` — Assert that an INSERT/UPDATE/DELETE does NOT occur
+Supported channels (negative expectations are enforced for the SQL and MongoDB stores):
+- `READ:MYSQL <table>` / `WRITE:MYSQL <table>`
+- `READ:POSTGRESQL <table>` / `WRITE:POSTGRESQL <table>`
+- `READ:MONGODB <collection>` / `WRITE:MONGODB <collection>`
+
+Each asserts that the corresponding read (SELECT/find) or write (INSERT/UPDATE/DELETE) does **not** occur.
 
 Example — Testing Efficient Queries:
 
@@ -1186,9 +1208,8 @@ WITH {{user_response.yaml}}
 
 Rules:
 
-* Exactly one of READ_MYSQL or WRITE_MYSQL
 * USING_SQL is optional; if provided, matches that specific query
-* If no USING_SQL, matches any read/write on the table
+* If no USING_SQL, matches any read/write on the table/collection
 * Test fails if the forbidden operation is detected
 
 ---
@@ -1558,8 +1579,19 @@ dependencies:
 provenance:
   dir: provenance/
   enforcement: warn        # none | warn | strict
-  commit_tag_required: true
-  auto_affected_scope: true
+  commit_tag_required: true              # require a record ID in commit messages
+  auto_affected_scope: true              # auto-populate affected_scope from git diffs
+  run_associated_specs_on_complete: true # run associated_specs on the open→implemented transition
+  commit_on_status_change: true          # auto-commit after open/complete/deprecate transitions
+  manifest_url: ""                       # source manifest URL (set automatically by `linespec clone`)
+
+  # Cross-repo provenance resolution (monorepos / shared product repos)
+  cache_ttl_minutes: 60                  # shared_repos cache freshness TTL (default: 60)
+  shared_repos:                          # named remote repositories for cross-repo records
+    - name: product
+      url: https://github.com/acme/product-provenance
+      ref: main                          # branch or tag (default: main)
+      dir: provenance                    # subdirectory containing the records (default: provenance)
 
   # Voyage AI embeddings for semantic search
   embedding:
@@ -1590,8 +1622,8 @@ container_naming:
 # ─────────────────────────────────────────────
 ports:
   dynamic_ports: true       # Allocate random host ports (default: true)
-  min_port: 20000           # Lower bound for random port range
-  max_port: 30000           # Upper bound for random port range
+  min_port: 20000           # Lower bound for random port range (default: 10000)
+  max_port: 30000           # Upper bound for random port range (default: 65535)
   fixed_proxy_port: 0       # Set to a specific port to pin the verify sidecar (0 = dynamic)
 
 # ─────────────────────────────────────────────
@@ -1612,12 +1644,14 @@ schema_discovery:
 # ─────────────────────────────────────────────
 payload:
   directory: payloads       # Subdirectory name for payload files (default: payloads)
-  status_field: status      # JSON field path used to extract HTTP status from payload files
+
+# Note: the HTTP proxy reads the response status from a `status` field in the
+# RETURNS payload itself (e.g. `status: 401`). This field name is fixed.
 
 # ─────────────────────────────────────────────
 # Misc
 # ─────────────────────────────────────────────
-timeout_seconds: 60     # Per-test timeout (default: 30)
+timeout_seconds: 60     # Per-test timeout in seconds (default: 180)
 strict_passthrough: false  # true = fail on any unmatched proxy interaction
 ```
 
