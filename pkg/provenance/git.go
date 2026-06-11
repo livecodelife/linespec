@@ -232,6 +232,24 @@ func (g *Git) CommitRecord(message string, filePaths ...string) error {
 	return nil
 }
 
+// Unstage removes the given paths from the index, leaving working-tree contents
+// untouched. Used to undo the `git add` performed by an auto-commit when a
+// status-change transition is rolled back after a rejected commit.
+func (g *Git) Unstage(filePaths ...string) error {
+	if len(filePaths) == 0 {
+		return nil
+	}
+	args := append([]string{"reset", "--quiet", "HEAD", "--"}, filePaths...)
+	cmd := exec.Command("git", args...)
+	if g.RepoRoot != "" {
+		cmd.Dir = g.RepoRoot
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git reset failed: %w\n%s", err, out)
+	}
+	return nil
+}
+
 // GetFilesChangedSince returns files that have changed between two SHAs
 func (g *Git) GetFilesChangedSince(fromSHA, toSHA string) ([]string, error) {
 	cmd := exec.Command("git", "diff", "--name-only", fmt.Sprintf("%s..%s", fromSHA, toSHA))
