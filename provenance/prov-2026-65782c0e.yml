@@ -1,6 +1,6 @@
 id: prov-2026-65782c0e
 title: 'Embeddings workflow: direct-push via bypass App instead of self-approved PR'
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -52,7 +52,7 @@ type: blueprint
 supersedes: prov-2026-da5fd142
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f2e4fedbfcf294e5c16f5ddf8ceab713423217df
 associated_specs:
   - path: .github/workflows/index-provenance.yml
     type: code
