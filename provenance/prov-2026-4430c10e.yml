@@ -1,0 +1,58 @@
+id: prov-2026-4430c10e
+title: Remove 18 functions dead in every build configuration
+status: open
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  One-time cleanup so the deadcode gate (prov-2026-50dc42de) starts and
+  stays green. Removed the 18 functions reported by the multi-config
+  intersection — unreachable in every build configuration AND unused by any
+  test. After removal the gate reports zero dead functions; `go build ./...`,
+  `go build -tags 'integration beta' ./...`, `go vet ./...`, and the full
+  unit suite all pass.
+
+  Removed:
+    - docker/orchestrator.go: GetNetworkGateway, GetContainerIP, WaitTCP
+      (WaitTCPInternal is the live equivalent; shared expBackoff kept).
+    - embeddings/client.go: Client.Generate (backward-compat wrapper around
+      GenerateDocument, which has the real callers).
+    - logger/logger.go: SetOutput (never wired up).
+    - manifest/manifest.go: ExtractRaw.
+    - provenance/loader.go: GetSupersededChain, UpdateSupersededBy
+      (superseded_by is now maintained via `create --supersedes`).
+    - provenance/types.go: ParseID.
+    - registry/registry.go: GetVarTypes, GetRedisSeeds, ToBytes, IncrementHit,
+      FindHTTPMockWithHeaders (matchHeaders kept; still used by
+      FindHTTPMockWithBody).
+    - runner/runner.go: TestSuite.ResetDatabase (no-op body) and the
+      explicitly Deprecated NewRunner / Runner / Runner.RunTest error stubs.
+    - verify/verify.go: CreateHTTPRequestFromRequest (+ its now-unused
+      net/http import).
+
+  No callers cascaded dead; helpers shared with live code (expBackoff,
+  matchHeaders, getSharedDatabaseConfig) were verified to retain other callers.
+constraints: []
+affected_scope:
+  - pkg/docker/orchestrator.go
+  - pkg/embeddings/client.go
+  - pkg/logger/logger.go
+  - pkg/manifest/manifest.go
+  - pkg/provenance/loader.go
+  - pkg/provenance/types.go
+  - pkg/registry/registry.go
+  - pkg/runner/runner.go
+  - pkg/verify/verify.go
+forbidden_scope: []
+implements: prov-2026-a241eaa6
+associated_specs:
+  - path: pkg/runner/runner.go
+    type: code
+    run_command: make test
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_traces: []
+monitors: []
+tags: []
