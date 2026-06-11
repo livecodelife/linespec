@@ -1,6 +1,6 @@
 id: prov-2026-799d52f0
 title: 'Overhaul install-skills content: rewrite linespec-testing skill, add scope-enforcement/associated_specs/command-flags to provenance skill, sync on-disk copies'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
