@@ -13,7 +13,6 @@ env:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   index:
@@ -22,14 +21,14 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      
+
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
       
       - name: Build LineSpec
         run: go build -o linespec ./cmd/linespec
@@ -41,7 +40,7 @@ jobs:
       
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -49,45 +48,43 @@ jobs:
           repositories: linespec
       
       - name: Commit and push updated embeddings
+        env:
+          # The linespec-merge-bot App is a bypass actor on the "Main branch merges"
+          # ruleset, so it can push embeddings.bin straight to main — no PR or review.
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          # Check if embeddings.bin exists and was modified
           if [ ! -f .linespec/embeddings.bin ]; then
             echo "⚠️ embeddings.bin does not exist, nothing to commit"
             exit 0
           fi
-          
-          # Check if the file has changes (staged or unstaged)
-          if git diff --quiet HEAD -- .linespec/embeddings.bin && git diff --cached --quiet -- .linespec/embeddings.bin; then
+
+          # No change vs HEAD (staged or unstaged) → nothing to do, no empty commit.
+          if git diff --quiet HEAD -- .linespec/embeddings.bin; then
             echo "✓ No changes to embeddings.bin"
-          else
-            echo "Committing updated embeddings.bin..."
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git checkout -b update-embeddings-${{ github.sha }}
-            git add .linespec/embeddings.bin
-            git commit -m "Update embeddings for newly completed provenance records [skip ci]"
-            git push origin update-embeddings-${{ github.sha }}
-            PR_URL=$(gh pr create \
-              --title "Update embeddings for newly completed provenance records" \
-              --body "Automated embeddings update triggered by commit ${{ github.sha }}" \
-              --base main)
-            PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
-            gh pr review "$PR_NUMBER" --approve --body "Automated approval for embeddings update"
-            gh pr merge "$PR_NUMBER" --squash --delete-branch
-            echo "✓ Merged PR for updated embeddings.bin"
+            exit 0
           fi
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-      
+
+          echo "Committing updated embeddings.bin directly to main..."
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "linespec-merge-bot"
+          git add .linespec/embeddings.bin
+          # [skip ci] avoids re-triggering CI; embeddings.bin is not in this
+          # workflow's on.push.paths either, so there is no re-trigger loop.
+          git commit -m "Update embeddings for newly completed provenance records [skip ci]"
+          # Push to main via the App token (ruleset bypass actor). HEAD is the new
+          # commit on top of the pushed SHA, so HEAD:main is a fast-forward.
+          git push "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+          echo "✓ Pushed updated embeddings.bin to main"
+
       - name: Check for unindexed records
         run: |
-          # Check if there are any unindexed records
+          # A non-zero dry-run (e.g. Voyage rate limits) must warn, not fail the job.
+          set +e
           output=$(./linespec provenance index -c .linespec.yml --dry-run 2>&1)
+          set -e
           if echo "$output" | grep -q "record(s) to index"; then
-            echo "⚠️ Warning: Some records were not indexed due to rate limits"
+            echo "⚠️ Warning: Some records were not indexed (likely rate limits)"
             echo "$output"
-            # Don't fail the build, just warn
-            exit 0
           else
             echo "✓ All records indexed successfully"
           fi
