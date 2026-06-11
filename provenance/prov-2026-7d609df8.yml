@@ -1,6 +1,6 @@
 id: prov-2026-7d609df8
 title: Reword supersede-only guidance messages and update provenance skill (Phase 1)
-status: draft
+status: deprecated
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -40,11 +40,7 @@ constraints:
     it), and a cross-link to the linespec-testing skill.
   - A fresh agent given the incident's starting conditions must create one new
     record covering its files and commit, without attempting supersession.
-affected_scope:
-  - pkg/provenance/git.go
-  - pkg/provenance/formatter.go
-  - pkg/provenance/linter.go
-  - .claude/skills/provenance/SKILL.md
+affected_scope: []
 forbidden_scope: []
 type: blueprint
 supersedes: ""
