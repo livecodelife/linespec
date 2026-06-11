@@ -1,6 +1,6 @@
 id: prov-2026-38971b27
 title: 'Update docs to v3.11.7: doc-site completeness, code-verified DSL/CLI/config coverage, and llms.txt'
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -373,7 +373,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 7b58e188ffa9bcf5733f8995aa27957f201cb3ca
 associated_specs:
   - path: README.md
     type: docs
