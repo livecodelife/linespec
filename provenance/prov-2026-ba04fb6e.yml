@@ -1,0 +1,52 @@
+id: prov-2026-ba04fb6e
+title: 'Wire ''linespec provenance next'' command: state gathering, rendering, dual dispatch (Phase 2b)'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Implements prov-2026-54aaf9cf (Phase 2b). Exposes the pure advice engine as a
+  CLI command.
+
+  - commands.go: NextOptions{Files, Format, ConfigFile} and a Next(opts) method
+    that GATHERS state (records from Loader, staged files from Git.GetStagedFiles,
+    working-tree changes from a new Git helper, intended files from opts) and hands
+    it to Advise. The command is the only I/O boundary; Advise stays pure.
+  - git.go: GetWorkingTreeChanges() -> `git diff --name-only HEAD` (staged +
+    unstaged vs HEAD) so ambient `next` knows what the agent is working on.
+  - formatter.go: FormatNext (human) prints the primary action (reason + ready-to-
+    run command), any governing records as advisory context, and an optional detail
+    block; FormatNextJSON emits the NextAction slice for hook/agent consumption.
+  - cmd/linespec/main_stable.go AND main_beta.go: parseNextOptions (supporting
+    `next`, `next --files ...`, the `--plan` alias for --files, `--json`, `-c`) and
+    a `case "next"` dispatch mirroring the existing context/run-specs pattern.
+constraints:
+  - State gathering lives in the command; Advise receives a fully-populated
+    NextState and remains free of I/O.
+  - The `--plan` flag is an alias for `--files` (intent-aware planning before edits).
+  - The `--json` output renders the same NextAction data the human format renders,
+    so both surfaces stay in lockstep.
+  - The dispatch case must be added to BOTH main_stable.go and main_beta.go.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/next.go
+  - pkg/provenance/next_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-54aaf9cf
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/next_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - phase-2
