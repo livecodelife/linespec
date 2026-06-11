@@ -1,6 +1,6 @@
 id: prov-2026-bc57fbdc
 title: Relocate governance-overlap signal to lifecycle transitions; run overlapping sealed records' specs at completion
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
