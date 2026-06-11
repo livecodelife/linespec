@@ -1,6 +1,6 @@
 id: prov-2026-40b513dc
 title: Reword three supersede-implying enforcement messages (git.go stale-scope, formatter.go hint, linter.go locked-scope) so none implies supersede is required
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -18,12 +18,13 @@ affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/formatter.go
   - pkg/provenance/linter.go
+  - pkg/provenance/git_test.go
 forbidden_scope: []
 type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e5e582796cbea9c0edd91328e787631dc75afcb4
 associated_specs:
   - path: pkg/provenance/git.go
     type: go_test
