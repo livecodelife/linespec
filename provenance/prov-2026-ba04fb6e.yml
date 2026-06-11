@@ -1,6 +1,6 @@
 id: prov-2026-ba04fb6e
 title: 'Wire ''linespec provenance next'' command: state gathering, rendering, dual dispatch (Phase 2b)'
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -40,7 +40,7 @@ implements: prov-2026-54aaf9cf
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f8ccc3ee61cebab45ee048ed69d748978b0ddb05
 associated_specs:
   - path: pkg/provenance/next_test.go
     type: go_test
