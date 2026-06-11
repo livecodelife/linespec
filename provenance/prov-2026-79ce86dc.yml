@@ -1,50 +1,60 @@
 id: prov-2026-79ce86dc
-title: 'Make status-change commit atomic: roll back record on hook rejection'
+title: 'Make status-change auto-commit atomic: roll back record on hook rejection'
 status: draft
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
-  The auto-commit-on-status-change flow (open, complete, deprecate) mutates the
-  record on disk and only afterwards runs `git commit`, which fires the pre-commit
-  hooks. When a hook rejects the commit, the status change has already been written
-  to disk with no matching commit, leaving the repository in an inconsistent state.
+  Supersedes prov-2026-8ea5aa89 (Auto-commit on provenance record status change).
+  That blueprint added the commit_on_status_change option: when enabled, the open,
+  complete, and deprecate commands stage the modified record file and create a git
+  commit after a successful status transition. This record carries that feature
+  forward unchanged in every respect except one: how a rejected commit is handled.
 
-  This is especially damaging for the complete command: before committing it sets
+  The original blueprint deliberately specified that when the git commit fails (e.g.
+  a pre-commit hook rejects it), the on-disk status change is left applied so the
+  user can resolve and commit manually. In practice this leaves the repository in an
+  inconsistent state: the record has been mutated and saved with no matching commit.
+  It is especially damaging for the complete command, which before committing sets
   status to implemented, writes sealed_at_sha, and calls SealRecord to write the
   record's content hash into the manifest. A rejected commit therefore leaves the
-  record sealed-and-implemented on disk but uncommitted. Re-running complete fails
+  record sealed-and-implemented on disk but uncommitted — re-running complete fails
   with "already implemented", and the now-immutable record cannot be cleanly
-  re-edited — the user is stuck reconciling the state by hand.
+  re-edited. The user is stuck reconciling the state by hand.
 
-  This bug overturns the original blueprint constraint that deliberately left the
-  on-disk change applied after a failed commit (prov-2026-8ea5aa89). The status
-  change and its commit must instead be atomic: if the commit fails, the on-disk
-  record file (and, for complete, the hash manifest) must be restored to their
-  pre-transition contents and any staging undone, so the operation behaves as if it
-  never happened. The error is still surfaced to the user.
+  This record overturns that one decision: the status change and its auto-commit must
+  be atomic. If the commit fails, the record file — and, for complete, the hash
+  manifest — are restored to their pre-transition contents and unstaged, leaving the
+  repository exactly as if the transition had never been attempted. The error is
+  still surfaced to the user. All other behavior of the feature is preserved.
 constraints:
-  - When the auto-commit fails for open, complete, or deprecate, the record file must be restored to its exact pre-transition contents on disk.
-  - For complete, the hash manifest must also be restored to its pre-seal contents when the commit fails, so no stale or orphaned seal is left behind.
-  - After a failed auto-commit, the affected files must be unstaged so the working tree and index match the pre-transition state.
-  - The in-memory record returned/handled after a failed transition must reflect the rolled-back (original) status, not the attempted new status.
-  - On a successful commit, behavior is unchanged from today (status changed, sealed, committed).
+  - Auto-commit must not apply to the create command; only to open, complete, and deprecate.
+  - Commit messages must match the existing convention for each transition — open uses "Open provenance record <id> [<id>]", complete uses "Complete provenance record [<id>]", deprecate uses "Deprecate provenance record [<id>]".
+  - The feature must be opt-in via the commit_on_status_change boolean in .linespec.yml provenance section; default is false so existing users see no behavior change.
+  - The field must be wired through both main_stable.go and main_beta.go config loaders.
+  - If the git commit fails (e.g. hook rejection), the status change must be rolled back so the transition is atomic with its commit — the record file, and for complete the hash manifest, are restored to their pre-transition contents and unstaged, leaving the repository exactly as if the transition had not been attempted. The error must still be surfaced to the user.
+  - For complete, the rollback must also undo the seal — no orphaned sealed_at_sha on disk and no stale or orphaned hash in the manifest may remain after a failed commit.
+  - The in-memory record handled after a failed transition must reflect the rolled-back (original) status, not the attempted new status.
+  - On a successful commit, behavior is unchanged from the superseded blueprint (status changed, sealed where applicable, committed).
   - The rollback must only run when commit_on_status_change is enabled and the commit actually fails; the manual (non-auto-commit) path is unaffected.
   - make test must pass.
 affected_scope:
+  - pkg/config/types.go
   - pkg/provenance/commands.go
   - pkg/provenance/git.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - .linespec.yml
 forbidden_scope: []
 type: bug
-extends: prov-2026-8ea5aa89
-supersedes: ""
+supersedes: prov-2026-8ea5aa89
 superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/provenance/git_test.go
+  - path: pkg/provenance/provenance_test.go
     type: go_test
     run_command: make test
-  - path: pkg/provenance/provenance_test.go
+  - path: pkg/provenance/git_test.go
     type: go_test
     run_command: make test
 associated_traces: []
