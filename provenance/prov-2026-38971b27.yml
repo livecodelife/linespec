@@ -1,0 +1,434 @@
+id: prov-2026-38971b27
+title: 'Update docs to v3.11.7: doc-site completeness, code-verified DSL/CLI/config coverage, and llms.txt'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Bring all user-facing documentation in line with the current v3.11.7 release
+  and close the doc-site completeness gaps users have reported.
+
+  Documentation must be verified against the actual code (lexer/parser, cobra
+  command registration, config structs) rather than against the markdown, since
+  the markdown itself can be stale. A code-grounded audit found real features
+  present in code but absent from the doc site: RESPONSE_HEADERS, Content-Type
+  inference from payload file extension, the run-specs and sync provenance
+  subcommands, and several .linespec.yml config keys (cache_ttl_minutes,
+  run_associated_specs_on_complete, commit_on_status_change, manifest_url,
+  shared_repos, payload.auth_extraction, payload.supported_formats). It also
+  found stale version strings, broken internal links, and redundant legacy
+  content that newer functionality has superseded.
+
+  Additionally, add an llms.txt and llms-full.txt at the doc-site root — linked
+  from the documentation site — so AI agents searching the web have a curated
+  map and a full-content corpus of the LineSpec documentation.
+
+  The Claude Code skills shipped by `linespec provenance install-skills` (embedded
+  in pkg/provenance/commands.go) are also severely out of date — they predate
+  semantic SQL matching, gRPC, RECEIVE JOB and more, and contain an incorrect
+  claim that a .linespec.yml is needed in every linespecs directory. They must be
+  overhauled to the same code-verified accuracy as the docs, and the drifted
+  on-disk copies regenerated to match the authoritative embed.
+
+  A primary driver is that AI agents repeatedly get stuck on provenance scope
+  enforcement and waste large amounts of effort (one reported postmortem: an
+  agent burned ~$400 after wrongly concluding it had to supersede the ~11
+  implemented records whose broad globs governed the files it touched — when the
+  per-commit check only validates the TAGGED record and a single new record would
+  have sufficed — then asked the user to disable the linter). Neither the skill
+  nor the doc site explains the scope-enforcement model or what to do when blocked.
+  Closing that gap — a clear enforcement model (the check only validates the
+  tagged record; overlap with other records is not a block) plus a when-blocked
+  decision tree that tells agents to STOP and ask the maintainer rather than
+  brute-force or relax controls — is a first-class goal of this work.
+constraints:
+  - Every documented feature must be verified against the code (pkg/dsl, cmd/linespec, pkg/config) — not merely copied from the markdown, which may itself be stale.
+  - The doc site (docs/*.html) is the priority surface; it must cover every CLI command, DSL token/channel, and config key that exists in code.
+  - >-
+    DSL terms/concepts that MUST be documented in docs/linespec.html (verified
+    present in pkg/dsl, currently absent or under-documented): RESPONSE_HEADERS
+    (per-EXPECT HTTP response header block, lexer.go:24); Content-Type inference
+    from payload file extension where RESPONSE_HEADERS is omitted
+    (pkg/dsl/payload.go:108 InferContentType — .json→application/json,
+    .yaml/.yml→application/yaml, .xml→application/xml); CALL N ordering suffix to
+    disambiguate repeated queries; the full semantic-SQL matching vocabulary
+    (ACCESSING_TABLES, VERIFY_OPERATION, VERIFY_WHERE_COLUMNS, VERIFY_WHERE,
+    VERIFY_WRITTEN_VALUES) vs legacy USING_SQL / USING_SQL_CONTAINS; the VERIFY
+    clause targets per channel (query; HTTP headers.NAME/body/url/path;
+    Kafka key/value/headers.NAME; gRPC request_body/metadata.NAME; Redis
+    command/key/value) with CONTAINS/NOT_CONTAINS/MATCHES operators; the
+    EXPECT_NOT vs EXPECT NOT equivalence; RETURNS variants (file, EMPTY, ERROR,
+    ERROR <code>, HTTP:NNN); the TIMEOUT directive and its placement.
+  - >-
+    WITH on EXPECT must be documented as outbound REQUEST-body matching: a
+    WITH {{file}} clause on EXPECT HTTP (and EXPECT EVENT/MESSAGE) asserts that
+    the service-under-test called the dependency with that specific request
+    body; an omitted WITH matches any body (parser.go:381,
+    pkg/proxy/http/interceptor.go makeBodyMatcher/FindHTTPMockWithBody,
+    pkg/registry/registry.go bodyMatch). The mocked RESPONSE body always comes
+    from RETURNS, never from WITH (interceptor.go:190). The existing
+    EXPECT HTTP text that frames WITH as a response body (LINESPEC.md ~516-520
+    and the mirrored docs/linespec.html) is incorrect and must be corrected,
+    with a worked example showing WITH (request match) + RETURNS (response).
+  - >-
+    EXPECT_NOT must be documented for every channel the proxies actually enforce
+    negatively: MySQL, PostgreSQL, AND MongoDB (CheckNegativeMocks is called in
+    pkg/proxy/mysql, pkg/proxy/postgresql, and pkg/proxy/mongodb). The current
+    docs (LINESPEC.md ~1160) list only READ_MYSQL/WRITE_MYSQL, use the stale
+    underscore channel form, and carry an incorrect "Exactly one of READ_MYSQL
+    or WRITE_MYSQL" rule — all of which must be corrected to the colon form and
+    the full channel set.
+  - >-
+    The VERIFY clause prose and target table must be corrected: VERIFY is NOT
+    limited to "MySQL, PostgreSQL, and Redis" as LINESPEC.md ~996 states. Per the
+    parser and the HTTP/Kafka/gRPC interceptors it also applies to HTTP
+    (headers.NAME, body, url, path), Kafka/EVENT (key, value, headers.NAME), and
+    gRPC (request_body, metadata.NAME) — these rows must be added to the targets
+    table alongside SQL query and Redis command/key/value.
+  - The Redis READ command list must add BRPOP, BLPOP, and LPOP (present in pkg/proxy/redis/interceptor.go readCommands but missing from LINESPEC.md ~804).
+  - EXPECT GRPC must document RETURNS EMPTY (nil response body), supported by pkg/proxy/grpc/interceptor.go but currently undocumented.
+  - >-
+    Parsed-but-inert features must NOT be presented as working functionality;
+    either omit them or explicitly mark them "parsed but not yet enforced".
+    These are verified no-ops in v3.11.7: the RESPOND-level HEADERS block (never
+    read by the runner), payload.status_field (the HTTP interceptor hardcodes the
+    "status" field and ignores this config — its current "configurable" framing in
+    LINESPEC.md ~1615 must be corrected/removed), payload.auth_extraction and
+    payload.supported_formats (declared in config but never consumed).
+  - >-
+    NO_TRANSACTION must be REMOVED from the docs entirely — both the
+    [NO TRANSACTION] entries in the EXPECT WRITE syntax grammar (docs/linespec.html
+    ~562 and ~580; LINESPEC.md ~613 and ~631) and the "parsed but has no effect"
+    caveat (docs/linespec.html ~611; LINESPEC.md ~685). It is a dead no-op: no
+    proxy reads expect.NoTransaction, no .linespec file or example uses it, and it
+    has no replacement (transactions pass through by default). Listing it in the
+    syntax grammar wrongly presents a non-feature as usable.
+  - The provenance record --type set includes bug — brief, blueprint, bug, imprint are all valid (RecordTypeBug exists in pkg/provenance/types.go and 18 records use it). Documentation listing bug is CORRECT and must not be "corrected" away, even though the create --type help string omits it.
+  - >-
+    DSL channels/statements that MUST be covered in docs/linespec.html: every
+    channel constant in pkg/types/types.go — HTTP, READ:MYSQL, WRITE:MYSQL,
+    READ:POSTGRESQL, WRITE:POSTGRESQL, READ:REDIS, WRITE:REDIS, READ:MONGODB,
+    WRITE:MONGODB, GRPC, EVENT (alias MESSAGE), JOB — and every RECEIVE variant
+    (HTTP, KAFKA/EVENT, GRPC, JOB) including the VARS block with its typed
+    constraints (uuid, integer, string, enum).
+  - >-
+    CLI commands that MUST be documented: in docs/provenance.html add the
+    run-specs and sync provenance subcommands (both real, currently 0 doc hits)
+    and confirm coverage of every subcommand registered in cmd/linespec
+    (create, open, lint, status, graph, check, lock-scope, lock-layer, complete,
+    deprecate, context, search, audit, index, run-specs, generate, sync,
+    compile, publish, install-hooks, install-skills); in docs/linespec.html
+    expand CLI Usage beyond build+test to also cover init and proxy (with its
+    type/listen/upstream args and flags). Also confirm the lint section
+    documents the --warn/--info/--all output-filter flags (v3.4.0).
+  - >-
+    Provenance hierarchy concepts (v3.x) that MUST be confirmed present in
+    docs/provenance.html: the draft status in the lifecycle, the open command
+    (draft->open transition), the tier types brief/blueprint/bug/imprint, the
+    implements field linking imprints to their blueprint, and the per-type
+    field enforcement matrix.
+  - >-
+    associated_specs must be clearly documented in docs/provenance.html AND
+    PROVENANCE_RECORDS.md (AI tools currently struggle with it). The explanation
+    must cover, per pkg/provenance (types.go AssociatedSpec, commands.go
+    buildSpecCommand, linter.go): (1) the three fields — path (required; must be
+    an EXISTING file, not a directory; it can be ANY file type — a test file,
+    config, doc, screenshot, log, etc.), type (optional), run_command (optional);
+    (2) the recognized type values that auto-run with no run_command and the exact
+    command each maps to: linespec -> "linespec test <path>", rspec -> "bundle
+    exec rspec <path>", pytest -> "pytest <path>", jest -> "npx jest <path>";
+    (3) ANY other type (or no type) with NO run_command is recorded as proof but
+    SKIPPED — not executed — at completion (so non-executable proof like config or
+    docs is fine, it just is not run); (4) run_command OVERRIDES type and is
+    executed as "<run_command> <path>" — i.e. the path is appended — UNLESS the
+    command contains the {{path}} placeholder, in which case {{path}} is
+    substituted with the path and nothing is appended; (5) specs are validated on
+    lint (path must exist) and executed on the open->implemented transition when
+    provenance.run_associated_specs_on_complete is enabled. Include a worked
+    example of each form (recognized type with no run_command; explicit
+    run_command with {{path}}; non-executable proof artifact with type only).
+  - >-
+    Config keys that MUST be documented in docs/linespec.html (verified present
+    and functional in pkg/config, currently 0 doc hits): provenance.cache_ttl_minutes
+    (used by pkg/provenance/cache.go, default 60), provenance.run_associated_specs_on_complete,
+    provenance.commit_on_status_change, provenance.manifest_url,
+    provenance.shared_repos (name/url/ref/dir); plus confirm coverage of the
+    top-level strict_passthrough, timeout_seconds, grpc_descriptor_set, and the
+    job_backend section (type/queue).
+  - >-
+    Config DEFAULTS that are mis-stated or undocumented must be corrected against
+    pkg/config/parser.go: timeout_seconds default is 180 (parser.go:218), NOT 30
+    as LINESPEC.md ~1620 claims; document the dynamic-port defaults min_port=10000
+    / max_port=65535; and the framework-defaults table must add the needs_warmup /
+    warmup_delay_ms values (rails and django default needs_warmup=true with
+    warmup_delay_ms=100; fastapi/express/chi=false) per frameworkDefaults in
+    pkg/config/types.go.
+  - Version strings must be consistent at 3.11.7 across README.md, PROVENANCE_RECORDS.md, and the HTML docs (no leftover 3.0.0, 2.2.0, or 1.x references). Specifically README.md:3 badge and README.md:45 release-binary label, and PROVENANCE_RECORDS.md go-install lines.
+  - Broken internal links to removed files (AGENTS.md, RELEASE_PLAN.md) must be repaired or repointed (to CLAUDE.md, CHANGELOG.md) everywhere they appear in README.md.
+  - Stale "beta build tag" framing must be corrected to reflect that LineSpec Testing is stable and included by default as of v2.0.0 (build-beta remains only as a backward-compatible alias) — in README.md and CLAUDE.md.
+  - >-
+    Out-of-date and redundant content must be removed or demoted, not merely
+    supplemented. Where newer functionality or terminology supersedes an older
+    one, the newer takes priority (presented first / as recommended) and the
+    older is clearly marked legacy/deprecated or removed if gone from code.
+    Specific known instances: (1) semantic SQL matching (ACCESSING_TABLES,
+    VERIFY_OPERATION, VERIFY_WHERE_COLUMNS, VERIFY_WHERE, VERIFY_WRITTEN_VALUES)
+    supersedes USING_SQL / USING_SQL_CONTAINS as of v2.9.0 — semantic must be
+    the primary documented approach and USING_SQL* explicitly demoted to legacy;
+    (2) RELEASE_PLAN.md was removed — every reference (README.md,
+    PROVENANCE_RECORDS.md, docs/provenance.html) must be repointed to CHANGELOG.md
+    or dropped; (3) channel syntax must use the parser's canonical colon form
+    (READ:MYSQL / WRITE:MYSQL etc.) — stray underscore forms (READ_MYSQL,
+    WRITE_MYSQL) in LINESPEC.md and docs/linespec.html must be normalized;
+    (4) associated_linespecs is superseded by associated_specs (verify it stays
+    absent). No deprecated term may be presented with equal or greater
+    prominence than its replacement.
+  - llms.txt must follow the llmstxt.org convention (H1 name, blockquote summary, linked sections with one-line descriptions); llms-full.txt contains the concatenated full documentation as clean markdown. Both live under docs/ so GitHub Pages serves them at /linespec/llms.txt and /linespec/llms-full.txt.
+  - The documentation site must link to llms.txt and llms-full.txt so they are discoverable — at minimum from docs/index.html and docs/docs.html (e.g. in the docs navigation/footer).
+  - >-
+    Source changes are limited to: (1) pkg/provenance/commands.go, ONLY its
+    embedded skill content constants (provenanceSkillMD ~1178-1408 and
+    linespecTestingSkillMD ~1410-1697); and (2) USER-FACING MESSAGE STRINGS ONLY in
+    pkg/provenance/git.go, pkg/provenance/formatter.go, and pkg/provenance/linter.go
+    (the three supersede-implying messages below). No command logic, control flow,
+    severities, field names, or behavior may change anywhere. `make test` must pass.
+  - >-
+    Reword three messages so none implies that superseding is the REQUIRED remedy
+    (strings only, severity/behavior unchanged): (1) git.go ~828 stale-scope
+    warning ("...governed by implemented record... Implemented records should not
+    need further changes... create a superseding record... --supersedes") — reframe
+    as informational and NON-BLOCKING: no action is required; proceed under your own
+    new record; superseding is only relevant if you are deliberately revising the
+    governing record's decision. (2) formatter.go ~639 violation hint ("create a
+    new Provenance Record that supersedes the governing record and governs this
+    file") — the new record only needs to GOVERN the file; drop the implication it
+    must supersede the governing record. (3) linter.go ~1174 locked-scope error
+    ("Surface X overlaps with locked record Y. Add supersedes: Y to reopen this
+    layer") — present resolving the overlap as a maintainer/governance decision
+    (narrow scope, or supersede only if revising the locked decision), not a
+    mandatory supersede. This message string change must stay consistent with the
+    decision-tree wording in the skill and docs.
+  - >-
+    The Claude Code skills installed by `linespec provenance install-skills` are
+    severely out of date and must be overhauled. The embedded constants in
+    pkg/provenance/commands.go (provenanceSkillMD, linespecTestingSkillMD) are the
+    authoritative source — what install-skills ships. Rewrite them, then
+    regenerate the on-disk copies (.claude/skills/provenance/SKILL.md,
+    .claude/skills/linespec-testing/SKILL.md, skills/provenance/SKILL.md) to match
+    the embed EXACTLY, eliminating the current three-way drift.
+  - >-
+    Fix the incorrect .linespec.yml location guidance in the linespec-testing
+    skill: it currently states "Every linespecs directory needs one" and frames
+    the config as living inside a dedicated linespecs subdirectory. The truth
+    (pkg/config/parser.go LoadConfig) is that the runner walks UP the directory
+    tree from the spec path to the repo root to find the nearest .linespec.yml
+    (or honors the LINESPEC_CONFIG env var) — so one .linespec.yml at the root of
+    the project/spec tree covers specs in subdirectories; it does NOT need to be
+    duplicated in every directory.
+  - >-
+    The linespec-testing skill needs a MAJOR overhaul — it predates semantic SQL,
+    gRPC, RECEIVE JOB and more. Required changes, anchored to verified code: lead
+    with semantic SQL matching (ACCESSING_TABLES, VERIFY_OPERATION,
+    VERIFY_WHERE_COLUMNS, VERIFY_WHERE, VERIFY_WRITTEN_VALUES) and demote
+    USING_SQL/USING_SQL_CONTAINS to legacy (skill currently teaches only USING_SQL);
+    add the missing RECEIVE variants (KAFKA/EVENT, GRPC, JOB); add EXPECT GRPC and
+    clarify HTTP:<METHOD>; add the missing EXPECT options — WITH-as-request-body,
+    RESPONSE_HEADERS, RETURNS EMPTY/ERROR/ERROR <code>/HTTP:NNN, Content-Type
+    inference; expand the VERIFY targets to HTTP (headers.NAME/body/url/path),
+    Kafka (key/value/headers.NAME) and gRPC (request_body/metadata.NAME); note
+    EXPECT_NOT works for MySQL/PostgreSQL/MongoDB; add brief gRPC and background-job
+    (job_backend) sections. Apply the same "newer supersedes older, no deprecated
+    term shown with equal prominence" rule. (NO_TRANSACTION is not present in this
+    skill, so nothing to remove there.)
+  - >-
+    The provenance skill is largely current and accurate (blueprint->imprint
+    workflow, bug type, tier rules PROV020/021/022, shared_repos/cache_ttl_minutes,
+    -c flag, sync/compile/publish/clone/import) — it needs only light additions,
+    NOT an overhaul: add an associated_specs explanation (path/type/run_command,
+    recognized auto-run types, {{path}} substitution, skip-when-no-type-or-runcommand
+    behavior — the same content required for the provenance docs, since AI tools
+    struggle with it), and add the missing commands to its reference (run-specs,
+    install-hooks, install-skills, lock-layer, generate). Do not regress its
+    existing correct content.
+  - >-
+    The provenance skill (and the provenance docs) must prescribe using the
+    state-changing COMMANDS/FLAGS rather than hand-editing record YAML — agents
+    frequently corrupt the graph by manually editing other records. Verified
+    behaviors to document: `create --supersedes <old-id>` automatically sets the
+    new record's supersedes AND updates the OLD record's superseded_by and flips
+    its status to superseded, staging both files together (commands.go:116-132) —
+    so agents must NOT manually edit superseded_by/status; `open` does
+    draft->open; `complete` does open->implemented and stamps sealed_at_sha;
+    `deprecate --reason` sets status deprecated; `lock-scope` auto-populates
+    affected_scope from git history; `compile` rebuilds the hash manifest. This
+    also CORRECTS the skill's current "Superseding Records" section, which wrongly
+    instructs the agent to manually update the old record's superseded_by field
+    instead of using `create --supersedes`. General rule to state: never hand-edit
+    status, superseded_by, sealed_at_sha, or the hash manifest — use the command
+    that manages them.
+  - >-
+    A "Scope Enforcement & When You're Blocked" section must be added to BOTH the
+    provenance skill (primary — agents load it; currently ~zero coverage) and the
+    doc site (docs/provenance.html + PROVENANCE_RECORDS.md), verified against
+    pkg/provenance (types.go ScopeMode/IsInScope, git.go CheckStaged/CheckCommit,
+    linter.go). THE CENTRAL POINT, which must be stated unambiguously: the
+    per-commit scope check validates your changed files ONLY against the record(s)
+    you TAG in the commit message — it does NOT consult other records that govern
+    those files. Therefore other records whose affected_scope overlaps your files
+    (including implemented/sealed records with broad globs) do NOT block your
+    commit and do NOT need to be superseded. To make a routine change you create
+    ONE new record, set its affected_scope to cover exactly the files you are
+    changing, open it, and tag your commits with it. You supersede a record ONLY
+    when you are deliberately revising the decision it captured — never merely
+    because its scope overlaps your files.
+  - >-
+    The section must also explain, accurately: (a) SCOPE MODES — a record with
+    empty affected_scope is "observed" (its IsInScope permits any file except
+    forbidden_scope); a NON-EMPTY affected_scope makes it "allowlist", so the
+    tagged record then only permits files matching its own affected_scope (this is
+    why "scope violation" on a tagged record means THAT record's affected_scope is
+    missing one of your changed files — fix by widening that record's scope in
+    draft, NOT by superseding others); (b) implemented records are immutable —
+    tagging one yields "already implemented - cannot commit with this ID. Create a
+    new record or supersede this one"; the correct reading is "create a new record"
+    (one record covering your files), NOT "supersede the N records that happen to
+    govern these files"; (c) opening under strict requires associated_specs
+    ("No associated specs (open) [strict]"); (d) OPTIONAL/ADVANCED — lock-scope
+    freezes a draft/open record's affected_scope to the files it changed in git
+    (AutoPopulateScope; observed->allowlist), and lock-layer creates a locked
+    record; ONLY when locked records exist does an overlapping open record hard-fail
+    lint with "overlaps with locked record Y. Add supersedes: Y" (most projects
+    have none — do not present this as the common case).
+  - >-
+    The section must include a WHEN-BLOCKED DECISION TREE mapping each enforcement
+    message to its sanctioned response: "tag required" -> tag the commit with your
+    record ID; "already implemented - cannot commit with this ID" -> create ONE NEW
+    record covering your files and tag THAT (do NOT supersede the governing
+    records); "scope violation / forbids changes to <file>" -> add that file to
+    your tagged record's affected_scope (freely editable in draft); "No associated
+    specs (open) [strict]" -> add associated_specs (proof) before committing or
+    completing; "overlaps with locked record - add supersedes" (only if locked
+    layers exist) -> a deliberate governance gate: STOP and ask the maintainer
+    rather than blindly superseding many records. Hard rules to state plainly:
+    NEVER use --no-verify, and NEVER relax enforcement (strict->warn/none) to get
+    unblocked — that is a maintainer + settings-level decision, not an agent's.
+  - >-
+    The skill's "investigate first" guidance must be strengthened and made
+    forcing: run `linespec provenance context -f <file>` for every file to be
+    changed BEFORE writing code, explicitly to surface the governing records early
+    AND to understand that those governing records do not need to be superseded —
+    you will create one new record covering your files (late discovery plus the
+    wrong "must supersede them" conclusion is the documented root cause of the
+    expensive failure). Authoring guidance must also recommend TIGHT affected_scope
+    over broad globs (e.g. core/**) so overlap noise does not mislead future
+    changes.
+  - >-
+    HIGHEST-VALUE skill addition: a dedicated callout/row for the STALE-SCOPE
+    WARNING (git.go ~828 — the exact message that started the reported failure
+    spiral). It must state plainly that this warning is NON-BLOCKING, requires NO
+    action, and is NOT a reason to supersede anything: it merely notes you are
+    editing a file governed by an implemented record; proceed under your own new
+    record and ignore it unless you are intentionally revising that record's
+    decision.
+  - >-
+    The skill must OPEN with a positive HAPPY-PATH RECIPE (a proactive checklist to
+    follow before touching anything, not just reactive error rows): (1) run
+    `linespec provenance context -f <file>` for each file you will change; (2)
+    create ONE record (`create --type blueprint --no-edit`); (3) set its
+    affected_scope to exactly those files; (4) create the proof artifact, then
+    `open` the record with that spec referenced; (5) make changes and commit tagged
+    with the record ID; (6) show proof and `complete`. Frame it as the default flow
+    so agents follow it instead of discovering enforcement reactively.
+  - >-
+    The associated_specs guidance must include a WORKED EXAMPLE showing the strict
+    ORDER OF OPERATIONS: under strict enforcement an open record with no existing
+    proof file is a HARD ERROR ("No associated specs (open) [strict]"), and a
+    referenced spec path that does not exist also fails lint — so the proof file
+    must be CREATED FIRST, then referenced in associated_specs, then the record
+    opened. Show the sequence (write the spec/proof file -> add the
+    path/type/run_command entry -> open) explicitly.
+  - The provenance skill must cross-link to the linespec-testing skill as the reference for AUTHORING the specs that back associated_specs (e.g. when type is linespec, how to write the .linespec proof file).
+  - Newly documented DSL features must include accurate, parser-valid syntax and at least one runnable example.
+affected_scope:
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - CLAUDE.md
+  - docs/index.html
+  - docs/docs.html
+  - docs/linespec.html
+  - docs/provenance.html
+  - docs/llms.txt
+  - docs/llms-full.txt
+  - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/linter.go
+  - .claude/skills/provenance/SKILL.md
+  - .claude/skills/linespec-testing/SKILL.md
+  - skills/provenance/SKILL.md
+forbidden_scope:
+  - cmd/**
+  - examples/**
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: README.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: LINESPEC.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: PROVENANCE_RECORDS.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: CLAUDE.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/index.html
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/docs.html
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/linespec.html
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/provenance.html
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/llms.txt
+    type: docs
+    run_command: test -f {{path}}
+  - path: docs/llms-full.txt
+    type: docs
+    run_command: test -f {{path}}
+  - path: pkg/provenance/commands.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/git.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/formatter.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/linter.go
+    type: go_test
+    run_command: make test
+  - path: .claude/skills/provenance/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: .claude/skills/linespec-testing/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: skills/provenance/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags:
+    - docs
+    - doc-site
+    - llms
