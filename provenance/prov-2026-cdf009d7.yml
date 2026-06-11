@@ -1,0 +1,69 @@
+id: prov-2026-cdf009d7
+title: Release v3.12.0
+status: draft
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  Version bump and release artifacts for v3.12.0. Minor release bundling a new
+  Go code-quality gate plus provenance-lifecycle behavior changes accumulated
+  since v3.11.7:
+    - Added: a committed Go code-quality gate (scripts/go-quality.sh) wired to a
+      pre-push git hook and the CI code-quality job — staticcheck (hard),
+      deadcode across all build configs (hard), and dupl (warn)
+      (prov-2026-a241eaa6).
+    - Changed: the governance-overlap signal moved off every commit/lint onto the
+      open/complete lifecycle transitions, and `complete` now runs the specs of
+      overlapping sealed records (prov-2026-bc57fbdc).
+    - Changed: provenance status transitions are now atomic — the record is
+      validated before sealing and the on-disk status change rolls back if lint
+      or the commit fails, so the repo is never left sealed-but-uncommitted
+      (prov-2026-79ce86dc).
+    - Changed: three supersede-implying enforcement messages reworded so none
+      implies superseding is required (prov-2026-40b513dc).
+    - Removed: dead code in pkg/proxy/postgresql and pkg/proxy/base, plus
+      assorted staticcheck cleanups (prov-2026-c013b085, prov-2026-53a12672).
+    - CI: the index-provenance embeddings workflow now commits
+      .linespec/embeddings.bin directly to main via the bypass App instead of an
+      unmergeable self-approved PR (prov-2026-65782c0e, prov-2026-eb7dd809).
+    - Docs: doc-site/skill/llms corpus refreshed to v3.11.7 content
+      (prov-2026-38971b27 and imprints).
+constraints:
+  - |
+    Promote [Unreleased] in CHANGELOG.md to [3.12.0] - 2026-06-11 with Added /
+    Changed / Removed entries for the above; add a fresh empty [Unreleased]
+    section above it.
+  - make bump-version NEW=3.12.0 handles VERSION and all doc/site references.
+  - Run linespec provenance compile to rebuild the hash manifest.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a241eaa6
+  - prov-2026-bc57fbdc
+  - prov-2026-79ce86dc
+  - prov-2026-40b513dc
+  - prov-2026-c013b085
+  - prov-2026-53a12672
+  - prov-2026-65782c0e
+  - prov-2026-eb7dd809
+  - prov-2026-38971b27
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - release
