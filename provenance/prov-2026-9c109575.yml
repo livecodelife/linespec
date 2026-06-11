@@ -1,0 +1,51 @@
+id: prov-2026-9c109575
+title: Overlap selector must include sealed records that predate sealed_at_sha
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Fixes a defect in prov-2026-bc57fbdc. The completion-time governance-overlap
+  selector (overlappingSealedRecords) and the open-time declared-overlap selector
+  (declaredOverlapSealedRecords) both gate on `r.SealedAtSHA != ""` in addition to
+  `r.Status == StatusImplemented`. That extra gate was copied from the old
+  stale-scope logic, which needed sealed_at_sha to compute "changed since seal".
+  The new selectors do not need it.
+
+  This repository is where Provenance Records were first built, so the earliest
+  records (e.g. prov-2026-009, 010, 014, 021, 032) predate the sealed_at_sha field
+  entirely. They are implemented — and therefore sealed and immutable — but carry no
+  sealed_at_sha. The extra gate silently excludes every such record from the overlap
+  teeth. Concretely, completing a change to pkg/provenance/commands.go did NOT run
+  prov-2026-010's user-linespecs specs, even though 010 governs commands.go, because
+  010 has no sealed_at_sha. The very records most likely to encode important proven
+  behavior (the oldest ones) were the ones skipped.
+
+  The fix is to define "sealed" as `status == implemented`, independent of whether the
+  legacy sealed_at_sha field is populated. Both selectors must select implemented
+  records regardless of sealed_at_sha, so old-paradigm records' specs are verified at
+  completion just like modern ones.
+constraints:
+  - The completion overlap selector must select a record when it is implemented and its scope contains an actually-changed file, regardless of whether sealed_at_sha is set.
+  - The open declared-overlap selector must likewise select implemented records regardless of sealed_at_sha.
+  - Implemented records that predate the sealed_at_sha field (no type, no sealed_at_sha) must be treated as sealed for overlap purposes.
+  - No other selection criteria change — superseded/deprecated/draft/open records are still excluded, and self is still excluded.
+  - make test must pass.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/overlap_specs_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-bc57fbdc
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/overlap_specs_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - governance
