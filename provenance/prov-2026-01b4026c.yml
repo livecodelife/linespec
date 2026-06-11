@@ -1,6 +1,6 @@
 id: prov-2026-01b4026c
 title: Route commit-violation hint and stale-scope warning through engine-owned wording (Phase 2c)
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -39,7 +39,7 @@ implements: prov-2026-54aaf9cf
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 73f60339c9466de16d9554ee8d97ca71ce92da24
 associated_specs:
   - path: pkg/provenance/next_test.go
     type: go_test
