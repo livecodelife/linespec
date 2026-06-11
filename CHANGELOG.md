@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.12.0] - 2026-06-11
+
+### Added
+
+- **Go code-quality gate** ([prov-2026-a241eaa6](./provenance/prov-2026-a241eaa6.yml)) — A committed script (`scripts/go-quality.sh`) now runs as a pre-push git hook and as the `code-quality` CI job, keeping the codebase compact by blocking dead code and lint regressions before they land. It runs three checks: **staticcheck** `./...` (hard gate), **deadcode** (hard gate, reporting only functions unreachable across *every* build configuration — `default`, `-test`, and the `beta`/`integration` tag combinations — so test-only and tag-gated helpers are treated as live), and **dupl** (warn-only). Install the hook once per clone with `make install-hooks-quality`; it is separate from the linespec-managed hooks so `linespec install-hooks` never overwrites it. Env overrides: `QUALITY_DEADCODE=warn`, `QUALITY_SKIP_DUPL=1`, `DUPL_THRESHOLD=<n>`.
+
+### Changed
+
+- **Governance-overlap signal moved to lifecycle transitions** ([prov-2026-bc57fbdc](./provenance/prov-2026-bc57fbdc.yml)) — Previously the "you are modifying a file governed by an implemented record" notice fired on every commit (via the commit-msg hook's `check --staged`) and every lint, spamming a loud non-blocking warning for any change touching a sealed record's glob scope without ever verifying the sealed behavior was affected. The signal now appears only on the `open` and `complete` lifecycle transitions, and `complete` additionally runs the `associated_specs` of overlapping sealed records against your actual changes to confirm nothing broke. Identical spec commands across overlapping records are de-duplicated so each runs once. Routine commits and lints no longer emit overlap noise.
+
+- **Provenance status transitions are now atomic** ([prov-2026-79ce86dc](./provenance/prov-2026-79ce86dc.yml)) — The `open`, `complete`, and `deprecate` commands now validate the record *before* sealing, and if lint or the auto-commit fails, the on-disk status change (including `sealed_at_sha` and the manifest hash written by `complete`) is rolled back. Previously a rejected commit left the record sealed-and-implemented on disk but uncommitted, so re-running `complete` failed with "already immutable" and the record could not be cleanly re-edited — the repository was left in an inconsistent state requiring manual reconciliation. Supersedes the original auto-commit-on-status-change behavior ([prov-2026-8ea5aa89](./provenance/prov-2026-8ea5aa89.yml)).
+
+- **Reworded enforcement messages** ([prov-2026-40b513dc](./provenance/prov-2026-40b513dc.yml)) — Three user-facing messages (the stale-scope warning, the violation hint, and the locked-scope error) were reworded so none implies that superseding is the required remedy; resolving a scope overlap is a governance decision, and a new record only needs to govern the file. Strings only — no severity or behavior change.
+
+- **Index-provenance embeddings workflow pushes directly to main** ([prov-2026-65782c0e](./provenance/prov-2026-65782c0e.yml), [prov-2026-eb7dd809](./provenance/prov-2026-eb7dd809.yml)) — The workflow previously opened a self-approved PR that GitHub's `main` ruleset (PR + 1 approval + Copilot review) would never merge, leaving stale unmergeable PRs. It now commits `.linespec/embeddings.bin` straight to `main` using the `linespec-merge-bot` App token, which is already in the ruleset's bypass list.
+
+### Removed
+
+- **PostgreSQL proxy dead code** ([prov-2026-c013b085](./provenance/prov-2026-c013b085.yml), [prov-2026-53a12672](./provenance/prov-2026-53a12672.yml)) — Removed 40+ unreachable methods and superseded implementation strata across `pkg/proxy/postgresql/` (`proxy.go`, `protocol.go`, `result.go`, `startup.go`) and the `pkg/proxy/base/` shared connection layer, reducing the proxy to only its live code paths, plus assorted staticcheck cleanups elsewhere. No behavior change.
+
 ## [3.11.7] - 2026-06-02
 
 ### Fixed
