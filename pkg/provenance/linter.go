@@ -85,8 +85,9 @@ func (l *Linter) LintAll() *LintResult {
 		l.lintRecord(record, result)
 	}
 
-	// Check for scope overlaps
-	l.checkScopeOverlaps(result)
+	// Scope overlap between open records is no longer surfaced as a lint warning —
+	// it was noise on every lint. Overlap is now computed at the open/complete
+	// lifecycle transitions as an internal selector (see prov-2026-bc57fbdc).
 
 	// Check for dead records
 	l.checkDeadRecords(result)
@@ -966,48 +967,6 @@ func (l *Linter) validateImmutability(record *Record, result *LintResult) {
 			Severity: SeverityError,
 		})
 	}
-}
-
-// checkScopeOverlaps checks for overlapping scope between open records
-func (l *Linter) checkScopeOverlaps(result *LintResult) {
-	openRecords := l.Loader.FilterByStatus(StatusOpen)
-	// Draft records are excluded — no enforcement applies until open
-
-	for i := 0; i < len(openRecords); i++ {
-		for j := i + 1; j < len(openRecords); j++ {
-			a, b := openRecords[i], openRecords[j]
-			overlap := l.findScopeOverlap(a, b)
-			if len(overlap) > 0 {
-				result.Add(Issue{
-					RecordID: a.ID,
-					Field:    "scope",
-					Message:  fmt.Sprintf("Scope overlap with %s: %v", b.ID, overlap),
-					Severity: SeverityWarning,
-				})
-			}
-		}
-	}
-}
-
-// findScopeOverlap returns files that appear in the scope of both records
-func (l *Linter) findScopeOverlap(a, b *Record) []string {
-	var overlap []string
-
-	// Get all scope patterns from both records
-	allA := append(a.AffectedScope, a.ForbiddenScope...)
-	allB := append(b.AffectedScope, b.ForbiddenScope...)
-
-	// Check if any pattern from A overlaps with any pattern from B
-	for _, patternA := range allA {
-		for _, patternB := range allB {
-			if patternsOverlap(patternA, patternB) {
-				overlap = append(overlap, patternA)
-				break
-			}
-		}
-	}
-
-	return overlap
 }
 
 // checkDeadRecords checks if any governed files have been deleted
