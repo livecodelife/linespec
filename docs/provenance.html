@@ -64,6 +64,7 @@
                         <li><a href="#semantic-search">Semantic Search</a></li>
                         <li><a href="#git">Git Integration</a></li>
                         <li><a href="#sealed-sha">Sealed at SHA</a></li>
+                        <li><a href="#scope-enforcement">Scope Enforcement</a></li>
                         <li><a href="#best-practices">Best Practices</a></li>
                         <li><a href="#examples">Examples</a></li>
                         <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -99,6 +100,7 @@
                         <li><a href="#semantic-search">Semantic Search</a></li>
                         <li><a href="#git">Git Integration</a></li>
                         <li><a href="#sealed-sha">Sealed at SHA</a></li>
+                        <li><a href="#scope-enforcement">Scope Enforcement</a></li>
                         <li><a href="#best-practices">Best Practices</a></li>
                         <li><a href="#examples">Examples</a></li>
                         <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -615,6 +617,9 @@ linespec provenance lint --enforcement strict</code></pre>
                         <li><code>--record prov-YYYY-XXXXXXXX</code> - Lint single record</li>
                         <li><code>--enforcement level</code> - none|warn|strict (default from config)</li>
                         <li><code>--format format</code> - human|json|sarif</li>
+                        <li><code>--warn</code> - Show only warnings</li>
+                        <li><code>--info</code> - Show only informational hints</li>
+                        <li><code>--all</code> - Show all output (errors, warnings, and hints)</li>
                         <li><code>-c, --config path</code> - Use custom config</li>
                     </ul>
                     <p><strong>Enforcement Levels:</strong></p>
@@ -1086,6 +1091,23 @@ linespec import https://example.com/linespec.manifest.json --version v2</code></
                     <p><strong>What it does:</strong> Fetches and verifies the manifest, checks all record IDs for conflicts with the local <code>provenance/</code> directory (aborts atomically if any exist), extracts all records, then runs <code>linespec provenance lint</code> to surface reference issues.</p>
                     <p><strong>When to use:</strong> When you want to pull in a set of published records to extend an existing repository's provenance graph. Use <code>clone</code> instead when starting from scratch.</p>
 
+                    <h3>Sync</h3>
+                    <p>Refresh the local cache for every <code>shared_repos</code> entry configured in <code>.linespec.yml</code>, so cross-repo <code>implements</code>/<code>supersedes</code> references resolve against current remote records.</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>Terminal</span></div>
+                        <pre><code>linespec provenance sync          # refresh stale shared-repo caches
+linespec provenance sync --force  # ignore the TTL and re-fetch all repos</code></pre>
+                    </div>
+                    <p>The linter warns when a shared-repo cache is older than <code>cache_ttl_minutes</code> (default 60); <code>sync</code> clears that warning.</p>
+
+                    <h3>Run Specs</h3>
+                    <p>Run the <code>associated_specs</code> for a record on demand — the same execution the pre-commit hook performs on the <code>open</code> → <code>implemented</code> transition when <code>run_associated_specs_on_complete</code> is enabled.</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>Terminal</span></div>
+                        <pre><code>linespec provenance run-specs --record prov-YYYY-XXXXXXXX</code></pre>
+                    </div>
+                    <p>Useful to verify proof artifacts pass <em>before</em> attempting to complete a record. See <a href="#scope-enforcement">associated_specs</a> for how <code>path</code>/<code>type</code>/<code>run_command</code> behave.</p>
+
                     <h3>Install Hooks</h3>
                     <p>Install git hooks for automatic validation:</p>
                     <div class="code-block">
@@ -1522,6 +1544,87 @@ Sealed at:    a3f92c1        ← Shows the short SHA</code></pre>
                     </div>
                 </section>
 
+                <section id="scope-enforcement" class="docs-section">
+                    <h2>Scope Enforcement &amp; When You're Blocked</h2>
+
+                    <p><strong>The single most important rule:</strong> the pre-commit scope check validates your changed files <strong>only against the record you tag</strong> in the commit message. It does <strong>not</strong> consult other records that happen to govern those files. So implemented/sealed records whose <code>affected_scope</code> overlaps your files do <strong>not</strong> block your commit and do <strong>not</strong> need to be superseded.</p>
+
+                    <p>To make a routine change: create <strong>one</strong> new record, set its <code>affected_scope</code> to cover exactly the files you are changing, open it, and tag your commits with it. Supersede a record <em>only</em> when you are deliberately revising the decision it captured — never merely because its scope overlaps your files.</p>
+
+                    <h3>Happy path — do this before touching anything</h3>
+                    <ol>
+                        <li>Run <code>linespec provenance context -f &lt;file&gt;</code> for each file you will change.</li>
+                        <li>Create one record: <code>linespec provenance create --type blueprint --no-edit --title "…"</code>.</li>
+                        <li>Set its <code>affected_scope</code> to exactly those files.</li>
+                        <li>Create the proof artifact, then <code>open</code> the record with that spec referenced in <code>associated_specs</code>.</li>
+                        <li>Make your changes; commit tagged with the record ID <code>[prov-YYYY-XXXXXXXX]</code>.</li>
+                        <li>Show proof, then <code>complete</code> the record.</li>
+                    </ol>
+
+                    <h3>Scope modes</h3>
+                    <ul>
+                        <li>A record with an <strong>empty <code>affected_scope</code></strong> is <strong>observed</strong> — its check permits any file (except <code>forbidden_scope</code>).</li>
+                        <li>A record with a <strong>non-empty <code>affected_scope</code></strong> is <strong>allowlist</strong> — it permits only files matching that scope. So a "scope violation" on <em>your tagged record</em> means its <code>affected_scope</code> is missing one of your changed files → widen that record's scope (free to edit while <code>draft</code>), don't touch other records.</li>
+                        <li><code>lock-scope</code> auto-populates a record's <code>affected_scope</code> from the files it changed in git (observed → allowlist). <code>lock-layer</code> creates a <code>locked</code> governance record — advanced and uncommon; only when locked records exist can an overlapping open record hard-fail lint.</li>
+                    </ul>
+
+                    <h3>When you're blocked — decision tree</h3>
+                    <table class="docs-table">
+                        <thead><tr><th>Message</th><th>Do this</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>Commit tag required but no provenance ID found</code></td><td>Tag the commit with your record ID <code>[prov-YYYY-XXXXXXXX]</code>.</td></tr>
+                            <tr><td><code>X is already implemented - cannot commit with this ID</code></td><td>Implemented records are immutable. Create <strong>one new record</strong> covering your files and tag that — do <strong>not</strong> supersede the records that govern the files.</td></tr>
+                            <tr><td><code>forbids changes to &lt;file&gt;</code> / scope violation</td><td>Add <code>&lt;file&gt;</code> to <strong>your tagged record's</strong> <code>affected_scope</code> (editable in draft).</td></tr>
+                            <tr><td><code>No associated specs (open) [strict]</code></td><td>Add <code>associated_specs</code> (proof) to the open record before committing/completing.</td></tr>
+                            <tr><td><code>overlaps with locked record Y</code></td><td>A deliberate governance gate (only if locked layers exist). <strong>Stop and ask the maintainer</strong> — do not blindly supersede multiple records.</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="callout callout-warning">
+                        <p><strong>Stale-scope warnings are non-blocking.</strong> When you edit a file governed by an <em>implemented</em> record you may see a warning that the file "is governed by implemented record … create a superseding record." This is informational only — the commit still succeeds, no action is required, and it is <strong>not</strong> a reason to supersede anything. Proceed under your own new record; superseding is relevant only if you are intentionally revising that record's decision.</p>
+                    </div>
+
+                    <p><strong>Hard rules:</strong> Never use <code>--no-verify</code>. Never relax enforcement (<code>strict</code> → <code>warn</code>/<code>none</code>) to get unblocked — that is a maintainer + settings-level decision, not an agent's. When a wall is genuinely a governance call, stop and ask rather than brute-forcing.</p>
+
+                    <h3>Use commands, not manual YAML edits</h3>
+                    <p>Let the CLI update records and other records for you — hand-editing managed fields corrupts the graph.</p>
+                    <table class="docs-table">
+                        <thead><tr><th>Instead of manually editing…</th><th>Use</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>supersedes</code> + the old record's <code>superseded_by</code> + <code>status: superseded</code></td><td><code>create --supersedes &lt;old-id&gt;</code> (sets all of it and stages both files)</td></tr>
+                            <tr><td><code>status: open</code></td><td><code>open --record &lt;id&gt;</code></td></tr>
+                            <tr><td><code>status: implemented</code> + <code>sealed_at_sha</code></td><td><code>complete --record &lt;id&gt;</code></td></tr>
+                            <tr><td><code>status: deprecated</code></td><td><code>deprecate --record &lt;id&gt; --reason "…"</code></td></tr>
+                            <tr><td>listing changed files into <code>affected_scope</code></td><td><code>lock-scope --record &lt;id&gt;</code> (auto-populates from git)</td></tr>
+                            <tr><td>the hash manifest</td><td><code>compile</code></td></tr>
+                        </tbody>
+                    </table>
+                    <p>Never hand-edit <code>status</code>, <code>superseded_by</code>, <code>sealed_at_sha</code>, or the hash manifest.</p>
+
+                    <h3>associated_specs — proof artifacts</h3>
+                    <p><code>associated_specs</code> attach proof that a record's constraints are met. Each entry has three fields:</p>
+                    <ul>
+                        <li><strong><code>path</code></strong> — required. Must point to a file that <em>exists</em> (lint fails otherwise). Any file type: a test, a <code>.linespec</code>, a config, a doc, a screenshot, a log.</li>
+                        <li><strong><code>type</code></strong> — optional. These auto-run with no <code>run_command</code>: <code>linespec</code> → <code>linespec test &lt;path&gt;</code>, <code>rspec</code> → <code>bundle exec rspec &lt;path&gt;</code>, <code>pytest</code> → <code>pytest &lt;path&gt;</code>, <code>jest</code> → <code>npx jest &lt;path&gt;</code>. Any other type with no <code>run_command</code> is recorded as proof but <strong>skipped</strong> (not executed).</li>
+                        <li><strong><code>run_command</code></strong> — optional; overrides <code>type</code>. Runs as <code>&lt;run_command&gt; &lt;path&gt;</code> (the path is appended) <strong>unless</strong> the command contains <code>{{path}}</code>, which is substituted instead. Use <code>{{path}}</code> when the path is not the last argument.</li>
+                    </ul>
+                    <p><strong>Strict order of operations:</strong> under strict enforcement an open record with no associated_specs is a hard error, and a referenced spec path that does not exist also fails lint — so create the proof file <em>first</em>, then reference it, then <code>open</code>:</p>
+                    <div class="code-block">
+                        <div class="code-header"><span>provenance record</span></div>
+                        <pre><code># 1. write the proof file first (e.g. spec/models/user_spec.rb)
+# 2. reference it:
+associated_specs:
+  - path: spec/models/user_spec.rb   # required; must already exist
+    type: rspec                       # optional; auto-runs `bundle exec rspec <path>`
+  - path: linespecs/create_user.linespec
+    type: linespec                    # auto-runs `linespec test <path>`
+  - path: docs/architecture.md
+    run_command: test -f {{path}}     # non-test proof: just assert it exists
+# 3. then `linespec provenance open --record <id>`</code></pre>
+                    </div>
+                    <p>Specs are validated on <code>lint</code> (path must exist) and executed on the <code>open</code> → <code>implemented</code> transition when <code>run_associated_specs_on_complete</code> is enabled. To author the <code>.linespec</code> files that back <code>type: linespec</code> specs, see the <a href="linespec.html">LineSpec Testing reference</a>.</p>
+                </section>
+
                 <section id="best-practices" class="docs-section">
                     <h2>Best Practices</h2>
                     
@@ -1748,6 +1851,7 @@ tags:
   - caching
   - lru</code></pre>
                     </div>
+                    <p>Don't author this by hand. Run <code>linespec provenance create --supersedes prov-2026-a1b2c3d4 --title "…" --no-edit</code> — it sets <code>supersedes</code> on the new record and automatically updates the old record's <code>superseded_by</code> and <code>status: superseded</code>, staging both files together. See <a href="#scope-enforcement">Use commands, not manual YAML edits</a>.</p>
                 </section>
 
                 <section id="troubleshooting" class="docs-section">
