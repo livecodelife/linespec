@@ -1,0 +1,48 @@
+id: prov-2026-799d52f0
+title: 'Overhaul install-skills content: rewrite linespec-testing skill, add scope-enforcement/associated_specs/command-flags to provenance skill, sync on-disk copies'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Overhaul the skills shipped by `linespec provenance install-skills` (embedded
+  as Go constants in pkg/provenance/commands.go). Rewrite the linespec-testing
+  skill to v3.11.7 (semantic SQL primary, RECEIVE JOB/GRPC/KAFKA, EXPECT GRPC,
+  WITH-as-request-body, RESPONSE_HEADERS, RETURNS variants, multi-channel
+  EXPECT_NOT, full VERIFY targets, fix the .linespec.yml-location claim). Add to
+  the provenance skill the Scope Enforcement section, associated_specs reference,
+  command-flags-over-manual-edits (fixing the manual Superseding guidance), and
+  the missing commands. Only the embedded skill constants change — no command
+  logic. Regenerate the on-disk copies (.claude/skills/**, skills/**) to match
+  the embed exactly. `make test` must pass.
+implements: prov-2026-38971b27
+constraints:
+  - Only the embedded skill string constants in commands.go change; no logic/flags/behavior.
+  - On-disk skill copies must match the authoritative embed byte-for-byte.
+  - Skill content verified against pkg/dsl, pkg/config, pkg/provenance.
+affected_scope:
+  - pkg/provenance/commands.go
+  - .claude/skills/provenance/SKILL.md
+  - .claude/skills/linespec-testing/SKILL.md
+  - skills/provenance/SKILL.md
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/commands.go
+    type: go_test
+    run_command: make test
+  - path: .claude/skills/linespec-testing/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: .claude/skills/provenance/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: skills/provenance/SKILL.md
+    type: docs
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags: []
