@@ -1,5 +1,5 @@
 id: prov-2026-79ce86dc
-title: 'Make status-change auto-commit atomic: roll back record on hook rejection'
+title: 'Make status transitions safe: validate before sealing and roll back on lint or commit failure'
 status: draft
 created_at: "2026-06-11"
 author: test@example.com
@@ -26,6 +26,18 @@ intent: |
   manifest — are restored to their pre-transition contents and unstaged, leaving the
   repository exactly as if the transition had never been attempted. The error is
   still surfaced to the user. All other behavior of the feature is preserved.
+
+  Beyond the auto-commit case, the open and complete transitions must never persist a
+  record in a state it cannot legally occupy. complete in particular seals the record
+  (sealed_at_sha + manifest hash) and makes it immutable; if the resulting record does
+  not pass lint, it is locked into an invalid, unfixable state. So open and complete
+  must validate the post-transition record (lint it) before the change is committed to
+  disk, UNCONDITIONALLY — independent of commit_on_status_change. If validation fails,
+  the transition is rolled back to the pre-transition state (for complete, the seal and
+  manifest hash are undone too) and a clear, actionable message is emitted explaining
+  which checks failed and that the transition was aborted. The validation guard and the
+  auto-commit atomicity share one rollback primitive; failure on either path leaves the
+  record exactly as it was before the command ran and tells the user why.
 constraints:
   - Auto-commit must not apply to the create command; only to open, complete, and deprecate.
   - Commit messages must match the existing convention for each transition — open uses "Open provenance record <id> [<id>]", complete uses "Complete provenance record [<id>]", deprecate uses "Deprecate provenance record [<id>]".
@@ -35,7 +47,9 @@ constraints:
   - For complete, the rollback must also undo the seal — no orphaned sealed_at_sha on disk and no stale or orphaned hash in the manifest may remain after a failed commit.
   - The in-memory record handled after a failed transition must reflect the rolled-back (original) status, not the attempted new status.
   - On a successful commit, behavior is unchanged from the superseded blueprint (status changed, sealed where applicable, committed).
-  - The rollback must only run when commit_on_status_change is enabled and the commit actually fails; the manual (non-auto-commit) path is unaffected.
+  - The open and complete commands must lint the post-transition record before persisting the change, and must do so unconditionally — regardless of whether commit_on_status_change is enabled. If the record would not pass lint, the transition is aborted and rolled back to the pre-transition state, so a record (especially a sealed/immutable completed one) can never be left in a state that fails validation.
+  - The commit-failure rollback applies only when commit_on_status_change is enabled and the commit actually fails; the lint-validation rollback always applies to open and complete. Neither path may leave the record half-transitioned.
+  - Every aborted transition — whether from failed lint validation or a rejected commit — must emit a clear, actionable message stating why the transition did not happen (which lint checks failed, or that the commit/hook was rejected) and confirming the record was left unchanged.
   - make test must pass.
 affected_scope:
   - pkg/config/types.go
