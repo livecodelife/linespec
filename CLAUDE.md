@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Build
-make build               # Stable version (Provenance Records only)
-make build-beta          # Beta version (includes LineSpec Testing)
-make install             # Install stable to $GOPATH/bin
-make install-beta        # Install beta to $GOPATH/bin
+# Build (Provenance Records + LineSpec Testing — both included by default)
+make build               # Build ./linespec with all features
+make install             # Install to $GOPATH/bin
+# `make build-beta` / `make install-beta` remain only as backward-compatible
+# aliases; they produce the same binary as `make build` (identical since v2.0.0).
 
 # Test
 make test                # Unit tests only (go test ./...)
@@ -105,11 +105,11 @@ linespec provenance complete --record prov-YYYY-XXXXXXXX
 
 ## Architecture
 
-LineSpec has two subsystems gated by the `beta` build tag:
+LineSpec has two subsystems, both included in the default build (as of v2.0.0):
 
-**Stable** (`cmd/linespec/main_stable.go`): Provenance Records CLI only.
+**Provenance Records** (`cmd/linespec/main_stable.go`): the provenance CLI.
 
-**Beta** (`cmd/linespec/main_beta.go`): Adds LineSpec Testing — a protocol-level integration testing DSL for containerized services. No modifications required to the service under test.
+**LineSpec Testing** (`cmd/linespec/main_beta.go`): a protocol-level integration testing DSL for containerized services — no modifications required to the service under test. The `beta` build tag and `main_beta.go` filename are legacy: `make build` includes LineSpec Testing, and `make build-beta` is an identical alias.
 
 ### Provenance Records (`pkg/provenance/`)
 
@@ -148,5 +148,5 @@ The PostgreSQL proxy connects upstream **first** (before any client communicatio
 ## Key Documentation
 
 - `PROVENANCE_RECORDS.md` — Full schema reference and CLI usage
-- `LINESPEC.md` — Beta DSL reference
+- `LINESPEC.md` — LineSpec Testing DSL reference
 - `CHANGELOG.md` — Breaking changes by version

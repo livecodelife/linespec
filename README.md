@@ -1,6 +1,6 @@
 # LineSpec v3.11.7
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-3.11.7-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -42,7 +42,7 @@ go install github.com/livecodelife/linespec/cmd/linespec@v3.11.7
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_3.0.0_*` - Full release (Provenance Records + LineSpec Testing)
+- `linespec_3.11.7_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
@@ -181,7 +181,7 @@ The SARIF output includes:
 ### Documentation
 
 - **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** - Complete reference guide
-- **[AGENTS.md](./AGENTS.md)** - Guidelines for AI agents using LineSpec
+- **[CLAUDE.md](./CLAUDE.md)** - Guidelines for AI agents using LineSpec
 
 ---
 
@@ -228,7 +228,7 @@ NOISE
 ### Documentation
 
 - **[LINESPEC.md](./LINESPEC.md)** - DSL syntax reference
-- **[AGENTS.md](./AGENTS.md)** - Testing guidelines
+- **[CLAUDE.md](./CLAUDE.md)** - Contributor & AI-agent guidelines
 
 ---
 
@@ -254,12 +254,12 @@ provenance:
     similarity_threshold: 0.50        # Minimum similarity for results
     index_on_complete: true         # Auto-index on complete
 
-# LineSpec Testing configuration (Beta)
+# LineSpec Testing configuration
 service:
   name: my-service
   type: web
   port: 3000
-  framework: rails                    # rails, fastapi, django, express, or custom
+  framework: rails                    # rails, fastapi, django, express, chi, or custom
   start_command: bundle exec rails server  # Optional: override framework default
   migration_command: bundle exec rake db:migrate  # Optional: custom migration command
   warmup_endpoint: /health            # Optional: custom warmup endpoint
@@ -295,11 +295,14 @@ container_naming:
 
 | Framework | Start Command | Migration Command | Needs Warmup |
 |-----------|---------------|-------------------|--------------|
-| `rails` | `bundle exec rails server` | `bundle exec rails db:migrate` | Yes |
-| `fastapi` | `uvicorn main:app` | None | No |
-| `django` | `python manage.py runserver` | `python manage.py migrate` | Yes |
+| `rails` | `bundle exec rails server -b 0.0.0.0 -p ${PORT}` | `bundle exec rails db:migrate` | Yes (100ms) |
+| `fastapi` | `python -m uvicorn main:app --host 0.0.0.0 --port ${PORT}` | None | No |
+| `django` | `python manage.py runserver 0.0.0.0:${PORT}` | `python manage.py migrate` | Yes (100ms) |
 | `express` | `npm start` | None | No |
+| `chi` | `PORT=${PORT} go run .` | None | No |
 | Custom | Via `start_command` | Via `migration_command` | Via `needs_warmup` |
+
+The **Needs Warmup** column shows the framework default for `needs_warmup` (and the default `warmup_delay_ms` where applicable); override any value per-service under `service:`.
 
 ---
 
@@ -310,19 +313,19 @@ container_naming:
 git clone https://github.com/livecodelife/linespec.git
 cd linespec
 
-# Build stable version (Provenance only)
+# Build (Provenance Records + LineSpec Testing — both included by default)
 go build -o linespec ./cmd/linespec
 
-# Build beta version (all features)
-go build -tags beta -o linespec ./cmd/linespec
+# `make build-beta` / `-tags beta` remain only as backward-compatible aliases;
+# they produce the same binary as the default build (identical since v2.0.0).
 
-# Run tests
+# Run unit tests
 go test ./...
 
 # Run integration tests (requires Docker)
 make test-integration
 
-# Run with beta features
+# Run the example test suites
 ./linespec test ./examples/
 ```
 
@@ -334,16 +337,16 @@ make test-integration
 |----------|--------|-------------|
 | **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** | ✅ Stable | Complete provenance reference |
 | **[README.md](./README.md)** | ✅ Stable | This file - overview and installation |
-| **[AGENTS.md](./AGENTS.md)** | ✅ Stable | Guidelines for AI agents |
+| **[CLAUDE.md](./CLAUDE.md)** | ✅ Stable | Contributor & AI-agent guidelines |
 | **[LINESPEC.md](./LINESPEC.md)** | ✅ Stable | DSL syntax for integration testing |
-| **[RELEASE_PLAN.md](./RELEASE_PLAN.md)** | ✅ Stable | v1.0.0 release strategy |
+| **[CHANGELOG.md](./CHANGELOG.md)** | ✅ Stable | Version history and breaking changes |
 
 ### Reading Order
 
 1. **Start here** (README.md) - Installation and overview
-2. **PROVENANCE_RECORDS.md** - Complete reference for stable features
-3. **AGENTS.md** - If using AI agents with LineSpec
-4. **LINESPEC.md** - If using LineSpec Testing
+2. **PROVENANCE_RECORDS.md** - Complete reference for Provenance Records
+3. **LINESPEC.md** - If using LineSpec Testing
+4. **CLAUDE.md** - If contributing or using AI agents with LineSpec
 
 ---
 
@@ -367,7 +370,7 @@ LineSpec doesn't generate YAML files. Provenance Records are the authoritative s
 4. Run the linter: `linespec provenance lint`
 5. Submit a pull request
 
-See [AGENTS.md](./AGENTS.md) for detailed guidelines.
+See [CLAUDE.md](./CLAUDE.md) for detailed guidelines.
 
 ---
 
