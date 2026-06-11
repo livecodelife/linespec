@@ -1,0 +1,39 @@
+id: prov-2026-40b513dc
+title: Reword three supersede-implying enforcement messages (git.go stale-scope, formatter.go hint, linter.go locked-scope) so none implies supersede is required
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Reword three user-facing enforcement messages so none implies superseding is
+  the required remedy — strings only, no severity/behavior change: the git.go
+  stale-scope warning (reframe as informational/non-blocking), the formatter.go
+  violation hint (the new record only needs to govern the file), and the
+  linter.go locked-scope error (resolving overlap is a governance decision, not a
+  mandatory supersede). Keeps wording consistent with the skill/doc decision tree.
+implements: prov-2026-38971b27
+constraints:
+  - Strings only; no logic, control flow, severities, or field names change.
+  - make test must pass.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/linter.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/formatter.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/linter.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
