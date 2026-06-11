@@ -1,6 +1,6 @@
 id: prov-2026-01b4026c
 title: Route commit-violation hint and stale-scope warning through engine-owned wording (Phase 2c)
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
