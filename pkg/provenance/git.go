@@ -868,16 +868,10 @@ func (c *CommitChecker) CheckForStaleScopeWarnings(record *Record, changedFiles 
 
 		// Check if this specific file has changed since sealing
 		if !changedSinceSeal[changedFile] {
-			// File hasn't changed since record was sealed - this is a stale scope warning
+			// Wording is sourced from the single engine-owned helper (next.go)
+			// so the commit-time warning never drifts from `next` or the skill.
 			shortSHA := record.SealedAtSHA[:7]
-			warning := fmt.Sprintf(
-				"Note: '%s' is governed by implemented record %s (sealed at %s). "+
-					"This is informational and non-blocking — no action is required. "+
-					"Make your change under your own new record and tag your commit with it. "+
-					"Supersede %s only if you are intentionally revising that record's decision:\n"+
-					"  linespec provenance create --title \"Your change description\" --supersedes %s",
-				changedFile, record.ID, shortSHA, record.ID, record.ID,
-			)
+			warning := HintStaleScope(changedFile, record.ID, shortSHA)
 			warnings = append(warnings, StaleScopeWarning{
 				RecordID: record.ID,
 				File:     changedFile,

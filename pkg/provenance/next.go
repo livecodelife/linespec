@@ -72,6 +72,33 @@ type NextState struct {
 	CommitTagRequired bool
 }
 
+// HintCreateNotSupersede returns the canonical guidance shown whenever a change
+// touches files already governed by existing records: create ONE new record
+// covering your files and tag your commits with it — supersede only when you are
+// deliberately revising the decision a record captured. This is the single source
+// of that wording. The `next` create advice, the commit-violation hint
+// (formatter.go), and any other surface all render from it so the framing that
+// caused the original ~$400 incident can never drift between surfaces again.
+func HintCreateNotSupersede() string {
+	return "create a new record that governs this file and tag your commit with it. " +
+		"Supersede an existing record only when you are deliberately revising the decision it captured."
+}
+
+// HintStaleScope returns the canonical, non-blocking message shown when a change
+// touches a file governed by an already-implemented (sealed) record. It is
+// informational only — no action is required, and it is NOT a reason to supersede
+// anything. The wording lives here so the commit-time warning and any other
+// surface stay single-sourced.
+func HintStaleScope(file, recordID, shortSHA string) string {
+	return fmt.Sprintf(
+		"Note: '%s' is governed by implemented record %s (sealed at %s). "+
+			"This is informational and non-blocking — no action is required. "+
+			"Make your change under your own new record and tag your commit with it. "+
+			"Supersede %s only if you are intentionally revising that record's decision:\n"+
+			"  linespec provenance create --title \"Your change description\" --supersedes %s",
+		file, recordID, shortSHA, recordID, recordID)
+}
+
 // Advise is THE advice engine: a pure function mapping provenance state to the
 // ordered list of correct next actions, with record IDs filled in. It performs
 // no I/O and has no side effects. Element 0 of the result is the single primary
@@ -154,10 +181,8 @@ func createAction(governing []string) NextAction {
 	reason := "No record governs these files — create one blueprint covering them."
 	if len(governing) > 0 {
 		reason = fmt.Sprintf(
-			"%d record(s) already govern these files, but you do NOT need to supersede them — "+
-				"create one new blueprint covering your files and tag your commits with it. "+
-				"Supersede only if you are deliberately revising a captured decision.",
-			len(governing))
+			"%d record(s) already govern these files, but you do NOT need to supersede them — %s",
+			len(governing), HintCreateNotSupersede())
 	}
 	return NextAction{
 		Kind:      ActionCreate,
