@@ -1,6 +1,6 @@
 id: prov-2026-4430c10e
 title: Remove 18 functions dead in every build configuration
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -52,7 +52,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d6adad7461f6edc1bb7cec43f7339ba26d42eab6
 associated_traces: []
 monitors: []
 tags: []
