@@ -1,0 +1,36 @@
+id: prov-2026-ee1c7221
+title: Add scope-enforcement guidance, associated_specs reference, command-flags-over-manual-edits, run-specs/sync, and lint flags to provenance docs
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Add the high-value provenance guidance to the doc site and reference doc:
+  a Scope Enforcement & When You're Blocked section (central rule, scope modes,
+  decision tree, non-blocking stale-scope callout, hard rules), an
+  associated_specs reference (path/type/run_command, recognized types, {{path}}
+  substitution, strict order of operations), command-flags-over-manual-edits
+  (create --supersedes etc.; correct the manual "Superseding Records" guidance),
+  and the missing run-specs/sync commands and lint --warn/--info/--all flags.
+implements: prov-2026-38971b27
+constraints:
+  - Enforcement model verified against pkg/provenance (ScopeMode/IsInScope, CheckStaged, linter).
+  - Decision tree must tell agents to stop-and-ask, never --no-verify, never relax enforcement.
+affected_scope:
+  - docs/provenance.html
+  - PROVENANCE_RECORDS.md
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: docs/provenance.html
+    type: docs
+    run_command: test -f {{path}}
+  - path: PROVENANCE_RECORDS.md
+    type: docs
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags: []
