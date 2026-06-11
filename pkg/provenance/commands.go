@@ -869,14 +869,21 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		var unverified []*Record
 		specsFailed := false
 		runTeeth := c.Config.RunAssociatedSpecsOnComplete
+		// seen de-duplicates identical spec commands across the touched records so a
+		// shared proof (e.g. `make test`) runs once, not once per record.
+		seen := map[string]bool{}
 		for _, r := range touched {
 			if !runTeeth || len(r.AssociatedSpecs) == 0 {
 				unverified = append(unverified, r)
 				continue
 			}
 			fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
-			if _, failed := c.runRecordSpecs(r); failed {
+			ran, failed := c.runRecordSpecs(r, seen)
+			if failed {
 				specsFailed = true
+			}
+			if !ran {
+				unverified = append(unverified, r)
 			}
 		}
 
@@ -1151,7 +1158,7 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
 
-	_, failed := c.runRecordSpecs(record)
+	_, failed := c.runRecordSpecs(record, nil)
 	if failed {
 		return fmt.Errorf("one or more associated specs failed — commit blocked")
 	}
@@ -1161,11 +1168,17 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 }
 
 // runRecordSpecs executes the associated_specs of a single record, streaming each
-// command's output. It returns ran (whether any executable spec was attempted) and
-// failed (whether any spec exited non-zero). It deliberately does NOT consult
-// run_associated_specs_on_complete or look at record status — the caller decides
-// when to invoke it, so it can verify an arbitrary record's specs on demand.
-func (c *Commands) runRecordSpecs(record *Record) (ran bool, failed bool) {
+// command's output. It returns ran (whether the record has any executable spec) and
+// failed (whether any spec it ran exited non-zero). It deliberately does NOT consult
+// run_associated_specs_on_complete or look at record status — the caller decides when
+// to invoke it, so it can verify an arbitrary record's specs on demand.
+//
+// When seen is non-nil it is used to de-duplicate identical spec commands across
+// calls: a command already present in seen is treated as already-verified and not
+// re-run (so completing a change to a widely-governed file does not run `make test`
+// dozens of times). A record still counts as ran if it has a runnable spec, even when
+// that spec's command was already executed for another record.
+func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool) {
 	for _, spec := range record.AssociatedSpecs {
 		cmdStr, skip, err := buildSpecCommand(spec)
 		if err != nil {
@@ -1178,8 +1191,16 @@ func (c *Commands) runRecordSpecs(record *Record) (ran bool, failed bool) {
 			continue
 		}
 
-		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
 		ran = true
+		if seen != nil {
+			if seen[cmdStr] {
+				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", cmdStr)
+				continue
+			}
+			seen[cmdStr] = true
+		}
+
+		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
 		cmd := exec.Command("sh", "-c", cmdStr)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
