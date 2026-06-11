@@ -175,6 +175,36 @@ func TestCompletion_NoSpecOverlap_EmitsNeutralNonBlockingFYI(t *testing.T) {
 	}
 }
 
+func TestCompletion_DedupesIdenticalSpecCommands(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	cmds.Config.RunAssociatedSpecsOnComplete = true
+	headSHA := gitOutput(t, repo, "rev-parse", "HEAD")
+
+	// Two sealed records sharing the SAME spec command, which appends to a counter
+	// file. With dedup the command must run exactly once across both records.
+	counter := filepath.Join(repo, "counter.txt")
+	shared := fmt.Sprintf("sh -c 'printf z >> %s; true'", counter)
+
+	for _, id := range []string{"prov-2026-cc000061", "prov-2026-cc000062"} {
+		writeRecord(t, repo, id,
+			customRecord(id, "implemented", headSHA, []string{"pkg/foo.go"}, []string{shared}))
+	}
+
+	rID := "prov-2026-cc000063"
+	writeRecord(t, repo, rID,
+		customRecord(rID, "open", "", []string{"pkg/foo.go"}, nil))
+	commitFileChange(t, repo, "pkg/foo.go", "package foo\n", rID)
+	reloadRecords(t, cmds)
+
+	if err := cmds.Complete(CompleteOptions{RecordID: rID}); err != nil {
+		t.Fatalf("completion should succeed: %v", err)
+	}
+	data, _ := os.ReadFile(counter)
+	if string(data) != "z" {
+		t.Errorf("shared spec command should run exactly once across the two records; counter = %q", data)
+	}
+}
+
 // --- Open lifecycle heads-up ------------------------------------------------
 
 func TestOpen_DeclaredOverlap_EmitsNonBlockingFYI(t *testing.T) {
