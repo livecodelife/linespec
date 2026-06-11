@@ -1,0 +1,59 @@
+id: prov-2026-65782c0e
+title: 'Embeddings workflow: direct-push via bypass App instead of self-approved PR'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Fix the Index Provenance Embeddings workflow, which currently opens a PR it
+  can never merge. Supersedes prov-2026-da5fd142, which switched the workflow
+  to a self-approved PR for "branch protection compatibility".
+
+  Root cause: the active ruleset "Main branch merges" on main requires a PR
+  with 1 approval AND a Copilot code review. The workflow opens a PR as the
+  `linespec-merge-bot` App and then calls `gh pr review --approve` on its own
+  PR — GitHub ignores self-approval and Copilot never reviews, so the PR is
+  stuck in REVIEW_REQUIRED. Three such PRs (#89, #90, #91) have been open and
+  unmergeable since April 2026.
+
+  Fix: drop the PR entirely and commit `.linespec/embeddings.bin` directly to
+  main using the App token. The `linespec-merge-bot` App is already in the
+  ruleset's bypass list (Integration id 3267226), so it can push to main
+  without a PR or review. This is the original pre-da5fd142 model, now safe
+  because the bypass actor is configured.
+
+  Scope of this change (per user):
+    1. Replace the branch/PR/approve/merge block with a direct
+       commit + push to main via the App token (keep `[skip ci]`; embeddings.bin
+       is not in the workflow's trigger paths, so no re-trigger loop).
+    2. Fix the "Check for unindexed records" step: a non-zero `provenance index
+       --dry-run` must warn, not fail the job (currently `set -e` +
+       command-substitution assignment kills the step).
+    3. Pin Go via `go-version-file: go.mod` (workflow still hardcodes 1.21).
+    4. Bump deprecated Node20 actions (checkout / setup-go /
+       create-github-app-token) to Node24-capable versions.
+    5. Close the 3 stranded PRs (#89, #90, #91) and delete their branches.
+constraints:
+  - 'No self-approval and no reliance on Copilot review: the workflow must not
+    open a PR against main for the embeddings update.'
+  - 'Direct push must use the linespec-merge-bot App token (ruleset bypass
+    actor), not GITHUB_TOKEN, or the ruleset will reject the push.'
+  - 'Must not create a re-trigger loop: the commit keeps `[skip ci]` and only
+    touches `.linespec/embeddings.bin`, which is not in the workflow''s
+    on.push.paths.'
+  - 'The job must not fail on Voyage rate limits / index errors — those warn.'
+  - 'Behaviour preserved: when embeddings.bin is unchanged, the workflow makes
+    no commit (no empty commits to main).'
+  - 'Only the embeddings workflow changes; no application code or other
+    workflows are modified.'
+affected_scope:
+  - .github/workflows/index-provenance.yml
+forbidden_scope: []
+type: blueprint
+supersedes: prov-2026-da5fd142
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
