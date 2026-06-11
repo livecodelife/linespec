@@ -1171,7 +1171,7 @@ func (l *Linter) checkLockedScope(result *LintResult) {
 						result.Add(Issue{
 							RecordID: openRecord.ID,
 							Field:    field,
-							Message:  fmt.Sprintf("Surface %q overlaps with locked record %s surface %q. Add supersedes: %s to reopen this layer.", openSurface, locked.ID, lockedSurface, locked.ID),
+							Message:  fmt.Sprintf("Surface %q overlaps with locked record %s surface %q. Resolving this is a governance decision: narrow this record's scope, or — only if you are revising the locked decision — supersede %s to reopen the layer.", openSurface, locked.ID, lockedSurface, locked.ID),
 							Severity: SeverityError,
 						})
 					}

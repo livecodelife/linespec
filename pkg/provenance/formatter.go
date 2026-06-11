@@ -637,7 +637,8 @@ func (f *Formatter) FormatCheckResult(violations []Violation, staleWarnings []St
 		}
 
 		fmt.Fprintf(f.Output, "  %s If this change is intentional, create a new Provenance Record\n", f.colored("Hint:", colorCyan))
-		fmt.Fprintf(f.Output, "       that supersedes the governing record and governs this file.\n")
+		fmt.Fprintf(f.Output, "       that governs this file and tag your commit with it. (Supersede the\n")
+		fmt.Fprintf(f.Output, "       existing record only if you are revising its decision.)\n")
 	}
 
 	if len(staleWarnings) > 0 {
