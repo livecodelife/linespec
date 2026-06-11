@@ -2038,6 +2038,43 @@ type ContextOptions struct {
 }
 
 // Context retrieves provenance context for the given files
+// NextOptions configures the `next` command.
+type NextOptions struct {
+	Files      []string // intended files (--files / --plan / positional args)
+	Format     string   // human (default) | json
+	ConfigFile string   // path to custom .linespec.yml file
+}
+
+// Next computes and renders the correct next provenance action for the current
+// state. It is the I/O boundary for the advice engine: it gathers records,
+// staged files, and working-tree changes, then hands a fully-populated NextState
+// to the pure Advise function. Both the `next` command and the routed error
+// hints (Phase 2c) render from that one engine.
+func (c *Commands) Next(opts NextOptions) error {
+	state := NextState{
+		Records:           c.Loader.Records,
+		IntendedFiles:     opts.Files,
+		CommitTagRequired: c.Config != nil && c.Config.CommitTagRequired,
+	}
+
+	if c.Git != nil {
+		if staged, err := c.Git.GetStagedFiles(); err == nil {
+			state.StagedFiles = staged
+		}
+		if changed, err := c.Git.GetWorkingTreeChanges(); err == nil {
+			state.ChangedFiles = changed
+		}
+	}
+
+	actions := Advise(state)
+
+	if opts.Format == "json" {
+		return c.Formatter.FormatNextJSON(actions)
+	}
+	c.Formatter.FormatNext(actions)
+	return nil
+}
+
 func (c *Commands) Context(opts ContextOptions) error {
 	if len(opts.Files) == 0 {
 		c.Formatter.FormatError("No files specified. Provide file paths as arguments or use --files flag.")

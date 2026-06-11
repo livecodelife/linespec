@@ -126,6 +126,22 @@ func TestAdvise_MultipleOpenGoverning_ChooseNotSupersede(t *testing.T) {
 	}
 }
 
+func TestAdvise_ObservedModeOpenRecord_NotTreatedAsGoverning(t *testing.T) {
+	// An open record with empty affected_scope (observed mode) permits any file but
+	// claims none. It must NOT be selected as the active record for an arbitrary
+	// file, nor listed as governing it — otherwise every observed record would
+	// hijack advice for every file.
+	observed := bp("prov-2026-0b5e2bed", StatusOpen, nil, spec("x_test.go")) // empty scope
+	s := NextState{Records: []*Record{observed}, IntendedFiles: []string{"pkg/core/auth.go"}}
+	got := primary(t, s)
+	if got.Kind != ActionCreate {
+		t.Fatalf("observed-mode open record must not become active; want ActionCreate, got %s", got.Kind)
+	}
+	if len(got.Governing) != 0 {
+		t.Fatalf("observed-mode record must not appear as governing, got %v", got.Governing)
+	}
+}
+
 func TestAdvise_CleanAmbient_None(t *testing.T) {
 	s := NextState{Records: []*Record{bp("prov-2026-00000001", StatusImplemented, []string{"pkg/core/**"})}}
 	got := primary(t, s)

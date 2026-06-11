@@ -298,6 +298,33 @@ func (g *Git) GetStagedFiles() ([]string, error) {
 	return result, nil
 }
 
+// GetWorkingTreeChanges returns every file that differs from HEAD — staged and
+// unstaged combined (`git diff --name-only HEAD`). It is the "what am I working
+// on" signal the advice engine uses for ambient `next` when no intended files are
+// given.
+func (g *Git) GetWorkingTreeChanges() ([]string, error) {
+	cmd := exec.Command("git", "diff", "--name-only", "HEAD")
+	if g.RepoRoot != "" {
+		cmd.Dir = g.RepoRoot
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get working tree changes: %w", err)
+	}
+
+	files := strings.Split(string(output), "\n")
+	var result []string
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			result = append(result, f)
+		}
+	}
+
+	return result, nil
+}
+
 // ReadCommitMessageFile reads the commit message from a file
 func (g *Git) ReadCommitMessageFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
