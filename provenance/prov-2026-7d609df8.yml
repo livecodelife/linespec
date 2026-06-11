@@ -1,0 +1,60 @@
+id: prov-2026-7d609df8
+title: Reword supersede-only guidance messages and update provenance skill (Phase 1)
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Stop agents and humans from getting trapped in provenance enforcement by
+  misreading supersede-oriented guidance as a hard block. Origin: an advanced
+  model spent ~$400 misreading the non-blocking stale-scope warning as a hard
+  block and concluding it had to supersede ~11 sealed records.
+
+  Phase 1 is the cheap, high-impact, recurrence-preventing slice that ships
+  independently of the later engine/plugin work. It does two things:
+
+  (1a) Reword the three messages that hard-code `--supersedes` as the default
+  remedy so each presents the correct branch: touching a file governed by an
+  implemented record does NOT require superseding. Supersede is only for
+  deliberately revising the captured decision. The stale-scope warning keeps its
+  loud non-blocking label.
+
+  (1b) Update the agent-facing provenance skill so the decision tree includes the
+  exact stale-scope warning string (currently absent), a positive happy-path
+  recipe, a worked associated_specs example showing order of operations, and a
+  cross-link to the linespec-testing skill.
+constraints:
+  - The stale-scope warning (git.go) must remain non-blocking and keep its loud
+    "(non-blocking)" label; only its wording changes.
+  - No message may present `--supersedes` as the default/first remedy for merely
+    touching a governed file. Supersede must be framed as the deliberate-revision
+    branch only.
+  - The locked-scope linter message (linter.go) is a real hard error and must stay
+    an error; only its wording changes to clarify supersede is the intentional
+    path to reopen a locked layer.
+  - These are string/documentation changes only — no control-flow, severity, or
+    enforcement behavior changes in Phase 1.
+  - The skill update must add the literal stale-scope warning string to the
+    decision tree, a top happy-path recipe (context -f per file -> create one
+    record -> set affected_scope -> open with a spec -> commit tagged -> complete),
+    a worked associated_specs example (create the proof file first, then reference
+    it), and a cross-link to the linespec-testing skill.
+  - A fresh agent given the incident's starting conditions must create one new
+    record covering its files and commit, without attempting supersession.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/linter.go
+  - .claude/skills/provenance/SKILL.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - provenance-ux
+  - phase-1
