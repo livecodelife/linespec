@@ -1,0 +1,95 @@
+id: prov-2026-a241eaa6
+title: 'Go code-quality git hooks: staticcheck, deadcode, dupl'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Continuously keep the codebase compact by preventing dead code, lint
+  regressions, and copy-paste duplication from being pushed. Add an
+  automated Go code-quality gate that runs on `git push` and in CI.
+
+  The gate runs three checks via a single committed script
+  (scripts/go-quality.sh), the source of truth shared by the local hook,
+  the Makefile, and CI:
+
+    1. staticcheck ./...   — HARD gate. Baseline is already clean (0
+       findings), so any new finding blocks the push.
+
+    2. deadcode (smart pass) — HARD gate after a one-time cleanup. Raw
+       `deadcode ./...` reports ~48 unreachable funcs, but most are false
+       positives: test-only helpers and code reachable only under the
+       `beta`/`integration` build tags. The script cuts these by running
+       deadcode across every build configuration and reporting only
+       functions unreachable in ALL of them (set intersection):
+         - default (stable, no test)
+         - -test
+         - -test -tags beta
+         - -test -tags integration
+         - -test -tags 'integration beta'
+       That intersection is 18 genuinely-dead functions today. A one-time
+       cleanup removes them so the gate starts and stays green; thereafter
+       any newly-dead function blocks the push.
+
+    3. dupl — WARN only. Reports copy-paste duplication (the part of the
+       goal that staticcheck/deadcode cannot see) but never blocks.
+
+  Enforcement lives in two places: a pre-push git hook for fast local
+  feedback, and a CI job so the gate cannot be bypassed with --no-verify
+  and applies to everyone (the hook lives in .git/hooks, which is not
+  version-controlled).
+constraints:
+  - 'Stage = pre-push, NOT pre-commit: deadcode does whole-program analysis
+    and is too slow to run on every commit; pre-push matches the "when we
+    push changes" goal.'
+  - 'Do not modify linespec''s own hook generator (pkg/provenance/commands.go
+    InstallHooks). It is a generic, language-agnostic tool and only writes
+    pre-commit/commit-msg. A separate pre-push hook also survives
+    `linespec install-hooks` regeneration untouched.'
+  - 'scripts/go-quality.sh is the single source of truth; the pre-push hook,
+    Makefile target, and CI job all delegate to it. No duplicated check
+    logic.'
+  - 'staticcheck is a hard gate immediately (baseline is clean).'
+  - 'deadcode hard-gates only after the one-time cleanup of the 18
+    intersection findings; the script must use the multi-config intersection
+    so the gate is meaningful and not noisy.'
+  - 'dupl is warn-only and must never fail the hook or CI; if dupl is not
+    installed the script installs it on demand or skips with a notice.'
+  - 'Tools (staticcheck, deadcode, dupl) are bootstrapped via `go install`
+    with pinned versions if missing, so the gate is reproducible.'
+  - 'The pre-push hook must be installable/version-controlled via a committed
+    script + Makefile target (e.g. `make install-hooks-quality`), since
+    .git/hooks is not tracked by git.'
+  - 'CI job must use a Go version compatible with go.mod (go 1.25.7) and the
+    tool versions — the existing CI jobs pin Go 1.21, which is already
+    inconsistent with go.mod; the new job pins a compatible version.'
+  - 'Existing behaviour unchanged: provenance pre-commit/commit-msg hooks,
+    `make test`, and example test suites must still pass.'
+affected_scope:
+  - scripts/go-quality.sh
+  - scripts/pre-push
+  - Makefile
+  - .github/workflows/ci.yml
+  - CLAUDE.md
+  - pkg/docker/orchestrator.go
+  - pkg/embeddings/client.go
+  - pkg/logger/logger.go
+  - pkg/manifest/manifest.go
+  - pkg/provenance/loader.go
+  - pkg/provenance/types.go
+  - pkg/registry/registry.go
+  - pkg/runner/runner.go
+  - pkg/verify/verify.go
+forbidden_scope:
+  - pkg/provenance/commands.go
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - code-quality
+  - tooling
+  - git-hooks
