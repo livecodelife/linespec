@@ -673,6 +673,80 @@ func (c *Commands) isRemoteRecord(record *Record) bool {
 	return !strings.HasPrefix(record.FilePath, dir)
 }
 
+// fileSnapshot captures a file's contents (or its absence) before a status
+// transition mutates it, so the transition can be rolled back to leave the file
+// byte-for-byte as it was.
+type fileSnapshot struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+// snapshotFiles records the current on-disk state of the given paths. A path that
+// does not exist yet is captured as absent so that rollback removes it if the
+// transition created it (e.g. a hash manifest written for the first time by seal).
+func snapshotFiles(paths ...string) ([]fileSnapshot, error) {
+	snaps := make([]fileSnapshot, 0, len(paths))
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				snaps = append(snaps, fileSnapshot{path: p, existed: false})
+				continue
+			}
+			return nil, fmt.Errorf("failed to snapshot %s: %w", p, err)
+		}
+		snaps = append(snaps, fileSnapshot{path: p, data: data, existed: true})
+	}
+	return snaps, nil
+}
+
+// restoreFiles returns the snapshotted files to their captured state, recreating
+// removed files, rewriting modified ones, and deleting any that did not exist
+// before. Errors are reported but do not stop the remaining restores.
+func restoreFiles(snaps []fileSnapshot) {
+	for _, s := range snaps {
+		if s.existed {
+			if err := os.WriteFile(s.path, s.data, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to restore %s during rollback: %v\n", s.path, err)
+			}
+			continue
+		}
+		if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove %s during rollback: %v\n", s.path, err)
+		}
+	}
+}
+
+// snapshotPaths extracts the file paths from a set of snapshots.
+func snapshotPaths(snaps []fileSnapshot) []string {
+	paths := make([]string, 0, len(snaps))
+	for _, s := range snaps {
+		paths = append(paths, s.path)
+	}
+	return paths
+}
+
+// formatLintErrors renders the error-level issues of a lint result as an indented
+// bullet list for inclusion in an aborted-transition message.
+func formatLintErrors(result *LintResult) string {
+	var b strings.Builder
+	for _, issue := range result.Issues {
+		if issue.Severity != SeverityError {
+			continue
+		}
+		if issue.Field != "" {
+			fmt.Fprintf(&b, "    · %s: %s\n", issue.Field, issue.Message)
+		} else {
+			fmt.Fprintf(&b, "    · %s\n", issue.Message)
+		}
+	}
+	return b.String()
+}
+
 func (c *Commands) Complete(opts CompleteOptions) error {
 	record, exists := c.Loader.GetRecord(opts.RecordID)
 	if !exists {
@@ -723,38 +797,94 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		return err
 	}
 
+	// Snapshot the on-disk state of every file this transition will touch — the
+	// record YAML and the hash manifest — BEFORE any mutation. Completing seals the
+	// record (sealed_at_sha + manifest hash) and makes it immutable, so if anything
+	// downstream fails we must be able to restore these byte-for-byte and leave the
+	// record exactly as it was. The manifest is included even when it does not exist
+	// yet, so a rollback removes a manifest the seal created.
+	manifestTracked := c.Linter != nil && c.Linter.Hasher != nil
+	tracked := []string{record.FilePath}
+	if manifestTracked {
+		tracked = append(tracked, c.Linter.Hasher.ManifestPath())
+	}
+	snaps, err := snapshotFiles(tracked...)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to snapshot record state: %v", err))
+		return err
+	}
+
+	// Preserve the in-memory fields we are about to overwrite so a rollback can
+	// restore the record struct as well as the files on disk.
+	origStatus := record.Status
+	origSealedAtSHA := record.SealedAtSHA
+
+	rollback := func(unstage bool) {
+		record.Status = origStatus
+		record.SealedAtSHA = origSealedAtSHA
+		restoreFiles(snaps)
+		if unstage {
+			if err := c.Git.Unstage(snapshotPaths(snaps)...); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to unstage during rollback: %v\n", err)
+			}
+		}
+	}
+
 	// Update status and seal
 	record.Status = StatusImplemented
 	record.SealedAtSHA = headSHA
 
 	// Save record
 	if err := c.Loader.SaveRecord(record); err != nil {
+		rollback(false)
 		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
 		return err
 	}
 
 	// Seal content hash into the manifest so the linter can verify integrity
 	// without git traversal.
-	if c.Linter != nil && c.Linter.Hasher != nil {
+	if manifestTracked {
 		if err := c.Linter.Hasher.SealRecord(record, c.Loader.Records); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to seal content hash for %s: %v\n", record.ID, err)
 		}
 	}
 
-	c.Formatter.FormatCompleteSuccess(record)
+	// Validate the sealed record BEFORE committing it to disk, unconditionally —
+	// regardless of commit_on_status_change. Sealing makes the record immutable, so
+	// a record that does not pass lint would be locked into an invalid, unfixable
+	// state. If validation fails, roll the seal back and tell the user why.
+	if c.Linter != nil {
+		if result := c.Linter.LintRecord(record.ID); result.HasErrors() {
+			rollback(false)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot complete %s: sealing it would make it immutable, but it does not pass validation:\n\n%s\n"+
+					"  The transition was rolled back — %s is unchanged (still %s).\n"+
+					"  Fix the errors above and run 'linespec provenance complete' again.",
+				opts.RecordID, formatLintErrors(result), opts.RecordID, origStatus,
+			))
+			return fmt.Errorf("record failed validation")
+		}
+	}
 
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Complete provenance record [%s]", opts.RecordID)
 		files := []string{record.FilePath}
-		if c.Linter != nil && c.Linter.Hasher != nil && c.Linter.Hasher.ManifestExists() {
+		if manifestTracked && c.Linter.Hasher.ManifestExists() {
 			files = append(files, c.Linter.Hasher.ManifestPath())
 		}
 		if err := c.Git.CommitRecord(msg, files...); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
-			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
+			rollback(true)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot complete %s: the auto-commit was rejected:\n\n    %v\n\n"+
+					"  The transition was rolled back — %s is unchanged (still %s) and nothing was staged.\n"+
+					"  Resolve the issue above (e.g. a failing pre-commit hook) and run 'linespec provenance complete' again.",
+				opts.RecordID, err, opts.RecordID, origStatus,
+			))
 			return err
 		}
 	}
+
+	c.Formatter.FormatCompleteSuccess(record)
 
 	// Generate and store embedding for the implemented record
 	if c.Embedder != nil && c.Embedder.IsConfigured() && c.Embedder.IndexOnComplete() {
@@ -812,6 +942,15 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 		return fmt.Errorf("already superseded")
 	}
 
+	// Snapshot the record file before mutating so a rejected auto-commit can be
+	// rolled back, keeping the status change atomic with its commit.
+	snaps, err := snapshotFiles(record.FilePath)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to snapshot record state: %v", err))
+		return err
+	}
+	origStatus := record.Status
+
 	// Update status
 	record.Status = StatusDeprecated
 
@@ -819,20 +958,31 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 
 	// Save record
 	if err := c.Loader.SaveRecord(record); err != nil {
+		record.Status = origStatus
+		restoreFiles(snaps)
 		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "\n✓ %s marked as deprecated\n\n", opts.RecordID)
-
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Deprecate provenance record [%s]", opts.RecordID)
 		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
-			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
+			record.Status = origStatus
+			restoreFiles(snaps)
+			if uerr := c.Git.Unstage(snapshotPaths(snaps)...); uerr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to unstage during rollback: %v\n", uerr)
+			}
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot deprecate %s: the auto-commit was rejected:\n\n    %v\n\n"+
+					"  The transition was rolled back — %s is unchanged (still %s) and nothing was staged.\n"+
+					"  Resolve the issue above (e.g. a failing pre-commit hook) and run 'linespec provenance deprecate' again.",
+				opts.RecordID, err, opts.RecordID, origStatus,
+			))
 			return err
 		}
 	}
+
+	fmt.Fprintf(os.Stdout, "\n✓ %s marked as deprecated\n\n", opts.RecordID)
 
 	return nil
 }
@@ -867,25 +1017,66 @@ func (c *Commands) Open(opts OpenOptions) error {
 		return fmt.Errorf("record is not in draft status")
 	}
 
+	// Snapshot the record file before mutating so a failed validation or rejected
+	// commit can leave it exactly as it was.
+	snaps, err := snapshotFiles(record.FilePath)
+	if err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to snapshot record state: %v", err))
+		return err
+	}
+	origStatus := record.Status
+
+	rollback := func(unstage bool) {
+		record.Status = origStatus
+		restoreFiles(snaps)
+		if unstage {
+			if err := c.Git.Unstage(snapshotPaths(snaps)...); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to unstage during rollback: %v\n", err)
+			}
+		}
+	}
+
 	record.Status = StatusOpen
 
 	if err := c.Loader.SaveRecord(record); err != nil {
+		rollback(false)
 		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
 		return err
+	}
+
+	// Validate the opened record before persisting the change, unconditionally —
+	// regardless of commit_on_status_change. Opening enables scope and spec
+	// enforcement; refuse to transition into a state that does not pass lint.
+	if c.Linter != nil {
+		if result := c.Linter.LintRecord(record.ID); result.HasErrors() {
+			rollback(false)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot open %s: the record does not pass validation:\n\n%s\n"+
+					"  The transition was rolled back — %s is unchanged (still %s).\n"+
+					"  Fix the errors above and run 'linespec provenance open' again.",
+				opts.RecordID, formatLintErrors(result), opts.RecordID, origStatus,
+			))
+			return fmt.Errorf("record failed validation")
+		}
+	}
+
+	if c.Config.CommitOnStatusChange {
+		msg := fmt.Sprintf("Open provenance record %s [%s]", opts.RecordID, opts.RecordID)
+		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
+			rollback(true)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot open %s: the auto-commit was rejected:\n\n    %v\n\n"+
+					"  The transition was rolled back — %s is unchanged (still %s) and nothing was staged.\n"+
+					"  Resolve the issue above (e.g. a failing pre-commit hook) and run 'linespec provenance open' again.",
+				opts.RecordID, err, opts.RecordID, origStatus,
+			))
+			return err
+		}
 	}
 
 	fmt.Fprintf(os.Stdout, "\n✓ %s transitioned from draft → open\n\n", opts.RecordID)
 	fmt.Fprintln(os.Stdout, "  Scope and spec enforcement now apply to this record.")
 	fmt.Fprintln(os.Stdout)
-
-	if c.Config.CommitOnStatusChange {
-		msg := fmt.Sprintf("Open provenance record %s [%s]", opts.RecordID, opts.RecordID)
-		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
-			fmt.Fprintln(os.Stderr, "  The record has been saved. Commit manually when ready.")
-			return err
-		}
-	}
 
 	return nil
 }

@@ -55,6 +55,7 @@ affected_scope:
   - pkg/config/types.go
   - pkg/provenance/commands.go
   - pkg/provenance/git.go
+  - pkg/provenance/transition_rollback_test.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
   - .linespec.yml
@@ -65,6 +66,9 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
+  - path: pkg/provenance/transition_rollback_test.go
+    type: go_test
+    run_command: make test
   - path: pkg/provenance/provenance_test.go
     type: go_test
     run_command: make test
