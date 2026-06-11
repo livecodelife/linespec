@@ -1,0 +1,45 @@
+id: prov-2026-50dc42de
+title: Quality gate script, pre-push hook, and Makefile targets
+status: open
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Add the code-quality gate plumbing: scripts/go-quality.sh (single source of
+  truth), the scripts/pre-push hook shim, and Makefile targets.
+
+  Key decision — deadcode false-positive cutting: raw `deadcode ./...` reports
+  48 unreachable funcs, but ~30 are test-only helpers or code reachable only
+  under the beta/integration build tags. The script runs deadcode across all
+  five build configurations (default, -test, -test -tags beta,
+  -test -tags integration, -test -tags 'integration beta') and reports only
+  the intersection — functions dead in EVERY configuration. Verified: that
+  intersection is exactly 18 functions, so the gate is meaningful, not noisy.
+
+  Decision — pre-push, installed via Makefile: deadcode is whole-program and
+  too slow for pre-commit. The hook is a thin shim delegating to the script;
+  `make install-hooks-quality` copies it into the worktree-correct hooks dir
+  (`git rev-parse --git-path hooks`). Kept separate from the linespec-managed
+  pre-commit/commit-msg hooks so `linespec install-hooks` never clobbers it.
+
+  Decision — dupl is warn-only: it found 48 clone groups, dominated by the
+  inherent main_beta.go/main_stable.go near-duplication and test-table repaints.
+  Blocking on that would be hostile, so dupl reports but never fails.
+constraints: []
+affected_scope:
+  - scripts/go-quality.sh
+  - scripts/pre-push
+  - Makefile
+forbidden_scope: []
+implements: prov-2026-a241eaa6
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: scripts/go-quality.sh
+    type: code
+    run_command: make quality
+associated_traces: []
+monitors: []
+tags: []
