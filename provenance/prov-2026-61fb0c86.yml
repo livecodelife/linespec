@@ -1,6 +1,6 @@
 id: prov-2026-61fb0c86
 title: Add llms.txt/llms-full.txt links to docs site, fix any residual version/link drift in index/docs html, finalize llms files
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -21,7 +21,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a10d07177358c535a8c536d3161d23134e1d5d9d
 associated_specs:
   - path: docs/index.html
     type: docs
