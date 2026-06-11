@@ -1,0 +1,81 @@
+id: prov-2026-bc57fbdc
+title: Relocate governance-overlap signal to lifecycle transitions; run overlapping sealed records' specs at completion
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Supersedes prov-2026-032 (Improve stale scope warning message clarity), which
+  established that the "you are modifying a file governed by an implemented record"
+  signal is surfaced at `provenance check` time. In practice that signal fires on
+  EVERY commit (the commit-msg hook runs `check --staged`) and on every lint, so any
+  change touching a file that happens to fall in a sealed record's glob scope spams a
+  loud, repetitive "(non-blocking)" warning. Agents working in the repo hit this
+  constantly; it is noise, not signal, because it never actually verifies whether the
+  sealed record's proven behavior was affected — it only checks glob membership.
+
+  This blueprint reworks the governance-overlap mechanism into three moves:
+
+  1. Relocate the signal off the per-commit (`check --staged`) and per-lint
+     (`LintAll` scope-overlap) paths and onto the open/complete LIFECYCLE
+     transitions. Routine commits and lints stop emitting overlap noise; the signal
+     appears only when a record is opened or completed. The loud "(non-blocking)"
+     label is preserved wherever an informational overlap notice is shown.
+
+  2. Demote file/glob overlap from a surfaced warning to an INTERNAL SELECTOR. At
+     completion, overlap is computed from the files the completing record ACTUALLY
+     changed (the union of files across its tagged commits, intersected with sealed
+     records' scope) rather than from glob-pattern intersection. The selector picks
+     which sealed records the change actually touches. For selected sealed records
+     that have NO associated_specs to run, a single neutral completion-time FYI is
+     emitted (one notice, not one-per-file), retaining the "(non-blocking)" framing.
+
+  3. Give the mechanism behavioral teeth: for selected sealed records that DO have
+     associated_specs, run those specs at completion and block completion only on a
+     real spec failure. This reuses the existing per-record spec runner (RunSpecs
+     already runs an arbitrary record's specs on demand), so it is a control-flow
+     change, not new infrastructure. A blocked completion rolls back atomically
+     (per prov-2026-79ce86dc) so the record is never left half-transitioned.
+
+  Net effect: routine work is quiet; the overlap signal becomes a precise,
+  completion-time verification that the change did not break the proven behavior of
+  the sealed records it actually touches, with a neutral FYI when there is nothing to
+  run. The sealed_at_sha changed-file detection from prov-2026-021 is reused, not
+  replaced.
+constraints:
+  - Routine `provenance check` (including `check --staged` run by the commit-msg hook) must NOT emit governance-overlap / stale-scope warnings; forbidden-scope violation checking is unchanged.
+  - Per-lint LintAll must NOT emit the open-vs-open scope-overlap warning; the glob-overlap computation is retained only as an internal selector, not a surfaced lint issue.
+  - The governance-overlap signal is surfaced only at the open and complete lifecycle transitions.
+  - Any informational (non-failing) overlap notice must keep an explicit, loud "(non-blocking)" label so it is clearly not an error.
+  - At completion, the set of touched sealed records must be computed from the files the completing record actually changed (union of files across commits tagged with its ID), intersected with each implemented record's scope — not from glob-pattern-vs-glob-pattern intersection.
+  - At completion, for each touched sealed record that has associated_specs, those specs are run; completion is blocked if and only if at least one such spec actually fails (non-zero exit). A blocked completion must roll back the transition atomically, leaving the record unchanged.
+  - At completion, touched sealed records that have NO runnable associated_specs must produce a single neutral combined FYI (one notice listing them), not a per-file or per-record warning, and must not block completion.
+  - The per-record spec runner must be usable to run an arbitrary record's specs on demand (decoupled from "the record being completed"), and must honor run_associated_specs_on_complete gating where appropriate.
+  - sealed_at_sha-based change detection from prov-2026-021 is reused; sealed_at_sha semantics are unchanged.
+  - Behavior for records with no overlap, and the success path of open/complete, is otherwise unchanged.
+  - make test must pass.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/git.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/overlap_specs_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: prov-2026-032
+superseded_by: ""
+related:
+  - prov-2026-021
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/overlap_specs_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - governance
+  - dx
+  - enforcement
