@@ -1,0 +1,31 @@
+id: prov-2026-4de0b5a7
+title: 'Update docs/linespec.html to mirror v3.11.7 DSL/config: RESPONSE_HEADERS, WITH request-body, multi-channel EXPECT_NOT/VERIFY, RETURNS EMPTY, Redis pops, config keys; remove NO_TRANSACTION'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Mirror the LINESPEC.md DSL/config corrections into the doc site's DSL page
+  (docs/linespec.html): document RESPONSE_HEADERS and WITH-as-request-body, fix
+  the WITH-as-response-body error, expand VERIFY targets to HTTP/Kafka/gRPC, add
+  multi-channel EXPECT_NOT (PostgreSQL/MongoDB), add Redis BRPOP/BLPOP/LPOP, add
+  gRPC RETURNS EMPTY, correct config defaults (timeout 180, ports), add the
+  missing config keys, and REMOVE the NO_TRANSACTION grammar entries + caveat.
+implements: prov-2026-38971b27
+constraints:
+  - Content verified against pkg/dsl, pkg/config — not copied from possibly-stale HTML.
+  - HTML must stay consistent with the updated LINESPEC.md.
+affected_scope:
+  - docs/linespec.html
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: docs/linespec.html
+    type: docs
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags: []
