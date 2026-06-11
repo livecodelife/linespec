@@ -1,0 +1,35 @@
+id: prov-2026-c3964c7a
+title: CI code-quality job; pin all CI jobs to go.mod Go version
+status: open
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Enforce the code-quality gate in CI so it cannot be bypassed with
+  --no-verify and applies to everyone (the pre-push hook lives in .git/hooks
+  and is not version-controlled).
+
+  Added a `code-quality` job to ci.yml that runs scripts/go-quality.sh (the
+  same gate as the pre-push hook); it bootstraps staticcheck/deadcode/dupl via
+  `go install`.
+
+  Also fixed the pre-existing Go-version mismatch: the three existing jobs
+  pinned `go-version: '1.21'` while go.mod requires go 1.25.7. Switched all
+  jobs to `go-version-file: go.mod` so CI always tracks the module's Go
+  version instead of a hardcoded value that can drift.
+constraints: []
+affected_scope:
+  - .github/workflows/ci.yml
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a241eaa6
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .github/workflows/ci.yml
+    type: code
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
