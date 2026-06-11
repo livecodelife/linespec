@@ -159,6 +159,28 @@ func TestAdvise_AmbientSingleOpenBlueprint_AdvancesIt(t *testing.T) {
 	}
 }
 
+func TestHintCreateNotSupersede_FramesSupersedeAsRevisionOnly(t *testing.T) {
+	h := HintCreateNotSupersede()
+	if !containsAny(h, "create a new record") {
+		t.Fatalf("hint must lead with creating a new record: %q", h)
+	}
+	if containsAny(h, "--supersedes") {
+		t.Fatalf("hint must not present the --supersedes command as the default remedy: %q", h)
+	}
+	if !containsAny(h, "deliberately revising") {
+		t.Fatalf("hint must frame supersede as the deliberate-revision branch: %q", h)
+	}
+}
+
+func TestHintStaleScope_NonBlockingAndSpecific(t *testing.T) {
+	h := HintStaleScope("pkg/core/auth.go", "prov-2026-0000beef", "abc1234")
+	for _, want := range []string{"non-blocking", "no action is required", "pkg/core/auth.go", "prov-2026-0000beef"} {
+		if !containsAny(h, want) {
+			t.Fatalf("stale-scope hint missing %q: %s", want, h)
+		}
+	}
+}
+
 func TestAdvise_NeverEmpty(t *testing.T) {
 	if len(Advise(NextState{})) == 0 {
 		t.Fatal("Advise must never return an empty slice")

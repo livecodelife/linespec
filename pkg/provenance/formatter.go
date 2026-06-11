@@ -636,9 +636,10 @@ func (f *Formatter) FormatCheckResult(violations []Violation, staleWarnings []St
 			fmt.Fprintln(f.Output)
 		}
 
-		fmt.Fprintf(f.Output, "  %s If this change is intentional, create a new Provenance Record\n", f.colored("Hint:", colorCyan))
-		fmt.Fprintf(f.Output, "       that governs this file and tag your commit with it. (Supersede the\n")
-		fmt.Fprintf(f.Output, "       existing record only if you are revising its decision.)\n")
+		// Render the create-not-supersede framing from the single engine-owned
+		// source (next.go) so this hint never drifts from `next` or the skill.
+		fmt.Fprintf(f.Output, "  %s If this change is intentional, %s\n",
+			f.colored("Hint:", colorCyan), HintCreateNotSupersede())
 	}
 
 	if len(staleWarnings) > 0 {
