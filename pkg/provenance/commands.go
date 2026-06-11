@@ -475,26 +475,18 @@ type CheckOptions struct {
 // Check checks commits for violations
 func (c *Commands) Check(opts CheckOptions) error {
 	var violations []Violation
-	var staleWarnings []StaleScopeWarning
 	var err error
 
+	// Governance-overlap / stale-scope signals are intentionally NOT computed here.
+	// They were noisy on every commit and every lint; the signal now lives on the
+	// open/complete lifecycle transitions (see prov-2026-bc57fbdc). `check` is
+	// limited to forbidden-scope enforcement.
 	if opts.Staged {
 		// Check staged files
 		violations, err = c.Checker.CheckStaged(opts.MessageFile, c.Config.CommitTagRequired)
 		if err != nil {
 			c.Formatter.FormatError(fmt.Sprintf("Check failed: %v", err))
 			return err
-		}
-
-		// Check for stale scope warnings on staged files
-		stagedFiles, err := c.Git.GetStagedFiles()
-		if err == nil {
-			for _, record := range c.Loader.Records {
-				if record.Status == StatusImplemented && record.SealedAtSHA != "" {
-					warnings := c.Checker.CheckForStaleScopeWarnings(record, stagedFiles)
-					staleWarnings = append(staleWarnings, warnings...)
-				}
-			}
 		}
 	} else if opts.Range != "" {
 		// Check range
@@ -537,7 +529,7 @@ func (c *Commands) Check(opts CheckOptions) error {
 	if opts.Staged {
 		label = "staged"
 	}
-	c.Formatter.FormatCheckResult(violations, staleWarnings, label)
+	c.Formatter.FormatCheckResult(violations, nil, label)
 
 	if len(violations) > 0 {
 		return fmt.Errorf("forbidden scope violations found")
@@ -866,6 +858,49 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
+	// Governance-overlap verification (completion-time teeth). Find the sealed
+	// records this change actually touched — computed from the files across this
+	// record's commits, not glob intersection — and run their associated specs to
+	// confirm their proven behavior still holds. Block completion only on a real
+	// spec failure; otherwise emit a single neutral, non-blocking FYI for the
+	// touched records we could not auto-verify (no runnable specs, or spec-running
+	// disabled). A blocked completion rolls back atomically.
+	if touched := c.completionOverlapSelector(record); len(touched) > 0 {
+		var unverified []*Record
+		specsFailed := false
+		runTeeth := c.Config.RunAssociatedSpecsOnComplete
+		for _, r := range touched {
+			if !runTeeth || len(r.AssociatedSpecs) == 0 {
+				unverified = append(unverified, r)
+				continue
+			}
+			fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
+			if _, failed := c.runRecordSpecs(r); failed {
+				specsFailed = true
+			}
+		}
+
+		if specsFailed {
+			rollback(false)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot complete %s: it changes files governed by a sealed record whose specs now fail.\n\n"+
+					"  A sealed record's proven behavior appears broken by this change, so completion is blocked.\n"+
+					"  The transition was rolled back — %s is unchanged (still %s).\n"+
+					"  Fix the failing spec(s) above, or supersede the affected record, then run 'linespec provenance complete' again.",
+				opts.RecordID, opts.RecordID, origStatus,
+			))
+			return fmt.Errorf("overlapping sealed record spec failed")
+		}
+
+		if len(unverified) > 0 {
+			fmt.Fprintf(c.Formatter.Output,
+				"\nℹ Governance overlap (non-blocking): this change also touches files governed by sealed record(s):\n\n%s\n"+
+					"  No runnable specs were available to auto-verify them. If your change conflicts with\n"+
+					"  their original intent, create a record that supersedes them.\n\n",
+				formatRecordList(unverified))
+		}
+	}
+
 	if c.Config.CommitOnStatusChange {
 		msg := fmt.Sprintf("Complete provenance record [%s]", opts.RecordID)
 		files := []string{record.FilePath}
@@ -1078,6 +1113,16 @@ func (c *Commands) Open(opts OpenOptions) error {
 	fmt.Fprintln(os.Stdout, "  Scope and spec enforcement now apply to this record.")
 	fmt.Fprintln(os.Stdout)
 
+	// Lifecycle-time governance-overlap heads-up (non-blocking). Before any files
+	// have changed, surface sealed records whose scope this record's declared scope
+	// overlaps, so the author knows their specs will be verified at completion.
+	if overlaps := c.declaredOverlapSealedRecords(record); len(overlaps) > 0 {
+		fmt.Fprintf(c.Formatter.Output,
+			"ℹ Governance overlap (non-blocking): this record's declared scope overlaps sealed record(s):\n\n%s\n"+
+				"  At completion, their specs will be run against your actual changes to confirm nothing broke.\n\n",
+			formatRecordList(overlaps))
+	}
+
 	return nil
 }
 
@@ -1106,11 +1151,27 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
 
-	allPassed := true
+	_, failed := c.runRecordSpecs(record)
+	if failed {
+		return fmt.Errorf("one or more associated specs failed — commit blocked")
+	}
+
+	fmt.Fprintf(os.Stdout, "All associated specs passed.\n\n")
+	return nil
+}
+
+// runRecordSpecs executes the associated_specs of a single record, streaming each
+// command's output. It returns ran (whether any executable spec was attempted) and
+// failed (whether any spec exited non-zero). It deliberately does NOT consult
+// run_associated_specs_on_complete or look at record status — the caller decides
+// when to invoke it, so it can verify an arbitrary record's specs on demand.
+func (c *Commands) runRecordSpecs(record *Record) (ran bool, failed bool) {
 	for _, spec := range record.AssociatedSpecs {
 		cmdStr, skip, err := buildSpecCommand(spec)
 		if err != nil {
-			return err
+			fmt.Fprintf(os.Stdout, "  · %s  ✗ could not build command: %v\n", spec.Path, err)
+			failed = true
+			continue
 		}
 		if skip {
 			fmt.Fprintf(os.Stdout, "  · %s  (skipped — no type or run_command)\n", spec.Path)
@@ -1118,23 +1179,95 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 		}
 
 		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
+		ran = true
 		cmd := exec.Command("sh", "-c", cmdStr)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
-			allPassed = false
+			failed = true
 		} else {
 			fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
 		}
 	}
+	return ran, failed
+}
 
-	if !allPassed {
-		return fmt.Errorf("one or more associated specs failed — commit blocked")
+// overlappingSealedRecords returns implemented (sealed) records — other than self —
+// whose scope contains at least one of changedFiles. This is the internal overlap
+// selector: membership is computed from the files a change ACTUALLY touched, not
+// from glob-pattern-vs-glob-pattern intersection.
+func (c *Commands) overlappingSealedRecords(self *Record, changedFiles []string) []*Record {
+	var out []*Record
+	for _, r := range c.Loader.Records {
+		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" {
+			continue
+		}
+		for _, f := range changedFiles {
+			if inScope, err := r.IsInScope(f); err == nil && inScope {
+				out = append(out, r)
+				break
+			}
+		}
 	}
+	return out
+}
 
-	fmt.Fprintf(os.Stdout, "All associated specs passed.\n\n")
-	return nil
+// completionOverlapSelector returns the sealed records the completing record
+// actually touched, computed from the union of files across its tagged commits.
+// Returns nil when git history is unavailable or the record changed nothing.
+func (c *Commands) completionOverlapSelector(self *Record) []*Record {
+	if c.Git == nil {
+		return nil
+	}
+	commits, err := c.Git.GetCommitsForRecord(self.ID)
+	if err != nil || len(commits) == 0 {
+		return nil
+	}
+	changed, err := c.Git.GetFilesChangedInCommits(commits)
+	if err != nil || len(changed) == 0 {
+		return nil
+	}
+	return c.overlappingSealedRecords(self, changed)
+}
+
+// declaredOverlapSealedRecords returns sealed records whose scope overlaps the
+// given record's DECLARED affected_scope (glob intersection). Used at open time —
+// before any files have changed — for an early non-blocking heads-up.
+func (c *Commands) declaredOverlapSealedRecords(self *Record) []*Record {
+	var out []*Record
+	for _, r := range c.Loader.Records {
+		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" {
+			continue
+		}
+		if scopesOverlap(self, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// scopesOverlap reports whether two records' affected_scope patterns could match a
+// common file. This is the glob-overlap computation, retained as an internal
+// selector rather than a surfaced lint warning.
+func scopesOverlap(a, b *Record) bool {
+	for _, pa := range a.AffectedScope {
+		for _, pb := range b.AffectedScope {
+			if patternsOverlap(pa, pb) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// formatRecordList renders records as an indented "· ID — Title" bullet list.
+func formatRecordList(records []*Record) string {
+	var b strings.Builder
+	for _, r := range records {
+		fmt.Fprintf(&b, "    · %s — %s\n", r.ID, r.Title)
+	}
+	return b.String()
 }
 
 // buildSpecCommand returns the shell command string to run for a given AssociatedSpec.
