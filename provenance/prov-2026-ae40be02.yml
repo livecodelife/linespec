@@ -1,0 +1,46 @@
+id: prov-2026-ae40be02
+title: Update markdown reference docs (README, PROVENANCE_RECORDS, CLAUDE, LINESPEC) to v3.11.7 code-verified content
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: >
+  Update the markdown reference docs to v3.11.7, verified against code: fix
+  version strings to 3.11.7, repair broken AGENTS.md/RELEASE_PLAN.md links,
+  correct stale "beta build tag" framing (testing is stable/default since
+  v2.0.0), and bring LINESPEC.md's DSL/config content in line with the lexer/
+  parser/config — lead with semantic SQL matching, document RESPONSE_HEADERS,
+  WITH-as-request-body, multi-channel EXPECT_NOT, the full VERIFY targets,
+  RETURNS variants, Redis BRPOP/BLPOP/LPOP, missing config keys, correct the
+  timeout_seconds default (180), and remove the dead NO_TRANSACTION clause and
+  the inert payload.status_field "configurable" framing.
+implements: prov-2026-38971b27
+constraints:
+  - Content verified against pkg/dsl, pkg/config, cmd/linespec — not copied from possibly-stale markdown.
+  - No deprecated term shown with equal-or-greater prominence than its replacement.
+affected_scope:
+  - README.md
+  - PROVENANCE_RECORDS.md
+  - CLAUDE.md
+  - LINESPEC.md
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: README.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: PROVENANCE_RECORDS.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: CLAUDE.md
+    type: docs
+    run_command: test -f {{path}}
+  - path: LINESPEC.md
+    type: docs
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags: []
