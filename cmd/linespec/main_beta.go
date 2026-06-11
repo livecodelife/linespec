@@ -729,6 +729,15 @@ func runProvenance() {
 		if err := cmds.Context(opts); err != nil {
 			os.Exit(1)
 		}
+	case "next":
+		opts := parseNextOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Next(opts); err != nil {
+			os.Exit(1)
+		}
 	case "search":
 		opts := parseSearchOptions(args)
 		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
@@ -1340,6 +1349,62 @@ Options:
 		default:
 			// If not a flag, treat as positional file argument
 			if !strings.HasPrefix(args[i], "--") && !strings.HasPrefix(args[i], "-") {
+				opts.Files = append(opts.Files, args[i])
+			}
+		}
+	}
+
+	return opts
+}
+
+// parseNextOptions parses flags for `linespec provenance next`. Files may be given
+// positionally, via --files, or via the --plan alias. --json selects JSON output.
+func parseNextOptions(args []string) provenance.NextOptions {
+	opts := provenance.NextOptions{}
+
+	collectFiles := func(start int) int {
+		last := start
+		for j := start + 1; j < len(args); j++ {
+			if strings.HasPrefix(args[j], "-") {
+				return j - 1
+			}
+			opts.Files = append(opts.Files, args[j])
+			last = j
+		}
+		return last
+	}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--files", "--plan":
+			i = collectFiles(i)
+		case "--json":
+			opts.Format = "json"
+		case "--format":
+			if i+1 < len(args) {
+				opts.Format = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance next [options] [files...]
+
+Computes the single correct next provenance action for the current state.
+With no files, reads staged + working-tree changes. With files, plans ahead.
+
+Options:
+  --files f1 f2 f3          Files you intend to change (plan before editing)
+  --plan f1 f2 f3           Alias for --files
+  --json                    Machine-readable output (for hooks/agents)
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message`)
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "-") {
 				opts.Files = append(opts.Files, args[i])
 			}
 		}

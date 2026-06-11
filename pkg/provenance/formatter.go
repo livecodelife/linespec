@@ -1187,3 +1187,56 @@ func (f *Formatter) FormatContextJSON(result *ContextResult) error {
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(jsonResult)
 }
+
+// FormatNext renders advice-engine actions for humans. Element 0 is the single
+// primary recommendation; any remaining actions are shown as follow-ups.
+func (f *Formatter) FormatNext(actions []NextAction) {
+	if len(actions) == 0 {
+		return
+	}
+	primary := actions[0]
+
+	fmt.Fprintf(f.Output, "\n%s %s\n", f.colored("Next:", colorCyan), primary.Reason)
+	if primary.Command != "" {
+		fmt.Fprintf(f.Output, "\n  %s\n", f.colored(primary.Command, colorGreen))
+	}
+	if primary.Detail != "" {
+		fmt.Fprintln(f.Output)
+		for _, line := range strings.Split(primary.Detail, "\n") {
+			fmt.Fprintf(f.Output, "  %s\n", line)
+		}
+	}
+	if len(primary.Governing) > 0 {
+		fmt.Fprintf(f.Output, "\n  %s %s\n",
+			f.colored("Governing (no supersede needed):", colorYellow),
+			strings.Join(primary.Governing, ", "))
+	}
+
+	if len(actions) > 1 {
+		fmt.Fprintf(f.Output, "\n  %s\n", f.colored("Then:", colorCyan))
+		for _, a := range actions[1:] {
+			if a.Command != "" {
+				fmt.Fprintf(f.Output, "    · %s — %s\n", a.Command, a.Reason)
+			} else {
+				fmt.Fprintf(f.Output, "    · %s\n", a.Reason)
+			}
+		}
+	}
+	fmt.Fprintln(f.Output)
+}
+
+// FormatNextJSON emits the advice-engine actions as JSON for hook/agent
+// consumption. The shape is stable: {"primary": <action>, "actions": [<action>...]}.
+func (f *Formatter) FormatNextJSON(actions []NextAction) error {
+	type jsonNext struct {
+		Primary *NextAction  `json:"primary"`
+		Actions []NextAction `json:"actions"`
+	}
+	out := jsonNext{Actions: actions}
+	if len(actions) > 0 {
+		out.Primary = &actions[0]
+	}
+	encoder := json.NewEncoder(f.Output)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(out)
+}

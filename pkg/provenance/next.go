@@ -277,8 +277,22 @@ func topLevelRecords(records []*Record) []*Record {
 	return out
 }
 
-// topLevelGoverning returns the top-level records (blueprint/bug) whose scope
-// covers at least one of the files, sorted by ID for determinism. Returns nil
+// explicitlyGoverns reports whether a record CLAIMS the given file — i.e. it is in
+// allowlist mode (non-empty affected_scope) and the file matches that scope.
+// Observed-mode records (empty affected_scope) permit any file but do not claim
+// any specific one, so they are NOT treated as governing a particular file. This
+// keeps the engine from selecting a permissive observed record as the active one
+// for every file, and keeps the advisory governing list free of noise.
+func explicitlyGoverns(r *Record, file string) bool {
+	if r.ScopeMode() != "allowlist" {
+		return false
+	}
+	inScope, err := r.IsInScope(file)
+	return err == nil && inScope
+}
+
+// topLevelGoverning returns the top-level records (blueprint/bug) that explicitly
+// govern at least one of the files, sorted by ID for determinism. Returns nil
 // when files is empty.
 func topLevelGoverning(records []*Record, files []string) []*Record {
 	if len(files) == 0 {
@@ -290,7 +304,7 @@ func topLevelGoverning(records []*Record, files []string) []*Record {
 			continue
 		}
 		for _, f := range files {
-			if inScope, err := r.IsInScope(f); err == nil && inScope {
+			if explicitlyGoverns(r, f) {
 				out = append(out, r)
 				break
 			}
@@ -300,14 +314,14 @@ func topLevelGoverning(records []*Record, files []string) []*Record {
 	return out
 }
 
-// governingRecords returns every record (any tier/status) whose scope covers at
-// least one of the files, sorted by ID.
+// governingRecords returns every record (any tier/status) that explicitly governs
+// at least one of the files, sorted by ID.
 func governingRecords(records []*Record, files []string) []string {
 	seen := map[string]bool{}
 	var ids []string
 	for _, r := range records {
 		for _, f := range files {
-			if inScope, err := r.IsInScope(f); err == nil && inScope {
+			if explicitlyGoverns(r, f) {
 				if !seen[r.ID] {
 					seen[r.ID] = true
 					ids = append(ids, r.ID)
