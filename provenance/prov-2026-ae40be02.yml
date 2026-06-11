@@ -1,6 +1,6 @@
 id: prov-2026-ae40be02
 title: Update markdown reference docs (README, PROVENANCE_RECORDS, CLAUDE, LINESPEC) to v3.11.7 code-verified content
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -27,7 +27,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 9269e555310510604152fd97ada42ebc64927b25
 associated_specs:
   - path: README.md
     type: docs
