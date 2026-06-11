@@ -19,11 +19,32 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
           cache: true
 
       - name: Run tests
         run: go test ./...
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Runs staticcheck (hard gate), deadcode across all build configs
+      # (hard gate on the intersection), and dupl (warn-only). The script
+      # bootstraps the tools via `go install`. Same gate as the pre-push hook.
+      - name: Run Go code-quality gate
+        run: ./scripts/go-quality.sh
 
   provenance-lint:
     name: Provenance Lint
@@ -37,7 +58,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
           cache: true
 
       - name: Build LineSpec
@@ -71,7 +92,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
           cache: true
 
       - name: Build LineSpec
