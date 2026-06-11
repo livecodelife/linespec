@@ -1,6 +1,6 @@
 id: prov-2026-c3964c7a
 title: CI code-quality job; pin all CI jobs to go.mod Go version
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -25,7 +25,7 @@ implements: prov-2026-a241eaa6
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6c4b725964692cde63ec9ce84ca70307ce2d73f7
 associated_specs:
   - path: .github/workflows/ci.yml
     type: code
