@@ -1,6 +1,6 @@
 id: prov-2026-bc57fbdc
 title: Relocate governance-overlap signal to lifecycle transitions; run overlapping sealed records' specs at completion
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -65,7 +65,7 @@ supersedes: prov-2026-032
 superseded_by: ""
 related:
   - prov-2026-021
-sealed_at_sha: ""
+sealed_at_sha: 9f2d1ba11b206f4efad65d915facd13d2009a783
 associated_specs:
   - path: pkg/provenance/overlap_specs_test.go
     type: go_test
