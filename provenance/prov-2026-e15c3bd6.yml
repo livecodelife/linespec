@@ -1,0 +1,50 @@
+id: prov-2026-e15c3bd6
+title: Share JSON body matcher between HTTP and Kafka interceptors
+status: open
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  The HTTP interceptor's makeBodyMatcher and the Kafka interceptor's inline
+  bodyMatcher closure were identical: empty WithFile -> match-any, else load the
+  payload via dsl.NewPayloadLoaderWithResolver, unmarshal the actual body as
+  JSON, and compare with verify.CompareJSON.
+
+  Lift a single exported helper into pkg/verify (new file bodymatch.go):
+
+    MakeJSONBodyMatcher(actualBody, sourceLabel string, resolver *interpolate.Resolver) func(withFile, baseDir string) bool
+
+  sourceLabel preserves the distinct debug message per channel
+  ("request body" for HTTP, "Kafka message value" for Kafka). HTTP's
+  makeBodyMatcher delegates to it; Kafka replaces its inline closure with a call.
+  pkg/verify gains imports on dsl/interpolate/logger; confirmed no import cycle
+  (none of those packages import pkg/verify).
+constraints:
+  - Debug messages preserved exactly via sourceLabel - "failed to parse request body as JSON" and "failed to parse Kafka message value as JSON"
+  - Empty withFile short-circuits to true; load failure and unmarshal failure both return false
+  - Helper lives in pkg/verify so http and kafka avoid a proxy-to-proxy import
+  - No behavior change; http and kafka interceptor tests pass unmodified
+affected_scope:
+  - pkg/verify/bodymatch.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/kafka/interceptor.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-23ab1db8
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-875617fa
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/http/interceptor_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/proxy/kafka/interceptor_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - verify
+  - proxy
+  - dupl
