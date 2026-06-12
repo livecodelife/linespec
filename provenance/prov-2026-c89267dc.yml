@@ -1,6 +1,6 @@
 id: prov-2026-c89267dc
 title: 'Decision: skip runner proxy-config consolidation (defer/guard entanglement)'
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: calebcowen@gmail.com
 intent: |
@@ -33,7 +33,7 @@ superseded_by: ""
 related:
   - prov-2026-7b58bc99
   - prov-2026-29c68262
-sealed_at_sha: ""
+sealed_at_sha: a125f3b395eb680c5d2a953934f085f20b886bef
 associated_specs:
   - type: go_test
     path: pkg/runner/port_allocator_test.go
