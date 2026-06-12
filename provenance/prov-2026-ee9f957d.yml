@@ -1,6 +1,6 @@
 id: prov-2026-ee9f957d
 title: 'Plugin assets: plugin.json/marketplace.json, hooks.json, SessionStart/PreToolUse/commit hook scripts, provenance-next slash command (5b-5d)'
-status: draft
+status: open
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
