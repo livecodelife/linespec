@@ -1,6 +1,6 @@
 id: prov-2026-54aaf9cf
 title: Build the 'next' advice engine and 'linespec provenance next' command (Phase 2)
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -76,7 +76,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: bf753efa567a21ae32ec68801945a10756375156
 associated_specs:
   - path: pkg/provenance/next_test.go
     type: go_test
