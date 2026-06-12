@@ -1,6 +1,6 @@
 # LineSpec
 
-> LineSpec is a CLI for **Provenance Records** — structured, queryable YAML decision documents that capture the intent, constraints, and reasoning behind architectural changes — and **LineSpec Testing**, a protocol-level integration-testing DSL that runs the real service in a container and intercepts its database, HTTP, Redis, Kafka, and gRPC traffic at the wire level (no mocks in the service code). As of v3.11.7, both subsystems ship in the default binary.
+> LineSpec is a CLI for **Provenance Records** — structured, queryable YAML decision documents that capture the intent, constraints, and reasoning behind architectural changes — and **LineSpec Testing**, a protocol-level integration-testing DSL that runs the real service in a container and intercepts its database, HTTP, Redis, Kafka, and gRPC traffic at the wire level (no mocks in the service code). As of v__VERSION__, both subsystems ship in the default binary.
 
 ## Documentation
 

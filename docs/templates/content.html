@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$metatitle$</title>
+    <meta name="description" content="$metadesc$">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/docs.css">
+    <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="docs-page">
+    <nav class="navbar docs-navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <img src="assets/logo.svg" alt="LineSpec" width="32" height="32">
+                <span>LineSpec</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html#features">Features</a>
+                <a href="index.html" class="active">Docs</a>
+                <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener">GitHub</a>
+            </div>
+            <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+        <div class="mobile-menu" id="mobile-menu">
+            <a href="index.html#features" class="mobile-nav-link">Features</a>
+            <a href="index.html" class="mobile-nav-link active">Docs</a>
+            <a href="https://github.com/livecodelife/linespec" target="_blank" rel="noopener" class="mobile-nav-link">GitHub</a>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>Documentation</h3>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <h4>Getting Started</h4>
+                    <ul>
+                        <li><a href="docs.html">Overview</a></li>
+                        <li><a href="$gs_other_href$">$gs_other_label$</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section nav-section-toc">
+                    <h4>$navtitle$</h4>
+$sidebar_toc$
+                </div>
+            </nav>
+        </aside>
+
+        <main class="docs-content">
+            <article class="docs-article">
+                <div class="docs-badge stable">Stable v$version$</div>
+$body$
+                <div class="docs-footer">
+                    <p><strong>Next:</strong> <a href="$next_href$">$next_label$</a></p>
+                </div>
+            </article>
+        </main>
+    </div>
+
+    <script src="assets/js/components.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/docs.js"></script>
+</body>
+</html>
