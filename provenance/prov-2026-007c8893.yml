@@ -55,6 +55,7 @@ affected_scope:
   - pkg/provenance/commands.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
+  - .gitignore
 forbidden_scope: []
 type: blueprint
 supersedes: ""

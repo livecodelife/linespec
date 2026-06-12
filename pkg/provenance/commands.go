@@ -94,6 +94,10 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 		return nil, fmt.Errorf("failed to load provenance records: %w", err)
 	}
 
+	// Keep the scope cache warm for the `next` fast path (prov-2026-007c8893).
+	// Best-effort and only rewrites when stale, so the already-fresh case is cheap.
+	refreshScopeIndexCache(repoRoot, loaderDirs(config.Dir, sharedDirs), loader.Records)
+
 	// Create linter with hash-based integrity checker
 	linter := NewLinter(loader, config.Enforcement)
 	linter.Hasher = NewHasher(repoRoot)
