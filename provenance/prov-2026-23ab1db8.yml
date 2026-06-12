@@ -30,6 +30,7 @@ constraints:
   - No change to the dupl threshold or to scripts/go-quality.sh; success is fewer real clones, not a config tweak
 affected_scope:
   - pkg/verify/verify.go
+  - pkg/verify/bodymatch.go
   - pkg/proxy/http/interceptor.go
   - pkg/proxy/kafka/interceptor.go
 forbidden_scope:
