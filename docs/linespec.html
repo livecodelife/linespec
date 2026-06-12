@@ -1361,6 +1361,7 @@ user_id: 123</code></pre>
   commit_tag_required: true  # Commits must reference a provenance record ID
   auto_affected_scope: true  # Auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true  # Run associated_specs on open→implemented
+  overlap_specs_on_complete: block        # Completion-time overlap teeth severity: block|warn|off
   commit_on_status_change: true           # Auto-commit after open/complete/deprecate
   manifest_url: ""                         # Source manifest URL (set by `linespec clone`)
 
