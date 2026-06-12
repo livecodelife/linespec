@@ -1,0 +1,55 @@
+id: prov-2026-4bab0511
+title: Consolidate medium-priority duplicated proxy/runner logic
+status: draft
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  Three medium-priority clones flagged by the dupl gate sit in the proxy and
+  runner subsystems. Each is a pair of functions that must stay in lockstep, so
+  the duplication is a latent drift hazard rather than mere verbosity.
+
+  1. findMock and peekMock in pkg/proxy/mysql/proxy.go (and the same pair in
+     pkg/proxy/postgresql/proxy.go) are identical except that find calls the
+     registry's Find* methods and peek calls Peek* (peek does not increment hit
+     counts). Collapse each pair into one implementation parameterized on
+     whether hit counts are incremented.
+
+  2. waitForMySQL and waitForPostgreSQL in pkg/runner/runner.go share an
+     identical poll-with-exponential-backoff loop; only the driver name and DSN
+     construction differ. Extract a shared waitForSQLDB(ctx, driver, dsn,
+     timeout) helper that both call.
+
+  These are independent of the high-priority verify work and can ship
+  separately.
+constraints:
+  - Behavior must be unchanged; mysql, postgresql, and runner unit tests pass unmodified
+  - peek paths must continue to NOT increment registry hit counts; find paths must continue to increment them
+  - The mysql and postgresql proxies keep their own findMock/peekMock signatures (their semantic-extraction differs); consolidation is within each package, not across the two protocols
+  - waitForSQLDB preserves the current deadline, 1s ping timeout, expBackoff(attempt, 50ms, 2s) schedule, and ctx.Done() handling; the timeout error message still names the protocol (MySQL / PostgreSQL) and host:port
+  - No change to scripts/go-quality.sh or the dupl threshold
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/runner/runner.go
+forbidden_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-23ab1db8
+  - prov-2026-b5c9c813
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/runner
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - quality
+  - dupl
+  - proxy
+  - runner
+  - refactor
