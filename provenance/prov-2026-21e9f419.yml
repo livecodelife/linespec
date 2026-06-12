@@ -1,0 +1,81 @@
+id: prov-2026-21e9f419
+title: Make completion-time overlap teeth configurable (block|warn|off) and skip remote records
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Refines the Phase 3/4 governance-overlap teeth from prov-2026-bc57fbdc. Today the
+  teeth (running OTHER sealed records' associated_specs at completion) have exactly
+  one coarse control — run_associated_specs_on_complete — which is all-or-nothing and
+  also gates the completing record's OWN spec proof. In practice this is too blunt:
+  because broad CLI files (cmd/linespec/main_stable.go, main_beta.go,
+  pkg/provenance/commands.go, git.go) sit in nearly every record's scope, completing
+  any record that touches them runs the ENTIRE examples/*-linespecs Docker integration
+  matrix (10+ minutes, requires Docker), and a single flaky integration spec rolls back
+  an otherwise-correct, unrelated completion. This was observed live completing
+  prov-2026-54aaf9cf: it rolled back once on a flaky spec, then passed unchanged on
+  retry.
+
+  Two changes:
+
+  (1) Tri-state severity for the overlap teeth via a new config key
+  `overlap_specs_on_complete: block | warn | off` (default `block` — current behavior,
+  fully backward compatible):
+    - block: run touched sealed records' specs; on failure roll back the completion
+      atomically (today's behavior).
+    - warn:  run them; on failure emit a non-blocking FYI naming the records/specs and
+      PROCEED with completion (no rollback).
+    - off:   skip the overlap teeth entirely. The completing record's OWN
+      associated_specs still run (still gated by run_associated_specs_on_complete);
+      only the cross-record teeth are skipped.
+  This mirrors the existing `enforcement: none|warn|strict` tri-state, so a team can
+  dial the teeth down as a maintainer/settings decision rather than agents brute-forcing
+  past them. run_associated_specs_on_complete remains the master switch for completion
+  spec-running generally; when it is false, nothing runs regardless of this key.
+
+  (2) Skip remote (shared_repos cache) records in the overlap selectors. A remote
+  sealed record's associated_specs paths are relative to ITS origin repo and may not
+  resolve in this working tree, so running them here can produce a false failure that
+  rolls back an unrelated completion. Remote records are read-only here and cannot be
+  superseded locally, so they must not gate local completion. Applies to both the
+  completion-time selector (overlappingSealedRecords) and the open-time heads-up
+  (declaredOverlapSealedRecords).
+constraints:
+  - Default behavior (no config key set, or `block`) must be byte-for-byte identical to
+    today's teeth — run overlapping sealed records' specs, roll back atomically on
+    failure. Existing tests must still pass unchanged.
+  - The `warn` mode runs the teeth but converts a spec failure into a non-blocking FYI
+    and completes; `off` skips the teeth selection/run entirely while leaving the
+    completing record's own-spec verification intact.
+  - The new key is gated under run_associated_specs_on_complete — when that master
+    switch is false, no completion specs run (own or overlap), preserving current
+    behavior.
+  - An invalid value for overlap_specs_on_complete is rejected (or defaulted to block
+    with a clear notice), never silently treated as off.
+  - Remote (cache-sourced) records are excluded from BOTH overlap selectors; a local
+    completion is never blocked or warned by a record this repo cannot modify.
+  - The config key must be plumbed through pkg/config types AND mapped into the
+    provenance ProvenanceConfig in BOTH cmd/linespec/main_stable.go and main_beta.go.
+  - Unit tests cover all modes — block (fail rolls back), warn (fail becomes FYI and
+    completes), off (teeth skipped, own specs still run), and remote-record exclusion.
+  - make test must pass.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/overlap_specs_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-bc57fbdc
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - provenance-ux
+  - governance-overlap
+  - config
