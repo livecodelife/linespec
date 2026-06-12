@@ -1,6 +1,6 @@
 id: prov-2026-875617fa
 title: Extract generic verifyWithExtractor helper for channel Verify functions
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: calebcowen@gmail.com
 intent: |
@@ -26,7 +26,7 @@ implements: prov-2026-23ab1db8
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 7376d6e3a80effe79c44e307603ae80d454cb705
 associated_specs:
   - type: go_test
     path: pkg/verify/verify_test.go
