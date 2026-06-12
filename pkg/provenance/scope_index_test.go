@@ -112,6 +112,41 @@ func TestLoadFreshScopeIndex_StaleAndCorruptFallBack(t *testing.T) {
 	}
 }
 
+func TestActiveGoverningRecords_ExcludesSupersededAndDeprecated(t *testing.T) {
+	scope := []string{"pkg/core/**"}
+	open := bp("prov-2026-0000aaaa", StatusOpen, scope)
+	impl := bp("prov-2026-0000bbbb", StatusImplemented, scope)
+	superseded := bp("prov-2026-0000cccc", StatusSuperseded, scope)
+	deprecated := bp("prov-2026-0000dddd", StatusDeprecated, scope)
+	draft := bp("prov-2026-0000eeee", StatusDraft, scope)
+
+	got := activeGoverningRecords([]*Record{open, impl, superseded, deprecated, draft}, []string{"pkg/core/auth.go"})
+
+	gotIDs := map[string]bool{}
+	for _, r := range got {
+		gotIDs[r.ID] = true
+	}
+	if !gotIDs[open.ID] || !gotIDs[impl.ID] {
+		t.Fatalf("active lookup must include open + implemented, got %v", gotIDs)
+	}
+	if gotIDs[superseded.ID] || gotIDs[deprecated.ID] {
+		t.Fatalf("active lookup must EXCLUDE superseded/deprecated, got %v", gotIDs)
+	}
+	if gotIDs[draft.ID] {
+		t.Fatalf("active lookup must exclude draft (not yet enforcing), got %v", gotIDs)
+	}
+}
+
+func TestActiveGoverningRecords_ObservedModeNotGoverning(t *testing.T) {
+	// An open observed-mode record (empty scope) permits any file but claims none —
+	// it must not appear as governing a specific file.
+	observed := bp("prov-2026-0000ffff", StatusImplemented, nil)
+	got := activeGoverningRecords([]*Record{observed}, []string{"pkg/core/auth.go"})
+	if len(got) != 0 {
+		t.Fatalf("observed-mode record must not be reported as governing, got %v", got)
+	}
+}
+
 func TestTryNextFromCache_MatchesHeavyPathOutput(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 
