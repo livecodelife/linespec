@@ -117,6 +117,11 @@ linespec provenance lint            # Validate records
 linespec provenance status          # View status
 linespec provenance graph           # Render decision graph
 
+# Agent guidance
+linespec provenance next            # Compute the correct next provenance action
+linespec provenance govern          # List the active records governing given files
+linespec provenance context         # Show which records govern given files
+
 # Semantic search (requires embedding configuration)
 linespec provenance search          # Search by semantic similarity
 linespec provenance audit           # Audit changes against history
@@ -126,6 +131,7 @@ linespec provenance index           # Index records for search
 linespec provenance check           # Check commits for violations
 linespec provenance install-hooks   # Install git hooks
 linespec provenance install-skills  # Install all Claude Code skills (provenance + linespec-testing)
+linespec provenance install-plugin  # Install the Claude Code provenance plugin (hooks + slash command)
 
 # Lifecycle management
 linespec provenance lock-scope      # Lock scope to allowlist
@@ -243,6 +249,8 @@ provenance:
   enforcement: warn                  # none|warn|strict
   commit_tag_required: false         # Require IDs in commits
   auto_affected_scope: true           # Auto-populate from git
+  run_associated_specs_on_complete: false  # Run associated_specs on completion
+  overlap_specs_on_complete: block   # Overlap teeth severity: block|warn|off
   shared_repos: []                    # Additional directories (monorepos)
   
   # Semantic search configuration (optional - supports voyage or openai)

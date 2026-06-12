@@ -282,7 +282,7 @@ associated_specs:
     run_command: python -m pytest --tb=short  # overrides default "pytest <path>"
 ```
 **Set by:** Author.  
-**Behavior:** The linter checks that each listed path exists on disk. At `strict` enforcement, an `open` record with no entries here is a lint error. At `warn`, it is a warning. At `none`, no check is performed beyond verifying that listed paths exist if any are provided. When `run_associated_specs_on_complete` is enabled in `.linespec.yml`, the pre-commit hook runs each spec whose `type` or `run_command` is set during the `open` → `implemented` transition.  
+**Behavior:** The linter checks that each listed path exists on disk. At `strict` enforcement, an `open` record with no entries here is a lint error. At `warn`, it is a warning. At `none`, no check is performed beyond verifying that listed paths exist if any are provided. When `run_associated_specs_on_complete` is enabled in `.linespec.yml`, the pre-commit hook runs each spec whose `type` or `run_command` is set during the `open` → `implemented` transition. At completion, the specs of already-sealed records whose scope the change actually touches are also run (the overlap "teeth"); `overlap_specs_on_complete` (`block`|`warn`|`off`, default `block`) sets that severity. See [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md#overlap_specs_on_complete).  
 **`run_command` template:** If the command string contains `{{path}}`, it is replaced with `spec.path`. Otherwise `spec.path` is appended as a trailing argument.  
 **Constraints:** Immutable after `implemented`. Specs with no `type` and no `run_command` are skipped (not an error) when the hook runs them.
 

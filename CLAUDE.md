@@ -68,7 +68,9 @@ Every change must be documented by a provenance record. Records live in `provena
 ```bash
 linespec provenance search "<query>"        # semantic search (requires embeddings)
 linespec provenance context -f <file>       # which records govern a file
+linespec provenance next --plan <file>      # the computed next action for files you'll change
 ```
+`next` renders the correct next step (create / open / add spec / commit / complete) with record IDs filled in — touching a governed file does **not** require superseding it. `govern --files <file>` lists just the active (open + implemented) records governing a file. Both are cache-backed (`.linespec/scope-index.json`).
 
 **2. Create a blueprint record (draft).** This captures scope and success criteria:
 ```bash
@@ -102,6 +104,10 @@ linespec provenance complete --record prov-YYYY-XXXXXXXX
 - Before each implementation commit: `linespec provenance check --staged`
 - **Never use `--no-verify`** to skip git hooks
 - Draft records are for planning — freely edit all fields including `affected_scope` in draft mode
+
+**Completion-time overlap teeth.** When a record is completed, the sealed records whose scope it actually touches have their `associated_specs` run. `overlap_specs_on_complete` in `.linespec.yml` sets severity — `block` (default; roll back on failure), `warn` (failure is a non-blocking FYI), or `off` (skip). This repo runs `warn` because completing files like `commands.go`/`main_*.go` pulls in the whole `examples/*-linespecs` Docker matrix, which is environmentally fragile. `complete --force` does not bypass the teeth.
+
+**Claude Code plugin.** `linespec provenance install-plugin` installs hooks that render this guidance in-loop (session-start `next`, per-edit `govern`, commit-rejection remediation) plus a `/provenance-next` command. See `plugins/provenance/`.
 
 ## Architecture
 

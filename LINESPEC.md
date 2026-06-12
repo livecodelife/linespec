@@ -1582,6 +1582,7 @@ provenance:
   commit_tag_required: true              # require a record ID in commit messages
   auto_affected_scope: true              # auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true # run associated_specs on the open→implemented transition
+  overlap_specs_on_complete: block       # completion-time overlap teeth severity: block | warn | off
   commit_on_status_change: true          # auto-commit after open/complete/deprecate transitions
   manifest_url: ""                       # source manifest URL (set automatically by `linespec clone`)
 
