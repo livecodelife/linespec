@@ -1,6 +1,6 @@
 id: prov-2026-97326c74
 title: Active-only per-file governing lookup + govern command with cache fast path (Phase 5b-5d foundation)
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -36,7 +36,7 @@ implements: prov-2026-cd1405fb
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 029764cd91cea4450edab4579f5d77293dc4096a
 associated_specs:
   - path: pkg/provenance/scope_index_test.go
     type: go_test
