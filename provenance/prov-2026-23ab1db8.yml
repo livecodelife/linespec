@@ -1,6 +1,6 @@
 id: prov-2026-23ab1db8
 title: Consolidate high-priority duplicated verification logic
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: calebcowen@gmail.com
 intent: |
@@ -42,7 +42,7 @@ superseded_by: ""
 related:
   - prov-2026-4bab0511
   - prov-2026-b5c9c813
-sealed_at_sha: ""
+sealed_at_sha: 1ace372445182f42a54ac6ccf050a07cded2eda3
 associated_specs:
   - type: go_test
     path: pkg/verify/verify_test.go
