@@ -1,0 +1,38 @@
+id: prov-2026-875617fa
+title: Extract generic verifyWithExtractor helper for channel Verify functions
+status: open
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  VerifyHTTP, VerifyKafka, VerifyGRPC, and VerifyRedis had byte-for-byte
+  identical rule-iteration loops; only the per-channel extractXValue call
+  differed. Introduce an unexported helper:
+
+    verifyWithExtractor(rules, extract func(target string) (string, error)) error
+
+  that owns the loop, the VerificationError wrapping on extractor failure, and
+  the verifyRule call. Each public Verify* function becomes a one-line delegation
+  that closes over its typed receiver and calls the matching extractor. This is
+  the same delegation shape VerifySQL already uses with VerifyTarget.
+constraints:
+  - Public signatures of VerifyHTTP/VerifyKafka/VerifyGRPC/VerifyRedis unchanged
+  - "VerificationError fields on extractor failure stay: Target=rule.Target, Rule=rule, Actual empty, Message=err.Error()"
+  - No behavior change; pkg/verify tests pass unmodified
+affected_scope:
+  - pkg/verify/verify.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-23ab1db8
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/verify/verify_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - verify
+  - dupl
