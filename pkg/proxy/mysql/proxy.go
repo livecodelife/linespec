@@ -482,12 +482,11 @@ func (p *Proxy) sendMockResponse(conn net.Conn, mock *types.ExpectStatement, cli
 	return p.sendMockOK(conn)
 }
 
-func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableName string, clientCapabilities uint32) error {
-	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
-	optionalMeta := clientCapabilities&clientOptionalResultsetMetadata != 0
-
+// extractRows normalizes a mock payload into a slice of row maps. A top-level map
+// with a "rows" list yields those rows; a bare map is treated as a single row; a
+// top-level list yields its map elements. Non-map items are skipped.
+func extractRows(payload interface{}) []map[string]interface{} {
 	var rows []map[string]interface{}
-
 	data, ok := payload.(map[string]interface{})
 	if !ok {
 		list, ok := payload.([]interface{})
@@ -510,6 +509,14 @@ func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableNa
 			rows = append(rows, data)
 		}
 	}
+	return rows
+}
+
+func (p *Proxy) sendPayloadResultSet(conn net.Conn, payload interface{}, tableName string, clientCapabilities uint32) error {
+	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
+	optionalMeta := clientCapabilities&clientOptionalResultsetMetadata != 0
+
+	rows := extractRows(payload)
 
 	if len(rows) == 0 {
 		return p.sendEmptyResultSet(conn, tableName, clientCapabilities)
@@ -722,30 +729,7 @@ func (p *Proxy) sendBinaryPayloadResultSet(conn net.Conn, payload interface{}, t
 	deprecateEOF := clientCapabilities&clientDeprecateEOF != 0
 	optionalMeta := clientCapabilities&clientOptionalResultsetMetadata != 0
 
-	var rows []map[string]interface{}
-
-	data, ok := payload.(map[string]interface{})
-	if !ok {
-		list, ok := payload.([]interface{})
-		if ok {
-			for _, item := range list {
-				if m, ok := item.(map[string]interface{}); ok {
-					rows = append(rows, m)
-				}
-			}
-		}
-	} else {
-		rowsRaw, ok := data["rows"].([]interface{})
-		if ok {
-			for _, item := range rowsRaw {
-				if m, ok := item.(map[string]interface{}); ok {
-					rows = append(rows, m)
-				}
-			}
-		} else {
-			rows = append(rows, data)
-		}
-	}
+	rows := extractRows(payload)
 
 	if len(rows) == 0 {
 		return p.sendEmptyResultSet(conn, tableName, clientCapabilities)
