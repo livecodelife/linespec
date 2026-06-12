@@ -1,0 +1,73 @@
+id: prov-2026-e69102cc
+title: Release v3.13.0
+status: draft
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: |
+  Version bump and release artifacts for v3.13.0. Minor release bundling the
+  agent-guidance effort — a computed next-action advice engine, the Claude Code
+  provenance plugin, and supporting commands/config/cache — accumulated since
+  v3.12.0. All changes are additive and backward compatible:
+    - Added: `linespec provenance next` renders the single correct next
+      provenance action (create / open / add spec / commit / complete) from one
+      pure advice engine, with ambient, --files/--plan, and --json modes
+      (prov-2026-54aaf9cf and imprints).
+    - Added: `linespec provenance govern` — active-only (open + implemented)
+      per-file governance lookup excluding superseded/deprecated records, with
+      --files/--json, served from the scope cache (prov-2026-cd1405fb).
+    - Added: the Claude Code provenance plugin (plugins/provenance/) —
+      SessionStart next-action guidance, advisory per-edit governance
+      (PreToolUse), commit-rejection remediation (PostToolUse), and a
+      /provenance-next slash command; dual install via
+      `linespec provenance install-plugin` and a marketplace
+      .claude-plugin/plugin.json (prov-2026-cd1405fb and imprints).
+    - Added: `overlap_specs_on_complete: block | warn | off` (default block) —
+      tri-state severity for the completion-time cross-record overlap teeth;
+      remote (shared_repos) records are excluded from the selectors
+      (prov-2026-21e9f419).
+    - Added: a cached scope index (.linespec/scope-index.json, gitignored,
+      self-healing) backing next/govern with sub-200ms per-file lookups and
+      fallback to the authoritative load (prov-2026-007c8893).
+    - Changed: the reworded enforcement hints (stale-scope warning,
+      commit-violation hint, locked-scope error) now render from the same
+      advice engine, so the CLI, skill, and plugin never drift
+      (prov-2026-54aaf9cf, superseding the hand-written Phase 1 approach
+      prov-2026-7d609df8).
+    - Docs: reference docs and the doc site refreshed to document next/govern/
+      install-plugin, overlap_specs_on_complete, the plugin, and the scope
+      cache (prov-2026-5c310d9d).
+constraints:
+  - |
+    Promote [Unreleased] in CHANGELOG.md to [3.13.0] - 2026-06-12; add a fresh
+    empty [Unreleased] section above it.
+  - make bump-version NEW=3.13.0 handles VERSION and all doc/site references.
+  - Run linespec provenance compile to rebuild the hash manifest.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - docs/index.html
+  - docs/linespec.html
+  - docs/docs.html
+  - docs/provenance.html
+  - README.md
+  - LINESPEC.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-54aaf9cf
+  - prov-2026-21e9f419
+  - prov-2026-007c8893
+  - prov-2026-cd1405fb
+  - prov-2026-5c310d9d
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - release
