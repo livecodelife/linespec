@@ -32,10 +32,14 @@ intent: |
   that plugin must be installable BOTH ways — a `linespec` install command (mirroring
   install-skill) AND a marketplace-style .claude-plugin/plugin.json.
 constraints:
-  - Cached context/next per-file lookups must be sub-200ms and must not perform a full
-    LoadAll on a cache hit.
-  - Cached output must be byte-identical to the current uncached context/next output for
-    the same state; a regression test asserts cached == uncached.
+  - The cached `next` fast path must be sub-200ms and must not perform a full LoadAll on
+    a cache hit; the dispatch consults the cache before constructing the heavy,
+    eager-loading Commands.
+  - Cached `next` output must be byte-identical to the current uncached `next` output for
+    the same state; a regression test asserts cached == uncached. (The full `context`
+    rich output renders prose the compact cache intentionally omits, so `context` keeps
+    its heavy path here; the lightweight per-file `context` lookup the hooks need —
+    IDs/status only — lands with the hooks blueprint, consuming this same primitive.)
   - The cache self-invalidates via a cheap stat-based fingerprint (no record-file reads
     to check freshness); a stale cache rebuilds transparently on next use.
   - The cache must never serve wrong governance — on any mismatch, malformed/missing
@@ -49,6 +53,8 @@ affected_scope:
   - pkg/provenance/scope_index.go
   - pkg/provenance/scope_index_test.go
   - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
