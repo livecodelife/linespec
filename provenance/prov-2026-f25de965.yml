@@ -1,6 +1,6 @@
 id: prov-2026-f25de965
 title: 'Teeth-config implementation: normalize invalid->block, remote-skip in selectors, warn/off in Complete'
-status: draft
+status: open
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
