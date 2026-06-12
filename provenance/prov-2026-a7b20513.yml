@@ -1,0 +1,75 @@
+id: prov-2026-a7b20513
+title: Build docs site from Markdown source in CI
+status: draft
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: >
+  Make Markdown the single source of truth for the linespec.dev site and move
+  the render step into CI so the published site is always built fresh from
+  source and cannot fall behind.
+
+  Today docs/*.html and docs/llms*.txt are hand-maintained, pre-rendered
+  duplicates of LINESPEC.md / PROVENANCE_RECORDS.md. GitHub's "Deploy from a
+  branch" Pages job ships those committed files as-is and never renders
+  Markdown, so editing a .md leaves the published .html stale (already visible:
+  llms.txt reads "As of v3.11.7" while VERSION is 3.13.0). The drift is in the
+  render step, not the deploy step.
+
+  The fix: render with pandoc inside a GitHub Actions Pages workflow. The two
+  content pages (linespec.html <- LINESPEC.md, provenance.html <-
+  PROVENANCE_RECORDS.md) are generated from Markdown into a pandoc template
+  shell. The two chrome pages (index.html marketing landing, docs.html hub) are
+  not derived from Markdown, so they become committed HTML templates under
+  docs/templates/ with the version injected at build time. llms.txt /
+  llms-full.txt are regenerated from the same Markdown. All rendered HTML and
+  llms*.txt stop being committed and become gitignored build artifacts. The
+  bespoke design (dark theme, sidebar nav, code-block copy buttons) is preserved
+  via the template shell plus the existing assets/css and assets/js, which
+  enhance the semantic HTML pandoc emits.
+
+constraints:
+  - Markdown (LINESPEC.md, PROVENANCE_RECORDS.md) is the single hand-edited
+    source for the content pages; rendered HTML is never hand-edited again
+  - The site is rebuilt from source on every push to main via a GitHub Actions
+    Pages workflow (not "Deploy from a branch")
+  - Rendered HTML (docs/index.html, docs.html, linespec.html, provenance.html)
+    and docs/llms.txt, docs/llms-full.txt are build artifacts, gitignored and
+    removed from version control
+  - The existing visual design must be preserved (navbar, sidebar nav, dark
+    theme, code-block copy buttons, heading anchors like #quick-start)
+  - The custom domain linespec.dev must keep working (CNAME shipped in the
+    Pages artifact); docs/_config.yml (stale Jekyll config pointing at
+    livecodelife.github.io) is deleted
+  - The version string is injected from the VERSION file at build time;
+    scripts/bump-version.sh only edits VERSION and the source .md files, never
+    committed HTML
+  - GitHub Actions versions in the new workflow are pinned to current,
+    non-deprecated releases (no Node 20 deprecation warnings)
+  - Provenance is respected by never using --no-verify, with all implementation
+    commits tagged with this blueprint (or an imprint) ID
+
+affected_scope:
+  - scripts/build-docs.sh
+  - scripts/bump-version.sh
+  - .github/workflows/pages.yml
+  - docs/**
+  - .gitignore
+
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-054aadca
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: scripts/build-docs.sh
+    run_command: bash scripts/build-docs.sh
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - github-pages
+  - ci
+  - build
