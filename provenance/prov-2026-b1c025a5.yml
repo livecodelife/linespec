@@ -1,0 +1,47 @@
+id: prov-2026-b1c025a5
+title: Collapse findMock/peekMock pairs in mysql and postgresql proxies
+status: open
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: |
+  In both pkg/proxy/mysql/proxy.go and pkg/proxy/postgresql/proxy.go, findMock
+  and peekMock are identical except that findMock calls the registry's Find*
+  methods (which increment hit counts) while peekMock calls the Peek* methods
+  (which do not). Each pair shares the same semantic-first, legacy-fallback
+  matching logic.
+
+  Within each package, introduce an unexported matchMock helper that takes the
+  ByTables and by-key registry lookups as function values, so findMock and
+  peekMock become one-line delegations passing the Find*/Peek* pair. The
+  registry method signatures already line up with the extracted values, so the
+  function-value approach is type-clean.
+
+  Consolidation stays within each package: mysql's matchMock keeps the
+  (query string) shape and postgresql's keeps the (query string, bindParams
+  []string) shape, since their semantic extraction differs.
+constraints:
+  - peek path keeps calling Peek* (no hit-count increment); find path keeps calling Find*
+  - Behavior unchanged; mysql and postgresql proxy unit tests pass unmodified
+  - matchMock is per-package; the two protocols are not merged across packages
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-4bab0511
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/mysql/proxy_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/proxy/postgresql/proxy_extract_table_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - dupl
