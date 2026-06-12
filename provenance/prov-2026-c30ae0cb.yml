@@ -1,6 +1,6 @@
 id: prov-2026-c30ae0cb
 title: Extract waitForSQLDB shared by waitForMySQL and waitForPostgreSQL
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: calebcowen@gmail.com
 intent: |
@@ -28,7 +28,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-b1c025a5
-sealed_at_sha: ""
+sealed_at_sha: 09dc3a58f5f1e1308a927b00ac86998f5bcab425
 associated_specs:
   - type: go_test
     path: pkg/runner/port_allocator_test.go
