@@ -1,0 +1,48 @@
+id: prov-2026-97326c74
+title: Active-only per-file governing lookup + govern command with cache fast path (Phase 5b-5d foundation)
+status: draft
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Implements prov-2026-cd1405fb. The Go foundation the 5c hook calls.
+
+  - scope_index.go: activeGoverningRecords(records, files) returns records that are
+    open OR implemented AND explicitly govern (allowlist scope match) at least one
+    file. Reuses the existing explicitlyGoverns helper (same package) so it does NOT
+    modify the sealed Phase 2 next.go. Superseded/deprecated are excluded.
+  - commands.go: a Govern command + GovernOptions{Files, Format, ConfigFile} that
+    renders the active governing records for the given files, plus the engine's
+    primary next action (so the hook can end with a next suggestion). JSON shape is
+    stable for hook consumption: {files, governing:[{id,status}], next:{command,reason}}.
+  - scope_index.go: TryGovernFromCache mirrors TryNextFromCache — serves govern from
+    the cached scope index without a full LoadAll, falling back on any miss.
+  - main_stable.go + main_beta.go: a `govern` dispatch case, and the pre-NewCommands
+    fast-path call (alongside the existing `next` fast path).
+constraints:
+  - activeGoverningRecords excludes superseded and deprecated; only open + implemented
+    are returned. A unit test asserts this.
+  - The govern command is cache-backed via the 5a fast path and never pays a full
+    LoadAll on a cache hit; falls back to the authoritative path on any miss.
+  - The JSON shape is stable and documented (hooks depend on it).
+affected_scope:
+  - pkg/provenance/scope_index.go
+  - pkg/provenance/scope_index_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-cd1405fb
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/scope_index_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - phase-5
+  - claude-code-plugin
