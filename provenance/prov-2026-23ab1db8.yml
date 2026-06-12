@@ -1,0 +1,55 @@
+id: prov-2026-23ab1db8
+title: Consolidate high-priority duplicated verification logic
+status: draft
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  The code-quality dupl gate surfaces two high-value clusters of copy-paste in
+  production verification code. Consolidating them removes the largest, most
+  error-prone duplication where the channels (HTTP, Kafka, gRPC, Redis) must
+  stay behaviorally identical.
+
+  1. pkg/verify/verify.go defines VerifyHTTP, VerifyKafka, VerifyGRPC, and
+     VerifyRedis with byte-for-byte identical rule-evaluation loop bodies; only
+     the per-channel extractXValue function differs. VerifySQL already shows the
+     intended shape by delegating to VerifyTarget. Extract a single generic
+     helper that all five entry points call, parameterized on the value
+     extractor, so a change to error wrapping or rule iteration happens once.
+
+  2. pkg/proxy/http/interceptor.go and pkg/proxy/kafka/interceptor.go each build
+     an identical "WITH body" JSON matcher closure (load payload via
+     PayloadLoaderWithResolver -> json.Unmarshal the actual body -> CompareJSON).
+     Lift this into a shared helper in pkg/verify so both interceptors (and any
+     future channel) call one implementation.
+constraints:
+  - Behavior must be unchanged; all existing verify and proxy unit tests pass without modification
+  - The public function signatures VerifyHTTP, VerifyKafka, VerifyGRPC, VerifyRedis, VerifySQL must be preserved (callers in proxy interceptors depend on them)
+  - The generic verify helper takes the target, the rules slice, and an extractor func(target) (string, error); it reproduces the existing VerificationError wrapping exactly (Target, Rule, Actual "", Message err.Error())
+  - The shared JSON body matcher must preserve current debug-log messages and the empty-withFile -> true short-circuit; on load or unmarshal failure it returns false, matching today's behavior
+  - The shared body matcher lives in pkg/verify to avoid a proxy->proxy import; http and kafka interceptors call it
+  - No change to the dupl threshold or to scripts/go-quality.sh; success is fewer real clones, not a config tweak
+affected_scope:
+  - pkg/verify/verify.go
+  - pkg/proxy/http/interceptor.go
+  - pkg/proxy/kafka/interceptor.go
+forbidden_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-4bab0511
+  - prov-2026-b5c9c813
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/verify
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - quality
+  - dupl
+  - verify
+  - refactor
