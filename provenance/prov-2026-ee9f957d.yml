@@ -1,6 +1,6 @@
 id: prov-2026-ee9f957d
 title: 'Plugin assets: plugin.json/marketplace.json, hooks.json, SessionStart/PreToolUse/commit hook scripts, provenance-next slash command (5b-5d)'
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -45,7 +45,7 @@ implements: prov-2026-cd1405fb
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e1419af4dc7dc2b2b52551270a78de6a00ebfbb8
 associated_specs:
   - path: plugins/provenance/.claude-plugin/plugin.json
     run_command: test -f {{path}}
