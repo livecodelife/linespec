@@ -807,6 +807,56 @@ linespec provenance context --format json pkg/proxy/postgresql/proxy.go</code></
                         <li>Detects conflicts when multiple open records govern the same file</li>
                     </ul>
 
+                    <h3>Next</h3>
+                    <p>Compute the single correct <strong>next provenance action</strong> for the current state, with record IDs filled in — instead of navigating by enforcement errors, ask the engine what to do:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code># Ambient: reads staged + working-tree changes
+linespec provenance next
+
+# Intent-aware: plan governance for files you intend to change
+linespec provenance next --files pkg/proxy/postgresql/proxy.go
+linespec provenance next --plan pkg/proxy/postgresql/proxy.go   # --plan is an alias for --files
+
+# Machine-readable output for hooks/agents
+linespec provenance next --json</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--files f1 f2 f3</code> / <code>--plan f1 f2 f3</code> - Files you intend to change (intent-aware planning)</li>
+                        <li><code>--json</code> - Machine-readable output</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+                    <p><strong>Output:</strong> one primary action — <code>create</code>, <code>open</code>, add an <code>associated_spec</code>, commit tagged, <code>complete</code>, or "nothing pending" — with the ready-to-run command. When records already govern your files, it tells you to create one new record and tag your commits with it; you do <strong>not</strong> need to supersede them. Cache-backed for a fast path.</p>
+
+                    <h3>Govern</h3>
+                    <p>List the <strong>active</strong> records (open + implemented) that govern given files — excluding superseded/deprecated. This is the narrow, fast lookup the Claude Code plugin's per-edit hook uses; the full <code>context</code> command still shows history.</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance govern --files pkg/proxy/postgresql/proxy.go
+linespec provenance govern --files pkg/proxy/postgresql/proxy.go --json</code></pre>
+                    </div>
+                    <p><strong>Options:</strong></p>
+                    <ul>
+                        <li><code>--files f1 f2 f3</code> - Files to look up governance for (positional args also accepted)</li>
+                        <li><code>--json</code> - Machine-readable output (<code>{files, governing:[{id,status}], next}</code>)</li>
+                        <li><code>-c, --config path</code> - Use custom config</li>
+                    </ul>
+
                     <h3>Search (Semantic)</h3>
                     <p>Search provenance records by semantic similarity:</p>
                     <div class="code-block">
@@ -1137,6 +1187,25 @@ linespec provenance sync --force  # ignore the TTL and re-fetch all repos</code>
                         <pre><code>linespec provenance install-skills</code></pre>
                     </div>
                     <p>Installs both the <code>provenance</code> and <code>linespec-testing</code> skills to <code>.claude/skills/</code> by default. Use <code>--path</code> to override the target directory. Existing skill directories are overwritten silently. Once installed, invoke with <code>/provenance</code> or <code>/linespec-testing</code> in Claude Code.</p>
+
+                    <h3>Install Plugin (Claude Code)</h3>
+                    <p>Install the Claude Code <strong>provenance plugin</strong>, which surfaces the advice engine inside the agent loop:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" aria-label="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 4v8h8V4H4zM2 2h12v12H2V2z" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code>linespec provenance install-plugin                     # install to .claude/plugins/ (default)
+linespec provenance install-plugin --path path/to/plugins</code></pre>
+                    </div>
+                    <p>The plugin ships three hooks, all rendering from <code>linespec provenance</code> (no duplicated logic): <strong>SessionStart</strong> injects the ambient <code>next</code> action; <strong>PreToolUse (Edit/Write)</strong> advisorily notes the open record to tag on the first edit of a governed file (never blocks); <strong>PostToolUse (Bash)</strong> surfaces the engine's remediation when a <code>git commit</code> is rejected on a provenance violation. It also bundles a <code>/provenance-next</code> slash command. Installable via this command (the plugin is embedded in the binary) or the Claude Code marketplace via the bundled <code>.claude-plugin/marketplace.json</code> (<code>claude plugin install</code>).</p>
+
+                    <h3>Scope Cache</h3>
+                    <p><code>context</code>, <code>next</code>, and <code>govern</code> are backed by a scope cache at <code>.linespec/scope-index.json</code> — a compact projection of each record's governance fields plus a cheap stat-based fingerprint of the provenance directory. On a fingerprint match the per-file lookups skip the full record load; on any mismatch or read error they fall back to the authoritative load. The cache is machine-specific (gitignored), self-healing, and safe to delete at any time — it simply rebuilds.</p>
                 </section>
 
                 <section id="config" class="docs-section">
@@ -1166,6 +1235,10 @@ linespec provenance sync --force  # ignore the TTL and re-fetch all repos</code>
 
   # Run associated_specs before allowing a completion-transition commit (default: false)
   run_associated_specs_on_complete: false
+
+  # Severity of the completion-time cross-record overlap teeth: block|warn|off
+  # (default: block). complete --force does NOT bypass these.
+  overlap_specs_on_complete: block
 
   # Additional directories to load records from (for monorepos)
   shared_repos:

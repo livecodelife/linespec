@@ -11,7 +11,8 @@
 
 ## For AI agents working in a LineSpec repo
 
-- [Provenance workflow & scope enforcement](https://linespec.dev/provenance.html): How to make a change without getting blocked — investigate with `provenance context -f <file>`, create ONE record covering your files, set its `affected_scope`, add a proof spec, open, commit tagged, complete. The scope check only validates the record you tag; overlapping records (even implemented ones) do not need to be superseded. Never use `--no-verify`; never relax enforcement to get unblocked.
+- [Provenance workflow & scope enforcement](https://linespec.dev/provenance.html): How to make a change without getting blocked — investigate with `provenance context -f <file>` (or `provenance next --plan <file>` for the computed next action), create ONE record covering your files, set its `affected_scope`, add a proof spec, open, commit tagged, complete. The scope check only validates the record you tag; overlapping records (even implemented ones) do not need to be superseded. Never use `--no-verify`; never relax enforcement to get unblocked.
+- [Engine-driven guidance](https://linespec.dev/provenance.html): `provenance next` computes the correct next action (create/open/spec/commit/complete) with IDs filled in; `provenance govern --files <f>` lists the active records governing a file. The Claude Code plugin (`provenance install-plugin`) surfaces this in the agent loop via SessionStart/PreToolUse/commit hooks.
 
 ## Full text
 

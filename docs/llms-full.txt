@@ -127,6 +127,11 @@ linespec provenance lint            # Validate records
 linespec provenance status          # View status
 linespec provenance graph           # Render decision graph
 
+# Agent guidance
+linespec provenance next            # Compute the correct next provenance action
+linespec provenance govern          # List the active records governing given files
+linespec provenance context         # Show which records govern given files
+
 # Semantic search (requires embedding configuration)
 linespec provenance search          # Search by semantic similarity
 linespec provenance audit           # Audit changes against history
@@ -136,6 +141,7 @@ linespec provenance index           # Index records for search
 linespec provenance check           # Check commits for violations
 linespec provenance install-hooks   # Install git hooks
 linespec provenance install-skills  # Install all Claude Code skills (provenance + linespec-testing)
+linespec provenance install-plugin  # Install the Claude Code provenance plugin (hooks + slash command)
 
 # Lifecycle management
 linespec provenance lock-scope      # Lock scope to allowlist
@@ -253,6 +259,8 @@ provenance:
   enforcement: warn                  # none|warn|strict
   commit_tag_required: false         # Require IDs in commits
   auto_affected_scope: true           # Auto-populate from git
+  run_associated_specs_on_complete: false  # Run associated_specs on completion
+  overlap_specs_on_complete: block   # Overlap teeth severity: block|warn|off
   shared_repos: []                    # Additional directories (monorepos)
   
   # Semantic search configuration (optional - supports voyage or openai)
@@ -1103,6 +1111,30 @@ linespec provenance context --format json pkg/proxy/postgresql/proxy.go
 - Follows `supersedes` chains to show ancestry
 - Detects conflicts when multiple open records govern the same file
 
+### Next
+
+Compute the single correct **next provenance action** for the current state, with record IDs filled in:
+
+```bash
+linespec provenance next                                          # ambient (staged + working-tree changes)
+linespec provenance next --files pkg/proxy/postgresql/proxy.go    # intent-aware planning
+linespec provenance next --plan pkg/proxy/postgresql/proxy.go     # --plan is an alias for --files
+linespec provenance next --json                                   # machine-readable (hooks/agents)
+```
+
+Output is one primary action — `create` / `open` / add `associated_spec` / commit tagged / `complete` / "nothing pending" — with the ready-to-run command. When records already govern your files, it tells you to create one new record and tag your commits with it; you do **not** need to supersede them. Cache-backed (see Scope Cache).
+
+### Govern
+
+List the **active** records (open + implemented) that govern given files — excluding superseded/deprecated. This is the narrow, fast lookup the Claude Code plugin's per-edit hook uses; the full `context` command still shows history:
+
+```bash
+linespec provenance govern --files pkg/proxy/postgresql/proxy.go
+linespec provenance govern --files pkg/proxy/postgresql/proxy.go --json
+```
+
+`--json` emits `{files, governing:[{id,status}], next}`. Cache-backed; never pays a full record load on a cache hit.
+
 ### Search (Semantic)
 
 Search provenance records by semantic similarity:
@@ -1224,6 +1256,26 @@ This installs two skills:
 
 Existing skill directories are overwritten silently. Both skills are always installed together.
 
+### Install Plugin (Claude Code)
+
+Install the Claude Code **provenance plugin**, which surfaces the advice engine inside the agent loop:
+
+```bash
+linespec provenance install-plugin                     # install to .claude/plugins/ (default)
+linespec provenance install-plugin --path path/to/plugins
+```
+
+The plugin ships three hooks (all rendering from `linespec provenance`, no duplicated logic): **SessionStart** injects the ambient `next` action; **PreToolUse (Edit/Write)** advisorily notes the open record to tag on the first edit of a governed file (never blocks); **PostToolUse (Bash)** surfaces the engine's remediation when a `git commit` is rejected on a provenance violation. It also bundles a `/provenance-next` slash command. Installable via this command (the plugin is embedded in the binary) or the Claude Code marketplace:
+
+```bash
+claude plugin marketplace add <repo>/plugins/provenance
+claude plugin install linespec-provenance@linespec
+```
+
+### Scope Cache
+
+`context`, `next`, and `govern` are backed by a scope cache at `.linespec/scope-index.json` — a compact projection of each record's governance fields plus a cheap stat-based fingerprint of the provenance directory. On a fingerprint match the per-file lookups skip the full record load; on any mismatch or read error they fall back to the authoritative load. The cache is machine-specific (gitignored), self-healing, and safe to delete at any time.
+
 ---
 
 ## Configuration
@@ -1246,7 +1298,11 @@ provenance:
   
   # Run associated_specs before allowing a completion-transition commit (default: false)
   run_associated_specs_on_complete: false
-  
+
+  # Severity of the completion-time cross-record overlap teeth: block|warn|off
+  # (default: block). Gated by run_associated_specs_on_complete above.
+  overlap_specs_on_complete: block
+
   # Additional directories to load records from (for monorepos)
   shared_repos:
     - examples/user-service/provenance
@@ -1262,7 +1318,10 @@ provenance:
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
 | `run_associated_specs_on_complete` | bool | `false` | Run specs on completion transition |
+| `overlap_specs_on_complete` | string | `block` | Completion-time overlap teeth severity: `block`\|`warn`\|`off` |
 | `shared_repos` | array | `[]` | Additional directories |
+
+When a record is completed, the **overlap teeth** run the `associated_specs` of the already-sealed records whose scope the change actually touches. `overlap_specs_on_complete` sets the severity (it applies only when `run_associated_specs_on_complete` is enabled): **`block`** (default) rolls the completion back on a spec failure; **`warn`** turns a failure into a non-blocking FYI and proceeds (useful when the suite is environmentally fragile); **`off`** skips the cross-record teeth entirely (the completing record's own specs still run). `complete --force` does **not** bypass the teeth, and remote (`shared_repos`) records are never run against your local tree.
 
 ### Semantic Search Configuration
 
@@ -3503,6 +3562,7 @@ provenance:
   commit_tag_required: true              # require a record ID in commit messages
   auto_affected_scope: true              # auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true # run associated_specs on the open→implemented transition
+  overlap_specs_on_complete: block       # completion-time overlap teeth severity: block | warn | off
   commit_on_status_change: true          # auto-commit after open/complete/deprecate transitions
   manifest_url: ""                       # source manifest URL (set automatically by `linespec clone`)
 
