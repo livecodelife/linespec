@@ -33,9 +33,36 @@ type ProvenanceConfig struct {
 	CommitTagRequired            bool
 	AutoAffectedScope            bool
 	RunAssociatedSpecsOnComplete bool
+	OverlapSpecsOnComplete       string // block (default) | warn | off — severity of the cross-record overlap teeth at completion
 	CommitOnStatusChange         bool
 	Embedding                    *config.EmbeddingConfig
 	ManifestURL                  string // source manifest URL, set by linespec clone
+}
+
+// Overlap-teeth severity modes for overlap_specs_on_complete. block is the default
+// and matches the original Phase 3/4 behavior (prov-2026-bc57fbdc).
+const (
+	OverlapSpecsBlock = "block" // run touched sealed records' specs; roll back on failure
+	OverlapSpecsWarn  = "warn"  // run them; a failure becomes a non-blocking FYI, completion proceeds
+	OverlapSpecsOff   = "off"   // skip the cross-record teeth entirely (own specs still run)
+)
+
+// normalizeOverlapMode maps a configured overlap_specs_on_complete value to a known
+// mode. Empty defaults to block (backward compatible). Any unrecognized value also
+// falls back to block — never silently off — with a one-line stderr notice so a typo
+// cannot quietly disable the teeth.
+func normalizeOverlapMode(mode string) string {
+	switch mode {
+	case "":
+		return OverlapSpecsBlock
+	case OverlapSpecsBlock, OverlapSpecsWarn, OverlapSpecsOff:
+		return mode
+	default:
+		fmt.Fprintf(os.Stderr,
+			"Warning: unknown overlap_specs_on_complete %q — defaulting to %q. Valid values: %s, %s, %s.\n",
+			mode, OverlapSpecsBlock, OverlapSpecsBlock, OverlapSpecsWarn, OverlapSpecsOff)
+		return OverlapSpecsBlock
+	}
 }
 
 // NewCommands creates a new commands instance
@@ -861,50 +888,63 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 	// Governance-overlap verification (completion-time teeth). Find the sealed
 	// records this change actually touched — computed from the files across this
 	// record's commits, not glob intersection — and run their associated specs to
-	// confirm their proven behavior still holds. Block completion only on a real
-	// spec failure; otherwise emit a single neutral, non-blocking FYI for the
-	// touched records we could not auto-verify (no runnable specs, or spec-running
-	// disabled). A blocked completion rolls back atomically.
-	if touched := c.completionOverlapSelector(record); len(touched) > 0 {
-		var unverified []*Record
-		specsFailed := false
-		runTeeth := c.Config.RunAssociatedSpecsOnComplete
-		// seen de-duplicates identical spec commands across the touched records so a
-		// shared proof (e.g. `make test`) runs once, not once per record.
-		seen := map[string]bool{}
-		for _, r := range touched {
-			if !runTeeth || len(r.AssociatedSpecs) == 0 {
-				unverified = append(unverified, r)
-				continue
+	// confirm their proven behavior still holds. The overlap_specs_on_complete mode
+	// controls severity: block rolls back on a real spec failure; warn turns a
+	// failure into a non-blocking FYI and proceeds; off skips the teeth entirely
+	// (selection included, so it costs nothing). Remote records are excluded by the
+	// selector. A blocked completion rolls back atomically.
+	overlapMode := normalizeOverlapMode(c.Config.OverlapSpecsOnComplete)
+	if overlapMode != OverlapSpecsOff {
+		if touched := c.completionOverlapSelector(record); len(touched) > 0 {
+			var unverified []*Record
+			var failedRecords []*Record
+			runTeeth := c.Config.RunAssociatedSpecsOnComplete
+			// seen de-duplicates identical spec commands across the touched records so a
+			// shared proof (e.g. `make test`) runs once, not once per record.
+			seen := map[string]bool{}
+			for _, r := range touched {
+				if !runTeeth || len(r.AssociatedSpecs) == 0 {
+					unverified = append(unverified, r)
+					continue
+				}
+				fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
+				ran, failed := c.runRecordSpecs(r, seen)
+				if failed {
+					failedRecords = append(failedRecords, r)
+				}
+				if !ran {
+					unverified = append(unverified, r)
+				}
 			}
-			fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
-			ran, failed := c.runRecordSpecs(r, seen)
-			if failed {
-				specsFailed = true
-			}
-			if !ran {
-				unverified = append(unverified, r)
-			}
-		}
 
-		if specsFailed {
-			rollback(false)
-			c.Formatter.FormatError(fmt.Sprintf(
-				"Cannot complete %s: it changes files governed by a sealed record whose specs now fail.\n\n"+
-					"  A sealed record's proven behavior appears broken by this change, so completion is blocked.\n"+
-					"  The transition was rolled back — %s is unchanged (still %s).\n"+
-					"  Fix the failing spec(s) above, or supersede the affected record, then run 'linespec provenance complete' again.",
-				opts.RecordID, opts.RecordID, origStatus,
-			))
-			return fmt.Errorf("overlapping sealed record spec failed")
-		}
+			if len(failedRecords) > 0 && overlapMode == OverlapSpecsBlock {
+				rollback(false)
+				c.Formatter.FormatError(fmt.Sprintf(
+					"Cannot complete %s: it changes files governed by a sealed record whose specs now fail.\n\n"+
+						"  A sealed record's proven behavior appears broken by this change, so completion is blocked.\n"+
+						"  The transition was rolled back — %s is unchanged (still %s).\n"+
+						"  Fix the failing spec(s) above, or supersede the affected record, then run 'linespec provenance complete' again.\n"+
+						"  (To downgrade this gate, set overlap_specs_on_complete: warn|off in .linespec.yml.)",
+					opts.RecordID, opts.RecordID, origStatus,
+				))
+				return fmt.Errorf("overlapping sealed record spec failed")
+			}
 
-		if len(unverified) > 0 {
-			fmt.Fprintf(c.Formatter.Output,
-				"\nℹ Governance overlap (non-blocking): this change also touches files governed by sealed record(s):\n\n%s\n"+
-					"  No runnable specs were available to auto-verify them. If your change conflicts with\n"+
-					"  their original intent, create a record that supersedes them.\n\n",
-				formatRecordList(unverified))
+			if len(failedRecords) > 0 { // warn mode — surface but do not block
+				fmt.Fprintf(c.Formatter.Output,
+					"\nℹ Governance overlap (non-blocking, warn mode): specs of sealed record(s) you touched failed:\n\n%s\n"+
+						"  Completion proceeds because overlap_specs_on_complete is 'warn'. If the failure is real,\n"+
+						"  fix it or supersede the affected record; if it is flaky/unrelated, no action is needed.\n\n",
+					formatRecordList(failedRecords))
+			}
+
+			if len(unverified) > 0 {
+				fmt.Fprintf(c.Formatter.Output,
+					"\nℹ Governance overlap (non-blocking): this change also touches files governed by sealed record(s):\n\n%s\n"+
+						"  No runnable specs were available to auto-verify them. If your change conflicts with\n"+
+						"  their original intent, create a record that supersedes them.\n\n",
+					formatRecordList(unverified))
+			}
 		}
 	}
 
@@ -1221,7 +1261,10 @@ func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran boo
 func (c *Commands) overlappingSealedRecords(self *Record, changedFiles []string) []*Record {
 	var out []*Record
 	for _, r := range c.Loader.Records {
-		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" {
+		// Remote (shared_repos cache) records are skipped: their associated_specs
+		// paths are relative to the origin repo and may not resolve here, and they
+		// cannot be superseded locally — so they must not gate local completion.
+		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" || c.isRemoteRecord(r) {
 			continue
 		}
 		for _, f := range changedFiles {
@@ -1258,7 +1301,8 @@ func (c *Commands) completionOverlapSelector(self *Record) []*Record {
 func (c *Commands) declaredOverlapSealedRecords(self *Record) []*Record {
 	var out []*Record
 	for _, r := range c.Loader.Records {
-		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" {
+		// Skip remote (shared_repos cache) records — see overlappingSealedRecords.
+		if r.ID == self.ID || r.Status != StatusImplemented || r.SealedAtSHA == "" || c.isRemoteRecord(r) {
 			continue
 		}
 		if scopesOverlap(self, r) {

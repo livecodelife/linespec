@@ -347,6 +347,7 @@ type ProvenanceConfig struct {
 	CommitTagRequired            bool               `yaml:"commit_tag_required"`              // whether commits must reference a prov ID
 	AutoAffectedScope            bool               `yaml:"auto_affected_scope"`              // whether to auto-populate affected_scope from git diffs
 	RunAssociatedSpecsOnComplete bool               `yaml:"run_associated_specs_on_complete"` // whether to run associated_specs before committing a completion transition
+	OverlapSpecsOnComplete       string             `yaml:"overlap_specs_on_complete"`        // severity of the cross-record overlap teeth at completion: block (default) | warn | off
 	CommitOnStatusChange         bool               `yaml:"commit_on_status_change"`          // whether to auto-commit after open, complete, or deprecate transitions
 	Embedding                    *EmbeddingConfig   `yaml:"embedding,omitempty"`              // embedding API configuration
 	ManifestURL                  string             `yaml:"manifest_url,omitempty"`           // source manifest URL set by linespec clone

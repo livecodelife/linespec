@@ -1333,6 +1333,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CommitTagRequired = fullConfig.Provenance.CommitTagRequired
 			cfg.AutoAffectedScope = fullConfig.Provenance.AutoAffectedScope
 			cfg.RunAssociatedSpecsOnComplete = fullConfig.Provenance.RunAssociatedSpecsOnComplete
+			cfg.OverlapSpecsOnComplete = fullConfig.Provenance.OverlapSpecsOnComplete
 			cfg.CommitOnStatusChange = fullConfig.Provenance.CommitOnStatusChange
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
 			cfg.CacheTTLMinutes = fullConfig.Provenance.CacheTTLMinutes
