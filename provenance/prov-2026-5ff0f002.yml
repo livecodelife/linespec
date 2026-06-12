@@ -1,0 +1,71 @@
+id: prov-2026-5ff0f002
+title: Pandoc render architecture, Lua sidebar/code-block filter, gfm anchors
+status: draft
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: >
+  Implementation decisions and one pivot made while building the from-source
+  docs pipeline under prov-2026-a7b20513.
+
+  Renderer: pandoc with --from gfm. gfm is deliberate — the source Markdown's
+  own hand-written Table of Contents already uses GitHub-style anchors
+  (#quick-start, #core-concepts), so gfm makes the rendered heading IDs match
+  the authored links natively, keeping Markdown the single source of truth for
+  anchors too. Consequence: the gfm anchors differ from the old hand-coded HTML
+  anchors (#concepts -> #core-concepts, #schema -> #schema-reference, RECEIVE ->
+  #1-receive, etc.), so docs.html's committed template was updated to point at
+  the real gfm IDs. All hub links were validated to resolve against rendered IDs.
+
+  Code-block chrome: a pandoc Lua filter (docs/templates/site-filter.lua)
+  rewrites every fenced CodeBlock into the site's existing
+  ".code-block / .code-header / .copy-btn" markup as a RawBlock. This reproduces
+  the hand-authored structure byte-for-byte, so docs.css and the main.js
+  copy-button handler work unchanged — no JS edits, no ordering hazards.
+
+  Sidebar TOC pivot: first attempt used pandoc --toc plus the `unlisted` class
+  to drop the page title from the nav. That works for LINESPEC.md (H1 sections
+  are siblings) but empties the sidebar for PROVENANCE_RECORDS.md, whose H2
+  sections are children of the single H1 title — unlisting the title drops the
+  whole subtree. Pivoted to building the sidebar list directly in the Lua
+  Pandoc(doc) walker: collect headings at a per-page level (passed via
+  -M toc_level=N; 2 for provenance, 1 for linespec), always skip the first
+  heading (title) and the in-body "Table of Contents". This yields a clean flat
+  nav for both heading conventions.
+
+  Version injection: content pages get the version via the pandoc template
+  variable ($version$); chrome pages (index/docs) and llms.txt are committed
+  templates carrying a __VERSION__ token that build-docs.sh substitutes from the
+  VERSION file; llms-full.txt's header is generated with the version inline.
+  This is what fixes the visible drift (llms.txt had a stale v3.11.7).
+
+constraints:
+  - Rendered heading anchors must match the Markdown's own TOC links (use gfm)
+  - Code-block markup must reproduce the existing .code-block/.copy-btn structure
+    so docs.css and main.js work without modification
+  - The sidebar nav must render correctly for both heading conventions
+    (single-H1-title + H2 sections, and multiple H1 sections)
+  - Version is injected at build time from VERSION, never hand-edited in output
+
+affected_scope:
+  - docs/templates/content.html
+  - docs/templates/site-filter.lua
+  - docs/templates/docs.html
+  - scripts/build-docs.sh
+
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a7b20513
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: scripts/build-docs.sh
+    run_command: bash scripts/build-docs.sh
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - pandoc
+  - implementation
