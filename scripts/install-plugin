@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# install-plugin — copies the LineSpec provenance Claude Code plugin into a target
+# Claude Code config (mirrors scripts/install-skill). The `linespec provenance
+# install-plugin` command does the same from the embedded copy; this script is the
+# in-repo / no-binary alternative. Implemented as part of prov-2026-cd1405fb.
+#
+# Usage:
+#   install-plugin <target-path>
+#
+# Arguments:
+#   target-path   Directory where the plugin folder will be created
+#                 (e.g. .claude/plugins). Created if it doesn't exist.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LINESPEC_ROOT="$(dirname "$SCRIPT_DIR")"
+SOURCE_DIR="$LINESPEC_ROOT/plugins/provenance"
+
+usage() {
+  echo "Usage: install-plugin <target-path>" >&2
+  echo "" >&2
+  echo "  target-path   Directory where the plugin folder will be created" >&2
+  echo "                (e.g. .claude/plugins)" >&2
+  exit 1
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+TARGET_PATH="$1"
+DEST_DIR="$TARGET_PATH/linespec-provenance"
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "error: plugin source not found at $SOURCE_DIR" >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET_PATH"
+rm -rf "$DEST_DIR"
+cp -r "$SOURCE_DIR" "$DEST_DIR"
+# embed.FS drops modes for the Go path; here cp preserves them, but re-assert anyway.
+chmod +x "$DEST_DIR"/hooks/*.sh 2>/dev/null || true
+# The Go source file is not part of the installed plugin.
+rm -f "$DEST_DIR/embed.go"
+
+echo "Installed plugin 'linespec-provenance' to $DEST_DIR"
+echo ""
+echo "Enable it in your Claude Code settings, or install via the marketplace:"
+echo "  claude plugin marketplace add $LINESPEC_ROOT/plugins/provenance"
+echo "  claude plugin install linespec-provenance@linespec"
