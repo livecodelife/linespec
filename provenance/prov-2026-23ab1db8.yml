@@ -1,6 +1,6 @@
 id: prov-2026-23ab1db8
 title: Consolidate high-priority duplicated verification logic
-status: draft
+status: open
 created_at: "2026-06-11"
 author: calebcowen@gmail.com
 intent: |
@@ -44,7 +44,13 @@ related:
 sealed_at_sha: ""
 associated_specs:
   - type: go_test
-    path: pkg/verify
+    path: pkg/verify/verify_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/proxy/http/interceptor_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/proxy/kafka/interceptor_test.go
     run_command: make test
 associated_traces: []
 monitors: []
