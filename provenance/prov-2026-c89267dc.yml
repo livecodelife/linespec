@@ -1,0 +1,46 @@
+id: prov-2026-c89267dc
+title: 'Decision: skip runner proxy-config consolidation (defer/guard entanglement)'
+status: open
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: |
+  The blueprint listed the runner proxy-sidecar container-startup duplication
+  (pkg/runner/runner.go, the postgresql vs mongodb branches flagged by dupl) as
+  an explicitly optional stretch item: "skip it if it does not strictly reduce
+  duplication without obscuring the per-protocol differences."
+
+  Decision: SKIP it. The duplicated block is not a self-contained config literal
+  - it is interleaved with control flow that must stay in the enclosing function:
+  a per-iteration `defer` that registers cleanup of the proxy container at
+  RunTests scope, a *bool cleanup guard appended to dbCleanupGuards, and a
+  conditional goroutine streaming container logs. Extracting the block into a
+  helper would move the `defer` into the helper (changing when cleanup runs,
+  from enclosing-function return to helper return) or require threading the
+  guard slice, ctx, and several closure vars back out - net more complexity and
+  real behavioral risk for a low-priority readability win.
+
+  The two clean wins in this blueprint (extractRows, errEmbeddingNotConfigured)
+  are implemented; this records why the third was intentionally left alone.
+constraints:
+  - No code change; pkg/runner/runner.go is intentionally left unchanged
+  - Revisit only if the cleanup/defer logic is itself refactored out of the loop first
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-b5c9c813
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7b58bc99
+  - prov-2026-29c68262
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/runner/port_allocator_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - runner
+  - dupl
+  - decision
