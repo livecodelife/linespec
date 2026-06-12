@@ -1,0 +1,91 @@
+id: prov-2026-cd1405fb
+title: Claude Code provenance plugin hooks (SessionStart/PreToolUse/commit-gate) + active-only per-file lookup + dual install (Phase 5b-5d)
+status: draft
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Completes Phase 5: surface the advice engine (prov-2026-54aaf9cf) inside the agent's
+  loop as a Claude Code plugin, consuming the 5a scope cache (prov-2026-007c8893) so
+  every hook stays fast. The hook scripts are THIN renderers — they shell out to
+  `linespec provenance ...` and format the result; no decision logic is duplicated in
+  the plugin.
+
+  Parts:
+
+  (lookup) Active-only per-file governance lookup. The 5c hook needs "which records
+  govern this file" but must exclude superseded/deprecated records (per the recorded
+  design note) — surfacing a replaced/withdrawn decision in the edit loop is exactly the
+  stale-signal failure mode this whole effort fights. The full `context` command keeps
+  showing everything (history value); this is a NEW, narrow, cache-backed lookup
+  (open + implemented only) the hook calls. It builds on the 5a fast path so it does not
+  pay a full LoadAll.
+
+  (5b) SessionStart hook. Runs the engine once and injects a compact ambient summary of
+  the single correct next action via hookSpecificOutput.additionalContext. The
+  cheapest, highest-value rail — the agent starts every session knowing the next step.
+
+  (5c) PreToolUse hook on Edit and Write. On the first write per file per session, runs
+  the active-only lookup; if any active records govern the file, injects them advisorily
+  (systemMessage / additionalContext, permissionDecision allow — NEVER a block here),
+  ending with the relevant next suggestion. Silent when no active record governs the
+  file (the common case). Dedup per file per session so it speaks at most once per file.
+
+  (5d) Commit-boundary gate. PostToolUse on Bash scoped to `git commit` (matcher Bash +
+  an `if: "Bash(git commit *)"` rule). Quiet on a clean commit. When the commit FAILED
+  on a provenance violation (the git commit-msg/pre-commit hook rejected it), it hands
+  the agent the engine's exact remediation as feedback rather than a bare door. The git
+  hook remains the actual gate; this surfaces the fix inside Claude's loop.
+
+  (command) Slash command. Bundle a commands/provenance-next.md slash command in the
+  plugin that runs `linespec provenance next`, so a user can ask for the engine's
+  guidance explicitly (on demand), not only through the hooks. Renders the same engine.
+
+  (install) Dual installation. (1) A `linespec provenance install-plugin` command
+  mirroring the existing install-skills/scripts/install-skill pattern, copying the
+  plugin into a target Claude Code config. (3) A marketplace-style
+  .claude-plugin/marketplace.json + .claude-plugin/plugin.json so users can also
+  `claude plugin install`. Hook scripts reference bundled paths via
+  ${CLAUDE_PLUGIN_ROOT} and call `linespec` from PATH.
+constraints:
+  - Every hook renders from the engine via `linespec provenance ...` (next/the active-only
+    lookup); the plugin holds NO copy of the advice/governance decision logic.
+  - The active-only per-file lookup returns only `open` + `implemented` records (excludes
+    superseded/deprecated), and is cache-backed (5a) so it never pays a full LoadAll on a
+    cache hit. A unit test asserts the status filtering.
+  - SessionStart (5b) and PreToolUse (5c) are advisory ONLY — they never block a tool.
+    5c is silent when no active record governs the file, and speaks at most once per file
+    per session (deduped).
+  - The only place that surfaces a block-style message is the commit gate (5d), and only
+    when a real commit-time provenance violation occurred; it always includes the engine's
+    exact remediation command.
+  - Hooks must stay fast (well under the budget) — no full record reload on the hot path
+    (use the 5a cache), no expensive path (no completion teeth, no embedding/index build)
+    invoked from any hook. Tool/path matching is done by hook matchers, not in-script.
+  - Over-gating is the footgun that caused the original incident — after a few consecutive
+    denials an agent escalates to the human and bails. Hooks err toward quiet/advisory.
+  - Installation must not clobber unrelated user Claude Code config; it adds the plugin
+    and its hooks only. Both install paths (command and marketplace) yield the same hooks.
+  - make test must pass; the new lookup and any new Go wiring are covered by tests.
+affected_scope:
+  - plugins/provenance/**
+  - scripts/install-plugin
+  - pkg/provenance/scope_index.go
+  - pkg/provenance/scope_index_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-54aaf9cf
+  - prov-2026-007c8893
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - agent-guidance
+  - phase-5
+  - claude-code-plugin
