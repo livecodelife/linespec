@@ -1,6 +1,6 @@
 id: prov-2026-5c310d9d
 title: Document next/govern/install-plugin commands, overlap_specs_on_complete config, and the Claude Code plugin across docs + doc site
-status: draft
+status: open
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -67,7 +67,11 @@ related:
   - prov-2026-21e9f419
   - prov-2026-cd1405fb
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: PROVENANCE_RECORDS.md
+    run_command: grep -q overlap_specs_on_complete {{path}}
+  - path: README.md
+    run_command: grep -q 'provenance next' {{path}}
 associated_traces: []
 monitors: []
 tags:
