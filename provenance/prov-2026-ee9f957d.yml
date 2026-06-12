@@ -1,0 +1,56 @@
+id: prov-2026-ee9f957d
+title: 'Plugin assets: plugin.json/marketplace.json, hooks.json, SessionStart/PreToolUse/commit hook scripts, provenance-next slash command (5b-5d)'
+status: draft
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Implements prov-2026-cd1405fb. The Claude Code plugin files under
+  plugins/provenance/. All hook scripts are thin renderers that shell out to
+  `linespec provenance ...` and emit hook JSON.
+
+  - .claude-plugin/plugin.json: plugin manifest (name, description, version, points
+    hooks at hooks/hooks.json).
+  - .claude-plugin/marketplace.json: single-plugin marketplace so users can
+    `claude plugin marketplace add` + `claude plugin install`.
+  - hooks/hooks.json: SessionStart (matcher startup|resume), PreToolUse (matcher
+    Edit|Write), PostToolUse (matcher Bash) — each pointing at a ${CLAUDE_PLUGIN_ROOT}
+    script with a short timeout.
+  - hooks/session-start.sh (5b): runs `linespec provenance next --json`, injects a
+    compact additionalContext summary. Silent if linespec/jq missing or not a repo.
+  - hooks/pre-edit.sh (5c): on first Edit/Write per file per session (deduped via a
+    per-session marker under the data dir), runs `govern --files <path> --json`;
+    injects governing records + the next suggestion as additionalContext only when at
+    least one ACTIVE record governs the file. Never blocks (permissionDecision allow).
+  - hooks/post-commit.sh (5d): scoped IN-SCRIPT to `git commit` (the only content-level
+    filter available — tool matchers cannot see command text). Quiet unless the commit
+    FAILED on a provenance violation, in which case it surfaces `next`'s remediation as
+    advisory feedback. The git hook stays the real gate.
+  - commands/provenance-next.md: a /provenance-next slash command that runs
+    `linespec provenance next`.
+constraints:
+  - Hook scripts contain no advice logic — they only call `linespec` and format its
+    output into hook JSON.
+  - Scripts are silent/no-op when linespec is absent, jq is absent, the dir is not a
+    provenance repo, or there is nothing to say (degrade gracefully, never error the
+    tool call).
+  - 5c dedups per file per session and never blocks; 5d only surfaces feedback on a
+    real failed-commit provenance violation.
+  - Hook scripts use ${CLAUDE_PLUGIN_ROOT} for bundled paths and call `linespec` from
+    PATH; per-session state lives under the data dir, not the (immutable) plugin root.
+affected_scope:
+  - plugins/provenance/**
+forbidden_scope: []
+type: imprint
+implements: prov-2026-cd1405fb
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: plugins/provenance/.claude-plugin/plugin.json
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - phase-5
+  - claude-code-plugin
