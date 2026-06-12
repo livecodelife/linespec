@@ -9,6 +9,7 @@ provenance:
   commit_tag_required: true  # whether commits must reference a prov ID
   auto_affected_scope: true   # whether to auto-populate affected_scope from git diffs
   run_associated_specs_on_complete: true  # run associated_specs before committing a completion transition
+  overlap_specs_on_complete: warn         # block | warn | off — cross-record overlap teeth severity at completion (warn: failures are non-blocking FYIs, since the back-to-back linespec cascade is environmentally fragile)
   commit_on_status_change: true           # auto-commit after open, complete, or deprecate transitions
   embedding:                  # semantic search and audit configuration
     provider: voyage           # embedding API provider (voyage)
