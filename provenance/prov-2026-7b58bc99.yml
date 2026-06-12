@@ -1,0 +1,33 @@
+id: prov-2026-7b58bc99
+title: Extract extractRows helper in mysql proxy
+status: open
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: |
+  pkg/proxy/mysql/proxy.go normalizes a mock payload into []map[string]interface{}
+  in two places: sendPayloadResultSet (text protocol) and
+  sendBinaryPayloadResultSet (binary protocol). The two blocks are identical.
+
+  Extract a package-level extractRows(payload) helper and replace both inline
+  blocks with rows := extractRows(payload).
+constraints:
+  - Reproduces current precedence exactly - a map with a "rows" list yields those rows; a bare map is one row; a top-level list yields its map elements; non-map items skipped
+  - Behavior unchanged; pkg/proxy/mysql tests pass unmodified
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-b5c9c813
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/proxy/mysql/proxy_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - dupl
