@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`linespec provenance next`** — computes the single correct next provenance action (create / open / add spec / commit / complete) with record IDs filled in. Supports ambient mode, `--files`/`--plan` for intent-aware planning, and `--json`. Cache-backed fast path.
+- **`linespec provenance govern`** — lists the active (open + implemented) records governing given files, excluding superseded/deprecated. Supports `--files`/`--json`. Cache-backed.
+- **`linespec provenance install-plugin`** — installs the Claude Code provenance plugin (embedded in the binary).
+- **Claude Code provenance plugin** (`plugins/provenance/`) — SessionStart next-action guidance, advisory per-edit governance (PreToolUse), commit-rejection remediation (PostToolUse), and a `/provenance-next` slash command. Installable via `install-plugin` or the Claude Code marketplace (`.claude-plugin/marketplace.json`). All hooks render from the `linespec provenance` engine.
+- **`overlap_specs_on_complete`** config key (`block`|`warn`|`off`, default `block`) — severity of the completion-time cross-record overlap teeth. `complete --force` does not bypass them; remote (`shared_repos`) records are excluded.
+- **Scope cache** (`.linespec/scope-index.json`, gitignored) — backs `next`/`govern` with sub-200ms per-file lookups; self-healing via a stat-based fingerprint, with fallback to the authoritative load.
+
+### Changed
+- **Provenance guidance now renders from one computed engine** — `linespec provenance next` and the reworded enforcement hints (stale-scope warning, commit-violation hint, locked-scope error) all render from a single `Advise` function, so the CLI, the skill, and the new Claude Code plugin never drift. Touching a governed file does not imply superseding it.
+
 ## [3.12.0] - 2026-06-11
 
 ### Added

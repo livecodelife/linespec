@@ -696,6 +696,45 @@ linespec provenance context --format json pkg/proxy/postgresql/proxy.go
 - Follows `supersedes` chains to show ancestry
 - Detects conflicts when multiple open records govern the same file
 
+### Next
+
+Compute the single correct **next provenance action** for the current state, with record IDs filled in. Rather than navigating by enforcement errors, ask the engine what to do:
+
+```bash
+# Ambient: reads staged + working-tree changes
+linespec provenance next
+
+# Intent-aware: plan governance for files you intend to change (before editing)
+linespec provenance next --files pkg/proxy/postgresql/proxy.go
+linespec provenance next --plan pkg/proxy/postgresql/proxy.go   # --plan is an alias for --files
+
+# Machine-readable output for hooks/agents
+linespec provenance next --json
+```
+
+**Options:**
+- `--files f1 f2 f3` / `--plan f1 f2 f3` - Files you intend to change (intent-aware planning)
+- `--json` - Machine-readable output
+- `-c, --config path` - Use custom config
+
+**Output:** one primary action — `create` a record, `open` a draft, add an `associated_spec`, commit tagged, complete the blueprint, or "nothing pending" — with the ready-to-run command. When records already govern your files, it tells you to create one new record and tag your commits with it (you do **not** need to supersede them). Cache-backed (see [scope cache](#scope-cache)) for a fast path.
+
+### Govern
+
+List the **active** records (open + implemented) that govern given files — excluding superseded/deprecated. This is the narrow, fast lookup the Claude Code plugin's per-edit hook uses; the full `context` command still shows history:
+
+```bash
+linespec provenance govern --files pkg/proxy/postgresql/proxy.go
+linespec provenance govern --files pkg/proxy/postgresql/proxy.go --json
+```
+
+**Options:**
+- `--files f1 f2 f3` - Files to look up governance for (positional args also accepted)
+- `--json` - Machine-readable output (`{files, governing:[{id,status}], next}`)
+- `-c, --config path` - Use custom config
+
+Cache-backed; never pays a full record load on a cache hit.
+
 ### Search (Semantic)
 
 Search provenance records by semantic similarity:
@@ -817,6 +856,35 @@ This installs two skills:
 
 Existing skill directories are overwritten silently. Both skills are always installed together.
 
+### Install Plugin (Claude Code)
+
+Install the Claude Code **provenance plugin**, which surfaces the advice engine inside the agent loop:
+
+```bash
+# Install to .claude/plugins/ (default)
+linespec provenance install-plugin
+
+# Override the target directory
+linespec provenance install-plugin --path path/to/plugins
+```
+
+The plugin ships three hooks (all rendering from `linespec provenance`, no duplicated logic):
+
+- **SessionStart** — injects the ambient `next` action so the agent starts each session knowing the next step.
+- **PreToolUse (Edit/Write)** — on the first edit of a governed file, advisorily notes the open record to tag (and a count of sealed records that also govern it); never blocks.
+- **PostToolUse (Bash)** — when a `git commit` is rejected on a provenance violation, surfaces the engine's exact remediation.
+
+It also bundles a `/provenance-next` slash command. The plugin is installable two ways: this `install-plugin` command (the plugin is embedded in the `linespec` binary), or the Claude Code marketplace via the bundled `.claude-plugin/marketplace.json`:
+
+```bash
+claude plugin marketplace add <repo>/plugins/provenance
+claude plugin install linespec-provenance@linespec
+```
+
+### Scope Cache
+
+`context`, `next`, and `govern` are backed by a scope cache at `.linespec/scope-index.json` — a compact projection of each record's governance fields plus a cheap stat-based fingerprint of the provenance directory. On a fingerprint match the per-file lookups skip the full record load (fast enough for a per-edit hook); on any mismatch or read error they fall back to the authoritative load. The cache is machine-specific (gitignored), self-healing, and safe to delete at any time — it simply rebuilds.
+
 ---
 
 ## Configuration
@@ -839,7 +907,11 @@ provenance:
   
   # Run associated_specs before allowing a completion-transition commit (default: false)
   run_associated_specs_on_complete: false
-  
+
+  # Severity of the completion-time cross-record overlap teeth: block|warn|off
+  # (default: block). Gated by run_associated_specs_on_complete above.
+  overlap_specs_on_complete: block
+
   # Additional directories to load records from (for monorepos)
   shared_repos:
     - examples/user-service/provenance
@@ -855,7 +927,18 @@ provenance:
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
 | `run_associated_specs_on_complete` | bool | `false` | Run specs on completion transition |
+| `overlap_specs_on_complete` | string | `block` | Completion-time overlap teeth severity: `block`\|`warn`\|`off` |
 | `shared_repos` | array | `[]` | Additional directories |
+
+#### `overlap_specs_on_complete`
+
+When a record is completed, the completion-time **overlap teeth** run the `associated_specs` of the already-implemented (sealed) records whose scope the change actually touches — verifying that those sealed behaviors still hold. This key sets the severity (it only applies when `run_associated_specs_on_complete` is enabled, the master switch):
+
+- **`block`** (default) — run the touched sealed records' specs; if any fails, roll the completion back atomically. This is the original behavior.
+- **`warn`** — run them, but a failure becomes a non-blocking FYI and the completion proceeds. Useful when the spec suite is environmentally fragile (e.g. flaky container startup) and a failure is more likely noise than a real regression.
+- **`off`** — skip the cross-record teeth entirely. The completing record's **own** `associated_specs` still run.
+
+Note: `complete --force` does **not** bypass the teeth — only this config key (and the master switch) controls them. Remote (`shared_repos`) records are never run as teeth against your local tree.
 
 ### Semantic Search Configuration
 
