@@ -1,0 +1,56 @@
+id: prov-2026-2f9f0620
+title: 'Scope-index implementation: stat fingerprint, .linespec/scope-index.json, dispatch fast path for next via lightweight Commands'
+status: draft
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Implements prov-2026-007c8893 (Phase 5a). Concrete implementation decisions:
+
+  - scope_index.go: ScopeEntry{ID, Status, Type, AffectedScope, ForbiddenScope,
+    Implements, HasSpecs} — only the fields the advice engine reads. ScopeIndex
+    {Fingerprint, Entries} persists as JSON in .linespec/scope-index.json (alongside
+    schema-cache.json / hash_manifest.json).
+  - Fingerprint = sha256 over sorted "relpath\0size\0modUnixNano" tuples of every *.yml
+    across the loader's directories (local provenance dir + shared cache dirs). Stat
+    only, no file reads — fast freshness check.
+  - ScopeEntry.toRecord() reconstructs a lightweight *Record carrying exactly those
+    fields (AssociatedSpecs synthesized to length 1 when HasSpecs, since Advise only
+    checks len). These drive Advise identically to full records.
+  - The dispatch (main_stable.go + main_beta.go) `next` case tries loadFreshScopeIndex
+    BEFORE NewCommands. On a fingerprint match it builds a lightweight Commands (Loader
+    pre-populated from entries, NO LoadAll) and runs Next — skipping the ~318-file parse.
+    On any miss/stale/error it falls through to the normal heavy NewCommands path, which
+    refreshes the cache after loading.
+  - NewCommandsWithEmbedder writes/refreshes the cache after its LoadAll (cheap,
+    idempotent when already fresh), so normal CLI usage keeps the cache warm for the
+    fast path.
+  - The cache is advisory: any malformed/missing cache or fingerprint mismatch falls
+    back to LoadAll. It is never a governance source of truth.
+constraints:
+  - Fast-path next must reconstruct records carrying every field Advise reads
+    (Status, Type, AffectedScope, ForbiddenScope, Implements, has-specs).
+  - On any cache problem, fall back to the heavy path — never serve from a stale/corrupt
+    cache.
+  - cached next output == uncached next output (asserted by test).
+affected_scope:
+  - pkg/provenance/scope_index.go
+  - pkg/provenance/scope_index_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-007c8893
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/scope_index_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - phase-5
+  - cache
