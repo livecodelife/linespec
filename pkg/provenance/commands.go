@@ -2428,20 +2428,27 @@ type ProvenanceSearchResult struct {
 	Similarity float64
 }
 
+// errEmbeddingNotConfigured prints the .linespec.yml embedding setup guidance to
+// stderr and returns the standard "embedding not configured" error. Shared by the
+// Search and Index commands.
+func errEmbeddingNotConfigured() error {
+	fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "provenance:")
+	fmt.Fprintln(os.Stderr, "  embedding:")
+	fmt.Fprintln(os.Stderr, "    provider: voyage")
+	fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
+	fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
+	fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
+	fmt.Fprintln(os.Stderr, "")
+	return fmt.Errorf("embedding not configured")
+}
+
 // Search performs semantic search over provenance records
 func (c *Commands) Search(opts SearchOptions) error {
 	// Check if embedder is configured
 	if c.Embedder == nil || !c.Embedder.IsConfigured() {
-		fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "provenance:")
-		fmt.Fprintln(os.Stderr, "  embedding:")
-		fmt.Fprintln(os.Stderr, "    provider: voyage")
-		fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
-		fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
-		fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
-		fmt.Fprintln(os.Stderr, "")
-		return fmt.Errorf("embedding not configured")
+		return errEmbeddingNotConfigured()
 	}
 
 	// Generate embedding for query
@@ -2634,16 +2641,7 @@ type IndexOptions struct {
 func (c *Commands) Index(opts IndexOptions) error {
 	// Check if embedder is configured
 	if c.Embedder == nil || !c.Embedder.IsConfigured() {
-		fmt.Fprintln(os.Stderr, "Embedding API not configured. Add to .linespec.yml:")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "provenance:")
-		fmt.Fprintln(os.Stderr, "  embedding:")
-		fmt.Fprintln(os.Stderr, "    provider: voyage")
-		fmt.Fprintln(os.Stderr, "    index_model: voyage-4-large")
-		fmt.Fprintln(os.Stderr, "    query_model: voyage-4-lite")
-		fmt.Fprintln(os.Stderr, "    api_key: ${VOYAGE_API_KEY}")
-		fmt.Fprintln(os.Stderr, "")
-		return fmt.Errorf("embedding not configured")
+		return errEmbeddingNotConfigured()
 	}
 
 	// Initialize embedding store
