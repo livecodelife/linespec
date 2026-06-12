@@ -1027,6 +1027,15 @@ func runProvenance() {
 	// Get repo root
 	repoRoot, _ := os.Getwd()
 
+	// Fast path: `next` can be served from the cached scope index without the full
+	// record load, keeping it cheap enough for a per-edit hook. Falls through to the
+	// heavy, authoritative path on any cache miss/staleness (prov-2026-007c8893).
+	if subcommand == "next" {
+		if provenance.TryNextFromCache(cfg, repoRoot, os.Stdout, true, parseNextOptions(args)) {
+			return
+		}
+	}
+
 	// Create embedder client if configured
 	var embedder *embeddings.Client
 	if cfg.Embedding != nil {
