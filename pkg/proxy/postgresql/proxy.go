@@ -1695,27 +1695,34 @@ func (p *Proxy) extractSemanticInfo(query string, bindParams []string) (
 	return
 }
 
-// findMock tries semantic matching (ACCESSING_TABLES) first, then falls back to
-// legacy USING_SQL matching. Pass nil bindParams for simple queries with inlined values.
-func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
+// matchMock runs semantic matching (ACCESSING_TABLES) first, then falls back to
+// legacy USING_SQL matching using the supplied registry lookups. findMock and
+// peekMock differ only in whether the registry increments hit counts, so they
+// pass the Find*/Peek* pair respectively.
+func (p *Proxy) matchMock(
+	query string,
+	bindParams []string,
+	byTables func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool),
+	byKey func(key, query string) (*types.ExpectStatement, bool),
+) (*types.ExpectStatement, bool) {
 	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
 	if len(tables) > 0 {
-		if mock, found := p.registry.FindMockByTables(tables, op, whereCols, whereVals, writtenVals); found {
+		if mock, found := byTables(tables, op, whereCols, whereVals, writtenVals); found {
 			return mock, true
 		}
 	}
-	return p.registry.FindMock(p.extractTable(query), query)
+	return byKey(p.extractTable(query), query)
+}
+
+// findMock tries semantic matching (ACCESSING_TABLES) first, then falls back to
+// legacy USING_SQL matching. Pass nil bindParams for simple queries with inlined values.
+func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
+	return p.matchMock(query, bindParams, p.registry.FindMockByTables, p.registry.FindMock)
 }
 
 // peekMock is like findMock but does not increment hit counts.
 func (p *Proxy) peekMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
-	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
-	if len(tables) > 0 {
-		if mock, found := p.registry.PeekMockByTables(tables, op, whereCols, whereVals, writtenVals); found {
-			return mock, true
-		}
-	}
-	return p.registry.PeekMock(p.extractTable(query), query)
+	return p.matchMock(query, bindParams, p.registry.PeekMockByTables, p.registry.PeekMock)
 }
 
 // checkNegativeMocksForQuery fires both semantic and legacy negative expectation checks.

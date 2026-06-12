@@ -1043,34 +1043,34 @@ func splitCommaTrimmedMySQL(s string) []string {
 	return parts
 }
 
-// findMock tries semantic matching first, then falls back to legacy table-based matching.
-func (p *Proxy) findMock(query string) (*types.ExpectStatement, bool) {
+// matchMock runs semantic-first, legacy-fallback matching using the supplied
+// registry lookups. findMock and peekMock differ only in whether the registry
+// increments hit counts, so they pass the Find*/Peek* pair respectively.
+func (p *Proxy) matchMock(
+	query string,
+	byTables func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool),
+	byKey func(key, query string) (*types.ExpectStatement, bool),
+) (*types.ExpectStatement, bool) {
 	tables := p.extractAllTables(query)
 	if len(tables) > 0 {
 		op := p.extractQueryOperation(query)
 		whereCols, whereVals := p.extractWhereInfo(query)
 		written := p.extractWrittenValuesFromSQL(query, op)
-		if mock, ok := p.registry.FindMockByTables(tables, op, whereCols, whereVals, written); ok {
+		if mock, ok := byTables(tables, op, whereCols, whereVals, written); ok {
 			return mock, true
 		}
 	}
-	tableName := p.extractTable(query)
-	return p.registry.FindMock(tableName, query)
+	return byKey(p.extractTable(query), query)
 }
 
-// peekMock tries semantic matching first, then falls back to legacy table-based matching.
+// findMock tries semantic matching first, then falls back to legacy table-based matching.
+func (p *Proxy) findMock(query string) (*types.ExpectStatement, bool) {
+	return p.matchMock(query, p.registry.FindMockByTables, p.registry.FindMock)
+}
+
+// peekMock is like findMock but does not increment hit counts.
 func (p *Proxy) peekMock(query string) (*types.ExpectStatement, bool) {
-	tables := p.extractAllTables(query)
-	if len(tables) > 0 {
-		op := p.extractQueryOperation(query)
-		whereCols, whereVals := p.extractWhereInfo(query)
-		written := p.extractWrittenValuesFromSQL(query, op)
-		if mock, ok := p.registry.PeekMockByTables(tables, op, whereCols, whereVals, written); ok {
-			return mock, true
-		}
-	}
-	tableName := p.extractTable(query)
-	return p.registry.PeekMock(tableName, query)
+	return p.matchMock(query, p.registry.PeekMockByTables, p.registry.PeekMock)
 }
 
 // checkNegativeMocksForQuery checks both semantic and legacy negative expectations.
