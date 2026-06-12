@@ -2730,10 +2730,36 @@ func (s *TestSuite) captureContainerLogs(containerName string) string {
 	return strings.Join(lines, "\n")
 }
 
+// waitForSQLDB polls a database/sql DSN until it accepts connections, using the
+// shared deadline + exponential-backoff schedule. label names the protocol in
+// the timeout error.
+func (s *TestSuite) waitForSQLDB(ctx context.Context, driver, dsn, label, host, port string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var attempt int
+	for time.Now().Before(deadline) {
+		db, err := sql.Open(driver, dsn)
+		if err == nil {
+			ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
+			err = db.PingContext(ctx2)
+			cancel()
+			db.Close()
+			if err == nil {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
+		}
+		attempt++
+	}
+	return fmt.Errorf("timeout waiting for %s at %s:%s", label, host, port)
+}
+
 // waitForMySQL polls until MySQL is accepting connections using actual MySQL driver
 // Handles MySQL restart during initialization by continuing to retry on any error
 func (s *TestSuite) waitForMySQL(ctx context.Context, host, port, user, password, database string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
 		user, password, host, port, database)
 
@@ -2741,54 +2767,15 @@ func (s *TestSuite) waitForMySQL(ctx context.Context, host, port, user, password
 	mysql.SetLogger(log.New(io.Discard, "", 0))
 	defer mysql.SetLogger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
 
-	var attempt int
-	for time.Now().Before(deadline) {
-		db, err := sql.Open("mysql", dsn)
-		if err == nil {
-			ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
-			err = db.PingContext(ctx2)
-			cancel()
-			db.Close()
-			if err == nil {
-				return nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
-		}
-		attempt++
-	}
-	return fmt.Errorf("timeout waiting for MySQL at %s:%s", host, port)
+	return s.waitForSQLDB(ctx, "mysql", dsn, "MySQL", host, port, timeout)
 }
 
 // waitForPostgreSQL polls until PostgreSQL is accepting connections
 func (s *TestSuite) waitForPostgreSQL(ctx context.Context, host, port, user, password, database string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		user, password, host, port, database)
 
-	var attempt int
-	for time.Now().Before(deadline) {
-		db, err := sql.Open("postgres", dsn)
-		if err == nil {
-			ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
-			err = db.PingContext(ctx2)
-			cancel()
-			db.Close()
-			if err == nil {
-				return nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(expBackoff(attempt, 50*time.Millisecond, 2*time.Second)):
-		}
-		attempt++
-	}
-	return fmt.Errorf("timeout waiting for PostgreSQL at %s:%s", host, port)
+	return s.waitForSQLDB(ctx, "postgres", dsn, "PostgreSQL", host, port, timeout)
 }
 
 // buildMongoURI constructs a MongoDB connection URI from components.
