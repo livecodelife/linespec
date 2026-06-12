@@ -1,0 +1,52 @@
+id: prov-2026-a4204f20
+title: 'Dual install: embed plugin files + linespec provenance install-plugin command + scripts/install-plugin (5b-5d)'
+status: draft
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Implements prov-2026-cd1405fb. The two install paths the user asked for.
+
+  - plugins/provenance/embed.go: a tiny `plugin` package exposing an embed.FS of the
+    plugin tree (.claude-plugin, hooks, commands) via //go:embed, so the distributed
+    linespec binary carries the plugin files.
+  - commands.go: InstallPlugin(opts) walks that embed.FS and writes the plugin into the
+    target Claude Code config dir (default .claude/plugins/linespec-provenance),
+    preserving structure and re-applying the executable bit to *.sh hook scripts. It
+    creates only the plugin's own files — it does not touch unrelated user config.
+  - main_stable.go + main_beta.go: an `install-plugin` dispatch case + option parsing
+    (a target --path).
+  - scripts/install-plugin: a shell alternative that copies plugins/provenance/ into a
+    target dir, mirroring scripts/install-skill (for in-repo / non-binary use).
+
+  The marketplace path (option 3) needs no code beyond the imprint-2 plugin files and
+  the .claude-plugin/marketplace.json already shipped: users run
+  `claude plugin marketplace add` + `claude plugin install`.
+constraints:
+  - InstallPlugin writes only the plugin's files into the target; it never edits or
+    clobbers unrelated user Claude Code config.
+  - Executable bits are re-applied to *.sh after extraction (embed.FS drops file modes).
+  - The embedded plugin tree matches the on-disk plugins/provenance/ source.
+  - make test must pass; install is smoke-tested writing to a temp dir.
+affected_scope:
+  - plugins/provenance/embed.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/scope_index_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - scripts/install-plugin
+forbidden_scope: []
+type: imprint
+implements: prov-2026-cd1405fb
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/scope_index_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - phase-5
+  - claude-code-plugin
