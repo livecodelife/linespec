@@ -1,6 +1,6 @@
 id: prov-2026-5ff0f002
 title: Pandoc render architecture, Lua sidebar/code-block filter, gfm anchors
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: calebcowen@gmail.com
 intent: >
@@ -58,7 +58,7 @@ implements: prov-2026-a7b20513
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 60a592373c626e6e34da0741e466c9af30aaecf0
 associated_specs:
   - type: code
     path: scripts/build-docs.sh
