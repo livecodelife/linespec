@@ -1,6 +1,6 @@
 id: prov-2026-b5c9c813
 title: Consolidate low-priority duplicated helper blocks
-status: draft
+status: open
 created_at: "2026-06-11"
 author: calebcowen@gmail.com
 intent: |
@@ -49,7 +49,13 @@ related:
 sealed_at_sha: ""
 associated_specs:
   - type: go_test
-    path: pkg/provenance
+    path: pkg/proxy/mysql/proxy_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/provenance/linter_test.go
+    run_command: make test
+  - type: go_test
+    path: pkg/runner/port_allocator_test.go
     run_command: make test
 associated_traces: []
 monitors: []
