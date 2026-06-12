@@ -3,6 +3,7 @@ package provenance
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/livecodelife/linespec/pkg/config"
 	"github.com/livecodelife/linespec/pkg/embeddings"
+	plugin "github.com/livecodelife/linespec/plugins/provenance"
 )
 
 // Commands provides all provenance CLI commands
@@ -1529,6 +1531,65 @@ exit $exit_code
 	fmt.Fprintln(os.Stdout, "    · Runs per-pack config for relevant staged changes (multi-pack aware)")
 	fmt.Fprintln(os.Stdout)
 
+	return nil
+}
+
+// InstallPluginOptions holds options for the install-plugin command.
+type InstallPluginOptions struct {
+	Path string // target plugins directory relative to repo root (default: .claude/plugins)
+}
+
+// InstallPlugin extracts the embedded Claude Code provenance plugin into the target
+// config directory (default <repo>/.claude/plugins/linespec-provenance), preserving
+// directory structure and re-applying the executable bit to *.sh hook scripts (which
+// embed.FS drops). It writes ONLY the plugin's own files — it never edits or clobbers
+// unrelated user Claude Code config.
+func (c *Commands) InstallPlugin(opts InstallPluginOptions) error {
+	base := opts.Path
+	if base == "" {
+		base = ".claude/plugins"
+	}
+	// A relative --path is resolved against the repo root; an absolute --path is used
+	// as-is (so callers can install into an arbitrary config dir).
+	dest := filepath.Join(base, "linespec-provenance")
+	if !filepath.IsAbs(base) {
+		dest = filepath.Join(c.RepoRoot, base, "linespec-provenance")
+	}
+
+	err := fs.WalkDir(plugin.Files, ".", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == "." {
+			return nil
+		}
+		target := filepath.Join(dest, path)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		data, err := plugin.Files.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return err
+		}
+		mode := os.FileMode(0644)
+		if strings.HasSuffix(path, ".sh") {
+			mode = 0755
+		}
+		return os.WriteFile(target, data, mode)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to install plugin: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "✓ Installed plugin 'linespec-provenance' to %s\n", dest)
+	fmt.Fprintf(os.Stdout, "\nIt adds three hooks (session-start guidance, per-edit governance, commit remediation),\n")
+	fmt.Fprintf(os.Stdout, "all rendered from `linespec provenance`. Enable it in your Claude Code settings,\n")
+	fmt.Fprintf(os.Stdout, "or install via the marketplace instead:\n")
+	fmt.Fprintf(os.Stdout, "  claude plugin marketplace add <repo>/plugins/provenance\n")
+	fmt.Fprintf(os.Stdout, "  claude plugin install linespec-provenance@linespec\n\n")
 	return nil
 }
 

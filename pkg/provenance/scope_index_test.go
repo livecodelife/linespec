@@ -112,6 +112,40 @@ func TestLoadFreshScopeIndex_StaleAndCorruptFallBack(t *testing.T) {
 	}
 }
 
+func TestInstallPlugin_WritesPluginTreeWithExecutableHooks(t *testing.T) {
+	repo := t.TempDir()
+	cmds := &Commands{RepoRoot: repo}
+	if err := cmds.InstallPlugin(InstallPluginOptions{}); err != nil {
+		t.Fatalf("InstallPlugin: %v", err)
+	}
+	dest := filepath.Join(repo, ".claude", "plugins", "linespec-provenance")
+	for _, p := range []string{
+		".claude-plugin/plugin.json",
+		".claude-plugin/marketplace.json",
+		"hooks/hooks.json",
+		"hooks/session-start.sh",
+		"hooks/pre-edit.sh",
+		"hooks/post-commit.sh",
+		"commands/provenance-next.md",
+	} {
+		if _, err := os.Stat(filepath.Join(dest, p)); err != nil {
+			t.Errorf("missing installed file %s: %v", p, err)
+		}
+	}
+	// The Go embed source must NOT be installed.
+	if _, err := os.Stat(filepath.Join(dest, "embed.go")); err == nil {
+		t.Error("embed.go must not be part of the installed plugin")
+	}
+	// Hook scripts must be executable.
+	info, err := os.Stat(filepath.Join(dest, "hooks", "session-start.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Errorf("hook scripts must be executable, got mode %v", info.Mode())
+	}
+}
+
 func TestActiveGoverningRecords_ExcludesSupersededAndDeprecated(t *testing.T) {
 	scope := []string{"pkg/core/**"}
 	open := bp("prov-2026-0000aaaa", StatusOpen, scope)

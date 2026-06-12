@@ -823,6 +823,12 @@ func runProvenance() {
 			logger.Error("Failed to install skills: %v", err)
 			os.Exit(1)
 		}
+	case "install-plugin":
+		opts := parseInstallPluginOptions(args)
+		if err := cmds.InstallPlugin(opts); err != nil {
+			logger.Error("Failed to install plugin: %v", err)
+			os.Exit(1)
+		}
 	case "--help", "-h":
 		printProvenanceUsage()
 	default:
@@ -1001,6 +1007,32 @@ func parseInstallSkillsOptions(args []string) provenance.InstallSkillsOptions {
 
 Options:
   --path dir     Target directory relative to repo root (default: .claude/skills)
+  --help         Show this help message`)
+			os.Exit(0)
+		}
+	}
+
+	return opts
+}
+
+func parseInstallPluginOptions(args []string) provenance.InstallPluginOptions {
+	opts := provenance.InstallPluginOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 < len(args) {
+				opts.Path = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance install-plugin [options]
+
+Installs the Claude Code provenance plugin (session-start guidance, per-edit
+governance, commit remediation) into a target config directory.
+
+Options:
+  --path dir     Target plugins directory relative to repo root (default: .claude/plugins)
   --help         Show this help message`)
 			os.Exit(0)
 		}
