@@ -1,6 +1,6 @@
 id: prov-2026-007c8893
 title: 'Cached scope index for sub-200ms context/next lookups (Phase 5a)'
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -62,7 +62,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-54aaf9cf
-sealed_at_sha: ""
+sealed_at_sha: e13403af0d52eeddf61b2040f4561b2617d299fe
 associated_specs:
   - path: pkg/provenance/scope_index_test.go
     type: go_test
