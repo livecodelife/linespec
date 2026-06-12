@@ -1,6 +1,6 @@
 id: prov-2026-cd1405fb
 title: Claude Code provenance plugin hooks (SessionStart/PreToolUse/commit-gate) + active-only per-file lookup + dual install (Phase 5b-5d)
-status: draft
+status: open
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -82,7 +82,10 @@ related:
   - prov-2026-54aaf9cf
   - prov-2026-007c8893
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/scope_index_test.go
+    type: go_test
+    run_command: make test # {{path}}
 associated_traces: []
 monitors: []
 tags:
