@@ -1,6 +1,6 @@
 id: prov-2026-f25de965
 title: 'Teeth-config implementation: normalize invalid->block, remote-skip in selectors, warn/off in Complete'
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -40,7 +40,7 @@ implements: prov-2026-21e9f419
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c6cea75b44cf328b9ea45a75fe00e9cd7ace1080
 associated_specs:
   - path: pkg/provenance/overlap_specs_test.go
     type: go_test
