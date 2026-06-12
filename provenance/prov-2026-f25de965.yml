@@ -1,0 +1,52 @@
+id: prov-2026-f25de965
+title: 'Teeth-config implementation: normalize invalid->block, remote-skip in selectors, warn/off in Complete'
+status: draft
+created_at: "2026-06-11"
+author: test@example.com
+intent: |
+  Implements prov-2026-21e9f419. Records the concrete implementation decisions:
+
+  - Mode constants live in the provenance package (OverlapSpecsBlock/Warn/Off =
+    "block"/"warn"/"off"). A normalizeOverlapMode helper maps "" -> block (backward
+    compatible default) and any unrecognized value -> block, printing a one-line
+    stderr notice so an invalid setting is never silently treated as off.
+  - Remote-skip is added directly to the two selector functions
+    (overlappingSealedRecords, declaredOverlapSealedRecords) by extending their
+    existing skip guard with `|| c.isRemoteRecord(r)`. Putting it in the selectors
+    (not the Complete loop) means both the completion teeth and the open-time
+    heads-up exclude remote records with one change each.
+  - In Complete, the teeth block reads the normalized mode. off -> the
+    completionOverlapSelector call is skipped entirely (no selection, no run, no
+    FYI for touched-with-specs; the no-spec FYI is also skipped). block -> unchanged
+    (rollback on failure). warn -> specs still run for streamed output, but a
+    failure is collected and rendered as a non-blocking FYI instead of triggering
+    rollback; completion proceeds.
+  - The master switch run_associated_specs_on_complete is unchanged and still gates
+    whether any specs run; the new mode only refines the overlap-teeth severity when
+    the master switch is on.
+constraints:
+  - Invalid/empty mode normalizes to block; never silently off.
+  - off skips selection so it costs nothing (no git history walk for overlap).
+  - warn must not roll back; it completes and prints a non-blocking FYI.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/overlap_specs_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-21e9f419
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/overlap_specs_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - governance-overlap
+  - config
