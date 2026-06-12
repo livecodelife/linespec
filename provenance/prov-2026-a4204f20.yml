@@ -1,6 +1,6 @@
 id: prov-2026-a4204f20
 title: 'Dual install: embed plugin files + linespec provenance install-plugin command + scripts/install-plugin (5b-5d)'
-status: draft
+status: open
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
