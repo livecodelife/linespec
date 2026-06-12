@@ -1,0 +1,59 @@
+id: prov-2026-b5c9c813
+title: Consolidate low-priority duplicated helper blocks
+status: draft
+created_at: "2026-06-11"
+author: calebcowen@gmail.com
+intent: |
+  Three low-priority clones flagged by the dupl gate are small, localized
+  copy-paste blocks. They are low risk and low value individually, but cheap to
+  fold into named helpers for readability and to keep the dupl report focused on
+  real signal.
+
+  1. pkg/proxy/mysql/proxy.go has the same payload-to-rows extraction block in
+     two places (handling a top-level []interface{} list versus a map with a
+     "rows" key). Extract one extractRows(payload) helper.
+
+  2. pkg/provenance/commands.go repeats an 11-line "Embedding API not
+     configured" stderr message in two commands. Extract one helper (e.g.
+     errEmbeddingNotConfigured) that prints the guidance and returns the error.
+
+  3. pkg/runner/runner.go repeats the proxy-sidecar container startup config for
+     the postgresql and mongodb branches. Optionally factor the shared
+     container.Config construction; lower value because the struct literal is
+     large and the two branches diverge in image/cmd. Treat as stretch.
+
+  NOTE: The largest dupl hit (commands.go:1523 vs 1766) is a FALSE POSITIVE --
+  it is two distinct embedded skill-doc markdown constants (provenanceSkillMD vs
+  linespecTestingSkillMD) that share boilerplate but hold different content.
+  This blueprint deliberately does NOT touch them.
+constraints:
+  - Behavior must be unchanged; provenance, runner, and mysql unit tests pass unmodified
+  - extractRows reproduces the current precedence exactly (map with "rows" key wins; bare map appended as a single row; top-level list flattened; non-map items skipped)
+  - The embedding-not-configured helper prints byte-identical stderr lines and returns the same "embedding not configured" error
+  - The two embedded skill markdown constants in commands.go are out of scope and must not be merged
+  - The runner proxy-config consolidation is optional; skip it if it does not strictly reduce duplication without obscuring the per-protocol differences
+  - No change to scripts/go-quality.sh or the dupl threshold
+affected_scope:
+  - pkg/proxy/mysql/proxy.go
+  - pkg/provenance/commands.go
+  - pkg/runner/runner.go
+forbidden_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-23ab1db8
+  - prov-2026-4bab0511
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    path: pkg/provenance
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - quality
+  - dupl
+  - refactor
