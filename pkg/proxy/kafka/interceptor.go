@@ -3,14 +3,12 @@ package kafka
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"hash/crc32"
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/livecodelife/linespec/pkg/dsl"
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/registry"
@@ -113,24 +111,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 			if topic != "" {
 				logger.Debug("Kafka Interceptor: Produce to topic %s", topic)
 				i.registry.CheckNegativeMocks(topic, "")
-				resolver := i.resolver
-				bodyMatcher := func(withFile, baseDir string) bool {
-					if withFile == "" {
-						return true
-					}
-					loader := dsl.NewPayloadLoaderWithResolver(baseDir, resolver)
-					expected, err := loader.Load(withFile)
-					if err != nil {
-						logger.Debug("WITH body match: failed to load %s: %v", withFile, err)
-						return false
-					}
-					var actual interface{}
-					if jsonErr := json.Unmarshal([]byte(value), &actual); jsonErr != nil {
-						logger.Debug("WITH body match: failed to parse Kafka message value as JSON: %v", jsonErr)
-						return false
-					}
-					return verify.CompareJSON(expected, actual) == nil
-				}
+				bodyMatcher := verify.MakeJSONBodyMatcher(value, "Kafka message value", i.resolver)
 				mock, found := i.registry.FindKafkaMockWithBody(topic, bodyMatcher)
 				if !found {
 					i.registry.RecordPassthrough("Kafka produce topic=" + topic)
