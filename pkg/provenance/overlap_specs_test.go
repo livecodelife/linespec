@@ -175,6 +175,105 @@ func TestCompletion_NoSpecOverlap_EmitsNeutralNonBlockingFYI(t *testing.T) {
 	}
 }
 
+func TestCompletion_WarnMode_FailingSpecBecomesNonBlockingFYI(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, false)
+	cmds.Config.RunAssociatedSpecsOnComplete = true
+	cmds.Config.OverlapSpecsOnComplete = OverlapSpecsWarn
+	headSHA := gitOutput(t, repo, "rev-parse", "HEAD")
+
+	sealedID := "prov-2026-cc000031"
+	writeRecord(t, repo, sealedID,
+		customRecord(sealedID, "implemented", headSHA, []string{"pkg/foo.go"}, []string{"false"}))
+
+	rID := "prov-2026-cc000032"
+	writeRecord(t, repo, rID,
+		customRecord(rID, "open", "", []string{"pkg/foo.go"}, nil))
+	commitFileChange(t, repo, "pkg/foo.go", "package foo\n", rID)
+	reloadRecords(t, cmds)
+
+	if err := cmds.Complete(CompleteOptions{RecordID: rID}); err != nil {
+		t.Fatalf("warn mode must not block completion on a spec failure: %v", err)
+	}
+	if got := loadedRecord(t, cmds, rID).Status; got != StatusImplemented {
+		t.Errorf("status = %q, want implemented (warn does not roll back)", got)
+	}
+	msg := buf.String()
+	if !strings.Contains(msg, "warn mode") || !strings.Contains(msg, sealedID) {
+		t.Errorf("expected a non-blocking warn-mode FYI naming %s, got:\n%s", sealedID, msg)
+	}
+}
+
+func TestCompletion_OffMode_SkipsTeethEntirely(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, false)
+	cmds.Config.RunAssociatedSpecsOnComplete = true
+	cmds.Config.OverlapSpecsOnComplete = OverlapSpecsOff
+	headSHA := gitOutput(t, repo, "rev-parse", "HEAD")
+
+	sealedID := "prov-2026-cc000041"
+	// Failing spec — would block under the default block mode.
+	writeRecord(t, repo, sealedID,
+		customRecord(sealedID, "implemented", headSHA, []string{"pkg/foo.go"}, []string{"false"}))
+
+	rID := "prov-2026-cc000042"
+	writeRecord(t, repo, rID,
+		customRecord(rID, "open", "", []string{"pkg/foo.go"}, nil))
+	commitFileChange(t, repo, "pkg/foo.go", "package foo\n", rID)
+	reloadRecords(t, cmds)
+
+	if err := cmds.Complete(CompleteOptions{RecordID: rID}); err != nil {
+		t.Fatalf("off mode must skip the teeth and complete despite a failing overlap spec: %v", err)
+	}
+	if got := loadedRecord(t, cmds, rID).Status; got != StatusImplemented {
+		t.Errorf("status = %q, want implemented", got)
+	}
+	if msg := buf.String(); strings.Contains(msg, "Verifying sealed record") {
+		t.Errorf("off mode must not run any overlap specs, got:\n%s", msg)
+	}
+}
+
+func TestCompletion_RemoteSealedRecord_ExcludedFromTeeth(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	cmds.Config.RunAssociatedSpecsOnComplete = true // default block mode
+	headSHA := gitOutput(t, repo, "rev-parse", "HEAD")
+
+	sealedID := "prov-2026-cc000051"
+	writeRecord(t, repo, sealedID,
+		customRecord(sealedID, "implemented", headSHA, []string{"pkg/foo.go"}, []string{"false"}))
+
+	rID := "prov-2026-cc000052"
+	writeRecord(t, repo, rID,
+		customRecord(rID, "open", "", []string{"pkg/foo.go"}, nil))
+	commitFileChange(t, repo, "pkg/foo.go", "package foo\n", rID)
+	reloadRecords(t, cmds)
+
+	// Simulate the sealed record being a remote (shared_repos cache) record by
+	// pointing its FilePath outside the local provenance dir. isRemoteRecord then
+	// excludes it from the teeth, so its failing spec must not gate this completion.
+	loadedRecord(t, cmds, sealedID).FilePath = filepath.Join(repo, "remote-cache", sealedID+".yml")
+
+	if err := cmds.Complete(CompleteOptions{RecordID: rID}); err != nil {
+		t.Fatalf("a remote sealed record must not gate local completion: %v", err)
+	}
+	if got := loadedRecord(t, cmds, rID).Status; got != StatusImplemented {
+		t.Errorf("status = %q, want implemented", got)
+	}
+}
+
+func TestNormalizeOverlapMode(t *testing.T) {
+	cases := map[string]string{
+		"":      OverlapSpecsBlock,
+		"block": OverlapSpecsBlock,
+		"warn":  OverlapSpecsWarn,
+		"off":   OverlapSpecsOff,
+		"bogus": OverlapSpecsBlock, // invalid falls back to block, never silently off
+	}
+	for in, want := range cases {
+		if got := normalizeOverlapMode(in); got != want {
+			t.Errorf("normalizeOverlapMode(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestCompletion_DedupesIdenticalSpecCommands(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 	cmds.Config.RunAssociatedSpecsOnComplete = true
