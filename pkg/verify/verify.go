@@ -61,10 +61,13 @@ func VerifySQL(query string, rules []types.VerifyRule) error {
 	return VerifyTarget("query", query, rules)
 }
 
-// VerifyHTTP checks an HTTP request against a set of verification rules
-func VerifyHTTP(req *HTTPRequest, rules []types.VerifyRule) error {
+// verifyWithExtractor applies verification rules to a channel whose target
+// value is produced per-rule by extract. It owns the loop shared by the
+// per-channel Verify* entry points: a failed extraction is wrapped in a
+// VerificationError, otherwise the rule is checked via verifyRule.
+func verifyWithExtractor(rules []types.VerifyRule, extract func(target string) (string, error)) error {
 	for _, rule := range rules {
-		value, err := extractHTTPValue(req, rule.Target)
+		value, err := extract(rule.Target)
 		if err != nil {
 			return &VerificationError{
 				Target:  rule.Target,
@@ -78,6 +81,13 @@ func VerifyHTTP(req *HTTPRequest, rules []types.VerifyRule) error {
 		}
 	}
 	return nil
+}
+
+// VerifyHTTP checks an HTTP request against a set of verification rules
+func VerifyHTTP(req *HTTPRequest, rules []types.VerifyRule) error {
+	return verifyWithExtractor(rules, func(target string) (string, error) {
+		return extractHTTPValue(req, target)
+	})
 }
 
 // extractHTTPValue extracts the target value from an HTTP request
@@ -113,21 +123,9 @@ func extractHTTPValue(req *HTTPRequest, target string) (string, error) {
 
 // VerifyKafka checks a Kafka message against a set of verification rules
 func VerifyKafka(msg *KafkaMessage, rules []types.VerifyRule) error {
-	for _, rule := range rules {
-		value, err := extractKafkaValue(msg, rule.Target)
-		if err != nil {
-			return &VerificationError{
-				Target:  rule.Target,
-				Rule:    rule,
-				Actual:  "",
-				Message: err.Error(),
-			}
-		}
-		if err := verifyRule(rule.Target, value, rule); err != nil {
-			return err
-		}
-	}
-	return nil
+	return verifyWithExtractor(rules, func(target string) (string, error) {
+		return extractKafkaValue(msg, target)
+	})
 }
 
 // extractKafkaValue extracts the target value from a Kafka message
@@ -167,21 +165,9 @@ type GRPCRequest struct {
 
 // VerifyGRPC checks a gRPC request against a set of verification rules
 func VerifyGRPC(req *GRPCRequest, rules []types.VerifyRule) error {
-	for _, rule := range rules {
-		value, err := extractGRPCValue(req, rule.Target)
-		if err != nil {
-			return &VerificationError{
-				Target:  rule.Target,
-				Rule:    rule,
-				Actual:  "",
-				Message: err.Error(),
-			}
-		}
-		if err := verifyRule(rule.Target, value, rule); err != nil {
-			return err
-		}
-	}
-	return nil
+	return verifyWithExtractor(rules, func(target string) (string, error) {
+		return extractGRPCValue(req, target)
+	})
 }
 
 // extractGRPCValue extracts the target value from a gRPC request
@@ -219,21 +205,9 @@ type RedisCommand struct {
 
 // VerifyRedis checks a Redis command against a set of verification rules
 func VerifyRedis(cmd *RedisCommand, rules []types.VerifyRule) error {
-	for _, rule := range rules {
-		value, err := extractRedisValue(cmd, rule.Target)
-		if err != nil {
-			return &VerificationError{
-				Target:  rule.Target,
-				Rule:    rule,
-				Actual:  "",
-				Message: err.Error(),
-			}
-		}
-		if err := verifyRule(rule.Target, value, rule); err != nil {
-			return err
-		}
-	}
-	return nil
+	return verifyWithExtractor(rules, func(target string) (string, error) {
+		return extractRedisValue(cmd, target)
+	})
 }
 
 // extractRedisValue extracts the target value from a Redis command
