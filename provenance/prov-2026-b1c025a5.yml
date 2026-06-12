@@ -1,6 +1,6 @@
 id: prov-2026-b1c025a5
 title: Collapse findMock/peekMock pairs in mysql and postgresql proxies
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: calebcowen@gmail.com
 intent: |
@@ -32,7 +32,7 @@ implements: prov-2026-4bab0511
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1cbfb91ea04b683af3e030b8f9ed6287304bc85e
 associated_specs:
   - type: go_test
     path: pkg/proxy/mysql/proxy_test.go
