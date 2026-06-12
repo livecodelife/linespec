@@ -1,6 +1,6 @@
 id: prov-2026-7b58bc99
 title: Extract extractRows helper in mysql proxy
-status: open
+status: implemented
 created_at: "2026-06-12"
 author: calebcowen@gmail.com
 intent: |
@@ -21,7 +21,7 @@ implements: prov-2026-b5c9c813
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 71e5d2d4254e99901d5d8bc5067af9aaea62d70b
 associated_specs:
   - type: go_test
     path: pkg/proxy/mysql/proxy_test.go
