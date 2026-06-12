@@ -1,6 +1,7 @@
 package provenance
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -2120,6 +2121,76 @@ func (c *Commands) Next(opts NextOptions) error {
 		return c.Formatter.FormatNextJSON(actions)
 	}
 	c.Formatter.FormatNext(actions)
+	return nil
+}
+
+// GovernOptions configures the `govern` command — the active-only per-file
+// governance lookup the 5c plugin hook consumes.
+type GovernOptions struct {
+	Files      []string // files to look up governance for
+	Format     string   // human (default) | json
+	ConfigFile string   // path to custom .linespec.yml file
+}
+
+// governingJSON is the stable hook-facing shape of one active governing record.
+type governingJSON struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+// Govern reports the ACTIVE records (open + implemented) that govern the given
+// files, plus the engine's primary next action so a caller can end with a `next`
+// suggestion. Superseded/deprecated records are excluded — see
+// activeGoverningRecords. This is the hook-facing lookup; the full `context`
+// command still shows history.
+func (c *Commands) Govern(opts GovernOptions) error {
+	active := activeGoverningRecords(c.Loader.Records, opts.Files)
+
+	state := NextState{
+		Records:           c.Loader.Records,
+		IntendedFiles:     opts.Files,
+		CommitTagRequired: c.Config != nil && c.Config.CommitTagRequired,
+	}
+	if c.Git != nil {
+		if staged, err := c.Git.GetStagedFiles(); err == nil {
+			state.StagedFiles = staged
+		}
+		if changed, err := c.Git.GetWorkingTreeChanges(); err == nil {
+			state.ChangedFiles = changed
+		}
+	}
+	actions := Advise(state)
+	var primary *NextAction
+	if len(actions) > 0 {
+		primary = &actions[0]
+	}
+
+	if opts.Format == "json" {
+		governing := make([]governingJSON, 0, len(active))
+		for _, r := range active {
+			governing = append(governing, governingJSON{ID: r.ID, Status: string(r.Status)})
+		}
+		out := struct {
+			Files     []string        `json:"files"`
+			Governing []governingJSON `json:"governing"`
+			Next      *NextAction     `json:"next,omitempty"`
+		}{Files: opts.Files, Governing: governing, Next: primary}
+		enc := json.NewEncoder(c.Formatter.Output)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
+	if len(active) == 0 {
+		fmt.Fprintf(c.Formatter.Output, "No active records govern %s.\n", strings.Join(opts.Files, ", "))
+	} else {
+		fmt.Fprintf(c.Formatter.Output, "Active records governing %s:\n", strings.Join(opts.Files, ", "))
+		for _, r := range active {
+			fmt.Fprintf(c.Formatter.Output, "  · %s [%s]\n", r.ID, r.Status)
+		}
+	}
+	if primary != nil && primary.Command != "" {
+		fmt.Fprintf(c.Formatter.Output, "Next: %s\n  %s\n", primary.Reason, primary.Command)
+	}
 	return nil
 }
 

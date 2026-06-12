@@ -571,6 +571,11 @@ func runProvenance() {
 			return
 		}
 	}
+	if subcommand == "govern" {
+		if provenance.TryGovernFromCache(cfg, repoRoot, os.Stdout, true, parseGovernOptions(args)) {
+			return
+		}
+	}
 
 	// Create embedder client if configured
 	var embedder *embeddings.Client
@@ -745,6 +750,15 @@ func runProvenance() {
 			os.Exit(1)
 		}
 		if err := cmds.Next(opts); err != nil {
+			os.Exit(1)
+		}
+	case "govern":
+		opts := parseGovernOptions(args)
+		if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+			logger.Error("Failed to reload config: %v", err)
+			os.Exit(1)
+		}
+		if err := cmds.Govern(opts); err != nil {
 			os.Exit(1)
 		}
 	case "search":
@@ -1410,6 +1424,63 @@ Options:
   --files f1 f2 f3          Files you intend to change (plan before editing)
   --plan f1 f2 f3           Alias for --files
   --json                    Machine-readable output (for hooks/agents)
+  -c, --config path         Path to custom .linespec.yml file
+  --help                    Show this help message`)
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				opts.Files = append(opts.Files, args[i])
+			}
+		}
+	}
+
+	return opts
+}
+
+// parseGovernOptions parses flags for `linespec provenance govern` — the active-only
+// per-file governance lookup. Files may be positional or via --files; --json selects
+// JSON output (the hook-facing shape).
+func parseGovernOptions(args []string) provenance.GovernOptions {
+	opts := provenance.GovernOptions{}
+
+	collectFiles := func(start int) int {
+		last := start
+		for j := start + 1; j < len(args); j++ {
+			if strings.HasPrefix(args[j], "-") {
+				return j - 1
+			}
+			opts.Files = append(opts.Files, args[j])
+			last = j
+		}
+		return last
+	}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--files":
+			i = collectFiles(i)
+		case "--json":
+			opts.Format = "json"
+		case "--format":
+			if i+1 < len(args) {
+				opts.Format = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance govern [options] [files...]
+
+Lists the ACTIVE provenance records (open + implemented) that govern the given
+files — excluding superseded/deprecated. Cache-backed and fast; intended for the
+Claude Code plugin's per-edit hook.
+
+Options:
+  --files f1 f2 f3          Files to look up governance for
+  --json                    Machine-readable output (for hooks)
   -c, --config path         Path to custom .linespec.yml file
   --help                    Show this help message`)
 			os.Exit(0)

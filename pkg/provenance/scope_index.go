@@ -214,6 +214,56 @@ func newCommandsFromScopeIndex(config *ProvenanceConfig, repoRoot, absDir string
 	}
 }
 
+// activeGoverningRecords returns the records that are open OR implemented AND
+// explicitly govern (allowlist scope match) at least one of the files, sorted by
+// ID. Superseded and deprecated records are excluded: a per-edit hook that injects
+// "who governs this file" must not surface a decision that has already been
+// replaced or withdrawn (stale-signal noise). This is the active-only lookup the
+// 5c PreToolUse hook consumes — distinct from the full `context` command, which
+// intentionally still shows history.
+func activeGoverningRecords(records []*Record, files []string) []*Record {
+	var out []*Record
+	for _, r := range records {
+		if r.Status != StatusOpen && r.Status != StatusImplemented {
+			continue
+		}
+		for _, f := range files {
+			if explicitlyGoverns(r, f) {
+				out = append(out, r)
+				break
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// TryGovernFromCache serves `linespec provenance govern` from the cached scope
+// index without a full LoadAll, mirroring TryNextFromCache. Returns true when it
+// handled the command; false to fall back to the heavy, authoritative path.
+func TryGovernFromCache(config *ProvenanceConfig, repoRoot string, output *os.File, color bool, opts GovernOptions) bool {
+	if opts.ConfigFile != "" {
+		return false
+	}
+	if config.Dir == "" {
+		config.Dir = "provenance"
+	}
+	absDir := config.Dir
+	if !filepath.IsAbs(absDir) && repoRoot != "" {
+		absDir = filepath.Join(repoRoot, absDir)
+	}
+	sharedDirs := NewCacheManager(config.SharedRepos, config.CacheTTLMinutes).LoadedDirs()
+	idx, ok := loadFreshScopeIndex(repoRoot, loaderDirs(absDir, sharedDirs))
+	if !ok {
+		return false
+	}
+	cmds := newCommandsFromScopeIndex(config, repoRoot, absDir, output, color, idx)
+	if err := cmds.Govern(opts); err != nil {
+		return false
+	}
+	return true
+}
+
 // TryNextFromCache serves `linespec provenance next` from the cached scope index
 // without a full LoadAll, when the cache is fresh. It returns true if it handled
 // the command (output already rendered); false if the caller must fall back to the
