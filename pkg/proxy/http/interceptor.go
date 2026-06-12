@@ -246,23 +246,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 // mock has no WithFile the callback always returns true (match-any). Otherwise it loads
 // the file, parses the actual body as JSON, and delegates to verify.CompareJSON.
 func makeBodyMatcher(actualBody string, resolver *interpolate.Resolver) func(withFile, baseDir string) bool {
-	return func(withFile, baseDir string) bool {
-		if withFile == "" {
-			return true
-		}
-		loader := dsl.NewPayloadLoaderWithResolver(baseDir, resolver)
-		expected, err := loader.Load(withFile)
-		if err != nil {
-			logger.Debug("WITH body match: failed to load %s: %v", withFile, err)
-			return false
-		}
-		var actual interface{}
-		if jsonErr := json.Unmarshal([]byte(actualBody), &actual); jsonErr != nil {
-			logger.Debug("WITH body match: failed to parse request body as JSON: %v", jsonErr)
-			return false
-		}
-		return verify.CompareJSON(expected, actual) == nil
-	}
+	return verify.MakeJSONBodyMatcher(actualBody, "request body", resolver)
 }
 
 // Note: Rails-specific auth extraction has been removed.
