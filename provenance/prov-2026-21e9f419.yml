@@ -65,6 +65,7 @@ affected_scope:
   - pkg/provenance/overlap_specs_test.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
+  - .linespec.yml
 forbidden_scope: []
 type: blueprint
 supersedes: ""
