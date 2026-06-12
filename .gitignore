@@ -68,3 +68,13 @@ examples/*/.bundle/
 examples/*/mariadb-dev/
 examples/*/anthropic-ca.pem
 examples/*/Dockerfile.linespec
+
+# Generated docs site artifacts — rendered from Markdown by scripts/build-docs.sh
+# (run locally or in the Pages workflow). Source of truth is the .md files and
+# docs/templates/. Do not commit these.
+docs/index.html
+docs/docs.html
+docs/linespec.html
+docs/provenance.html
+docs/llms.txt
+docs/llms-full.txt

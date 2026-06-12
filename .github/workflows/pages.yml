@@ -1,0 +1,67 @@
+name: Pages
+
+# Build the linespec.dev site from Markdown source and deploy it to GitHub
+# Pages. This replaces the auto-generated "pages build and deployment" job:
+# Pages source must be set to "GitHub Actions" (Settings -> Pages) for this to
+# deploy. The site is rebuilt from source on every push to main, so the
+# published HTML can never fall behind the Markdown.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'LINESPEC.md'
+      - 'PROVENANCE_RECORDS.md'
+      - 'README.md'
+      - 'VERSION'
+      - 'docs/**'
+      - 'scripts/build-docs.sh'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Build docs
+        run: ./scripts/build-docs.sh
+
+      - name: Strip raw templates from the published tree
+        run: rm -rf docs/templates
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

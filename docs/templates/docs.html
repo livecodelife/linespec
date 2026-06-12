@@ -58,12 +58,12 @@
                     <h4>Provenance Records</h4>
                     <ul>
                         <li><a href="provenance.html#quick-start">Quick Start</a></li>
-                        <li><a href="provenance.html#concepts">Core Concepts</a></li>
-                        <li><a href="provenance.html#schema">Schema Reference</a></li>
-                        <li><a href="provenance.html#cli">CLI Commands</a></li>
-                        <li><a href="provenance.html#config">Configuration</a></li>
-                        <li><a href="provenance.html#git">Git Integration</a></li>
-                        <li><a href="provenance.html#scope-enforcement">Scope Enforcement</a></li>
+                        <li><a href="provenance.html#core-concepts">Core Concepts</a></li>
+                        <li><a href="provenance.html#schema-reference">Schema Reference</a></li>
+                        <li><a href="provenance.html#cli-commands">CLI Commands</a></li>
+                        <li><a href="provenance.html#configuration">Configuration</a></li>
+                        <li><a href="provenance.html#git-integration">Git Integration</a></li>
+                        <li><a href="provenance.html#scope-enforcement--when-youre-blocked">Scope Enforcement</a></li>
                         <li><a href="provenance.html#best-practices">Best Practices</a></li>
                         <li><a href="provenance.html#examples">Examples</a></li>
                         <li><a href="provenance.html#troubleshooting">Troubleshooting</a></li>
@@ -74,13 +74,13 @@
                     <h4>LineSpec Testing</h4>
                     <ul>
                         <li><a href="linespec.html">Introduction</a></li>
-                        <li><a href="linespec.html#principles">Design Principles</a></li>
-                        <li><a href="linespec.html#grammar">DSL Grammar</a></li>
-                        <li><a href="linespec.html#receive">RECEIVE</a></li>
-                        <li><a href="linespec.html#expect">EXPECT</a></li>
-                        <li><a href="linespec.html#expect-not">EXPECT_NOT</a></li>
-                        <li><a href="linespec.html#respond">RESPOND</a></li>
-                        <li><a href="linespec.html#verify">VERIFY</a></li>
+                        <li><a href="linespec.html#core-design-principles">Design Principles</a></li>
+                        <li><a href="linespec.html#dsl-grammar-overview">DSL Grammar</a></li>
+                        <li><a href="linespec.html#1-receive">RECEIVE</a></li>
+                        <li><a href="linespec.html#2-expect">EXPECT</a></li>
+                        <li><a href="linespec.html#3-expect_not">EXPECT_NOT</a></li>
+                        <li><a href="linespec.html#4-respond">RESPOND</a></li>
+                        <li><a href="linespec.html#verify-validation-rules">VERIFY</a></li>
                         <li><a href="linespec.html#examples">Examples</a></li>
                     </ul>
                 </div>
@@ -118,7 +118,7 @@
                         <span class="card-link">Read documentation →</span>
                     </a>
 
-                    <a href="provenance.html#schema" class="docs-card">
+                    <a href="provenance.html#schema-reference" class="docs-card">
                         <div class="docs-card-icon blue">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="3" y="3" width="7" height="7"/>
@@ -149,7 +149,7 @@
                     <h2>What is LineSpec?</h2>
                     <p>LineSpec is a tool for managing <strong>Provenance Records</strong> — structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.</p>
                     
-                    <p>As of v3.13.0, both <strong>Provenance Records</strong> and <strong>LineSpec Testing</strong> are stable and included in the default installation.</p>
+                    <p>As of v__VERSION__, both <strong>Provenance Records</strong> and <strong>LineSpec Testing</strong> are stable and included in the default installation.</p>
 
                     <div class="comparison-table">
                         <table>
@@ -184,30 +184,30 @@
                             <ul>
                                 <li><a href="provenance.html">Introduction</a> - What are Provenance Records?</li>
                                 <li><a href="provenance.html#quick-start">Quick Start</a> - Get up and running</li>
-                                <li><a href="provenance.html#concepts">Core Concepts</a> - ID format, status lifecycle</li>
-                                <li><a href="provenance.html#schema">Schema Reference</a> - Complete field reference</li>
-                                <li><a href="provenance.html#cli">CLI Commands</a> - All available commands</li>
-                                <li><a href="provenance.html#config">Configuration</a> - .linespec.yml options</li>
-                                <li><a href="provenance.html#git">Git Integration</a> - Hooks and validation</li>
+                                <li><a href="provenance.html#core-concepts">Core Concepts</a> - ID format, status lifecycle</li>
+                                <li><a href="provenance.html#schema-reference">Schema Reference</a> - Complete field reference</li>
+                                <li><a href="provenance.html#cli-commands">CLI Commands</a> - All available commands</li>
+                                <li><a href="provenance.html#configuration">Configuration</a> - .linespec.yml options</li>
+                                <li><a href="provenance.html#git-integration">Git Integration</a> - Hooks and validation</li>
                                 <li><a href="provenance.html#examples">Examples</a> - Real-world examples</li>
                             </ul>
                         </div>
                         <div class="structure-item">
                             <h4>Schema Reference</h4>
                             <ul>
-                                <li><a href="provenance.html#schema">Field Summary</a> - All fields at a glance</li>
-                                <li><a href="provenance.html#schema">Required Fields</a> - id, title, status, etc.</li>
-                                <li><a href="provenance.html#schema">Optional Fields</a> - constraints, scope, tags</li>
-                                <li><a href="provenance.html#schema">Validation Rules</a> - Lint rules and enforcement</li>
+                                <li><a href="provenance.html#schema-reference">Field Summary</a> - All fields at a glance</li>
+                                <li><a href="provenance.html#schema-reference">Required Fields</a> - id, title, status, etc.</li>
+                                <li><a href="provenance.html#schema-reference">Optional Fields</a> - constraints, scope, tags</li>
+                                <li><a href="provenance.html#schema-reference">Validation Rules</a> - Lint rules and enforcement</li>
                             </ul>
                         </div>
                         <div class="structure-item">
                             <h4>LineSpec Testing</h4>
                             <ul>
                                 <li><a href="linespec.html">Introduction</a> - DSL overview</li>
-                                <li><a href="linespec.html#grammar">Grammar</a> - Statement structure</li>
-                                <li><a href="linespec.html#expect">EXPECT</a> - Dependencies</li>
-                                <li><a href="linespec.html#verify">VERIFY</a> - SQL validation</li>
+                                <li><a href="linespec.html#dsl-grammar-overview">Grammar</a> - Statement structure</li>
+                                <li><a href="linespec.html#2-expect">EXPECT</a> - Dependencies</li>
+                                <li><a href="linespec.html#verify-validation-rules">VERIFY</a> - SQL validation</li>
                                 <li><a href="linespec.html#examples">Examples</a> - Complete test specs</li>
                             </ul>
                         </div>

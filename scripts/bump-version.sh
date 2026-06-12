@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bump-version.sh — update all doc/site version references to a new release.
+# bump-version.sh — update the version in the Markdown sources for a new release.
 #
 # Usage: ./scripts/bump-version.sh <new-version>
 # Example: ./scripts/bump-version.sh 2.1.0
@@ -29,13 +29,14 @@ fi
 
 echo "Bumping v$OLD → v$NEW"
 
+# Only the hand-edited Markdown sources carry version strings now. The site's
+# HTML and llms*.txt are rendered from these by scripts/build-docs.sh, which
+# injects the version from the VERSION file at build time — so there is no
+# committed HTML to update here.
 FILES=(
-  docs/index.html
-  docs/linespec.html
-  docs/docs.html
-  docs/provenance.html
   README.md
   LINESPEC.md
+  PROVENANCE_RECORDS.md
 )
 
 for f in "${FILES[@]}"; do
