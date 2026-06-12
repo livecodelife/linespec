@@ -1,6 +1,6 @@
 id: prov-2026-4bab0511
 title: Consolidate medium-priority duplicated proxy/runner logic
-status: open
+status: implemented
 created_at: "2026-06-11"
 author: calebcowen@gmail.com
 intent: |
@@ -40,7 +40,7 @@ superseded_by: ""
 related:
   - prov-2026-23ab1db8
   - prov-2026-b5c9c813
-sealed_at_sha: ""
+sealed_at_sha: 7b1cb21ad890e685f6b3f889214ecda7f0841122
 associated_specs:
   - type: go_test
     path: pkg/proxy/mysql/proxy_test.go
