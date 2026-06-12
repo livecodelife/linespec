@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.13.0] - 2026-06-12
+
 ### Added
 - **`linespec provenance next`** — computes the single correct next provenance action (create / open / add spec / commit / complete) with record IDs filled in. Supports ambient mode, `--files`/`--plan` for intent-aware planning, and `--json`. Cache-backed fast path.
 - **`linespec provenance govern`** — lists the active (open + implemented) records governing given files, excluding superseded/deprecated. Supports `--files`/`--json`. Cache-backed.
