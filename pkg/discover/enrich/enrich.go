@@ -259,7 +259,7 @@ func parseOpenAIResponse(body []byte) (string, error) {
 		return "", fmt.Errorf("parse OpenAI response: %w", err)
 	}
 	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("OpenAI returned no choices")
+		return "", fmt.Errorf("no choices in OpenAI response")
 	}
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
@@ -305,7 +305,7 @@ func parseAnthropicResponse(body []byte) (string, error) {
 		return "", fmt.Errorf("parse Anthropic response: %w", err)
 	}
 	if len(resp.Content) == 0 {
-		return "", fmt.Errorf("Anthropic returned no content")
+		return "", fmt.Errorf("no content in Anthropic response")
 	}
 	return strings.TrimSpace(resp.Content[0].Text), nil
 }
