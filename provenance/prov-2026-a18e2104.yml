@@ -1,6 +1,6 @@
 id: prov-2026-a18e2104
 title: 'Phase 5: git history enrichment for intent field population (--enrich)'
-status: open
+status: implemented
 created_at: "2026-06-04"
 author: test@example.com
 implements: prov-2026-0071506f
@@ -35,7 +35,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2c1f122381bb77f6df7bf284a2cf34c763a4201f
 associated_specs:
   - path: pkg/discover/enrich/enrich_test.go
     type: go_test
