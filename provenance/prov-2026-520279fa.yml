@@ -1,0 +1,40 @@
+id: prov-2026-520279fa
+title: Add ExcludePaths to config and provenance structs, implement path exclusion logic
+status: draft
+created_at: "2026-06-22"
+author: calebcowen@gmail.com
+implements: prov-2026-1b5fa2c2
+intent: >
+  Add ExcludePaths []string to both config.ProvenanceConfig and
+  provenance.ProvenanceConfig, implement IsPathExcluded helper,
+  wire the field through loadProvenanceConfigFromFile, and use it in
+  the commit checker (CheckStaged/CheckCommit), context command, linter,
+  and formatter to exempt matching files from all provenance rules.
+constraints:
+  - ExcludePaths added to both config.ProvenanceConfig (YAML) and provenance.ProvenanceConfig
+  - "Pattern types supported: regex (/…/), glob (*/?), directory prefix, exact path"
+  - CheckStaged/CheckCommit skip excluded files; if all staged files are excluded, no commit-tag required
+  - buildContextResult records exempt files in ContextResult.ExemptFiles
+  - FormatContext/FormatContextCompact/FormatContextJSON surface exempt files
+affected_scope:
+  - pkg/config/types.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/types.go
+  - pkg/provenance/git.go
+  - pkg/provenance/formatter.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/exclude_paths_test.go
+    run_command: make test
+  - path: pkg/provenance/exclude_paths_test.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
