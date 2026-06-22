@@ -1,6 +1,6 @@
 id: prov-2026-1b5fa2c2
 title: Add exclude_paths config to exempt files from provenance rules
-status: open
+status: implemented
 created_at: '2026-06-22'
 author: calebcowen@gmail.com
 implements: prov-2026-bb380f4b
