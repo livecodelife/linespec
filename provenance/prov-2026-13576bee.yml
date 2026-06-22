@@ -1,6 +1,6 @@
 id: prov-2026-13576bee
 title: Document docs-site update process; fix version badge drift
-status: open
+status: implemented
 created_at: "2026-06-22"
 author: calebcowen@gmail.com
 intent: >
@@ -39,7 +39,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-a7b20513
-sealed_at_sha: ""
+sealed_at_sha: f91c6a543e0d29120ea478d7e4caa03442e7f5b4
 associated_specs:
   - type: code
     path: scripts/bump-version.sh
