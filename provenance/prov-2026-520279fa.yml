@@ -1,6 +1,6 @@
 id: prov-2026-520279fa
 title: Add ExcludePaths to config and provenance structs, implement path exclusion logic
-status: open
+status: implemented
 created_at: "2026-06-22"
 author: calebcowen@gmail.com
 implements: prov-2026-1b5fa2c2
@@ -33,7 +33,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e307c78c8345c9df8ec17f95dfc536fc462515b5
 associated_specs:
   - path: pkg/config/exclude_paths_test.go
     run_command: make test
