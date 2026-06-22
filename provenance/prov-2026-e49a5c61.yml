@@ -1,0 +1,33 @@
+id: prov-2026-e49a5c61
+title: 'records package: route group to blueprint record generation'
+status: implemented
+created_at: "2026-06-05"
+author: test@example.com
+intent: Implement pkg/discover/records/ — the record generation package that groups
+  route groups into draft blueprint provenance records. Groups are derived from Phase
+  1 output (routes.Group), stubs from Phase 3, and boundary data from Phase 2. Writes
+  draft blueprint records to the provenance directory using pkg/provenance infrastructure.
+  Supports dry-run mode via Plan(). Includes tests and FormatTable/FormatJSON helpers.
+constraints: []
+affected_scope:
+  - pkg/discover/records/records.go
+  - pkg/discover/records/records_test.go
+  - pkg/discover/records/format.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-2042c6a2
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ef382b3cec780a5efffea502786b76df27ee2968
+associated_specs:
+  - path: pkg/discover/records/records_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/records/...'"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - record-generation

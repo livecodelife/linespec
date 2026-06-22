@@ -1,0 +1,31 @@
+id: prov-2026-0d713fa1
+title: 'Implement pkg/discover/enrich: git log + LLM intent synthesis'
+status: implemented
+created_at: "2026-06-05"
+author: test@example.com
+intent: |
+  Creates pkg/discover/enrich with Enrich() and EnrichWithBaseURL() functions.
+  Runs git log --follow per file cluster, deduplicates commit subjects, and calls
+  OpenAI or Anthropic chat completion to synthesize a 1-2 sentence intent field.
+  LLM provider is auto-detected from OPENAI_API_KEY / ANTHROPIC_API_KEY env vars.
+  All errors are per-result (non-fatal); the caller logs and continues.
+  EnrichWithBaseURL accepts a mock server URL for deterministic tests.
+constraints: []
+affected_scope:
+  - pkg/discover/enrich/enrich.go
+  - pkg/discover/enrich/enrich_test.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a18e2104
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 54a26244889d22a9bc2c0e22394589b17d47c582
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+associated_traces: []
+monitors: []
+tags: []

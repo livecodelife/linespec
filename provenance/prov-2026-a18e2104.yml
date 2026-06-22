@@ -1,0 +1,49 @@
+id: prov-2026-a18e2104
+title: 'Phase 5: git history enrichment for intent field population (--enrich)'
+status: open
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-0071506f
+intent: |
+  When `--enrich` is passed, run git log --follow for each file cluster in a blueprint's
+  affected_scope, collect commit messages (and PR titles from merge commit conventions or
+  GitHub/GitLab API if credentials are available), and synthesize a 1-2 sentence intent
+  field via LLM.
+
+  This is the only LLM-dependent, non-deterministic step in the entire pipeline. It is
+  opt-in and completely independent of phases 0-4. Without --enrich the intent field is
+  left empty and the user fills it in manually.
+
+  The LLM prompt is focused: "Given these commit messages for files [list], write a 1-2
+  sentence intent summarizing what this code does and why it exists." The result is written
+  to the blueprint record's intent field before it is saved to disk.
+
+  Git log parsing must handle --follow for renamed files and should gracefully degrade when
+  a file has no git history (new files, untracked paths).
+constraints:
+  - MUST be implemented as an opt-in flag (--enrich); phases 0-4 MUST remain deterministic and network-free
+  - MUST use git log --follow per file cluster to collect commit messages
+  - MUST construct a focused LLM prompt producing a 1-2 sentence intent summary
+  - MUST gracefully degrade when files have no git history
+  - MUST NOT block or error the core pipeline if LLM call fails; log warning and leave intent empty
+  - LLM call MUST be the only non-deterministic, network-dependent step in the entire command
+affected_scope:
+  - pkg/discover/enrich/**
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - git-enrichment
+  - llm
+  - enrich

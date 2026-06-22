@@ -1,0 +1,24 @@
+id: prov-2026-f3df5dfc
+title: Infer discover record author from target repo git config
+status: implemented
+created_at: "2026-06-12"
+author: calebcowen@gmail.com
+intent: |
+  When --dir points to an external repo, author resolution ran git config
+  user.email in the linespec-discover worktree (which has a local override of
+  test@example.com). Fix: resolve git email in scanDir instead of repoRoot, so
+  the local config of the TARGET repo is used, with natural fallback to global
+  git config. One-line change in runDiscover.
+constraints: []
+affected_scope:
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 45a529ef92cc2a44bcaf2a168385ad2f29d42a66
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []

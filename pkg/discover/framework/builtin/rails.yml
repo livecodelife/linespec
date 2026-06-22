@@ -1,0 +1,217 @@
+name: rails
+language: ruby
+
+detection:
+  - manifest: Gemfile
+    contains:
+      - "gem 'rails'"
+  - manifest: Gemfile
+    contains:
+      - "gem \"rails\""
+
+route_queries:
+  # get '/path', to: 'controller#action'  — with handler
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @path
+          (pair
+            key: (hash_key_symbol)
+            value: (string) @handler)))
+    filter:
+      method: "^(get|post|put|patch|delete)$"
+  # get '/path'  — without to: option
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @path))
+    filter:
+      method: "^(get|post|put|patch|delete)$"
+  # resources :name  — expanded by assembler to conventional endpoints
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (simple_symbol) @resource))
+    filter:
+      method: "^(resources|resource)$"
+
+middleware_queries:
+  # before_action :authenticate_user  — #match? predicate filters to before_action/before_filter
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (simple_symbol) @middleware)
+        (#match? @method "^(before_action|before_filter)$"))
+
+group_queries:
+  # namespace :api do ... end  — symbol prefix
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (simple_symbol) @prefix)
+        block: (do_block) @body
+        (#match? @method "^(namespace|scope)$"))
+  # scope '/v2' do ... end  — string prefix
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @prefix)
+        block: (do_block) @body
+        (#eq? @method "scope"))
+
+grouping_strategy: controller
+
+boundary_queries:
+  # ActiveRecord reads — Model.where, Model.find, etc. (receiver is a constant class name)
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call
+        receiver: (constant) @model
+        method: (identifier) @method
+        (#match? @method "^(where|find|find_by|find_by!|first|first!|last|last!|all|count|exists\?|pluck|select|minimum|maximum|sum|average|includes|joins|group|having|order|limit|offset|take|find_each|find_in_batches)$"))
+    captures:
+      target: model
+
+  # ActiveRecord reads — namespaced model: MyApp::User.where(...)
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call
+        receiver: (scope_resolution) @model
+        method: (identifier) @method
+        (#match? @method "^(where|find|find_by|find_by!|first|first!|last|last!|all|count|exists\?|pluck|select|minimum|maximum|sum|average|includes|joins|group|having|order|limit|offset|take)$"))
+    captures:
+      target: model
+
+  # ActiveRecord class-level writes — Model.create, Model.update_all, etc.
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        receiver: (constant) @model
+        method: (identifier) @method
+        (#match? @method "^(create|create!|update_all|destroy_all|delete_all|insert|insert_all|insert_all!|upsert|upsert_all|import|import!)$"))
+    captures:
+      target: model
+
+  # ActiveRecord class-level writes — namespaced model
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        receiver: (scope_resolution) @model
+        method: (identifier) @method
+        (#match? @method "^(create|create!|update_all|destroy_all|delete_all|insert|insert_all!|upsert|upsert_all)$"))
+    captures:
+      target: model
+
+  # ActiveRecord instance writes — model_instance.save, update, destroy (target unknown without type info)
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#match? @method "^(save|save!|update|update!|update_attributes|update_attributes!|destroy|destroy!|delete|touch)$"))
+    captures:
+      target: ""
+
+  # Raw SQL via connection.execute("SELECT ...") or execute("INSERT ...")
+  - protocol: postgresql
+    direction: both
+    pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @sql)
+        (#match? @method "^(execute|exec_query|exec_insert|exec_update|exec_delete|select_all|select_rows|select_one|select_value)$"))
+    captures:
+      target: sql
+
+  # Net::HTTP class methods: Net::HTTP.get("url")
+  - protocol: http
+    direction: read
+    pattern: |
+      (call
+        receiver: (scope_resolution) @client
+        method: (identifier) @method
+        (#match? @method "^(get|head|get_response)$"))
+    captures:
+      target: ""
+
+  # Faraday / HTTParty: conn.get('/path'), conn.post('/path', ...)
+  - protocol: http
+    direction: read
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @url)
+        (#match? @method "^(get|head)$"))
+    captures:
+      target: url
+
+  - protocol: http
+    direction: write
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @url)
+        (#match? @method "^(post|put|patch|delete)$"))
+    captures:
+      target: url
+
+  # Redis gem reads: redis.get("key"), $redis.get("key")
+  - protocol: redis
+    direction: read
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @key)
+        (#match? @method "^(get|hget|hgetall|lrange|smembers|zrange|exists|ttl|llen|scard|lpop|rpop|srandmember|zscore|zrank|mget)$"))
+    captures:
+      target: key
+
+  # Redis gem writes: redis.set("key", value)
+  - protocol: redis
+    direction: write
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @key)
+        (#match? @method "^(set|setex|setnx|hset|del|expire|incr|decr|rpush|lpush|sadd|zadd|publish|xadd)$"))
+    captures:
+      target: key
+
+  # Bunny/Sneakers RabbitMQ: channel.publish(payload, routing_key: "queue.name")
+  - protocol: rabbitmq
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#eq? @method "publish"))
+    captures:
+      target: ""
+
+  # ruby-kafka: kafka.deliver_message(payload, topic: "topic-name")
+  - protocol: kafka
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#match? @method "^(produce|deliver_message|async_produce)$"))
+    captures:
+      target: ""

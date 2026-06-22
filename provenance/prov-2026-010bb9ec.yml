@@ -1,0 +1,52 @@
+id: prov-2026-010bb9ec
+title: 'Phase 0: tree-sitter infrastructure and framework description loader'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-0071506f
+intent: |
+  Integrate go-tree-sitter into the linespec codebase and build the foundational
+  infrastructure that all discovery phases depend on:
+    - Tree-sitter bindings and a query execution engine that compiles S-expression
+      patterns from a framework description YAML and runs them against source files
+    - A framework description loader: parse YAML, compile the tree-sitter queries,
+      and return structured results with captures (method, path, handler reference, etc.)
+    - Auto-detection logic: scan a project for go.mod, Gemfile, package.json, etc.
+      and match against framework detection rules declared in each description file
+    - Support for user-provided framework descriptions in .linespec/frameworks/ in
+      addition to built-in descriptions shipped with the binary
+
+  This phase is the foundation — no route discovery, boundary tracing, or stub
+  generation is possible until the query engine and loader exist.
+constraints:
+  - MUST use go-tree-sitter for all source parsing; no language-native AST tooling
+  - MUST support compiling tree-sitter queries declared in YAML framework descriptions
+  - MUST auto-detect framework from dependency manifests (go.mod, Gemfile, package.json)
+  - MUST load user-provided descriptions from .linespec/frameworks/ directory
+  - MUST return structured query results (method, path, handler ref, source location)
+  - Query compilation MUST fail with a clear error on malformed S-expression patterns
+affected_scope:
+  - pkg/discover/**
+  - go.mod
+  - go.sum
+  - Makefile
+  - Dockerfile.linespec
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: d18b9150fcdae5124d360a5687bbce9208d5e44a
+associated_specs:
+  - path: pkg/discover/treesitter/treesitter_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/treesitter/ && echo {{path}}"
+  - path: pkg/discover/framework/framework_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/framework/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - tree-sitter
+  - infrastructure
