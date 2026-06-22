@@ -64,7 +64,8 @@ type Linter struct {
 	Loader            *Loader
 	Enforcement       string // none | warn | strict
 	CommitTagRequired bool
-	Hasher            *Hasher // nil when hash manifest is not configured
+	ExcludePaths      []string // patterns for files exempt from provenance rules
+	Hasher            *Hasher  // nil when hash manifest is not configured
 }
 
 // NewLinter creates a new linter
@@ -409,6 +410,7 @@ func (l *Linter) validateScopePatterns(record *Record, result *LintResult) {
 // validateScopePaths checks that scope patterns match actual files.
 // Open records produce errors for missing paths; terminal-state records produce warnings.
 // Draft records are skipped entirely.
+// Patterns that resolve only to excluded files are silently skipped.
 func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 	if record.Status == StatusDraft {
 		return
@@ -424,6 +426,11 @@ func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 	for _, pattern := range allPatterns {
 		// Skip empty patterns
 		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+
+		// If the pattern itself is an excluded path, skip it.
+		if IsPathExcluded(pattern, l.ExcludePaths) {
 			continue
 		}
 

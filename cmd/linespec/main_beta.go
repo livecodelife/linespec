@@ -871,6 +871,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CommitOnStatusChange = fullConfig.Provenance.CommitOnStatusChange
 			cfg.SharedRepos = fullConfig.Provenance.SharedRepos
 			cfg.CacheTTLMinutes = fullConfig.Provenance.CacheTTLMinutes
+			cfg.ExcludePaths = fullConfig.Provenance.ExcludePaths
 
 			if fullConfig.Provenance.Embedding != nil {
 				cfg.Embedding = fullConfig.Provenance.Embedding

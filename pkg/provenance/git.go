@@ -337,8 +337,9 @@ func (g *Git) ReadCommitMessageFile(path string) (string, error) {
 
 // CommitChecker checks commits for provenance violations
 type CommitChecker struct {
-	Git    *Git
-	Loader *Loader
+	Git          *Git
+	Loader       *Loader
+	ExcludePaths []string // patterns for files exempt from all provenance enforcement
 }
 
 // NewCommitChecker creates a new commit checker
@@ -370,9 +371,17 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 		return nil, nil
 	}
 
-	files, err := c.Git.GetModifiedFiles(commit)
+	allFiles, err := c.Git.GetModifiedFiles(commit)
 	if err != nil {
 		return nil, err
+	}
+
+	// Filter excluded files so they cannot trigger scope or tag violations.
+	var files []string
+	for _, f := range allFiles {
+		if !IsPathExcluded(f, c.ExcludePaths) {
+			files = append(files, f)
+		}
 	}
 
 	var violations []Violation
@@ -524,10 +533,26 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 	}
 
 	recordIDs := c.Git.ExtractProvenanceIDs(message)
+
+	// Get staged files before the commit-tag check so we can filter out excluded paths.
+	files, err := c.Git.GetStagedFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter excluded files out of the staged list.
+	var nonExcluded []string
+	for _, f := range files {
+		if !IsPathExcluded(f, c.ExcludePaths) {
+			nonExcluded = append(nonExcluded, f)
+		}
+	}
+	files = nonExcluded
+
 	if len(recordIDs) == 0 {
-		// No provenance IDs in commit message
-		if commitTagRequired {
-			// Commit tag is required but none found - this is a violation
+		// No provenance IDs in commit message.
+		// If all staged files are excluded the commit-tag requirement is waived.
+		if commitTagRequired && len(files) > 0 {
 			return []Violation{
 				{
 					RecordID: "",
@@ -537,18 +562,11 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 				},
 			}, nil
 		}
-		// Commit tag not required, nothing to check
 		return nil, nil
 	}
 
-	// Get staged files
-	files, err := c.Git.GetStagedFiles()
-	if err != nil {
-		return nil, err
-	}
-
 	if len(files) == 0 {
-		// No staged files, nothing to check
+		// No non-excluded staged files, nothing to check
 		return nil, nil
 	}
 
