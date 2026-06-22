@@ -1,0 +1,47 @@
+id: prov-2026-720fa389
+title: Add exclude_paths to ProvenanceConfig for per-file rule exemptions
+status: draft
+created_at: "2026-06-22"
+author: calebcowen@gmail.com
+implements: prov-2026-bb380f4b
+intent: >
+  Add an `exclude_paths` list to the `provenance:` section of `.linespec.yml`
+  so engineers can exempt specific files, directories, or patterns from
+  provenance enforcement without disabling the feature globally. Matching
+  entries must be silently skipped by `lint`, `check`, `check --staged`, and
+  the pre-commit / commit-msg hooks. The `context` command must surface the
+  exemption — when called with an excluded file, it must report that the file
+  is exempt from provenance rules alongside any historical record context it
+  can show. Pattern matching must support full paths, directory prefixes,
+  glob notation, and Go regexp strings, with all paths normalized to
+  repo-relative form before comparison.
+constraints:
+  - "ProvenanceConfig in pkg/config/types.go must gain an ExcludePaths []string field (yaml: exclude_paths). The field is optional; omitting it or leaving it empty must preserve all existing behaviour with zero regressions."
+  - "Accepted pattern forms: exact repo-relative path (e.g. 'scripts/seed.go'), directory prefix with trailing slash ('docs/'), double-star glob ('docs/**/*.md'), and Go regexp enclosed in slashes ('/pattern/')."
+  - "All path comparisons must normalize input paths to repo-relative, forward-slash form before matching to ensure OS portability."
+  - "The lint command must skip scope-enforcement checks for any file matching an ExcludePaths entry and must not emit warnings or errors about missing governance for that file."
+  - "check and check --staged (pre-commit hook path in git.go) must not require a commit tag for commits that only touch excluded files."
+  - "The commit-msg hook in git.go must not require a record-ID tag on commits whose changed-file set consists entirely of excluded paths."
+  - "The context command must explicitly state when a queried file is excluded from provenance rules, in addition to showing any historical record associations."
+  - "No changes to the .linespec.yml parser are needed beyond unmarshalling the new field; existing yaml tags already flow through pkg/config/parser.go."
+affected_scope:
+  - "pkg/config/types.go"
+  - "pkg/provenance/linter.go"
+  - "pkg/provenance/commands.go"
+  - "pkg/provenance/git.go"
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    description: "Unit tests covering ExcludePaths pattern matching and command behaviour for excluded files"
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - configuration
+  - provenance
+  - enforcement
