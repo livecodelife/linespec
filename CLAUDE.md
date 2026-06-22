@@ -151,6 +151,42 @@ The PostgreSQL proxy connects upstream **first** (before any client communicatio
 
 **Configuration** (`pkg/config/`) — loaded from `.linespec.yml`. Key sections: `service` (framework, port, start_command, health_endpoint), `database` (type, host, credentials), `infrastructure`, `container_naming` (Go template strings), `provenance`.
 
+## Updating the Docs Site
+
+The published site at [linespec.dev](https://linespec.dev) is built **from source**
+by `scripts/build-docs.sh` and deployed by `.github/workflows/pages.yml` on every
+push to `main`. Markdown is the single source of truth — the rendered HTML and
+`llms*.txt` are gitignored build artifacts.
+
+**Never hand-edit `docs/*.html` or `docs/llms*.txt`.** They are regenerated on
+every push and your changes will be overwritten. Edit the source instead:
+
+- **Content pages** (`provenance.html`, `linespec.html`) — edit the Markdown:
+  `PROVENANCE_RECORDS.md` and `LINESPEC.md`. Pandoc renders them with
+  `--from gfm`, so in-page anchors match the Markdown's own TOC links. If you add
+  a cross-page link, target the **rendered gfm anchor** (e.g.
+  `provenance.html#core-concepts`, not `#concepts`).
+- **Chrome pages** (`index.html` landing, `docs.html` hub) and the curated
+  `llms.txt` — edit their committed templates under `docs/templates/`. Use the
+  `__VERSION__` token wherever the version appears; the build substitutes it from
+  `VERSION`.
+- **Page shell / design** — `docs/templates/content.html` (pandoc shell),
+  `docs/templates/site-filter.lua` (code-block markup + sidebar nav), and
+  `docs/assets/` (CSS/JS).
+- **Version bump** — `scripts/bump-version.sh <new-version>` edits only `VERSION`
+  and the source `.md` files; the version flows into the site at build time.
+
+**Preview locally before pushing** (output is byte-identical to CI):
+
+```bash
+brew install pandoc        # one-time; CI installs it via apt
+./scripts/build-docs.sh    # renders docs/*.html and docs/llms*.txt
+open docs/index.html
+```
+
+As with any change in this repo, wrap docs edits in a provenance record and tag
+the commit with its ID.
+
 ## Key Documentation
 
 - `PROVENANCE_RECORDS.md` — Full schema reference and CLI usage

@@ -1,6 +1,6 @@
 # LineSpec v3.13.0
 
-[![Version](https://img.shields.io/badge/version-3.11.7-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-3.13.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -42,7 +42,7 @@ go install github.com/livecodelife/linespec/cmd/linespec@v3.13.0
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_3.11.7_*` - Full release (Provenance Records + LineSpec Testing)
+- `linespec_3.13.0_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
@@ -335,6 +335,33 @@ make test-integration
 
 # Run the example test suites
 ./linespec test ./examples/
+```
+
+---
+
+## Updating the Docs Site
+
+The site at [linespec.dev](https://linespec.dev) is built **from source** on every
+push to `main` (`scripts/build-docs.sh` + `.github/workflows/pages.yml`). Markdown
+is the single source of truth; the rendered `docs/*.html` and `docs/llms*.txt` are
+gitignored build artifacts — **don't edit them by hand**, they're regenerated on
+every push.
+
+| To change… | Edit… |
+|------------|-------|
+| Provenance reference content | `PROVENANCE_RECORDS.md` |
+| Testing / DSL reference content | `LINESPEC.md` |
+| Overview content | `README.md` |
+| Landing page / docs hub / curated `llms.txt` | the templates in `docs/templates/` (use the `__VERSION__` token for the version) |
+| Page shell or design | `docs/templates/content.html`, `docs/templates/site-filter.lua`, `docs/assets/` |
+| The version everywhere | `./scripts/bump-version.sh <new-version>` (touches `VERSION` + the `.md` sources only) |
+
+Preview locally before pushing — the output is identical to CI:
+
+```bash
+brew install pandoc        # one-time; CI installs it via apt
+./scripts/build-docs.sh    # renders docs/*.html and docs/llms*.txt
+open docs/index.html
 ```
 
 ---
