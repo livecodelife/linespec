@@ -1,18 +1,10 @@
 id: prov-2026-1b5fa2c2
 title: Add exclude_paths config to exempt files from provenance rules
-status: draft
-created_at: "2026-06-22"
+status: open
+created_at: '2026-06-22'
 author: calebcowen@gmail.com
 implements: prov-2026-bb380f4b
-intent: >
-  Engineers often maintain generated files, documentation, migration scripts, or
-  tooling configs that should not require provenance governance. This adds an
-  exclude_paths list to the provenance section of .linespec.yml that accepts
-  glob patterns, full file paths, directory prefixes, and regex patterns. Any
-  file matching at least one entry is fully exempt: the linter skips it, the
-  commit checker skips both scope-enforcement and the commit-tag requirement,
-  and the context command surfaces the exemption status explicitly rather than
-  silently omitting it.
+intent: 'Engineers often maintain generated files, documentation, migration scripts, or tooling configs that should not require provenance governance. This adds an exclude_paths list to the provenance section of .linespec.yml that accepts glob patterns, full file paths, directory prefixes, and regex patterns. Any file matching at least one entry is fully exempt: the linter skips it, the commit checker skips both scope-enforcement and the commit-tag requirement, and the context command surfaces the exemption status explicitly rather than silently omitting it.'
 constraints:
   - The .linespec.yml provenance section must accept an exclude_paths field as a list of strings; each entry may be a full file path, a glob, a directory path (matched as prefix), or a regex (recognized by leading/trailing slash, e.g. /.*_gen\.go$/).
   - Matching must be evaluated before any other provenance rule — an excluded file cannot trigger a scope violation, a missing-commit-tag violation, or any linter warning.
@@ -26,19 +18,13 @@ affected_scope:
   - pkg/provenance/commands.go
   - pkg/provenance/linter.go
   - pkg/provenance/git.go
-forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
-related: []
-sealed_at_sha: ""
+superseded_by: ''
+sealed_at_sha: ''
 associated_specs:
   - path: pkg/provenance/exclude_paths_test.go
-    type: go_test
     run_command: make test
   - path: pkg/config/exclude_paths_test.go
-    type: go_test
     run_command: make test
 associated_traces: []
 monitors: []
-tags: []
