@@ -15,6 +15,7 @@ affected_scope:
   - cmd/linespec/main_stable.go
 forbidden_scope: []
 type: imprint
+implements: prov-2026-a18e2104
 supersedes: ""
 superseded_by: ""
 related: []
