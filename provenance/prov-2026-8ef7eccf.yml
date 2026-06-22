@@ -1,0 +1,77 @@
+id: prov-2026-8ef7eccf
+title: Add exclude_paths to ProvenanceConfig with hook and command awareness
+status: draft
+created_at: "2026-06-22"
+author: calebcowen@gmail.com
+implements: prov-2026-bb380f4b
+intent: >
+  Add an `exclude_paths` field to the `provenance` section of `.linespec.yml`
+  that accepts a list of file path patterns (full paths, globs, regex, or
+  directory prefixes). Files matching any pattern are fully exempt from
+  provenance enforcement: the git pre-commit hook skips the commit-tag
+  requirement for them, and commands such as `context`, `govern`, `lint`, and
+  `next` surface the exemption clearly rather than treating the file as
+  ungoverned.
+constraints:
+  - >
+    `ProvenanceConfig` in `pkg/config/types.go` must gain an `ExcludePaths
+    []string` field (yaml: `exclude_paths`). Pattern semantics must support
+    full file paths, glob patterns (filepath.Match), directory prefixes (any
+    path under the listed directory), and RE2 regular expressions; matching is
+    tried in that order and the first match wins.
+  - >
+    The pre-commit hook in `pkg/provenance/git.go` must evaluate `exclude_paths`
+    before the commit-tag check, the scope-enforcement check, and any other
+    per-file validation. An exempt file must produce no errors and no warnings
+    from the hook.
+  - >
+    `linespec provenance context -f <file>` must indicate when the file is
+    exempt (e.g. "⊘ exempt via exclude_paths") and still render the record
+    history as informational; it must not behave as though the file is
+    ungoverned. `govern`, `lint`, and `next` must similarly communicate
+    exemption status rather than silently omitting the file.
+  - >
+    The linter (`pkg/provenance/linter.go`) must not flag exempt files in
+    scope-coverage checks. If a record's `affected_scope` contains only
+    exempt files and no other governed files, the linter should warn rather
+    than hard-error.
+  - >
+    Matching must normalise paths relative to the repo root before comparison;
+    absolute paths provided in `exclude_paths` must be resolved relative to
+    the root, not the process working directory.
+  - >
+    The feature must be backward-compatible: a config with no `exclude_paths`
+    key must behave identically to the current implementation.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/provenance/git.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/types.go
+forbidden_scope: []
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    description: >
+      Unit tests for the exclude_paths matching logic in the git hook: verify
+      that exempt files bypass commit-tag enforcement and scope checks.
+    run_command: make test
+  - path: pkg/provenance/linter_test.go
+    type: go_test
+    description: >
+      Unit tests for linter behaviour when affected_scope contains exempt
+      files: coverage warnings rather than hard errors.
+    run_command: make test
+  - path: pkg/config/parser_test.go
+    type: go_test
+    description: >
+      Unit tests confirming `exclude_paths` round-trips through YAML
+      parsing and that an absent key produces the zero value.
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
