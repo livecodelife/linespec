@@ -938,6 +938,15 @@ func (f *Formatter) FormatContext(result *ContextResult) {
 		}
 	}
 
+	// Output exempt files
+	if len(result.ExemptFiles) > 0 {
+		fmt.Fprintf(f.Output, "%s\n\n", f.colored("EXEMPT FROM PROVENANCE RULES", colorYellow))
+		for _, file := range result.ExemptFiles {
+			fmt.Fprintf(f.Output, "  %s %s\n", f.colored("○", colorYellow), file)
+		}
+		fmt.Fprintln(f.Output)
+	}
+
 	// Output conflicts
 	if len(result.Conflicts) > 0 {
 		fmt.Fprintf(f.Output, "%s\n\n", f.colored("SCOPE CONFLICTS", colorRed))
@@ -950,7 +959,7 @@ func (f *Formatter) FormatContext(result *ContextResult) {
 	}
 
 	// Summary
-	if len(result.DirectMatches) == 0 {
+	if len(result.DirectMatches) == 0 && len(result.ExemptFiles) == 0 {
 		fmt.Fprintf(f.Output, "%s No provenance records govern these files.\n\n", f.colored("→", colorCyan))
 	} else {
 		fmt.Fprintf(f.Output, "%s %d record(s) govern these files\n\n", f.colored("✓", colorGreen), len(result.DirectMatches))
@@ -1068,6 +1077,15 @@ func (f *Formatter) FormatContextCompact(result *ContextResult) {
 		}
 	}
 
+	// Exempt files
+	if len(result.ExemptFiles) > 0 {
+		fmt.Fprintln(f.Output, "EXEMPT:")
+		for _, file := range result.ExemptFiles {
+			fmt.Fprintf(f.Output, "FILE:%s STATUS:exempt\n", file)
+		}
+		fmt.Fprintln(f.Output)
+	}
+
 	// Conflicts
 	if len(result.Conflicts) > 0 {
 		fmt.Fprintln(f.Output, "CONFLICTS:")
@@ -1146,15 +1164,17 @@ func (f *Formatter) FormatContextJSON(result *ContextResult) error {
 
 	type JSONContextResult struct {
 		Files        []string            `json:"files"`
-		Records      []JSONContextRecord `json:"records"`
-		Conflicts    []JSONScopeConflict `json:"conflicts,omitempty"`
-		TotalRecords int                 `json:"total_records"`
+		Records      []JSONContextRecord  `json:"records"`
+		Conflicts    []JSONScopeConflict  `json:"conflicts,omitempty"`
+		ExemptFiles  []string             `json:"exempt_files,omitempty"`
+		TotalRecords int                  `json:"total_records"`
 	}
 
 	jsonResult := JSONContextResult{
 		Files:        result.Files,
 		Records:      make([]JSONContextRecord, 0, len(result.DirectMatches)),
 		Conflicts:    make([]JSONScopeConflict, 0, len(result.Conflicts)),
+		ExemptFiles:  result.ExemptFiles,
 		TotalRecords: len(result.DirectMatches),
 	}
 

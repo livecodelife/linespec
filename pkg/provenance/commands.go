@@ -31,6 +31,7 @@ type Commands struct {
 type ProvenanceConfig struct {
 	Enforcement                  string
 	Dir                          string
+	ExcludePaths                 []string // glob/regex/path patterns for files exempt from provenance rules
 	SharedRepos                  []config.SharedRepoConfig
 	CacheTTLMinutes              int
 	CommitTagRequired            bool
@@ -104,12 +105,14 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 	// Create linter with hash-based integrity checker
 	linter := NewLinter(loader, config.Enforcement)
 	linter.Hasher = NewHasher(repoRoot)
+	linter.ExcludePaths = config.ExcludePaths
 
 	// Create git helper
 	git := NewGit(repoRoot)
 
 	// Create commit checker
 	checker := NewCommitChecker(git, loader)
+	checker.ExcludePaths = config.ExcludePaths
 
 	// Create formatter
 	formatter := NewFormatter(output, color)
@@ -2283,6 +2286,17 @@ func (c *Commands) buildContextResult(files []string) *ContextResult {
 		Files:         files,
 		DirectMatches: make([]*ContextRecord, 0),
 		Conflicts:     make([]ScopeConflict, 0),
+		ExemptFiles:   make([]string, 0),
+	}
+
+	// Collect files that are exempt from provenance rules via exclude_paths.
+	var governedFiles []string
+	for _, file := range files {
+		if IsPathExcluded(file, c.Config.ExcludePaths) {
+			result.ExemptFiles = append(result.ExemptFiles, file)
+		} else {
+			governedFiles = append(governedFiles, file)
+		}
 	}
 
 	// Track which records directly match files
@@ -2291,8 +2305,8 @@ func (c *Commands) buildContextResult(files []string) *ContextResult {
 	// Track open record conflicts per file
 	fileToOpenRecords := make(map[string][]string)
 
-	// Find matching records for each file
-	for _, file := range files {
+	// Find matching records for each non-exempt file
+	for _, file := range governedFiles {
 		matchingOpenRecords := make([]string, 0)
 
 		for _, record := range c.Loader.Records {
