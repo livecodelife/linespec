@@ -1,0 +1,50 @@
+id: prov-2026-a8fe26ea
+title: 'Cobra scaffold: root command + provenance group migration'
+status: draft
+created_at: "2026-06-22"
+author: test@example.com
+intent: |
+  First migration slice for the Cobra brief (the validation milestone): add the
+  Cobra dependency, build the root command tree, and migrate the entire provenance
+  command group to declarative Cobra subcommands whose RunE wrappers call the
+  existing handlers unchanged. The deferred command groups (test, proxy, build,
+  init, clone, import) are bridged with DisableFlagParsing so they keep dispatching
+  to their existing runX() functions byte-for-byte until their own imprints.
+constraints:
+  - All ~25 provenance subcommand names and their flags stay byte-identical
+    (create, open, lint, status, graph, check, lock-scope, lock-layer, complete,
+    deprecate, run-specs, context, next, govern, search, audit, index, generate,
+    sync, compile, publish, install-hooks, install-skills, install-plugin,
+    discover); each Cobra RunE produces the same option struct the parseXOptions
+    helper did and calls the same cmds.Xxx handler.
+  - Preserve the -p alias via an os.Args rewrite shim in main() (Cobra cannot
+    register a flag-like command alias) and expose -d/--debug as a root persistent
+    flag.
+  - The lint/check multi-config fan-out (findAllLinespecConfigs) and the next/govern
+    cache fast-paths are preserved exactly.
+  - Cobra owns --help/-h and --version (root.Version = the goreleaser-injected
+    main.version); the now-dead runProvenance, parseXOptions, and printXUsage
+    helpers are removed so the deadcode gate stays green.
+  - Only the stable (!beta) build is migrated in this imprint; main_beta.go is
+    untouched (collapse deferred).
+affected_scope:
+  - cmd/linespec/provenance_cobra.go
+  - cmd/linespec/main_stable.go
+  - go.mod
+  - go.sum
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f1241113
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: cmd/linespec/main_stable.go
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+    - cobra
+    - cli
