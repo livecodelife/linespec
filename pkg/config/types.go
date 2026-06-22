@@ -342,6 +342,7 @@ type SharedRepoConfig struct {
 type ProvenanceConfig struct {
 	Enforcement                  string             `yaml:"enforcement"`                      // none | warn | strict
 	Dir                          string             `yaml:"dir"`                              // relative to repo root
+	ExcludePaths                 []string           `yaml:"exclude_paths"`                    // glob/regex/path patterns for files exempt from provenance rules
 	SharedRepos                  []SharedRepoConfig `yaml:"shared_repos"`                     // named remote repositories for cross-repo resolution
 	CacheTTLMinutes              int                `yaml:"cache_ttl_minutes"`                // cache freshness TTL in minutes; defaults to 60
 	CommitTagRequired            bool               `yaml:"commit_tag_required"`              // whether commits must reference a prov ID

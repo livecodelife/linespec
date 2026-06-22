@@ -15,12 +15,14 @@ constraints:
   - All new behavior must be covered by unit tests in the provenance and config packages.
 affected_scope:
   - pkg/config/types.go
+  - pkg/config/exclude_paths_test.go
   - pkg/provenance/commands.go
   - pkg/provenance/linter.go
   - pkg/provenance/git.go
   - pkg/provenance/types.go
   - pkg/provenance/formatter.go
   - pkg/provenance/exclude.go
+  - pkg/provenance/exclude_paths_test.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
 type: blueprint

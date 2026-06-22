@@ -289,6 +289,7 @@ type ContextResult struct {
 	Files         []string         // Input files
 	DirectMatches []*ContextRecord // Records that directly match the files
 	Conflicts     []ScopeConflict  // Overlapping open records
+	ExemptFiles   []string         // Files that match exclude_paths and are exempt from provenance rules
 }
 
 // ScopeConflict represents two or more open records with overlapping scope
