@@ -1,0 +1,51 @@
+id: prov-2026-13576bee
+title: Document docs-site update process; fix version badge drift
+status: draft
+created_at: "2026-06-22"
+author: calebcowen@gmail.com
+intent: >
+  Now that the linespec.dev site is built from Markdown source in CI
+  (prov-2026-a7b20513), document the new "edit source, push, CI rebuilds"
+  process so contributors and AI agents do not hand-edit the generated HTML
+  artifacts. Add an "Updating the Docs Site" section to CLAUDE.md (agent-facing:
+  the never-edit-generated-HTML rule, what to edit per change type, the gfm
+  anchor gotcha, local preview) and to README.md (a contributor-facing
+  to-change-X-edit-Y table plus preview commands).
+
+  Also fix pre-existing version drift in README.md that the from-source build
+  does not cover, because these files are not site build inputs in the
+  version-injected way the HTML is: the shields.io version badge
+  (version-3.11.7) and the release-artifact filename example (linespec_3.11.7_*)
+  were stuck two releases behind VERSION (3.13.0). They drifted because
+  scripts/bump-version.sh only rewrote v<ver> patterns and these have no leading
+  "v". Correct both to 3.13.0 and extend bump-version.sh to also rewrite
+  version-<ver> and linespec_<ver> so they cannot drift again.
+
+constraints:
+  - CLAUDE.md and README.md must each gain an "Updating the Docs Site" section
+  - The README version badge and release-artifact example must match VERSION
+  - bump-version.sh must rewrite the badge and artifact-name version patterns,
+    not just v<ver>, so no version string in the source docs is left behind
+  - No generated artifact (docs/*.html, docs/llms*.txt) is hand-edited
+
+affected_scope:
+  - CLAUDE.md
+  - README.md
+  - scripts/bump-version.sh
+
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a7b20513
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: scripts/bump-version.sh
+    run_command: bash scripts/build-docs.sh
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - maintenance
