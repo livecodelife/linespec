@@ -1,0 +1,38 @@
+id: prov-2026-cd3af872
+title: Fix enrich path resolution for --dir pointing to external repos
+status: implemented
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Fixes two bugs that caused --enrich to produce no results when --dir points
+  to a repo outside the current working directory.
+
+  Bug 1: repoRoot was always os.Getwd() (the linespec-discover repo), so git log
+  ran against the wrong tree. Fix: resolve git root of scanDir via
+  git -C <scanDir> rev-parse --show-toplevel before calling runDiscoverEnrich.
+
+  Bug 2: affected_scope paths in generated records are relative to the process
+  CWD (e.g., ../smart-car-api/config/routes.rb), but git log expects paths
+  relative to the repo root (config/routes.rb). Fix: in collectCommitMessages,
+  when a path is absolute or starts with ../, resolve it to absolute via
+  filepath.Abs then rebase it onto repoDir via filepath.Rel. Plain repo-relative
+  paths pass through unchanged.
+constraints: []
+affected_scope:
+  - pkg/discover/enrich/enrich.go
+  - pkg/discover/enrich/enrich_test.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a18e2104
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: b56bc6c994fac5fd95a72fb16b9f3cb53cb5e637
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+associated_traces: []
+monitors: []
+tags: []

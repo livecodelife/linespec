@@ -1,0 +1,44 @@
+id: prov-2026-ac156eb7
+title: 'Introduce CGO via go-tree-sitter: trade-off vs. pure-Go build'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-010bb9ec
+intent: |
+  The linespec binary is currently pure-Go (CGO_ENABLED=0). Tree-sitter requires CGO
+  because the parser core and language grammars are C libraries with Go FFI bindings.
+
+  Decision: accept CGO. The alternative (pure-Go parsing) would require writing language-
+  specific parsers from scratch, which is the exact problem tree-sitter was chosen to avoid.
+  The binary no longer cross-compiles without a C toolchain, but the build environment
+  (macOS with Xcode CLI tools, Linux with gcc) already has one, and the Dockerfile alpine
+  builder stage needs gcc + musl-dev (apk add) to compile CGO code.
+
+  Using github.com/smacker/go-tree-sitter because it bundles language grammar C sources
+  directly as Go packages rather than requiring separate shared libraries at runtime.
+  The grammars compile into the binary — no .so/.dylib dependency at runtime.
+constraints:
+  - Dockerfile alpine builder stage must install gcc and musl-dev before go build
+  - go-tree-sitter language sub-packages (golang, ruby) must be imported by the binary
+affected_scope:
+  - go.mod
+  - go.sum
+  - Dockerfile.linespec
+  - Makefile
+  - pkg/discover/**
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 0c208e1a7d4f77cc6088873ea050691c8a6e0261
+associated_specs:
+  - path: pkg/discover/treesitter/treesitter_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/treesitter/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - cgo
+  - tree-sitter
+  - build

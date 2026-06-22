@@ -1,0 +1,31 @@
+id: prov-2026-3d5fb504
+title: Add --llm-url flag for local LLM server support
+status: implemented
+created_at: "2026-06-12"
+author: test@example.com
+intent: |
+  Adds --llm-url <base-url> flag to linespec provenance discover so users can
+  point --enrich at a local LLM server (LMStudio, Ollama, etc.). The provider
+  path is appended automatically: /v1/chat/completions for openai, /v1/messages
+  for anthropic. Adds LLMBaseURL field to enrich.Input; Enrich() passes it
+  through to EnrichWithBaseURL(). callOpenAI and callAnthropic now treat baseURL
+  as a base and construct the full endpoint internally.
+constraints: []
+affected_scope:
+  - pkg/discover/enrich/enrich.go
+  - pkg/discover/enrich/enrich_test.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a18e2104
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: e417fd03f2cb1c272312bfecf296e766fe2c2d0f
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+associated_traces: []
+monitors: []
+tags: []

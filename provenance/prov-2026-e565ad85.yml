@@ -1,0 +1,34 @@
+id: prov-2026-e565ad85
+title: 'Phase 2: boundaries package — Tracer, Hit type, call graph walker'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+intent: |
+  Implements the boundaries package: Tracer type with syntactic call graph walking
+  up to configurable depth (default 3), Hit type, function definition lookup via
+  tree-sitter, boundary query execution against function subtrees, ActiveRecord
+  table name inference, SQL table name extraction, and dynamic flagging for
+  unresolvable call patterns.
+constraints: []
+affected_scope:
+  - pkg/discover/boundaries/**
+  - pkg/discover/framework/builtin/chi.yml
+  - pkg/discover/framework/builtin/rails.yml
+  - pkg/discover/framework/builtin/sinatra.yml
+forbidden_scope: []
+type: imprint
+implements: prov-2026-95b526f5
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 61fc8e558789bd6529f7e842c93272a060b75714
+associated_specs:
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/boundaries/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - boundaries
+  - protocol-tracing

@@ -1,0 +1,60 @@
+id: prov-2026-2042c6a2
+title: 'Phase 4: blueprint record generation and CLI command wiring'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-0071506f
+intent: |
+  Group related routes into draft blueprint provenance records using the framework
+  description's grouping hints, emit those records to the provenance/ directory, and
+  wire the full `linespec provenance discover` subcommand into the CLI.
+
+  Grouping rules: by package for Go (Chi), by controller class for Rails, by file for
+  Sinatra. Each group becomes one draft blueprint record with:
+    - title: derived from the group identity (e.g. "UsersController endpoints")
+    - status: draft
+    - type: blueprint
+    - affected_scope: handler files, model files, migration files in the group
+    - associated_specs: paths to the generated .linespec stubs from Phase 3
+    - intent: empty (populated by Phase 5 --enrich if used)
+    - constraints: empty (require human judgment)
+
+  Records are named prov-YYYY-XXXXXXXX with crypto-random hex IDs using existing
+  provenance record creation infrastructure (Commands.Create, Record types in
+  pkg/provenance/).
+
+  CLI flags wired in this phase:
+    --dir, --lang, --framework, --enrich, --dry-run, --format
+
+  The summary report (route count, boundary count, records created, unclassified files)
+  is also implemented here. Discover is additive: existing records in provenance/ are
+  never modified.
+constraints:
+  - MUST group routes using framework description grouping hints (package/controller/file)
+  - MUST emit draft blueprint records conforming to the provenance record schema
+  - MUST use crypto-random hex IDs in prov-YYYY-XXXXXXXX format
+  - MUST reuse existing pkg/provenance/ record creation infrastructure
+  - MUST NOT modify or overwrite existing provenance records
+  - "MUST wire all CLI flags: --dir, --lang, --framework, --enrich, --dry-run, --format"
+  - "MUST emit a summary report: route count, boundary count, records created, unclassified files"
+  - MUST support --dir to scope discovery to a subdirectory
+affected_scope:
+  - pkg/discover/records/**
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 4b43b8c0bedc6daa5179bb9ee27c5ffb12173d09
+associated_specs:
+  - path: pkg/discover/records/records_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/records/...'"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - record-generation
+  - cli

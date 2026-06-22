@@ -28,6 +28,12 @@ import (
 	"github.com/livecodelife/linespec/pkg/interpolate"
 	"github.com/livecodelife/linespec/pkg/logger"
 	"github.com/livecodelife/linespec/pkg/provenance"
+	"github.com/livecodelife/linespec/pkg/discover/boundaries"
+	"github.com/livecodelife/linespec/pkg/discover/enrich"
+	"github.com/livecodelife/linespec/pkg/discover/framework"
+	discoverrecords "github.com/livecodelife/linespec/pkg/discover/records"
+	discoverroutes "github.com/livecodelife/linespec/pkg/discover/routes"
+	"github.com/livecodelife/linespec/pkg/discover/stubs"
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
 	"github.com/livecodelife/linespec/pkg/proxy/kafka"
@@ -1307,6 +1313,8 @@ func runProvenance() {
 		if err := cmds.Publish(opts); err != nil {
 			os.Exit(1)
 		}
+	case "discover":
+		runDiscover(args, cfg, repoRoot)
 	case "install-hooks":
 		if err := cmds.InstallHooks(); err != nil {
 			logger.Error("Failed to install hooks: %v", err)
@@ -1437,8 +1445,322 @@ Subcommands:
   publish [options]          Package records into a versioned linespec.manifest.json
   install-hooks              Install git hooks
   install-skills [options]   Install all LineSpec Claude Code skills
+  discover [options]         Scan codebase and generate draft provenance records + .linespec stubs
 
 Use "linespec provenance <subcommand> --help" for more information.`)
+}
+
+// discoverOptions holds parsed flags for the discover subcommand.
+type discoverOptions struct {
+	Dir        string
+	Lang       string
+	Framework  string
+	Enrich     bool
+	LLMBaseURL string
+	DryRun     bool
+	Format     string
+	ConfigFile string
+}
+
+func parseDiscoverOptions(args []string) discoverOptions {
+	opts := discoverOptions{Format: "table"}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--dir":
+			if i+1 < len(args) {
+				opts.Dir = args[i+1]
+				i++
+			}
+		case "--lang":
+			if i+1 < len(args) {
+				opts.Lang = args[i+1]
+				i++
+			}
+		case "--framework":
+			if i+1 < len(args) {
+				opts.Framework = args[i+1]
+				i++
+			}
+		case "--enrich":
+			opts.Enrich = true
+		case "--llm-url":
+			if i+1 < len(args) {
+				opts.LLMBaseURL = args[i+1]
+				i++
+			}
+		case "--dry-run":
+			opts.DryRun = true
+		case "--format":
+			if i+1 < len(args) {
+				opts.Format = args[i+1]
+				i++
+			}
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.ConfigFile = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			logger.Info(`Usage: linespec provenance discover [options]
+
+Options:
+  --dir path                   Scope scan to a specific directory (default: repo root)
+  --lang go|ruby               Language override (auto-detected if omitted)
+  --framework chi|rails|sinatra  Framework override (auto-detected if omitted)
+  --enrich                     Populate intent fields from git history (Phase 5)
+  --llm-url url                Base URL for local LLM server (e.g., http://localhost:1234); provider path appended automatically
+  --dry-run                    Print what would be generated without writing files
+  --format table|json          Output format for --dry-run (default: table)
+  -c, --config path            Path to custom .linespec.yml file
+  --help                       Show this help message`)
+			os.Exit(0)
+		}
+	}
+	return opts
+}
+
+// runDiscover orchestrates all discover phases (1–4) and prints a summary.
+func runDiscover(args []string, cfg *provenance.ProvenanceConfig, repoRoot string) {
+	opts := parseDiscoverOptions(args)
+
+	if opts.ConfigFile != "" {
+		cfg = loadProvenanceConfigFromFile(opts.ConfigFile)
+	}
+
+	scanDir := opts.Dir
+	if scanDir == "" {
+		scanDir = "."
+	}
+
+	// Load framework descriptions (built-ins + user overrides from .linespec/frameworks/).
+	userFrameworksDir := filepath.Join(scanDir, ".linespec", "frameworks")
+	descs, err := framework.Load(userFrameworksDir)
+	if err != nil {
+		logger.Error("Failed to load framework descriptions: %v", err)
+		os.Exit(1)
+	}
+
+	// Resolve the framework description to use.
+	var desc *framework.Description
+	if opts.Framework != "" {
+		d, ok := descs[opts.Framework]
+		if !ok {
+			names := make([]string, 0, len(descs))
+			for k := range descs {
+				names = append(names, k)
+			}
+			logger.Error("Unknown framework %q. Available: %s", opts.Framework, strings.Join(names, ", "))
+			os.Exit(1)
+		}
+		desc = d
+	} else {
+		result := framework.Detect(scanDir, descs)
+		if result == nil {
+			logger.Error("Could not detect framework in %q. Use --lang and --framework to specify.", scanDir)
+			os.Exit(1)
+		}
+		if opts.Lang != "" && result.Language != opts.Lang {
+			logger.Error("Detected framework language %q does not match --lang %q", result.Language, opts.Lang)
+			os.Exit(1)
+		}
+		desc = descs[result.Framework]
+	}
+
+	ctx := context.Background()
+
+	// Phase 1: route discovery.
+	assembler, err := discoverroutes.New(desc)
+	if err != nil {
+		logger.Error("Failed to create route assembler: %v", err)
+		os.Exit(1)
+	}
+	groups, err := assembler.Assemble(ctx, scanDir)
+	if err != nil {
+		logger.Error("Route discovery failed: %v", err)
+		os.Exit(1)
+	}
+
+	// Flatten all routes for Phase 2.
+	var allRoutes []discoverroutes.Route
+	for _, g := range groups {
+		allRoutes = append(allRoutes, g.Routes...)
+	}
+
+	// Phase 2: protocol boundary tracing.
+	tracer, err := boundaries.New(desc)
+	if err != nil {
+		logger.Error("Failed to create boundary tracer: %v", err)
+		os.Exit(1)
+	}
+	hitMap, err := tracer.Trace(ctx, scanDir, allRoutes)
+	if err != nil {
+		logger.Error("Boundary tracing failed: %v", err)
+		os.Exit(1)
+	}
+
+	// Phase 3: spec stub generation.
+	// When --dir is set, resolve output paths relative to the scanned directory.
+	specsDir := filepath.Join(scanDir, "linespecs")
+	provenanceDir := cfg.Dir
+	if opts.Dir != "" {
+		provenanceDir = filepath.Join(scanDir, filepath.Base(cfg.Dir))
+	}
+	stubInputs := buildDiscoverStubInputs(groups, hitMap)
+
+	var stubResults []stubs.Result
+	if opts.DryRun {
+		stubResults = stubs.Plan(specsDir, stubInputs)
+	} else {
+		stubResults, err = stubs.Write(specsDir, stubInputs)
+		if err != nil {
+			logger.Error("Stub generation failed: %v", err)
+			os.Exit(1)
+		}
+	}
+
+	// Phase 4: blueprint record generation.
+	existingLoader := provenance.NewLoader(provenanceDir, nil)
+	_ = existingLoader.LoadAll()
+	existingIDs := existingLoader.GetAllIDs()
+
+	author := "linespec-discover"
+	if helperCmds, cerr := provenance.NewCommands(cfg, scanDir, os.Stdout, false); cerr == nil {
+		if email, gerr := helperCmds.Git.GetGitEmail(); gerr == nil && email != "" {
+			author = email
+		}
+	}
+
+	recordInput := discoverrecords.Input{
+		Groups:        groups,
+		StubResults:   stubResults,
+		Boundaries:    hitMap,
+		ProvenanceDir: provenanceDir,
+		SpecsDir:      specsDir,
+		Author:        author,
+	}
+
+	if opts.DryRun {
+		recordResults, sum := discoverrecords.Plan(recordInput, existingIDs)
+		printDiscoverDryRun(desc, scanDir, stubResults, recordResults, sum, opts.Format)
+		return
+	}
+
+	recordResults, sum, err := discoverrecords.Write(recordInput, existingIDs)
+	if err != nil {
+		logger.Error("Record generation failed: %v", err)
+		os.Exit(1)
+	}
+
+	printDiscoverSummary(desc, scanDir, recordResults, sum)
+
+	if opts.Enrich {
+		enrichRoot := scanDir
+		if out, err := exec.Command("git", "-C", scanDir, "rev-parse", "--show-toplevel").Output(); err == nil {
+			enrichRoot = strings.TrimSpace(string(out))
+		}
+		runDiscoverEnrich(recordResults, enrichRoot, opts.LLMBaseURL)
+	}
+}
+
+// runDiscoverEnrich runs Phase 5: git history analysis + LLM intent synthesis.
+// Errors are non-fatal: each failure is logged as a warning and the pipeline continues.
+func runDiscoverEnrich(results []discoverrecords.Result, repoRoot, llmBaseURL string) {
+	recordFiles := make([]string, 0, len(results))
+	for _, r := range results {
+		recordFiles = append(recordFiles, r.FilePath)
+	}
+
+	fmt.Fprintln(os.Stdout, "\n  Phase 5: git history enrichment")
+	enrichResults, err := enrich.Enrich(enrich.Input{
+		RepoDir:     repoRoot,
+		RecordFiles: recordFiles,
+		LLMBaseURL:  llmBaseURL,
+		Progress:    func(msg string) { fmt.Fprintln(os.Stdout, msg) },
+	})
+	if err != nil {
+		logger.Info("--enrich: unexpected error: %v", err)
+		return
+	}
+
+	enriched := 0
+	for _, r := range enrichResults {
+		if r.Skipped || r.Err != nil {
+			continue
+		}
+		enriched++
+	}
+
+	if enriched > 0 {
+		fmt.Fprintf(os.Stdout, "\n  Intent fields enriched: %d/%d\n\n", enriched, len(enrichResults))
+	} else {
+		fmt.Fprintln(os.Stdout, "\n  No intent fields populated.")
+	}
+}
+
+// buildDiscoverStubInputs converts Phase 1 and Phase 2 output into Phase 3 inputs.
+func buildDiscoverStubInputs(groups []discoverroutes.Group, hitMap map[string][]boundaries.Hit) []stubs.Input {
+	var inputs []stubs.Input
+	for _, g := range groups {
+		for _, r := range g.Routes {
+			hits := hitMap[r.HandlerRef]
+			boundaryHits := make([]stubs.BoundaryHit, len(hits))
+			for i, h := range hits {
+				boundaryHits[i] = stubs.BoundaryHit{
+					Protocol:  h.Protocol,
+					Direction: h.Direction,
+					Target:    h.Target,
+					Dynamic:   h.Dynamic,
+				}
+			}
+			inputs = append(inputs, stubs.Input{
+				Route:      r,
+				Boundaries: boundaryHits,
+			})
+		}
+	}
+	return inputs
+}
+
+// printDiscoverSummary prints the post-run summary for a successful discover run.
+func printDiscoverSummary(desc *framework.Description, scanDir string, results []discoverrecords.Result, sum discoverrecords.Summary) {
+	fmt.Fprintf(os.Stdout, "\nlinespec provenance discover — complete\n\n")
+	fmt.Fprintf(os.Stdout, "  Scanned:                   %s (%s/%s)\n", scanDir, desc.Name, desc.Language)
+	fmt.Fprintf(os.Stdout, "  Routes discovered:         %d\n", sum.RouteCount)
+	fmt.Fprintf(os.Stdout, "  Protocol boundaries:       %d\n", sum.BoundaryCount)
+	fmt.Fprintf(os.Stdout, "  Blueprint records created: %d\n\n", sum.RecordsCreated)
+	if len(results) > 0 {
+		fmt.Fprintf(os.Stdout, "  Records:\n")
+		for _, r := range results {
+			fmt.Fprintf(os.Stdout, "    %-20s  %s  (%d route(s))\n", r.RecordID, r.Title, r.RouteCount)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+	if len(sum.Unclassified) > 0 {
+		fmt.Fprintf(os.Stdout, "  Unclassified files (%d):\n", len(sum.Unclassified))
+		for _, f := range sum.Unclassified {
+			fmt.Fprintf(os.Stdout, "    %s\n", f)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+}
+
+// printDiscoverDryRun prints the dry-run output showing what would be generated.
+func printDiscoverDryRun(desc *framework.Description, scanDir string, stubResults []stubs.Result, recordResults []discoverrecords.Result, sum discoverrecords.Summary, format string) {
+	if format == "json" {
+		data, err := discoverrecords.FormatJSON(recordResults, sum)
+		if err != nil {
+			logger.Error("Failed to format JSON: %v", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stdout, string(data))
+		return
+	}
+	fmt.Fprintf(os.Stdout, "\nlinespec provenance discover — DRY RUN (no files written)\n\n")
+	fmt.Fprintf(os.Stdout, "  Scanned: %s (%s/%s)\n\n", scanDir, desc.Name, desc.Language)
+	fmt.Fprintf(os.Stdout, "Stubs:\n")
+	fmt.Fprint(os.Stdout, stubs.FormatTable(stubResults))
+	fmt.Fprintf(os.Stdout, "\nRecords:\n")
+	fmt.Fprint(os.Stdout, discoverrecords.FormatTable(recordResults, sum))
 }
 
 func parseCreateOptions(args []string) provenance.CreateOptions {

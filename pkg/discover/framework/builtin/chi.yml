@@ -1,0 +1,176 @@
+name: chi
+language: go
+
+detection:
+  - manifest: go.mod
+    contains:
+      - "go-chi/chi"
+
+route_queries:
+  # Named handler: r.Get("/path", myHandler) or r.Get("/path", pkg.Handler)
+  - pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @path
+          [(identifier) (selector_expression)] @handler))
+    filter:
+      method: "^(Get|Post|Put|Patch|Delete|Head|Options|Connect|Trace)$"
+  # Inline/complex handler — path only fallback
+  - pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @path))
+    filter:
+      method: "^(Get|Post|Put|Patch|Delete|Head|Options|Connect|Trace)$"
+
+middleware_queries:
+  # r.Use(middleware.Logger) — #eq? predicate filters to Use only
+  - pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          [(identifier) (selector_expression)] @middleware)
+        (#eq? @method "Use"))
+
+group_queries:
+  # r.Route("/prefix", func(r chi.Router) { ... }) — #eq? filters to Route only
+  - pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @prefix
+          (func_literal) @body)
+        (#eq? @method "Route"))
+
+grouping_strategy: package
+
+boundary_queries:
+  # database/sql reads: db.Query("SELECT...", args...) — SQL is first arg
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @query)
+        (#match? @method "^(Query|QueryRow)$"))
+    captures:
+      target: query
+
+  # pgx reads: conn.Query(ctx, "SELECT...", args...) — SQL is second arg
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          _
+          (interpreted_string_literal) @query)
+        (#match? @method "^(Query|QueryRow|QueryContext|QueryRowContext)$"))
+    captures:
+      target: query
+
+  # database/sql writes: db.Exec("INSERT INTO...", args...)
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @query)
+        (#match? @method "^(Exec|ExecContext)$"))
+    captures:
+      target: query
+
+  # pgx writes: conn.Exec(ctx, "INSERT INTO...", args...)
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          _
+          (interpreted_string_literal) @query)
+        (#match? @method "^(Exec|ExecContext|SendBatch)$"))
+    captures:
+      target: query
+
+  # go-redis reads: rdb.Get(ctx, "key"), rdb.HGet(ctx, "hash", "field")
+  - protocol: redis
+    direction: read
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          _
+          (interpreted_string_literal) @key)
+        (#match? @method "^(Get|HGet|HGetAll|LRange|SMembers|ZRange|ZRangeByScore|LPop|RPop|SPop|Exists|TTL|Keys|LLen|SCard|ZCard|ZScore|MGet)$"))
+    captures:
+      target: key
+
+  # go-redis writes: rdb.Set(ctx, "key", value, ttl)
+  - protocol: redis
+    direction: write
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          _
+          (interpreted_string_literal) @key)
+        (#match? @method "^(Set|SetEx|SetNX|HSet|Del|Expire|Incr|IncrBy|Decr|DecrBy|RPush|LPush|SAdd|ZAdd|Publish|XAdd|PExpire|Persist|MSet)$"))
+    captures:
+      target: key
+
+  # sarama/franz-go: producer.SendMessage — topic is in struct literal, dynamic
+  - protocol: kafka
+    direction: write
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method)
+        (#eq? @method "SendMessage"))
+    captures:
+      target: ""
+
+  # net/http client reads: http.Get("url"), http.Head("url")
+  - protocol: http
+    direction: read
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          operand: (identifier) @pkg
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @url)
+        (#eq? @pkg "http")
+        (#match? @method "^(Get|Head)$"))
+    captures:
+      target: url
+
+  # net/http client writes: http.Post("url", contentType, body)
+  - protocol: http
+    direction: write
+    pattern: |
+      (call_expression
+        function: (selector_expression
+          operand: (identifier) @pkg
+          field: (field_identifier) @method)
+        arguments: (argument_list
+          (interpreted_string_literal) @url
+          _)
+        (#eq? @pkg "http")
+        (#match? @method "^(Post|PostForm)$"))
+    captures:
+      target: url

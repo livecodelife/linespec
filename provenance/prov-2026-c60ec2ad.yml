@@ -1,0 +1,58 @@
+id: prov-2026-c60ec2ad
+title: 'Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra)'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-0071506f
+intent: |
+  Write the Chi, Rails, and Sinatra framework description files (YAML with tree-sitter
+  queries) and build the route table assembler that consumes them.
+
+  A framework description contains: detection rules (how to identify this framework from
+  project files), route queries (match HTTP method + path + handler reference), middleware
+  queries, and group/prefix queries. The assembler executes these queries against source
+  files and resolves nested prefix nesting into a flat route table.
+
+  Specific behaviors per framework:
+    - Chi: handle r.Route("/prefix", func(r chi.Router) {...}) nesting; routes spread
+      across multiple files wired in a setup function
+    - Rails: parse config/routes.rb DSL (get/post/put/patch/delete/resources/resource/
+      namespace/scope/mount); expand `resources :name` to its 7 conventional routes
+    - Sinatra: match get/post/etc. block calls on the app class; handle multi-file layouts
+
+  Each discovered route produces a tuple: (method, full_path, handler_ref, middleware_chain,
+  source_location). The grouping hints in the framework description define how to cluster
+  routes into blueprint-sized units (by package for Go, by controller class for Rails,
+  by file for Sinatra).
+constraints:
+  - MUST implement framework description YAML format with route/middleware/group queries and grouping hints
+  - MUST write built-in descriptions for Chi, Rails, and Sinatra
+  - MUST expand Rails `resources`/`resource` DSL to individual endpoints
+  - MUST resolve nested Chi r.Route() prefixes into full paths
+  - MUST produce (method, path, handler_ref, middleware_chain, source_location) tuples
+  - MUST support user-provided descriptions in .linespec/frameworks/ alongside built-ins
+  - Framework descriptions MUST be shareable with Sedum's world state scanner without modification
+affected_scope:
+  - pkg/discover/routes/**
+  - pkg/discover/framework/builtin/chi.yml
+  - pkg/discover/framework/builtin/rails.yml
+  - pkg/discover/framework/builtin/sinatra.yml
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 4168a6349f7f20a4d9161c4eb223e9f7ecebe6b1
+associated_specs:
+  - path: pkg/discover/routes/routes_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/routes/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - routes
+  - chi
+  - rails
+  - sinatra
+  - framework-descriptions

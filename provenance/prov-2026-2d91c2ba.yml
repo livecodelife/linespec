@@ -1,0 +1,32 @@
+id: prov-2026-2d91c2ba
+title: 'Phase 3: dry-run plan and table/JSON formatting for stub results'
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+intent: >
+  Adds Plan() for dry-run mode (compute results without filesystem writes),
+  extends Result with Method/Path for rich reporting, and adds FormatTable()
+  and FormatJSON() for --format table|json output. Completes the two remaining
+  blueprint constraints for the stubs package.
+constraints: []
+affected_scope:
+  - pkg/discover/stubs/stubs.go
+  - pkg/discover/stubs/format.go
+  - pkg/discover/stubs/stubs_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-da18cbfe
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-db4734d9
+sealed_at_sha: 91c09cae35eb38a7af61f9d7caedd311d7376414
+associated_specs:
+  - type: go_test
+    path: pkg/discover/stubs/stubs_test.go
+    run_command: "go test ./pkg/discover/stubs/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - stub-generation

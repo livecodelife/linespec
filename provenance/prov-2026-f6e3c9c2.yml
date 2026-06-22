@@ -1,0 +1,48 @@
+id: prov-2026-f6e3c9c2
+title: Route table assembler and position-aware query engine
+status: implemented
+created_at: "2026-06-04"
+author: test@example.com
+implements: prov-2026-c60ec2ad
+intent: |
+  Build pkg/discover/routes/: Route/Group types, a position-aware query engine, and the
+  Assembler that produces a grouped route table from a project directory.
+
+  Key design decisions:
+  - The routes package contains its own position-aware query engine (engine.go) that uses
+    go-tree-sitter directly, rather than the shared treesitter.Engine from Phase 0. This
+    avoids modifying sealed Phase 0 files while gaining StartByte/EndByte on each capture,
+    which is required for Chi prefix nesting resolution.
+  - Chi nested prefix resolution uses byte ranges: group queries capture the func_literal
+    body node; each route's method capture byte is checked against all group body ranges.
+    The containing groups are sorted by bodyStart (outermost first) and their prefixes are
+    concatenated to build the full path. Handles arbitrary nesting depth.
+  - Rails resources/resource expansion is done in Go (not tree-sitter) because generating
+    7/6 conventional routes from one symbol requires imperative logic, not pattern matching.
+  - Route deduplication uses (method, path, file, line) as the key. Adding path was necessary
+    after discovering that multiple GET routes expanded from `resources :name` on the same
+    source line were incorrectly collapsed when only (method, file, line) was the key.
+  - Grouping by package (Go) is done per-file by querying the package_clause node. Grouping
+    by controller (Rails) is derived from the HandlerRef string "ControllerName#action".
+constraints: []
+affected_scope:
+  - pkg/discover/routes/**
+  - pkg/discover/framework/builtin/chi.yml
+  - pkg/discover/framework/builtin/rails.yml
+  - pkg/discover/framework/builtin/sinatra.yml
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: f9d4caaca04e5c7b1884a8c9a856289fd9bcd732
+associated_specs:
+  - path: pkg/discover/routes/routes_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/routes/ && echo {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - routes
+  - tree-sitter

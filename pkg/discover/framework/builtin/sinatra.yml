@@ -1,0 +1,173 @@
+name: sinatra
+language: ruby
+
+detection:
+  - manifest: Gemfile
+    contains:
+      - "gem 'sinatra'"
+  - manifest: Gemfile
+    contains:
+      - "gem \"sinatra\""
+
+route_queries:
+  # get '/path' do ... end
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @path)
+        block: (do_block))
+    filter:
+      method: "^(get|post|put|patch|delete|head|options)$"
+
+middleware_queries:
+  # use Rack::Auth::Basic
+  - pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (scope_resolution) @middleware))
+    filter:
+      method: "^use$"
+
+group_queries: []
+
+grouping_strategy: file
+
+boundary_queries:
+  # ActiveRecord reads — Model.where, Model.find, etc.
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call
+        receiver: (constant) @model
+        method: (identifier) @method
+        (#match? @method "^(where|find|find_by|find_by!|first|first!|last|last!|all|count|exists\?|pluck|select|minimum|maximum|sum|average|includes|joins|group|having|order|limit|offset|take)$"))
+    captures:
+      target: model
+
+  # ActiveRecord reads — namespaced model
+  - protocol: postgresql
+    direction: read
+    pattern: |
+      (call
+        receiver: (scope_resolution) @model
+        method: (identifier) @method
+        (#match? @method "^(where|find|find_by|find_by!|first|first!|last|last!|all|count|exists\?|pluck|select)$"))
+    captures:
+      target: model
+
+  # ActiveRecord class-level writes — Model.create, etc.
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        receiver: (constant) @model
+        method: (identifier) @method
+        (#match? @method "^(create|create!|update_all|destroy_all|delete_all|insert|insert_all!|upsert|upsert_all)$"))
+    captures:
+      target: model
+
+  # ActiveRecord class-level writes — namespaced model
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        receiver: (scope_resolution) @model
+        method: (identifier) @method
+        (#match? @method "^(create|create!|update_all|destroy_all|delete_all|upsert|upsert_all)$"))
+    captures:
+      target: model
+
+  # ActiveRecord instance writes — dynamic (type unknown)
+  - protocol: postgresql
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#match? @method "^(save|save!|update|update!|destroy|destroy!|delete|touch)$"))
+    captures:
+      target: ""
+
+  # Raw SQL
+  - protocol: postgresql
+    direction: both
+    pattern: |
+      (call
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @sql)
+        (#match? @method "^(execute|exec_query|select_all|select_rows|select_one|select_value)$"))
+    captures:
+      target: sql
+
+  # Faraday / HTTParty: conn.get('/path')
+  - protocol: http
+    direction: read
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @url)
+        (#match? @method "^(get|head)$"))
+    captures:
+      target: url
+
+  - protocol: http
+    direction: write
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @url)
+        (#match? @method "^(post|put|patch|delete)$"))
+    captures:
+      target: url
+
+  # Redis gem reads
+  - protocol: redis
+    direction: read
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @key)
+        (#match? @method "^(get|hget|hgetall|lrange|smembers|zrange|exists|ttl|llen|scard|lpop|rpop|zscore|mget)$"))
+    captures:
+      target: key
+
+  # Redis gem writes
+  - protocol: redis
+    direction: write
+    pattern: |
+      (call
+        receiver: (identifier) @client
+        method: (identifier) @method
+        arguments: (argument_list
+          (string) @key)
+        (#match? @method "^(set|setex|setnx|hset|del|expire|incr|decr|rpush|lpush|sadd|zadd|publish)$"))
+    captures:
+      target: key
+
+  # Bunny RabbitMQ
+  - protocol: rabbitmq
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#eq? @method "publish"))
+    captures:
+      target: ""
+
+  # ruby-kafka
+  - protocol: kafka
+    direction: write
+    pattern: |
+      (call
+        method: (identifier) @method
+        (#match? @method "^(produce|deliver_message|async_produce)$"))
+    captures:
+      target: ""
