@@ -7,7 +7,7 @@ require (
 	github.com/docker/go-connections v0.6.0
 	github.com/go-mysql-org/go-mysql v1.14.0
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/lib/pq v1.12.0
+	github.com/lib/pq v1.12.3
 	go.mongodb.org/mongo-driver/v2 v2.5.1
 	golang.org/x/net v0.50.0
 	google.golang.org/protobuf v1.36.11
