@@ -1,0 +1,60 @@
+id: prov-2026-f1241113
+title: Migrate cmd/linespec CLI to a Cobra command tree
+status: draft
+created_at: "2026-06-22"
+author: test@example.com
+intent: |
+  Replace the hand-rolled os.Args/switch dispatch in cmd/linespec/ with a Cobra
+  command tree, wrapping the existing handler functions as RunE callbacks without
+  changing their logic. This makes the command/flag surface declarative so the
+  full CLI reference can be auto-generated from the tree via cobra/doc and stop
+  drifting from the code. Migrate incrementally, one command group at a time, with
+  the provenance group migrated first as the validation milestone, and collapse the
+  two build-tagged entrypoints (main_stable.go, main_beta.go) into a single tree.
+constraints:
+  - Command names, subcommand names, and flag names/shapes must stay byte-identical
+    so git hooks, CI, make targets, and scripts that shell out to linespec keep
+    passing. This covers every top-level command (init, clone, import, proxy, test,
+    build, provenance) and every provenance subcommand (create, open, complete,
+    lint, check, status, search, context, next, govern, graph, deprecate, audit,
+    index, generate, sync, compile, publish, lock-scope, lock-layer, run-specs,
+    discover, install-skills, install-plugin).
+  - Preserve the -p alias for the provenance command and the global -d/--debug flag.
+  - Handler functions and all of pkg/ business logic must remain unchanged — Cobra
+    RunE wrappers only replace the arg/flag parsing front layer and call the
+    existing handlers. The parseXOptions helpers may be reshaped into flag bindings
+    but must produce identical option structs.
+  - Replace the hand-rolled --help/-h and --version with Cobra's generated versions.
+    The version command/flag must keep reading the main.version variable that
+    goreleaser injects via -ldflags "-X main.version=..." (and may surface
+    main.commit / main.date if present), so release builds still report the tag.
+  - Collapse main_stable.go and main_beta.go into a single command tree. The unified
+    tree must be a superset that preserves every command currently reachable in
+    either entrypoint; reconcile the build-tag divergence (build/clone/import exist
+    only in the stable entrypoint today) deliberately rather than silently dropping
+    commands.
+  - Migrate group by group. The provenance group lands first as the validation
+    milestone; each subsequent group (test, proxy, build, init, clone, import) is
+    its own imprint so regressions stay isolated.
+  - Land separately from and after the docs-pipeline change (per the parent brief).
+  - Adding Cobra (and its spf13/pflag dependency) to go.mod/go.sum is in scope; no
+    other dependency or runtime behavior change is permitted.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
+  - go.mod
+  - go.sum
+forbidden_scope: []
+type: blueprint
+implements: prov-2026-d25ed59c
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+    - migration
+    - cli
+    - cobra
