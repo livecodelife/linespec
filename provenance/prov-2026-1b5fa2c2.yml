@@ -18,6 +18,11 @@ affected_scope:
   - pkg/provenance/commands.go
   - pkg/provenance/linter.go
   - pkg/provenance/git.go
+  - pkg/provenance/types.go
+  - pkg/provenance/formatter.go
+  - pkg/provenance/exclude.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/main_beta.go
 type: blueprint
 superseded_by: ''
 sealed_at_sha: ''
