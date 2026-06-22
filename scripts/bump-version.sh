@@ -41,8 +41,12 @@ FILES=(
 
 for f in "${FILES[@]}"; do
   if [ -f "$f" ]; then
-    # \Q...\E quotes the version string so dots aren't treated as regex wildcards
-    perl -pi -e "s/v\Q$OLD\E/v$NEW/g" "$f"
+    # \Q...\E quotes the version string so dots aren't treated as regex wildcards.
+    # Three patterns cover every place the version appears in the source docs:
+    #   v<ver>          — prose, install commands, the "LineSpec v<ver>" title
+    #   version-<ver>   — the shields.io badge (no leading "v")
+    #   linespec_<ver>  — release artifact filenames (no leading "v")
+    perl -pi -e "s/v\Q$OLD\E/v$NEW/g; s/version-\Q$OLD\E/version-$NEW/g; s/linespec_\Q$OLD\E/linespec_$NEW/g" "$f"
     echo "  updated $f"
   fi
 done
