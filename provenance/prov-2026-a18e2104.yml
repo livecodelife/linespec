@@ -1,10 +1,10 @@
 id: prov-2026-a18e2104
 title: 'Phase 5: git history enrichment for intent field population (--enrich)'
-status: open
-created_at: "2026-06-04"
+status: implemented
+created_at: '2026-06-04'
 author: test@example.com
 implements: prov-2026-0071506f
-intent: |
+intent: |-
   When `--enrich` is passed, run git log --follow for each file cluster in a blueprint's
   affected_scope, collect commit messages (and PR titles from merge commit conventions or
   GitHub/GitLab API if credentials are available), and synthesize a 1-2 sentence intent
@@ -30,16 +30,12 @@ constraints:
 affected_scope:
   - pkg/discover/enrich/**
   - cmd/linespec/main_stable.go
-forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
-related: []
-sealed_at_sha: ""
+superseded_by: ''
+sealed_at_sha: ''
 associated_specs:
   - path: pkg/discover/enrich/enrich_test.go
-    type: go_test
-    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+    run_command: sh -c 'go test ./pkg/discover/enrich/...'
 associated_traces: []
 monitors: []
 tags:
