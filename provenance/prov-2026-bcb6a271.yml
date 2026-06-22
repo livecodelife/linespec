@@ -1,0 +1,61 @@
+id: prov-2026-bcb6a271
+title: Add provenance exclude_paths config to exempt files from rules
+status: draft
+created_at: "2026-06-22"
+author: test@example.com
+implements: prov-2026-bb380f4b
+intent: >
+  Engineers frequently have files in a project (docs, maintenance scripts,
+  generated files, etc.) that should not be subject to provenance rules.
+  This blueprint designs an exclude_paths configuration field for the
+  .linespec.yml provenance block that accepts full paths, glob patterns,
+  directory prefixes, and regexes. Exemption must be surfaced explicitly
+  in context, lint, govern, and audit output so engineers always know when
+  a file is exempt. Git hooks (pre-commit tag enforcement and commit-msg
+  validation) must silently pass for all staged files that match an
+  exclusion pattern.
+constraints:
+  - "The .linespec.yml provenance block must accept an `exclude_paths` list
+    whose entries may be: a literal file path, a glob pattern (e.g. docs/**),
+    a directory prefix (e.g. scripts/), or a Go regexp prefixed with `re:`
+    (e.g. re:^vendor/)."
+  - "Matching must use normalized, repo-root-relative paths and must be
+    consistent across all commands (context, lint, govern, audit, check,
+    complete-overlap teeth)."
+  - "The `linespec provenance context -f <file>` output must clearly state
+    when a file is exempt (e.g. 'EXEMPT: matches exclude_paths pattern
+    <pattern>') in addition to showing the normal record history."
+  - "The `linespec provenance lint` command must skip files that match
+    exclude_paths and, when run with --verbose or equivalent, note which
+    files were skipped and why."
+  - "The git pre-commit and commit-msg hooks must bypass commit-tag validation
+    for any commit whose entire set of staged/changed files fall within
+    exclude_paths. If only some staged files are exempt, non-exempt files
+    still require the tag."
+  - "No existing tests or integration specs may be broken by these changes;
+    the schema change must be backward-compatible (omitting exclude_paths
+    means no exclusions)."
+  - "All public-facing changes to command output must be covered by at least
+    one unit test asserting the exempt status message."
+affected_scope:
+  - pkg/config/config.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/git.go
+  - pkg/provenance/loader.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: go_test
+    description: Unit tests for exclude_paths matching logic and exempt status surfacing
+    run_command: make test
+  - type: go_test
+    description: Unit tests for git hook bypass when staged files are exempt
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
