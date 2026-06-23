@@ -2,7 +2,7 @@ id: prov-2026-004a7d33
 title: Generate CLI reference via cobra/doc and wire into docs pipeline
 status: draft
 created_at: "2026-06-23"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: |
   Deliver the brief's payoff: add CLI-reference generation from the Cobra command
   tree via spf13/cobra/doc (a generator, e.g. a hidden `gen-docs` command or a
