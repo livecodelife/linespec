@@ -2,7 +2,7 @@ id: prov-2026-f1241113
 title: Migrate cmd/linespec CLI to a Cobra command tree
 status: open
 created_at: "2026-06-22"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: |
   Replace the hand-rolled os.Args/switch dispatch in cmd/linespec/ with a Cobra
   command tree, wrapping the existing handler functions as RunE callbacks without
