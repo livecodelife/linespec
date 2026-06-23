@@ -1,0 +1,33 @@
+id: prov-2026-334ced6a
+title: Migrate test and build commands to declarative Cobra
+status: draft
+created_at: "2026-06-23"
+author: test@example.com
+intent: |
+  Replace the DisableFlagParsing bridges for `test` and `build` with declarative
+  Cobra subcommands so their flags appear in the generated CLI reference. Bind the
+  test command's --debug/-d and positional <path>; build takes no flags. The RunE
+  wrappers call the existing runTestWithCode / Docker-image-build logic unchanged —
+  only the arg-parsing front layer is replaced.
+constraints:
+  - linespec test [--debug|-d] <path-to-linespec-or-dir> and linespec build keep
+    identical flags, behavior, and exit codes.
+  - test's per-command --debug keeps working; once declarative it may also honor
+    the root persistent -d/--debug flag.
+  - runTestWithCode and the Docker image build logic are unchanged.
+affected_scope:
+  - cmd/linespec/provenance_cobra.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f1241113
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+    - cobra
+    - cli
