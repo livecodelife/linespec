@@ -1,6 +1,6 @@
 id: prov-2026-a8fe26ea
 title: 'Cobra scaffold: root command + provenance group migration'
-status: open
+status: implemented
 created_at: "2026-06-22"
 author: test@example.com
 intent: |
@@ -38,7 +38,7 @@ implements: prov-2026-f1241113
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f56f1837ee498f4e863e48a8b2136b80ad883dd0
 associated_specs:
   - type: code
     path: cmd/linespec/main_stable.go
