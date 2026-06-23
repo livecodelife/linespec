@@ -2,7 +2,7 @@ id: prov-2026-af7becf2
 title: Collapse main_beta.go into the unified Cobra command tree
 status: draft
 created_at: "2026-06-23"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: |
   Collapse the two build-tagged entrypoints into a single command tree. Remove the
   !beta build tag from the Cobra files, delete main_beta.go's parallel os.Args
