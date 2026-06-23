@@ -2,7 +2,7 @@ id: prov-2026-a8fe26ea
 title: 'Cobra scaffold: root command + provenance group migration'
 status: implemented
 created_at: "2026-06-22"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: |
   First migration slice for the Cobra brief (the validation milestone): add the
   Cobra dependency, build the root command tree, and migrate the entire provenance
