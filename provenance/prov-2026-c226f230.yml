@@ -2,7 +2,7 @@ id: prov-2026-c226f230
 title: Migrate proxy command to declarative Cobra
 status: draft
 created_at: "2026-06-23"
-author: test@example.com
+author: calebcowen@gmail.com
 intent: |
   Replace the proxy bridge with a declarative Cobra subcommand exposing the
   positional <type> <addr> <upstream> contract plus the flags --db-name, --host,
