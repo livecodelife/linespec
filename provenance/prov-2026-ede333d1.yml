@@ -1,0 +1,35 @@
+id: prov-2026-ede333d1
+title: Migrate init, clone, and import commands to declarative Cobra
+status: draft
+created_at: "2026-06-23"
+author: test@example.com
+intent: |
+  Replace the init/clone/import bridges with declarative Cobra subcommands. clone
+  and import expose a positional <manifest-url> plus --version (and clone adds
+  --dir); init exposes its existing flags. The RunE wrappers call the existing
+  runInit/runClone/runImport handlers unchanged. Grouped together because they are
+  the project-bootstrap / manifest-fetch family and share the @version URL-suffix
+  handling.
+constraints:
+  - The <manifest-url> positional, --version pinning (including the @version URL
+    suffix behavior), and clone's --dir stay identical.
+  - The function-local `version` shadow variables used today for manifest pinning
+    are reshaped into flag bindings that produce identical fetch behavior, without
+    colliding with the root command's binary --version.
+  - runInit/runClone/runImport business logic is unchanged.
+affected_scope:
+  - cmd/linespec/provenance_cobra.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f1241113
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+    - cobra
+    - cli
