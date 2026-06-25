@@ -60,45 +60,6 @@ func main() {
 	}
 }
 
-func runTest() {
-	// Parse test command arguments — argument errors can exit immediately, no cleanup needed yet.
-	args := os.Args[2:]
-	debug := false
-	var path string
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--debug", "-d":
-			debug = true
-		case "--help", "-h":
-			printTestUsage()
-			os.Exit(0)
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				path = args[i]
-			} else {
-				logger.Error("Unknown flag: %s", args[i])
-				printTestUsage()
-				os.Exit(1)
-			}
-		}
-	}
-
-	if path == "" {
-		logger.Error("Usage: linespec test [--debug] <path-to-linespec-or-dir>")
-		os.Exit(1)
-	}
-
-	if debug {
-		logger.SetLevel(logger.DebugLevel)
-		logger.Debug("Debug mode enabled")
-	}
-
-	// Delegate to a helper that returns an exit code so that deferred cleanup
-	// always runs before os.Exit is called (os.Exit skips defers).
-	os.Exit(runTestWithCode(path))
-}
-
 // runTestWithCode executes the full test run and returns an exit code.
 // Using a return value instead of os.Exit ensures all deferred cleanups run.
 func runTestWithCode(path string) int {
@@ -252,24 +213,6 @@ func runTestWithCode(path string) int {
 }
 
 func runBuild() {
-	args := os.Args[2:]
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" {
-			logger.Info(`Usage: linespec build
-
-Builds the linespec:latest Docker image using the currently installed binary.
-This image is required by protocol proxy sidecars when running linespec tests
-against services with database or HTTP dependencies.
-
-Run this once after installation, or any time the Docker image is missing:
-
-  linespec build
-
-Docker must be running. If Docker is not available, start it and re-run.`)
-			os.Exit(0)
-		}
-	}
-
 	execPath, err := os.Executable()
 	if err != nil {
 		logger.Error("Failed to locate linespec executable: %v", err)
@@ -739,19 +682,6 @@ Options:
 		logger.Error("%v", err)
 		os.Exit(1)
 	}
-}
-
-func printTestUsage() {
-	logger.Info(`Usage: linespec test [--debug] <path-to-linespec-or-dir>
-
-Options:
-  --debug, -d    Show detailed debug logs
-  --help, -h     Show this help message
-
-Examples:
-  linespec test ./tests/              # Run all tests in directory
-  linespec test --debug ./tests/       # Run with debug output
-  linespec test ./tests/create.linespec # Run single test file`)
 }
 
 func runProxy() {
