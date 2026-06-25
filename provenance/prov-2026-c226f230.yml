@@ -1,6 +1,6 @@
 id: prov-2026-c226f230
 title: Migrate proxy command to declarative Cobra
-status: open
+status: implemented
 created_at: "2026-06-23"
 author: calebcowen@gmail.com
 intent: |
@@ -25,7 +25,7 @@ implements: prov-2026-f1241113
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cdcebfe248e86a4d236029489039d951bd5372c4
 associated_specs:
     - type: code
       path: cmd/linespec/main_stable.go
