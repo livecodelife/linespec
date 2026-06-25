@@ -40,7 +40,7 @@ func newRootCmd() *cobra.Command {
 		bridgeCmd("init", "Interactively create a .linespec.yml for your project", runInit),
 		bridgeCmd("clone", "Bootstrap a project from a published manifest", runClone),
 		bridgeCmd("import", "Import provenance records from a published manifest", runImport),
-		bridgeCmd("proxy", "Start protocol proxy", runProxy),
+		newProxyCmd(),
 		newTestCmd(),
 		newBuildCmd(),
 		newProvenanceCmd(),
@@ -88,6 +88,34 @@ func newBuildCmd() *cobra.Command {
 			runBuild()
 		},
 	}
+}
+
+// newProxyCmd is the declarative form of the `proxy` command. The positional
+// <type> <addr> <upstream> contract is bound via MinimumNArgs(3); any trailing
+// positionals (registry file, mysql transparent duration) flow through to the
+// handler as args[3:]. Every flag the legacy os.Args parser recognized is bound
+// here with identical names/defaults so proxy sidecars and the runner see the
+// same surface; pflag accepts both --flag value and --flag=value natively.
+// --debug/-d is honored through the root persistent flag (PersistentPreRun), so
+// `linespec proxy <type> ... --debug` keeps working. The Run wrapper calls the
+// existing runProxyCore handler unchanged.
+func newProxyCmd() *cobra.Command {
+	var dbName, host, schemaData, schemaFile, sidecarPort, grpcDescriptorSet string
+	cmd := &cobra.Command{
+		Use:   "proxy <type> <listen-addr> <upstream-addr> [registry-file]",
+		Short: "Start protocol proxy",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			runProxyCore(args[0], args[1], args[2], dbName, host, schemaData, schemaFile, sidecarPort, grpcDescriptorSet, args[3:])
+		},
+	}
+	cmd.Flags().StringVar(&dbName, "db-name", "", "Database name (required for mysql proxy)")
+	cmd.Flags().StringVar(&host, "host", "", "Advertised host (kafka proxy)")
+	cmd.Flags().StringVar(&schemaData, "schema-data", "", "Base64-encoded schema (mysql proxy)")
+	cmd.Flags().StringVar(&schemaFile, "schema-file", "", "Path to schema file (mysql proxy)")
+	cmd.Flags().StringVar(&sidecarPort, "sidecar-port", "8081", "Verification sidecar HTTP port")
+	cmd.Flags().StringVar(&grpcDescriptorSet, "grpc-descriptor-set", "", "Path to gRPC descriptor set (grpc proxy)")
+	return cmd
 }
 
 // provSetup mirrors the per-invocation setup that runProvenance performed before
