@@ -684,63 +684,21 @@ Options:
 	}
 }
 
-func runProxy() {
-	if len(os.Args) < 5 {
-		logger.Error("Usage: linespec proxy <type> <listen-addr> <upstream-addr> [registry-file] [--schema-file <path>]")
-		os.Exit(1)
-	}
-
+// runProxyCore runs the protocol proxy with already-parsed arguments. The
+// positional <type>/<addr>/<upstream> contract and every flag (--db-name,
+// --host, --schema-data, --schema-file, --sidecar-port, --grpc-descriptor-set)
+// are bound declaratively by newProxyCmd in provenance_cobra.go; --debug is
+// handled by the root persistent flag. extraArgs carries the trailing
+// positionals the legacy parser collected (registry file, mysql transparent
+// duration). Everything below this front layer is unchanged.
+func runProxyCore(pType, addr, upstream, dbName, kafkaHost, schemaDataB64, schemaFile, sidecarPort, grpcDescriptorSet string, extraArgs []string) {
 	// Change working directory to /app/project if it exists (inside container)
 	if _, err := os.Stat("/app/project"); err == nil {
 		os.Chdir("/app/project")
 		logger.Debug("Changed working directory to /app/project")
 	}
 
-	pType := os.Args[2]
-	addr := os.Args[3]
-	upstream := os.Args[4]
-
-	// Extract --db-name, --host, --schema-data, --schema-file, --sidecar-port, --grpc-descriptor-set, and --debug flags from remaining args
-	var dbName, kafkaHost, schemaDataB64, schemaFile, grpcDescriptorSet string
-	sidecarPort := "8081"
-	var filteredArgs []string
-	for i := 5; i < len(os.Args); i++ {
-		if os.Args[i] == "--db-name" && i+1 < len(os.Args) {
-			dbName = os.Args[i+1]
-			i++
-		} else if strings.HasPrefix(os.Args[i], "--db-name=") {
-			dbName = strings.TrimPrefix(os.Args[i], "--db-name=")
-		} else if os.Args[i] == "--host" && i+1 < len(os.Args) {
-			kafkaHost = os.Args[i+1]
-			i++
-		} else if strings.HasPrefix(os.Args[i], "--host=") {
-			kafkaHost = strings.TrimPrefix(os.Args[i], "--host=")
-		} else if os.Args[i] == "--schema-file" && i+1 < len(os.Args) {
-			schemaFile = os.Args[i+1]
-			i++
-		} else if strings.HasPrefix(os.Args[i], "--schema-file=") {
-			schemaFile = strings.TrimPrefix(os.Args[i], "--schema-file=")
-		} else if os.Args[i] == "--schema-data" && i+1 < len(os.Args) {
-			schemaDataB64 = os.Args[i+1]
-			i++
-		} else if strings.HasPrefix(os.Args[i], "--schema-data=") {
-			schemaDataB64 = strings.TrimPrefix(os.Args[i], "--schema-data=")
-		} else if os.Args[i] == "--sidecar-port" && i+1 < len(os.Args) {
-			sidecarPort = os.Args[i+1]
-			i++
-	} else if strings.HasPrefix(os.Args[i], "--sidecar-port=") {
-		sidecarPort = strings.TrimPrefix(os.Args[i], "--sidecar-port=")
-	} else if os.Args[i] == "--grpc-descriptor-set" && i+1 < len(os.Args) {
-		grpcDescriptorSet = os.Args[i+1]
-		i++
-	} else if strings.HasPrefix(os.Args[i], "--grpc-descriptor-set=") {
-		grpcDescriptorSet = strings.TrimPrefix(os.Args[i], "--grpc-descriptor-set=")
-	} else if os.Args[i] == "--debug" || os.Args[i] == "-d" {
-			logger.SetLevel(logger.DebugLevel)
-		} else {
-			filteredArgs = append(filteredArgs, os.Args[i])
-		}
-	}
+	filteredArgs := extraArgs
 
 	reg := registry.NewMockRegistry()
 	if len(filteredArgs) > 0 {
