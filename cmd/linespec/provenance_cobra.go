@@ -41,8 +41,8 @@ func newRootCmd() *cobra.Command {
 		bridgeCmd("clone", "Bootstrap a project from a published manifest", runClone),
 		bridgeCmd("import", "Import provenance records from a published manifest", runImport),
 		bridgeCmd("proxy", "Start protocol proxy", runProxy),
-		bridgeCmd("test", "Run .linespec test files", runTest),
-		bridgeCmd("build", "Build the linespec:latest Docker image", runBuild),
+		newTestCmd(),
+		newBuildCmd(),
 		newProvenanceCmd(),
 	)
 	return root
@@ -57,6 +57,36 @@ func bridgeCmd(use, short string, run func()) *cobra.Command {
 		Short:              short,
 		DisableFlagParsing: true,
 		Run:                func(cmd *cobra.Command, args []string) { run() },
+	}
+}
+
+// newTestCmd is the declarative form of the `test` command. The positional
+// <path> is bound via ExactArgs and debug logging is honored through the root
+// persistent -d/--debug flag (handled in PersistentPreRun), so the per-command
+// `linespec test --debug <path>` form keeps working. The Run wrapper calls the
+// existing runTestWithCode handler unchanged.
+func newTestCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "test <path-to-linespec-or-dir>",
+		Short: "Run .linespec test files",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			os.Exit(runTestWithCode(args[0]))
+		},
+	}
+}
+
+// newBuildCmd is the declarative form of the `build` command. It takes no flags
+// or arguments; Cobra supplies --help/-h. The Run wrapper calls the existing
+// runBuild Docker-image-build logic unchanged.
+func newBuildCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "build",
+		Short: "Build the linespec:latest Docker image",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runBuild()
+		},
 	}
 }
 
