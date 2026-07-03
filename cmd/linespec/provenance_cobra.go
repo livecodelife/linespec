@@ -37,27 +37,15 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().BoolVarP(&debugFlag, "debug", "d", false, "Enable debug logging")
 
 	root.AddCommand(
-		bridgeCmd("init", "Interactively create a .linespec.yml for your project", runInit),
-		bridgeCmd("clone", "Bootstrap a project from a published manifest", runClone),
-		bridgeCmd("import", "Import provenance records from a published manifest", runImport),
+		newInitCmd(),
+		newCloneCmd(),
+		newImportCmd(),
 		newProxyCmd(),
 		newTestCmd(),
 		newBuildCmd(),
 		newProvenanceCmd(),
 	)
 	return root
-}
-
-// bridgeCmd wraps a legacy handler that parses os.Args itself. DisableFlagParsing
-// keeps Cobra from touching the command's flags so the handler sees the exact same
-// argument vector it does today (including its own --help/-h handling).
-func bridgeCmd(use, short string, run func()) *cobra.Command {
-	return &cobra.Command{
-		Use:                use,
-		Short:              short,
-		DisableFlagParsing: true,
-		Run:                func(cmd *cobra.Command, args []string) { run() },
-	}
 }
 
 // newTestCmd is the declarative form of the `test` command. The positional
@@ -115,6 +103,70 @@ func newProxyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&schemaFile, "schema-file", "", "Path to schema file (mysql proxy)")
 	cmd.Flags().StringVar(&sidecarPort, "sidecar-port", "8081", "Verification sidecar HTTP port")
 	cmd.Flags().StringVar(&grpcDescriptorSet, "grpc-descriptor-set", "", "Path to gRPC descriptor set (grpc proxy)")
+	return cmd
+}
+
+// newInitCmd is the declarative form of the `init` command. It takes no
+// positionals; the --force/-f, --project/-p, and --output/-o flags are bound with
+// identical names/shorthands/defaults to the legacy os.Args parser. The -p
+// shorthand is a command-local flag and does not collide with the root's -p
+// (provenance) alias, which is rewritten in main() before Cobra parses. The Run
+// wrapper calls the existing runInitCore handler unchanged.
+func newInitCmd() *cobra.Command {
+	var force bool
+	var projectPath, outputPath string
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Interactively create a .linespec.yml for your project",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runInitCore(force, projectPath, outputPath)
+		},
+	}
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing .linespec.yml without prompting")
+	cmd.Flags().StringVarP(&projectPath, "project", "p", "", "Path to the project to set up (default: prompted)")
+	cmd.Flags().StringVarP(&outputPath, "output", "o", "", "Directory where .linespec.yml is written (default: project path)")
+	return cmd
+}
+
+// newCloneCmd is the declarative form of the `clone` command. The positional
+// <manifest-url> is bound via ExactArgs(1); --version pins the manifest (the
+// @version URL-suffix behavior is preserved inside manifest.Fetch) and --dir sets
+// the destination directory. --version is a command-local flag and does not
+// collide with the root's binary --version, which is a non-persistent flag on the
+// root command only. The Run wrapper calls the existing runCloneCore handler
+// unchanged.
+func newCloneCmd() *cobra.Command {
+	var version, dir string
+	cmd := &cobra.Command{
+		Use:   "clone <manifest-url>",
+		Short: "Bootstrap a project from a published manifest",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			runCloneCore(args[0], version, dir)
+		},
+	}
+	cmd.Flags().StringVar(&version, "version", "", "Pin to a specific manifest version (overrides @version suffix)")
+	cmd.Flags().StringVar(&dir, "dir", "", "Destination directory name (default: derived from manifest URL)")
+	return cmd
+}
+
+// newImportCmd is the declarative form of the `import` command. The positional
+// <manifest-url> is bound via ExactArgs(1) and --version pins the manifest (the
+// @version URL-suffix behavior is preserved inside manifest.Fetch). --version is a
+// command-local flag and does not collide with the root's binary --version. The
+// Run wrapper calls the existing runImportCore handler unchanged.
+func newImportCmd() *cobra.Command {
+	var version string
+	cmd := &cobra.Command{
+		Use:   "import <manifest-url>",
+		Short: "Import provenance records from a published manifest",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			runImportCore(args[0], version)
+		},
+	}
+	cmd.Flags().StringVar(&version, "version", "", "Pin to a specific manifest version (overrides @version suffix)")
 	return cmd
 }
 
