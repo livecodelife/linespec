@@ -43,6 +43,7 @@ affected_scope:
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
   - cmd/linespec/provenance_cobra.go
+  - cmd/linespec/cli.go
   - go.mod
   - go.sum
 forbidden_scope: []
