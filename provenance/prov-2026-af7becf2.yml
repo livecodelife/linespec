@@ -24,6 +24,7 @@ affected_scope:
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
   - cmd/linespec/provenance_cobra.go
+  - cmd/linespec/cli.go
 forbidden_scope: []
 type: imprint
 implements: prov-2026-f1241113
