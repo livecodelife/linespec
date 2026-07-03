@@ -21,11 +21,27 @@ if ! command -v pandoc >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v go >/dev/null 2>&1; then
+  echo "error: go is required but not found on PATH" >&2
+  echo "       it generates the CLI reference from the Cobra command tree" >&2
+  exit 1
+fi
+
 VERSION="$(tr -d '[:space:]' < VERSION)"
 DOCS="docs"
 TPL="$DOCS/templates"
 
 echo "Building docs for v$VERSION"
+
+# --- CLI reference: generated from the Cobra command tree -------------------
+# The command tree is the single source of truth; `linespec gen-docs` renders it
+# to Markdown so the published reference is regenerated on every build and can
+# never drift from the code. The Markdown is a throwaway intermediate; the
+# rendered cli.html (and its inclusion in llms-full.txt) are the build artifacts.
+CLI_MD="$(mktemp -t linespec-cli.XXXXXX)"
+trap 'rm -f "$CLI_MD"' EXIT
+go run ./cmd/linespec gen-docs --out "$CLI_MD"
+echo "  generated CLI reference from the Cobra command tree"
 
 # --- Content pages: Markdown -> HTML via the shared pandoc shell -------------
 render_content() {
@@ -65,6 +81,13 @@ render_content LINESPEC.md linespec.html 1 \
   "LineSpec Testing" \
   "provenance.html" "Provenance Guide" \
   "provenance.html" "Provenance Records"
+
+render_content "$CLI_MD" cli.html 2 \
+  "CLI Reference - LineSpec Documentation" \
+  "Complete linespec command-line reference, generated from the Cobra command tree." \
+  "CLI Reference" \
+  "provenance.html" "Provenance Guide" \
+  "linespec.html" "LineSpec Testing"
 
 # --- Chrome pages: committed HTML templates with the version injected --------
 render_chrome() {
@@ -111,7 +134,15 @@ EOF
 
 EOF
   cat LINESPEC.md
+  cat <<EOF
+
+---
+
+# ===== CLI Reference (generated from the Cobra command tree) =====
+
+EOF
+  cat "$CLI_MD"
 } > "$DOCS/llms-full.txt"
-echo "  rendered $DOCS/llms-full.txt  (from README.md + PROVENANCE_RECORDS.md + LINESPEC.md)"
+echo "  rendered $DOCS/llms-full.txt  (from README.md + PROVENANCE_RECORDS.md + LINESPEC.md + CLI reference)"
 
 echo "Done."
