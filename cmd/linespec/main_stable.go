@@ -423,42 +423,11 @@ func embeddedModuleVersion() string {
 	return v
 }
 
-func runImport() {
-	args := os.Args[2:]
-	var manifestURL string
-	var version string
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--version":
-			i++
-			if i < len(args) {
-				version = args[i]
-			}
-		case "--help", "-h":
-			logger.Info(`Usage: linespec import <manifest-url> [options]
-
-Options:
-  --version <ver>   Pin to a specific manifest version (overrides @version suffix)
-  --help, -h        Show this help message
-
-Examples:
-  linespec import https://example.com/linespec.manifest.json
-  linespec import https://example.com/linespec.manifest.json@v3
-  linespec import https://example.com/linespec.manifest.json --version v2`)
-			return
-		default:
-			if manifestURL == "" && !strings.HasPrefix(args[i], "-") {
-				manifestURL = args[i]
-			}
-		}
-	}
-
-	if manifestURL == "" {
-		logger.Error("Usage: linespec import <manifest-url> [--version <ver>]")
-		os.Exit(1)
-	}
-
+// runImportCore imports a published manifest's provenance layer. The
+// <manifest-url> positional and --version pin are bound declaratively by
+// newImportCmd in provenance_cobra.go; the @version URL-suffix behavior is
+// preserved inside manifest.Fetch. Everything below this front layer is unchanged.
+func runImportCore(manifestURL, version string) {
 	cfg := loadProvenanceConfig()
 	provDir := cfg.Dir
 	if provDir == "" {
@@ -523,49 +492,12 @@ Examples:
 	}
 }
 
-func runClone() {
-	args := os.Args[2:]
-	var manifestURL string
-	var version string
-	var destDir string
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--version":
-			i++
-			if i < len(args) {
-				version = args[i]
-			}
-		case "--dir":
-			i++
-			if i < len(args) {
-				destDir = args[i]
-			}
-		case "--help", "-h":
-			logger.Info(`Usage: linespec clone <manifest-url> [options]
-
-Options:
-  --version <ver>   Pin to a specific manifest version (overrides @version suffix)
-  --dir <path>      Destination directory name (default: derived from manifest URL)
-  --help, -h        Show this help message
-
-Examples:
-  linespec clone https://example.com/linespec.manifest.json
-  linespec clone https://example.com/linespec.manifest.json@v3
-  linespec clone https://example.com/linespec.manifest.json --version v2 --dir myproject`)
-			return
-		default:
-			if manifestURL == "" && !strings.HasPrefix(args[i], "-") {
-				manifestURL = args[i]
-			}
-		}
-	}
-
-	if manifestURL == "" {
-		logger.Error("Usage: linespec clone <manifest-url> [--version <ver>] [--dir <path>]")
-		os.Exit(1)
-	}
-
+// runCloneCore bootstraps a new project directory from a published manifest. The
+// <manifest-url> positional, --version pin, and --dir destination are bound
+// declaratively by newCloneCmd in provenance_cobra.go; the @version URL-suffix
+// behavior is preserved inside manifest.Fetch. Everything below this front layer
+// is unchanged.
+func runCloneCore(manifestURL, version, destDir string) {
 	fmt.Printf("Fetching manifest from %s...\n", manifestURL)
 	fetched, err := manifest.Fetch(manifestURL, version)
 	if err != nil {
@@ -650,34 +582,12 @@ Examples:
 	fmt.Printf("\n✓ Project ready in ./%s\n", destDir)
 }
 
-func runInit() {
-	args := os.Args[2:]
-	opts := initcmd.Options{}
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--force", "-f":
-			opts.Force = true
-		case "--project", "-p":
-			i++
-			if i < len(args) {
-				opts.ProjectPath = args[i]
-			}
-		case "--output", "-o":
-			i++
-			if i < len(args) {
-				opts.OutputPath = args[i]
-			}
-		case "--help", "-h":
-			logger.Info(`Usage: linespec init [options]
-
-Options:
-  --force, -f           Overwrite existing .linespec.yml without prompting
-  --project, -p <path>  Path to the project to set up (default: prompted)
-  --output, -o <path>   Directory where .linespec.yml is written (default: project path)
-  --help, -h            Show this help message`)
-			return
-		}
-	}
+// runInitCore runs the interactive project setup. The --force/-f, --project/-p,
+// and --output/-o flags are bound declaratively by newInitCmd in
+// provenance_cobra.go; the parsed values are assembled into initcmd.Options here.
+// The initcmd.Run business logic is unchanged.
+func runInitCore(force bool, projectPath, outputPath string) {
+	opts := initcmd.Options{Force: force, ProjectPath: projectPath, OutputPath: outputPath}
 	if err := initcmd.Run(opts); err != nil {
 		logger.Error("%v", err)
 		os.Exit(1)
