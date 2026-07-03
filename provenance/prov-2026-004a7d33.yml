@@ -24,6 +24,8 @@ affected_scope:
   - scripts/build-docs.sh
   - .gitignore
   - .github/workflows/pages.yml
+  - go.mod
+  - go.sum
 forbidden_scope: []
 type: imprint
 implements: prov-2026-f1241113

@@ -17,6 +17,11 @@ on:
       - 'docs/**'
       - 'scripts/build-docs.sh'
       - '.github/workflows/pages.yml'
+      # The CLI reference is generated from the command tree, so CLI source and
+      # dependency changes must also trigger a rebuild or the reference drifts.
+      - 'cmd/**'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 permissions:
@@ -36,6 +41,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Install pandoc
         run: sudo apt-get update && sudo apt-get install -y pandoc
