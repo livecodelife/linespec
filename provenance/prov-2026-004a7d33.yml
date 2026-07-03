@@ -1,6 +1,6 @@
 id: prov-2026-004a7d33
 title: Generate CLI reference via cobra/doc and wire into docs pipeline
-status: open
+status: implemented
 created_at: "2026-06-23"
 author: calebcowen@gmail.com
 intent: |
@@ -32,7 +32,7 @@ implements: prov-2026-f1241113
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 096286060d56fc297a3cb39de15161fdc04891d0
 associated_specs:
     - type: code
       path: cmd/linespec/main_stable.go
