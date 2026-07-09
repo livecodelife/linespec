@@ -1,13 +1,20 @@
 FROM golang:1.23-alpine AS builder
 ENV GOTOOLCHAIN=auto
+# cmd/linespec pulls in go-tree-sitter (via pkg/discover), a cgo package, so the
+# build needs a C toolchain and CGO enabled. Without them the cgo bindings that
+# define Node are excluded and the build fails with "undefined: Node". The
+# legacy `-tags beta` is dropped: nothing gates on it after the Cobra collapse,
+# and the default build is the unified superset.
+RUN apk --no-cache add build-base
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -tags beta -o linespec ./cmd/linespec
+RUN CGO_ENABLED=1 go build -o linespec ./cmd/linespec
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+# libstdc++/libgcc back the cgo (go-tree-sitter) runtime dependencies.
+RUN apk --no-cache add ca-certificates libstdc++
 WORKDIR /app
 COPY --from=builder /app/linespec /app/linespec
 ENTRYPOINT ["/app/linespec"]
