@@ -1,0 +1,42 @@
+id: prov-2026-80db53da
+title: Fix Dockerfile.linespec cgo build broken by the unified binary
+status: draft
+created_at: "2026-07-09"
+author: calebcowen@gmail.com
+intent: |
+  The "Example LineSpec Tests" CI job fails at the "Build LineSpec Docker image"
+  step with "undefined: Node" from github.com/smacker/go-tree-sitter. Root cause:
+  after the Cobra collapse (af7becf2) the single cmd/linespec entrypoint imports
+  pkg/discover unconditionally, which pulls in go-tree-sitter — a cgo package.
+  Dockerfile.linespec builds on golang:1.23-alpine with no C toolchain and CGO
+  effectively disabled, so the cgo bindings that define Node are excluded while
+  the pure-Go iter.go still references Node, and the build fails. Fix the image
+  build to compile the cgo dependency: install a C toolchain (build-base) and
+  build with CGO_ENABLED=1. Also drop the now-legacy `-tags beta` (nothing is
+  gated on the beta build tag after the collapse; the default build is the
+  unified superset).
+constraints:
+  - The fix is confined to Dockerfile.linespec; no Go source or dependency change.
+  - The produced binary must still run on the alpine:latest runtime stage (musl),
+    so build the cgo binary against alpine's musl in the builder stage.
+  - Drop `-tags beta` only after confirming no Go file still gates behavior on the
+    beta build tag (verified — none remain).
+affected_scope:
+  - Dockerfile.linespec
+forbidden_scope: []
+type: bug
+extends: prov-2026-f1241113
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: Dockerfile.linespec
+    run_command: docker build -f Dockerfile.linespec -t linespec:verify .
+associated_traces: []
+monitors: []
+tags:
+  - docker
+  - cgo
+  - ci
