@@ -13,8 +13,15 @@ builds:
   - id: linespec-stable
     main: ./cmd/linespec
     binary: linespec
+    # cgo is required: pkg/discover pulls in go-tree-sitter (a cgo package), so
+    # the binary no longer builds pure-Go. This job runs on a macOS runner, so
+    # darwin builds natively via clang (macOS SDK provides libresolv + the
+    # CoreFoundation/Security frameworks that crypto/x509 links); linux and
+    # windows cross-compile with `zig cc`/`zig c++` (tree-sitter is pure C).
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
+      - '{{ if eq .Os "linux" }}{{ if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-gnu{{ else }}CC=zig cc -target aarch64-linux-gnu{{ end }}{{ else if eq .Os "darwin" }}CC=clang{{ else if eq .Os "windows" }}CC=zig cc -target x86_64-windows-gnu{{ end }}'
+      - '{{ if eq .Os "linux" }}{{ if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-linux-gnu{{ else }}CXX=zig c++ -target aarch64-linux-gnu{{ end }}{{ else if eq .Os "darwin" }}CXX=clang++{{ else if eq .Os "windows" }}CXX=zig c++ -target x86_64-windows-gnu{{ end }}'
     goos:
       - linux
       - windows
@@ -35,8 +42,15 @@ builds:
   - id: linespec-beta
     main: ./cmd/linespec
     binary: linespec
+    # cgo is required: pkg/discover pulls in go-tree-sitter (a cgo package), so
+    # the binary no longer builds pure-Go. This job runs on a macOS runner, so
+    # darwin builds natively via clang (macOS SDK provides libresolv + the
+    # CoreFoundation/Security frameworks that crypto/x509 links); linux and
+    # windows cross-compile with `zig cc`/`zig c++` (tree-sitter is pure C).
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
+      - '{{ if eq .Os "linux" }}{{ if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-gnu{{ else }}CC=zig cc -target aarch64-linux-gnu{{ end }}{{ else if eq .Os "darwin" }}CC=clang{{ else if eq .Os "windows" }}CC=zig cc -target x86_64-windows-gnu{{ end }}'
+      - '{{ if eq .Os "linux" }}{{ if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-linux-gnu{{ else }}CXX=zig c++ -target aarch64-linux-gnu{{ end }}{{ else if eq .Os "darwin" }}CXX=clang++{{ else if eq .Os "windows" }}CXX=zig c++ -target x86_64-windows-gnu{{ end }}'
     goos:
       - linux
       - windows
