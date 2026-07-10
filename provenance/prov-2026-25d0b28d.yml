@@ -1,0 +1,63 @@
+id: prov-2026-25d0b28d
+title: Update provenance skill with next, discover, and CLI-first guidance
+status: draft
+created_at: "2026-07-10"
+author: calebcowen@gmail.com
+implements: prov-2026-dfa5051f
+intent: |
+  The provenance skill needs updating to reflect recently shipped capabilities and to
+  steer coding agents toward correct usage patterns. Three gaps:
+
+  1. The `next` command shipped and is now the canonical first step — it computes the
+     single correct next provenance action with record IDs filled in — but the skill
+     still leads with `context -f <file>` as the investigation entry point.
+
+  2. The `discover` command (bootstrap draft blueprint records and `.linespec` stubs for
+     an existing codebase via tree-sitter static analysis) is entirely absent from the
+     skill, so agents have no guidance on when or how to use it.
+
+  3. Agents default to bash grep/find/cat when investigating provenance context instead
+     of using `linespec provenance context`, `govern`, `search`, and `next` — the
+     accurate, cache-backed CLI commands that also surface exemptions, ancestry, and
+     conflicts that grep cannot.
+
+  Additionally, the skill should reinforce that imprint records are written BEFORE the
+  code they document, not retroactively after implementation.
+constraints:
+  - Promote `linespec provenance next` to the primary first-step command in the TL;DR
+    and investigation section; it computes the correct next action with IDs filled in
+    and must run before the agent touches any file.
+  - Document `linespec provenance discover` in a dedicated section covering its purpose
+    (bootstrap records and .linespec stubs for existing codebases), key flags
+    (--dir, --lang, --framework, --enrich, --dry-run, --format), supported frameworks
+    (Chi/Go, Rails/Sinatra/Ruby), what it emits (draft blueprints + linespecs/ stubs),
+    and that outputs are a starting point to review and refine.
+  - Explicitly direct agents to use `linespec provenance` commands (context, govern,
+    search, next) for provenance investigation — never raw bash grep/find/cat.
+  - Strengthen the imprint guidance so agents understand that imprint records must be
+    created and committed BEFORE the code they capture, not retroactively.
+  - Do not change the skill frontmatter (name, description, when_to_use fields).
+affected_scope:
+  - skills/provenance/SKILL.md
+  - .claude/skills/provenance/SKILL.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-dfa5051f
+  - prov-2026-3bfc4e1a
+sealed_at_sha: ""
+associated_specs:
+  - path: skills/provenance/SKILL.md
+    run_command: grep -q 'provenance next' {{path}}
+  - path: skills/provenance/SKILL.md
+    run_command: grep -q 'provenance discover' {{path}}
+  - path: skills/provenance/SKILL.md
+    run_command: grep -qi 'not.*bash\|avoid.*bash\|never.*bash\|prefer.*linespec\|use.*linespec.*commands' {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - skill
+  - documentation
+  - agents
