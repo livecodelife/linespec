@@ -1,6 +1,6 @@
 id: prov-2026-2b6ba33a
 title: Flag .claude/ write restriction and out-of-scope commands.go embed
-status: draft
+status: open
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 intent: |
