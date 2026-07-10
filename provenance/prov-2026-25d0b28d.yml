@@ -1,6 +1,6 @@
 id: prov-2026-25d0b28d
 title: Update provenance skill with next, discover, govern, and CLI-first guidance
-status: open
+status: implemented
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 implements: prov-2026-dfa5051f
@@ -57,7 +57,7 @@ superseded_by: ""
 related:
   - prov-2026-dfa5051f
   - prov-2026-3bfc4e1a
-sealed_at_sha: ""
+sealed_at_sha: 135f87ad63cf76e0167f3bd6b3b8e809f1fac131
 associated_specs:
   - path: skills/provenance/SKILL.md
     run_command: grep -q 'provenance next' {{path}}
