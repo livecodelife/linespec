@@ -79,3 +79,6 @@ docs/provenance.html
 docs/cli.html
 docs/llms.txt
 docs/llms-full.txt
+
+# GoReleaser build output (produced by `goreleaser build`/`release`)
+/dist/
