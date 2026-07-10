@@ -1,0 +1,79 @@
+id: prov-2026-2f48aea1
+title: Release v3.14.0
+status: draft
+created_at: "2026-07-09"
+author: calebcowen@gmail.com
+intent: |
+  Version bump and release artifacts for v3.14.0. Minor release bundling the
+  work accumulated on main since v3.13.0. All changes are additive or
+  behavior-preserving; there are no breaking changes, so a minor bump is
+  correct.
+
+  Highlights:
+    - Added: `linespec provenance discover` — scans a target repository's
+      source and auto-generates draft blueprint records and `.linespec` stubs
+      from its discovered HTTP routes and cross-service protocol boundaries.
+      Built in phases: tree-sitter parsing infrastructure introducing a CGO
+      dependency (prov-2026-010bb9ec, prov-2026-ac156eb7); route discovery and
+      framework descriptions for Chi, Rails, and Sinatra (prov-2026-c60ec2ad,
+      prov-2026-9d655373, prov-2026-f6e3c9c2); protocol-boundary tracing via a
+      syntactic call-graph walk (prov-2026-95b526f5, prov-2026-e565ad85);
+      `.linespec` stub generation (prov-2026-da18cbfe, prov-2026-db4734d9,
+      prov-2026-2d91c2ba); blueprint-record generation and CLI wiring
+      (prov-2026-2042c6a2, prov-2026-e49a5c61, prov-2026-a9a09e43); and the
+      `--enrich` git-history + LLM intent synthesis with `--llm-url`
+      (prov-2026-a18e2104 and imprints).
+    - Added: `exclude_paths` provenance config to exempt files from governance
+      (prov-2026-1b5fa2c2, prov-2026-520279fa).
+    - Added: auto-generated CLI reference from the Cobra tree via cobra/doc,
+      wired into the docs pipeline (prov-2026-004a7d33).
+    - Changed: the CLI is migrated to a declarative Cobra command tree with the
+      two build-tagged entrypoints collapsed into one (prov-2026-f1241113 and
+      imprints).
+    - Changed: the docs site is built from Markdown source in CI; rendered HTML
+      and llms*.txt are now gitignored build artifacts (prov-2026-a7b20513,
+      prov-2026-13576bee).
+    - Changed: consolidated dupl-flagged duplication across verify, the proxies,
+      and the runner (prov-2026-23ab1db8, prov-2026-4bab0511, prov-2026-b5c9c813).
+    - Fixed: Dockerfile.linespec cgo build broken by the unified binary
+      (prov-2026-80db53da).
+constraints:
+  - |
+    Promote [Unreleased] in CHANGELOG.md to [3.14.0] - 2026-07-09; add a fresh
+    empty [Unreleased] section above it. The [Unreleased] section is currently
+    empty, so the full changelog for this release is reconstructed from the
+    records completed since v3.13.0.
+  - make bump-version NEW=3.14.0 handles VERSION and the doc references (README).
+  - Run linespec provenance compile to rebuild the hash manifest.
+  - Docs/*.html and llms*.txt are gitignored build artifacts and are NOT part of
+    the release commit (unlike v3.13.0); the Pages workflow rebuilds them.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-f1241113
+  - prov-2026-1b5fa2c2
+  - prov-2026-a7b20513
+  - prov-2026-004a7d33
+  - prov-2026-80db53da
+  - prov-2026-23ab1db8
+  - prov-2026-4bab0511
+  - prov-2026-b5c9c813
+  - prov-2026-13576bee
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - release
