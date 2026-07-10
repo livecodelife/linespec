@@ -1,6 +1,6 @@
 id: prov-2026-05aeb6a6
 title: Lead skill investigation with next; document discover/govern; fix context -f syntax bug
-status: open
+status: implemented
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 intent: |
@@ -22,7 +22,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2c5edca745a77640c97245c1d4ad5b3cb04c765f
 associated_specs:
   - path: skills/provenance/SKILL.md
     run_command: grep -q 'context <file>' {{path}}
