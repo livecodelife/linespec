@@ -1,6 +1,6 @@
 id: prov-2026-78af1526
 title: Fix GoReleaser cgo cross-compilation broken by discover/tree-sitter
-status: draft
+status: open
 created_at: "2026-07-09"
 author: calebcowen@gmail.com
 intent: |
@@ -30,8 +30,10 @@ constraints:
 affected_scope:
   - .goreleaser.yml
   - .github/workflows/release.yml
+  - .gitignore
 forbidden_scope: []
 type: bug
+extends: prov-2026-f1241113
 supersedes: ""
 superseded_by: ""
 related:
@@ -39,7 +41,10 @@ related:
   - prov-2026-ac156eb7
   - prov-2026-2f48aea1
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - type: code
+    path: .goreleaser.yml
+    run_command: goreleaser build --snapshot --clean --skip=before
 associated_traces: []
 monitors: []
 tags:
