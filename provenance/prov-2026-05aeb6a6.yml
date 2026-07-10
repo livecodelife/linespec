@@ -1,0 +1,33 @@
+id: prov-2026-05aeb6a6
+title: Lead skill investigation with next; document discover/govern; fix context -f syntax bug
+status: draft
+created_at: "2026-07-10"
+author: calebcowen@gmail.com
+intent: |
+  Reworked skills/provenance/SKILL.md's investigation guidance to lead with `next`
+  instead of `context -f`, added a dedicated `discover` section and a `govern`
+  subsection alongside `context`/`next`, and strengthened the imprint-timing
+  guidance. Also fixed a pre-existing bug: `context -f <file>` uses a `-f`
+  shorthand flag that does not exist on the `context` command (verified via
+  `linespec provenance context --help`); corrected both occurrences to the
+  actual positional `<file>...` syntax.
+constraints:
+  - "next/govern/discover documentation must match actual CLI flags, verified
+    against `--help` output and pkg/discover/framework for supported
+    frameworks (Chi/Go, Rails+Sinatra/Ruby) — not guessed."
+  - "Frontmatter (name, description, when_to_use) must remain byte-identical
+    to the pre-existing values, per the blueprint's constraint."
+implements: prov-2026-25d0b28d
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: skills/provenance/SKILL.md
+    run_command: grep -q 'context <file>' {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - skill
+  - documentation
