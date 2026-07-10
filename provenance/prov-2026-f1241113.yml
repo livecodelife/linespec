@@ -1,6 +1,6 @@
 id: prov-2026-f1241113
 title: Migrate cmd/linespec CLI to a Cobra command tree
-status: open
+status: implemented
 created_at: "2026-06-22"
 author: calebcowen@gmail.com
 intent: |
@@ -53,7 +53,7 @@ implements: prov-2026-d25ed59c
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: cea760c5825fda45975f653cef0c0558fde8e695
 associated_specs:
   - type: code
     path: cmd/linespec/main_stable.go
