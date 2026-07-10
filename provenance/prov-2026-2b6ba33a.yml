@@ -1,0 +1,46 @@
+id: prov-2026-2b6ba33a
+title: Flag .claude/ write restriction and out-of-scope commands.go embed
+status: draft
+created_at: "2026-07-10"
+author: calebcowen@gmail.com
+intent: |
+  Two out-of-band notes from this implementation session, for the operator's
+  attention:
+
+  1. This blueprint's affected_scope lists both skills/provenance/SKILL.md and
+     .claude/skills/provenance/SKILL.md as identical on-disk copies. The
+     sandboxed headless session this work ran in hard-blocked all writes
+     (Write, Edit, and Bash cp/cat-redirect) to .claude/skills/provenance/SKILL.md
+     specifically, with no way to grant permission non-interactively. Only
+     skills/provenance/SKILL.md was updated; the .claude/ copy still has the
+     pre-existing content and needs the same diff applied by someone with an
+     interactive session with permission to write under .claude/. All four of
+     the blueprint's associated_specs target skills/provenance/SKILL.md only,
+     so this does not block completion, but the two copies are now out of sync.
+
+  2. pkg/provenance/commands.go embeds a third copy of this same content as the
+     `provenanceSkillMD` Go string constant (used by `install-skills`). Prior
+     records (e.g. prov-2026-799d52f0, prov-2026-f25d8526, prov-2026-7efa1f1b)
+     established the norm that this embed and the on-disk SKILL.md copies are
+     kept byte-for-byte in sync. This blueprint's affected_scope did not
+     include commands.go, so it was deliberately left unchanged per the
+     no-scope-expansion instruction — but that means `install-skills` will now
+     emit stale content until a follow-up record updates the embed to match.
+constraints:
+  - "No code changes; this imprint documents blockers/decisions only — no
+    associated production diff beyond the parent blueprint's own commit."
+implements: prov-2026-25d0b28d
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: provenance/prov-2026-25d0b28d.yml
+    run_command: grep -q 'skills/provenance/SKILL.md' {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - skill
+  - documentation
+  - follow-up
