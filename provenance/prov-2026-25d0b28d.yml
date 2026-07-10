@@ -1,12 +1,12 @@
 id: prov-2026-25d0b28d
-title: Update provenance skill with next, discover, and CLI-first guidance
+title: Update provenance skill with next, discover, govern, and CLI-first guidance
 status: draft
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 implements: prov-2026-dfa5051f
 intent: |
   The provenance skill needs updating to reflect recently shipped capabilities and to
-  steer coding agents toward correct usage patterns. Three gaps:
+  steer coding agents toward correct usage patterns. Four gaps:
 
   1. The `next` command shipped and is now the canonical first step — it computes the
      single correct next provenance action with record IDs filled in — but the skill
@@ -16,7 +16,12 @@ intent: |
      an existing codebase via tree-sitter static analysis) is entirely absent from the
      skill, so agents have no guidance on when or how to use it.
 
-  3. Agents default to bash grep/find/cat when investigating provenance context instead
+  3. The `govern` command (list just the active — open + implemented — records governing
+     a set of files, cache-backed like `next`) is also absent from the skill, so agents
+     don't know it exists as a lighter-weight alternative to `context` when they only
+     need the active governing records for files they're about to change.
+
+  4. Agents default to bash grep/find/cat when investigating provenance context instead
      of using `linespec provenance context`, `govern`, `search`, and `next` — the
      accurate, cache-backed CLI commands that also surface exemptions, ancestry, and
      conflicts that grep cannot.
@@ -32,6 +37,10 @@ constraints:
     (--dir, --lang, --framework, --enrich, --dry-run, --format), supported frameworks
     (Chi/Go, Rails/Sinatra/Ruby), what it emits (draft blueprints + linespecs/ stubs),
     and that outputs are a starting point to review and refine.
+  - Document `linespec provenance govern` alongside `context` and `next`, covering its
+    `--files` flag, that it returns only active (open + implemented) governing records
+    as a lighter-weight, cache-backed alternative to `context` when an agent just needs
+    to know what currently governs the files it's about to touch.
   - Explicitly direct agents to use `linespec provenance` commands (context, govern,
     search, next) for provenance investigation — never raw bash grep/find/cat.
   - Strengthen the imprint guidance so agents understand that imprint records must be
@@ -53,6 +62,8 @@ associated_specs:
     run_command: grep -q 'provenance next' {{path}}
   - path: skills/provenance/SKILL.md
     run_command: grep -q 'provenance discover' {{path}}
+  - path: skills/provenance/SKILL.md
+    run_command: grep -q 'provenance govern' {{path}}
   - path: skills/provenance/SKILL.md
     run_command: grep -qi 'not.*bash\|avoid.*bash\|never.*bash\|prefer.*linespec\|use.*linespec.*commands' {{path}}
 associated_traces: []
