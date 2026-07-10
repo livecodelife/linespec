@@ -12,7 +12,7 @@ Follow these rules precisely whenever working with provenance records or making 
 
 Before touching anything, follow this sequence and you will not get stuck on enforcement:
 
-1. **Investigate.** Run `linespec provenance context -f <file>` for every file you plan to change. This shows which records govern them. (Those governing records do **not** need to be superseded — see below.)
+1. **Investigate.** Run `linespec provenance next --plan <file>...` for every file you plan to change. It computes the single correct next action — with record IDs already filled in — so start here, not with a manual read of the graph. (Governing records `next` surfaces do **not** need to be superseded — see below.)
 2. **Create one record:** `linespec provenance create --type blueprint --no-edit --title "…"`.
 3. **Set its `affected_scope`** to exactly the files you will change.
 4. **Create your proof artifact, then `open`** the record with that spec referenced in `associated_specs`.
@@ -21,12 +21,28 @@ Before touching anything, follow this sequence and you will not get stuck on enf
 
 ## Step 1 — Investigate Before Creating
 
-**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code.
+**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code — and grep/find/cat cannot see any of it: they can't tell you which records govern a file, whether a file is exempted, what the ancestry of a decision is, or whether two open records conflict over the same file. **Always use `linespec provenance` commands for provenance investigation; never fall back to raw bash grep/find/cat to infer governance.**
 
-For every file you plan to touch, check which records govern it:
+**Start with `next`** — it computes the single correct next provenance action for the files you're about to touch, with record IDs already filled in, so you don't have to manually reason through the state machine:
 
 ```bash
-linespec provenance context -f <file> [-c <config>]
+linespec provenance next --plan <file>... [-c <config>]   # or: next [files...]
+```
+
+It tells you, precisely: create a new record, open an existing draft, add specs before opening, commit under an existing ID, or complete — with the exact command to run next. Run this before you write a line of code or create a record.
+
+For a lighter-weight lookup — just the active records currently governing a set of files, without the full graph context — use `govern`:
+
+```bash
+linespec provenance govern --files <file>... [-c <config>]   # or: govern [files...]
+```
+
+`govern` returns only **open + implemented** records (cache-backed, like `next`). Reach for it when you already know what you're doing and just need to confirm what currently governs the files you're about to change.
+
+For the full picture — all statuses, ancestry, and any cross-record conflicts on your files — use `context`:
+
+```bash
+linespec provenance context <file>... [-c <config>]
 ```
 
 If embeddings are configured, search semantically:
@@ -42,6 +58,22 @@ linespec provenance status --record prov-YYYY-XXXXXXXX [-c <config>]
 ```
 
 **Important:** discovering that several records govern your files does NOT mean you must supersede them. The scope check only validates the record you tag. You will create one new record covering your files (Step 2). See "Scope Enforcement & When You're Blocked" below.
+
+### Bootstrapping provenance on an existing codebase — `discover`
+
+`discover` scans a codebase with tree-sitter and generates **draft** blueprint records plus `.linespec` stubs, so you don't hand-author provenance from a blank page for code that predates it:
+
+```bash
+linespec provenance discover [--dir <path>] [--lang <lang>] [--framework <name>] [--dry-run] [--enrich] [--format table|json] [-c <config>]
+```
+
+- `--dir` — scope the scan to a subdirectory instead of the repo root (useful in monorepos).
+- `--lang` / `--framework` — override auto-detection when the codebase's dependency manifests don't make it obvious.
+- `--dry-run` — print what would be generated (routes, boundaries, records) without writing any files; pair with `--format json` for machine-readable output.
+- `--enrich` — populate `intent` fields from git history instead of leaving them as placeholders.
+- Supported frameworks: Chi (Go), and Rails/Sinatra (Ruby).
+
+It emits **draft** blueprint records under `provenance/` and skeleton `.linespec` files under `linespecs/` — a starting point, not finished output. Review and refine every generated record and spec (fill in real `intent`/`constraints`, correct any misdetected routes) before opening them; `discover` never overwrites existing records or specs.
 
 ## Step 2 — Create a Blueprint Record (Draft)
 
@@ -73,6 +105,8 @@ As you work, create `imprint` records to log micro-decisions, trade-offs, pivots
 type: imprint
 implements: prov-YYYY-XXXXXXXX   # the blueprint ID
 ```
+
+**Write and commit the imprint BEFORE writing the code it documents, not after.** An imprint captures the decision you're about to make — the trade-off, the pivot, the reasoning — so it must exist before the commit that acts on it, the same way the blueprint must exist before any implementation code. Retroactively writing an imprint after the fact turns it into a summary instead of a record of the decision, and defeats the purpose of provenance as a decision log.
 
 **All imprints must be implemented before the blueprint can be completed.** Tag every implementation commit with the relevant record ID.
 
@@ -205,9 +239,12 @@ In monorepos with multiple `.linespec.yml` files, **always use `-c <path>`** to 
 
 ```bash
 # Investigation
+linespec provenance next --plan <file>... [-c <config>]    # the single correct next action (start here)
+linespec provenance govern --files <file>... [-c <config>] # active (open+implemented) records governing files
 linespec provenance status [--record <id>] [-c <config>]   # list records / detail
 linespec provenance search --query "<query>" [-c <config>] # semantic search
-linespec provenance context -f <file> [-c <config>]        # which records govern a file
+linespec provenance context <file>... [-c <config>]        # full context: which records govern a file
+linespec provenance discover [--dir <path>] [--dry-run]    # bootstrap draft records + .linespec stubs
 linespec provenance audit [-c <config>]                    # audit recent changes
 linespec provenance graph [--root <id>] [-c <config>]      # render the graph
 
