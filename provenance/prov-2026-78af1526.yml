@@ -1,0 +1,47 @@
+id: prov-2026-78af1526
+title: Fix GoReleaser cgo cross-compilation broken by discover/tree-sitter
+status: draft
+created_at: "2026-07-09"
+author: calebcowen@gmail.com
+intent: |
+  The v3.14.0 Release workflow failed at the GoReleaser step with
+  "undefined: Node" from github.com/smacker/go-tree-sitter. Root cause is the
+  same cgo dependency that prov-2026-80db53da fixed for Dockerfile.linespec:
+  after the Cobra collapse the single cmd/linespec entrypoint imports
+  pkg/discover unconditionally, which pulls in go-tree-sitter (a cgo package).
+  .goreleaser.yml still builds every target (linux/windows/darwin x amd64/arm64)
+  with CGO_ENABLED=0, so the pure-Go iter.go references Node — defined only in
+  the cgo bindings — and the build fails. The Test job passed because it builds
+  natively (cgo available on the runner); only GoReleaser's cross-compilation
+  matrix breaks.
+
+  Fix: cross-compile with cgo enabled using `zig cc` / `zig c++` as the
+  per-target C/C++ cross-compiler. This keeps the full platform matrix and ships
+  the discover feature in every prebuilt binary. tree-sitter is pure C (libc
+  only, no platform frameworks), so zig cross-links it cleanly for each
+  goos/goarch. Set CGO_ENABLED=1 and a templated per-target CC/CXX in both
+  .goreleaser.yml builds, and install zig in the Release workflow before the
+  GoReleaser step.
+constraints:
+  - Keep the existing platform/arch matrix (linux/windows/darwin x amd64/arm64,
+    minus windows/arm64) and both the stable and beta build IDs.
+  - Do not change cmd/linespec or pkg/discover; the fix is release-tooling only.
+  - Pin the zig version in the workflow for reproducibility.
+affected_scope:
+  - .goreleaser.yml
+  - .github/workflows/release.yml
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-80db53da
+  - prov-2026-ac156eb7
+  - prov-2026-2f48aea1
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - ci
