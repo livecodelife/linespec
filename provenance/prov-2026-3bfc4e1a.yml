@@ -1,0 +1,63 @@
+id: prov-2026-3bfc4e1a
+title: Document discover and exclude_paths in the provenance reference
+status: draft
+created_at: "2026-07-09"
+author: calebcowen@gmail.com
+intent: |
+  Two v3.14.0 capabilities shipped without published documentation: the
+  `linespec provenance discover` command (a 203-line LINESPEC_DISCOVER.md exists
+  but is a design brief, never wired into the site build) and the `exclude_paths`
+  provenance config key (absent from every prose doc; it is a `.linespec.yml`
+  key, not a CLI flag, so it does not even appear in the generated cli.html).
+
+  Document both on the existing published provenance page — PROVENANCE_RECORDS.md,
+  rendered to provenance.html by scripts/build-docs.sh — rather than adding a new
+  page:
+    - Add a `### Discover` subsection under `## CLI Commands` with a user-facing
+      summary: purpose (bootstrap records + .linespec stubs for an existing
+      codebase), the real flag surface (--dir, --lang, --framework, --enrich,
+      --llm-url, --dry-run, --format), supported frameworks (Chi/Go, Rails and
+      Sinatra/Ruby), output locations (draft blueprint records in provenance/,
+      `.linespec` stubs in linespecs/), and a cross-link to the LINESPEC_DISCOVER.md
+      design deep-dive.
+    - Add `exclude_paths` to the Configuration section: the example YAML, the
+      Configuration Options table, and a `#### exclude_paths` detail subsection
+      documenting the glob / full-path / directory-prefix / regex matching and
+      what exemption means (linter skips, commit checker skips scope-enforcement
+      and the commit-tag requirement, context reports the exemption).
+    - Add a brief discover mention + cross-link to README.md.
+
+  Flags and defaults are sourced from the built binary (discover --help) and the
+  code (stubs write to linespecs/), not from the design brief, which predates the
+  --llm-url flag and the specs->linespecs rename. The docs site rebuilds from
+  main on every push via the Pages workflow, so this needs no version bump or
+  release tag.
+constraints:
+  - Use the existing PROVENANCE_RECORDS.md page; do not add a new site page or
+    change scripts/build-docs.sh or the nav.
+  - Document the actual implemented flag surface and defaults, not the design brief.
+  - Validate the render locally with scripts/build-docs.sh (pandoc) before completing.
+affected_scope:
+  - PROVENANCE_RECORDS.md
+  - README.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c60ec2ad
+  - prov-2026-1b5fa2c2
+  - prov-2026-2f48aea1
+  - prov-2026-5c310d9d
+sealed_at_sha: ""
+associated_specs:
+  - path: PROVENANCE_RECORDS.md
+    run_command: grep -q 'provenance discover' {{path}}
+  - path: PROVENANCE_RECORDS.md
+    run_command: grep -q exclude_paths {{path}}
+  - path: README.md
+    run_command: grep -qi discover {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - documentation
