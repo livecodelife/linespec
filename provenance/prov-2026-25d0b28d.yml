@@ -49,6 +49,7 @@ constraints:
 affected_scope:
   - skills/provenance/SKILL.md
   - .claude/skills/provenance/SKILL.md
+  - pkg/provenance/commands.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
