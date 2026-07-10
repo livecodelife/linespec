@@ -113,6 +113,7 @@ tags:
 ```bash
 # Record management
 linespec provenance create          # Create new record
+linespec provenance discover        # Bootstrap draft records + spec stubs from existing source
 linespec provenance lint            # Validate records
 linespec provenance status          # View status
 linespec provenance graph           # Render decision graph
@@ -151,6 +152,8 @@ linespec provenance lint --format sarif    # SARIF output for GitHub Code Scanni
 ### Key Features
 
 - **Structured YAML format** - Clear, version-controlled decision records
+- **Codebase discovery** - `provenance discover` bootstraps draft records and `.linespec` stubs from an existing Chi/Rails/Sinatra project ([details](./PROVENANCE_RECORDS.md#discover))
+- **Path exemptions** - `exclude_paths` exempts generated/vendored files from governance ([details](./PROVENANCE_RECORDS.md#exclude_paths))
 - **Scope enforcement** - Automatic validation of what files can be modified
 - **Git integration** - Pre-commit hooks and commit message validation
 - **Graph visualization** - Query and visualize decision relationships

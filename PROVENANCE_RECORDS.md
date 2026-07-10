@@ -277,6 +277,41 @@ linespec provenance create --title "Quick fix" --no-edit
 
 **Note:** New records start in `draft` status. Scope and spec enforcement are suppressed until you run `linespec provenance open`.
 
+### Discover
+
+Bootstrap provenance records and LineSpec spec stubs for an **existing** codebase by statically analyzing its source. This solves the cold-start problem when adopting Provenance on a legacy project: instead of a blank page, you run one command and get a draft provenance graph to review and refine.
+
+```bash
+# Scan the whole repo, auto-detect language and framework
+linespec provenance discover
+
+# Preview without writing files (see routes, boundaries, proposed records)
+linespec provenance discover --dry-run
+
+# Scope to one service in a monorepo, and enrich intent from git history
+linespec provenance discover --dir services/api --enrich
+```
+
+`discover` parses source with tree-sitter, walks each framework's route and protocol-boundary patterns, and emits:
+
+- **Draft blueprint records** in `provenance/` with populated `affected_scope` and `associated_specs` (and, with `--enrich`, `intent`). They start in `draft` — review, refine, and `open` them like any hand-written record.
+- **`.linespec` spec stubs** in `linespecs/` with `RECEIVE`/`EXPECT`/`RESPOND` skeletons derived from the detected protocol boundaries (bodies left as `# TODO`).
+- A **summary report** of routes found, protocol boundaries traced, records created, and anything that couldn't be statically classified.
+
+**Supported frameworks:** Chi (Go), Rails and Sinatra (Ruby), with PostgreSQL/MySQL/Redis/HTTP/Kafka boundary tracing. Framework recognition is driven by declarative description files, so new frameworks can be added without Go code.
+
+**Options:**
+- `--dir path` - Scope the scan to a directory (default: repo root). Records and `linespecs/` are written under this directory.
+- `--lang go|ruby` - Language override (auto-detected from file extensions and manifests if omitted)
+- `--framework chi|rails|sinatra` - Framework override (auto-detected from dependencies if omitted)
+- `--enrich` - Populate `intent` fields from git history via an LLM. Without it, the whole pipeline is deterministic.
+- `--llm-url url` - Base URL of a local LLM server for `--enrich` (the provider path is appended automatically)
+- `--dry-run` - Print what would be generated without writing any files
+- `--format table|json` - Output format for `--dry-run` (default: `table`)
+- `-c, --config path` - Use custom .linespec.yml
+
+The generated records and stubs are a starting point, not a finished artifact — `discover` gets the structure right (which endpoints exist and what each talks to) and leaves the judgment calls (`intent`, `constraints`, spec bodies) for you. See `LINESPEC_DISCOVER.md` in the repository for the design deep-dive, framework-description format, and the tree-sitter approach.
+
 ### Open
 
 Transition a record from `draft` to `open`, activating scope and spec enforcement:
@@ -916,6 +951,14 @@ provenance:
   shared_repos:
     - examples/user-service/provenance
     - examples/todo-api/provenance
+
+  # Files exempt from all provenance governance (default: none).
+  # Entries may be globs, exact paths, directory prefixes, or /regex/.
+  exclude_paths:
+    - docs/                 # directory prefix — everything under docs/
+    - "**/*_gen.go"         # glob — generated Go files anywhere
+    - CHANGELOG.md          # exact path
+    - /.*\.pb\.go$/         # regex — protobuf-generated files
 ```
 
 ### Configuration Options
@@ -929,6 +972,7 @@ provenance:
 | `run_associated_specs_on_complete` | bool | `false` | Run specs on completion transition |
 | `overlap_specs_on_complete` | string | `block` | Completion-time overlap teeth severity: `block`\|`warn`\|`off` |
 | `shared_repos` | array | `[]` | Additional directories |
+| `exclude_paths` | array | `[]` | Files exempt from all governance (globs, paths, dir prefixes, `/regex/`) |
 
 #### `overlap_specs_on_complete`
 
@@ -939,6 +983,25 @@ When a record is completed, the completion-time **overlap teeth** run the `assoc
 - **`off`** — skip the cross-record teeth entirely. The completing record's **own** `associated_specs` still run.
 
 Note: `complete --force` does **not** bypass the teeth — only this config key (and the master switch) controls them. Remote (`shared_repos`) records are never run as teeth against your local tree.
+
+#### `exclude_paths`
+
+Some files should never require provenance governance — generated code, vendored docs, migration scripts, tooling configs. List them under `exclude_paths` and any matching file becomes **fully exempt**:
+
+- the linter skips it,
+- the commit checker skips both scope-enforcement **and** the commit-tag requirement for it, and
+- `linespec provenance context` reports the exemption explicitly rather than silently omitting the file.
+
+Each entry is matched against a file's repo-relative path using the first form that applies:
+
+| Form | How it's recognized | Example | Matches |
+|------|--------------------|---------|---------|
+| **Regex** | Wrapped in `/…/` | `/.*\.pb\.go$/` | any `*.pb.go` file |
+| **Glob** | Contains `*` or `?` | `**/*_gen.go` | generated Go files at any depth |
+| **Exact path** | No wildcards, matches in full | `CHANGELOG.md` | just that file |
+| **Directory prefix** | A bare dir name, with or without a trailing `/` | `docs` or `docs/` | every file under `docs/` |
+
+A file is exempt as soon as it matches **any** entry. An invalid regex or glob is silently skipped (it simply matches nothing), so a malformed pattern never accidentally exempts everything.
 
 ### Semantic Search Configuration
 
