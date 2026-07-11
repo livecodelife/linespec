@@ -212,6 +212,8 @@ func newProvenanceCmd() *cobra.Command {
 		newProvGraphCmd(),
 		newProvCheckCmd(),
 		newProvLockScopeCmd(),
+		newProvAddScopeCmd(),
+		newProvReconcileCmd(),
 		newProvLockLayerCmd(),
 		newProvCompleteCmd(),
 		newProvDeprecateCmd(),
@@ -441,7 +443,7 @@ func newProvLockScopeCmd() *cobra.Command {
 	var opts provenance.LockScopeOptions
 	cmd := &cobra.Command{
 		Use:   "lock-scope",
-		Short: "Lock scope to allowlist mode",
+		Short: "Populate scope from git history (observed -> allowlist)",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmds := provCmds(opts.ConfigFile)
 			if err := cmds.LockScope(opts); err != nil {
@@ -454,6 +456,58 @@ func newProvLockScopeCmd() *cobra.Command {
 	f.BoolVar(&opts.DryRun, "dry-run", false, "Print scope without writing")
 	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")
 	_ = cmd.MarkFlagRequired("record")
+	return cmd
+}
+
+// newProvAddScopeCmd is the dedicated scope-widening verb (prov-2026-8d2f5f2a):
+// distinct from lock-scope's initial observed->allowlist populate, it adds
+// newly-committed files to an already-allowlist record's affected_scope and
+// materializes write permission for them in the same atomic operation.
+func newProvAddScopeCmd() *cobra.Command {
+	var opts provenance.AddScopeOptions
+	cmd := &cobra.Command{
+		Use:   "add-scope",
+		Short: "Widen an already-allowlist record's scope with newly-committed files",
+		Run: func(cmd *cobra.Command, args []string) {
+			cmds := provCmds(opts.ConfigFile)
+			if err := cmds.AddScope(opts); err != nil {
+				os.Exit(1)
+			}
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&opts.RecordID, "record", "", "Required. The record to widen")
+	f.BoolVar(&opts.DryRun, "dry-run", false, "Print widened scope without writing")
+	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")
+	_ = cmd.MarkFlagRequired("record")
+	return cmd
+}
+
+// newProvReconcileCmd is the dedicated fswrite reconcile verb (prov-2026-8d2f5f2a):
+// re-derives the entire write-bit projection from current record state.
+// `next` already runs this unconditionally on every invocation; this verb
+// exists so it can also be invoked explicitly, without depending on the
+// Claude Code plugin hooks being installed.
+func newProvReconcileCmd() *cobra.Command {
+	var opts provenance.ReconcileOptions
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "reconcile",
+		Short: "Re-derive filesystem write permissions from current record state",
+		Run: func(cmd *cobra.Command, args []string) {
+			if jsonOut {
+				opts.Format = "json"
+			}
+			cmds := provCmds(opts.ConfigFile)
+			if err := cmds.Reconcile(opts); err != nil {
+				os.Exit(1)
+			}
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&jsonOut, "json", false, "Machine-readable output")
+	f.StringVar(&opts.Format, "format", "", "Output format (human|json)")
+	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")
 	return cmd
 }
 

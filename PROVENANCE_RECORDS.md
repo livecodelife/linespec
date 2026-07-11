@@ -339,11 +339,12 @@ record's `associated_specs` paths are always writable, so authoring records and
 their proof artifacts can never be blocked by this. A project with no records
 yet defers enforcement (warn-until-first-record); a project created via
 `linespec clone` arrives pre-seeded with open records and enforces immediately.
-Writability is re-derived — never separately tracked — by a `reconcile` pass
-that runs automatically at Claude Code session start (see
-[Install Plugin](#install-plugin-claude-code)); `linespec provenance next` also
-surfaces the corrective action (widen scope, or create a governing record) when
-a file is blocked.
+Writability is re-derived — never separately tracked — by [reconcile](#reconcile),
+which `linespec provenance next` runs unconditionally on every invocation. This
+does **not** depend on the Claude Code plugin hooks being installed — a user may
+not have them set up — so it holds for any harness, or none at all: manual CLI
+use, another agent, or a script. `next` also surfaces the corrective action
+([add-scope](#add-scope), or create a governing record) when a file is blocked.
 
 ### Lint
 
@@ -509,12 +510,54 @@ linespec provenance lock-scope --record prov-2026-a1b2c3d4
 - `--dry-run` - Print scope without writing
 - `-c, --config path` - Use custom config
 
-Running `lock-scope` again on a record that is already in allowlist mode widens
-it: it pulls any files from commits already tagged with the record that are not
-yet declared, adds them to `affected_scope`, and — if the record is `open` —
-unlocks their write permission in the same atomic operation (see the
-filesystem write enforcement note under [Open](#open)). It errors if there is
-nothing new to add.
+`lock-scope` only populates a record's *initial* scope (observed → allowlist).
+Calling it again on a record that is already in allowlist mode is an error —
+use [`add-scope`](#add-scope) to widen an already-allowlist record instead.
+
+### Add Scope
+
+Widen an already-allowlist record's `affected_scope` with files from commits
+already tagged with the record that are not yet declared:
+
+```bash
+# Dry run first
+linespec provenance add-scope --record prov-2026-a1b2c3d4 --dry-run
+
+# Widen scope (saves to file)
+linespec provenance add-scope --record prov-2026-a1b2c3d4
+```
+
+**Options:**
+- `--record prov-YYYY-XXXXXXXX` - Required. The record to widen
+- `--dry-run` - Print widened scope without writing
+- `-c, --config path` - Use custom config
+
+If the record is `open`, write permission for the newly-added paths is
+materialized in the same atomic operation (see the filesystem write
+enforcement note under [Open](#open)). Errors if the record is not yet in
+allowlist mode (run `lock-scope` first) or if there is nothing new to add.
+
+### Reconcile
+
+Re-derive the entire filesystem write-bit projection from the current set of
+open records' scopes, unlocking covered paths and re-locking uncovered ones:
+
+```bash
+linespec provenance reconcile
+
+# Machine-readable output
+linespec provenance reconcile --json
+```
+
+**Options:**
+- `--json` / `--format json` - Machine-readable output
+- `-c, --config path` - Use custom config
+
+`linespec provenance next` already calls this unconditionally on every
+invocation, so it self-heals write bits that have drifted (a stale clone, an
+out-of-band file restore, manual tampering) without any special setup. This
+verb exists for explicit or scripted invocation — enforcement must not depend
+on the Claude Code plugin hooks being installed.
 
 ### Lock Layer
 
@@ -1409,7 +1452,7 @@ To make a routine change: create **one** new record, set its `affected_scope` to
 
 - A record with an **empty `affected_scope`** is **observed** — its check permits any file (except `forbidden_scope`).
 - A record with a **non-empty `affected_scope`** is **allowlist** — it permits only files matching that scope. So a "scope violation" on *your tagged record* means its `affected_scope` is missing one of your changed files → widen that record's scope (free to edit while `draft`), don't touch other records.
-- `lock-scope` auto-populates a record's `affected_scope` from the files it changed in git (observed → allowlist). `lock-layer` creates a `locked` governance record — advanced and uncommon; only when locked records exist can an overlapping open record hard-fail lint.
+- `lock-scope` auto-populates a record's `affected_scope` from the files it changed in git (observed → allowlist); `add-scope` widens an already-allowlist record's scope the same way. `lock-layer` creates a `locked` governance record — advanced and uncommon; only when locked records exist can an overlapping open record hard-fail lint.
 
 ### When you're blocked — decision tree
 
@@ -1435,7 +1478,7 @@ Let the CLI update records and other records for you — hand-editing managed fi
 | `status: open` | `open --record <id>` |
 | `status: implemented` + `sealed_at_sha` | `complete --record <id>` |
 | `status: deprecated` | `deprecate --record <id> --reason "…"` |
-| listing changed files into `affected_scope` | `lock-scope --record <id>` (auto-populates from git) |
+| listing changed files into `affected_scope` | `lock-scope --record <id>` (initial populate) / `add-scope --record <id>` (widen) |
 | the hash manifest | `compile` |
 
 Never hand-edit `status`, `superseded_by`, `sealed_at_sha`, or the hash manifest.

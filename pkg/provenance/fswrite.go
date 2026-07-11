@@ -42,14 +42,21 @@ const (
 // configured provenance directory, .linespec.yml, and every associated_spec
 // path across all loaded records (regardless of status), so the
 // Brief-to-Blueprint-to-Imprint authoring chain can never block its own
-// creation. This set is derived, never separately hand-maintained.
-func AlwaysWritablePaths(config *ProvenanceConfig, records []*Record) []string {
+// creation. This set is derived, never separately hand-maintained. repoRoot
+// normalizes an absolute config.Dir to repo-relative, since every path this
+// pattern set is matched against (from `git ls-files`) is repo-relative too.
+func AlwaysWritablePaths(config *ProvenanceConfig, records []*Record, repoRoot string) []string {
 	var out []string
 	dir := "provenance"
 	if config != nil {
 		out = append(out, config.ExcludePaths...)
 		if config.Dir != "" {
 			dir = config.Dir
+		}
+	}
+	if repoRoot != "" && filepath.IsAbs(dir) {
+		if rel, err := filepath.Rel(repoRoot, dir); err == nil && !strings.HasPrefix(rel, "..") {
+			dir = rel
 		}
 	}
 	out = append(out, dir, ".linespec.yml")
@@ -301,7 +308,7 @@ func Reconcile(repoRoot string, files []string, records []*Record, config *Prove
 		return result, nil
 	}
 
-	always := AlwaysWritablePaths(config, records)
+	always := AlwaysWritablePaths(config, records, repoRoot)
 	openScope := OpenAllowlistScope(records)
 
 	writableDirs := map[string]bool{}
