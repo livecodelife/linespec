@@ -1,6 +1,6 @@
 id: prov-2026-a8de41cd
 title: 'fswrite: scope reuse of lock-scope, env-gated reconcile, bounded relock'
-status: open
+status: implemented
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 intent: |-
@@ -48,7 +48,7 @@ type: imprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8f3ffe4e338afcf11fa2f4a21eada2bfa892c56d
 associated_specs:
   - path: pkg/provenance/fswrite_transitions_test.go
     type: go_test
