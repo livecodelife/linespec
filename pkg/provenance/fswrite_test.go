@@ -1,1 +1,367 @@
 package provenance
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+)
+
+func writePerm(t *testing.T, path string, mode os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("x"), mode); err != nil {
+		t.Fatalf("WriteFile %s: %v", path, err)
+	}
+}
+
+func isWritableOnDisk(t *testing.T, path string) bool {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat %s: %v", path, err)
+	}
+	return info.Mode().Perm()&0o200 != 0
+}
+
+// --- AlwaysWritablePaths / IsAlwaysWritable ---------------------------------
+
+func TestAlwaysWritablePaths_IsDerivedNotHandMaintained(t *testing.T) {
+	config := &ProvenanceConfig{
+		Dir:          "provenance",
+		ExcludePaths: []string{"*.md", "vendor/"},
+	}
+	records := []*Record{
+		{ID: "prov-2026-aaaa0001", AssociatedSpecs: []AssociatedSpec{{Path: "pkg/foo_test.go"}}},
+		{ID: "prov-2026-aaaa0002", AssociatedSpecs: []AssociatedSpec{{Path: "pkg/foo_test.go"}, {Path: "specs/bar.linespec"}}},
+	}
+
+	always := AlwaysWritablePaths(config, records)
+
+	for _, want := range []string{"*.md", "vendor/", "provenance", ".linespec.yml", "pkg/foo_test.go", "specs/bar.linespec"} {
+		if !slices.Contains(always, want) {
+			t.Errorf("AlwaysWritablePaths missing %q, got %v", want, always)
+		}
+	}
+	// De-duplicated: pkg/foo_test.go appears in two records but once in the set.
+	count := 0
+	for _, p := range always {
+		if p == "pkg/foo_test.go" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected pkg/foo_test.go once, got %d times in %v", count, always)
+	}
+}
+
+func TestAlwaysWritablePaths_DefaultsDirToProvenance(t *testing.T) {
+	always := AlwaysWritablePaths(&ProvenanceConfig{}, nil)
+	if !slices.Contains(always, "provenance") {
+		t.Errorf("expected default provenance dir in always-writable set, got %v", always)
+	}
+}
+
+func TestIsAlwaysWritable_MatchesDirectoryPrefixAndGlob(t *testing.T) {
+	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "provenance", ExcludePaths: []string{"*.md"}}, nil)
+
+	cases := map[string]bool{
+		"provenance/prov-2026-aaaa0001.yml": true,
+		".linespec.yml":                     true,
+		"README.md":                         true,
+		"pkg/provenance/commands.go":        false,
+	}
+	for path, want := range cases {
+		if got := IsAlwaysWritable(path, always); got != want {
+			t.Errorf("IsAlwaysWritable(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// --- OpenAllowlistScope ------------------------------------------------------
+
+func TestOpenAllowlistScope_OnlyOpenAllowlistRecordsContribute(t *testing.T) {
+	records := []*Record{
+		{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/a.go"}},
+		{ID: "prov-2026-0002", Status: StatusDraft, AffectedScope: []string{"pkg/b.go"}},       // draft: no writability yet
+		{ID: "prov-2026-0003", Status: StatusImplemented, AffectedScope: []string{"pkg/c.go"}}, // sealed: no longer contributing
+		{ID: "prov-2026-0004", Status: StatusOpen, AffectedScope: nil},                         // observed mode: never contributes
+		{ID: "prov-2026-0005", Status: StatusOpen, AffectedScope: []string{"pkg/a.go", "pkg/d.go"}},
+	}
+
+	got := OpenAllowlistScope(records)
+	want := []string{"pkg/a.go", "pkg/d.go"}
+	if len(got) != len(want) {
+		t.Fatalf("OpenAllowlistScope = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("OpenAllowlistScope[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+// --- IsWritablePath ----------------------------------------------------------
+
+func TestIsWritablePath(t *testing.T) {
+	always := []string{"provenance"}
+	openScope := []string{"pkg/foo.go", "pkg/bar/*.go"}
+
+	cases := map[string]bool{
+		"provenance/prov-2026-aaaa0001.yml": true,
+		"pkg/foo.go":                        true,
+		"pkg/bar/baz.go":                    true,
+		"pkg/other.go":                      false,
+	}
+	for path, want := range cases {
+		got, err := IsWritablePath(path, always, openScope)
+		if err != nil {
+			t.Fatalf("IsWritablePath(%q): %v", path, err)
+		}
+		if got != want {
+			t.Errorf("IsWritablePath(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// --- LockFile / UnlockFile / UnlockDir ---------------------------------------
+
+func TestLockFile_StripsWriteLeavesOtherBitsAlone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	writePerm(t, path, 0o755) // executable, writable
+
+	if err := LockFile(path); err != nil {
+		t.Fatalf("LockFile: %v", err)
+	}
+	info, _ := os.Stat(path)
+	if info.Mode().Perm() != 0o555 {
+		t.Errorf("mode = %o, want 0555 (write stripped, exec kept)", info.Mode().Perm())
+	}
+}
+
+func TestUnlockFile_AddsOwnerWriteLeavesOtherBitsAlone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	writePerm(t, path, 0o444)
+
+	if err := UnlockFile(path); err != nil {
+		t.Fatalf("UnlockFile: %v", err)
+	}
+	if !isWritableOnDisk(t, path) {
+		t.Errorf("expected file writable after UnlockFile")
+	}
+}
+
+func TestLockFile_UnlockFile_MissingPathIsNoop(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "does-not-exist.go")
+	if err := LockFile(path); err != nil {
+		t.Errorf("LockFile on missing path should be a no-op, got %v", err)
+	}
+	if err := UnlockFile(path); err != nil {
+		t.Errorf("UnlockFile on missing path should be a no-op, got %v", err)
+	}
+}
+
+func TestUnlockDir_DoesNotAlterSiblingFilePermissions(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "pkg")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	locked := filepath.Join(sub, "locked.go")
+	writePerm(t, locked, 0o444)
+	if err := os.Chmod(sub, 0o555); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+
+	if err := UnlockDir(sub); err != nil {
+		t.Fatalf("UnlockDir: %v", err)
+	}
+
+	info, _ := os.Stat(sub)
+	if info.Mode().Perm()&0o200 == 0 {
+		t.Errorf("directory should be writable after UnlockDir, mode = %o", info.Mode().Perm())
+	}
+	// The already-locked sibling file must remain locked — unlocking a directory
+	// to permit new-file creation must not alter files already present in it.
+	if isWritableOnDisk(t, locked) {
+		t.Errorf("UnlockDir must not alter permission bits of files already present in the directory")
+	}
+}
+
+// --- MaterializeScope ---------------------------------------------------------
+
+func TestMaterializeScope_UnlocksExistingFile(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(repo, "pkg", "foo.go")
+	writePerm(t, target, 0o444)
+
+	if err := MaterializeScope(repo, []string{"pkg/foo.go"}); err != nil {
+		t.Fatalf("MaterializeScope: %v", err)
+	}
+	if !isWritableOnDisk(t, target) {
+		t.Errorf("expected pkg/foo.go writable after MaterializeScope")
+	}
+}
+
+func TestMaterializeScope_UnlocksParentDirForNotYetExistingFile(t *testing.T) {
+	repo := t.TempDir()
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.Mkdir(pkgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(pkgDir, "sibling.go")
+	writePerm(t, sibling, 0o444)
+	if err := os.Chmod(pkgDir, 0o555); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+
+	if err := MaterializeScope(repo, []string{"pkg/new_file.go"}); err != nil {
+		t.Fatalf("MaterializeScope: %v", err)
+	}
+
+	dirInfo, _ := os.Stat(filepath.Join(repo, "pkg"))
+	if dirInfo.Mode().Perm()&0o200 == 0 {
+		t.Errorf("expected pkg/ writable so pkg/new_file.go can be created, mode = %o", dirInfo.Mode().Perm())
+	}
+	// The sibling's own bits must be untouched by unlocking the directory.
+	if isWritableOnDisk(t, sibling) {
+		t.Errorf("unlocking the directory for a not-yet-existing file must not touch sibling file bits")
+	}
+}
+
+func TestMaterializeScope_SkipsGlobPatterns(t *testing.T) {
+	repo := t.TempDir()
+	// A glob pattern is not a concrete path to chmod — MaterializeScope must not
+	// error attempting to Lstat it.
+	if err := MaterializeScope(repo, []string{"pkg/*.go"}); err != nil {
+		t.Fatalf("MaterializeScope should skip glob patterns without error, got %v", err)
+	}
+}
+
+// --- ColdStartSkip -------------------------------------------------------------
+
+func TestColdStartSkip_HandInitWithNoRecordsDefersEnforcement(t *testing.T) {
+	if !ColdStartSkip(nil, &ProvenanceConfig{}) {
+		t.Errorf("expected cold-start skip=true for a hand-initialized project with no records")
+	}
+}
+
+func TestColdStartSkip_ClonedProjectDefaultsStrictDenyEvenWithNoLocalRecords(t *testing.T) {
+	// linespec clone stamps ManifestURL — the project arrived pre-seeded with open
+	// records to enforce against, so cold-start deferral must not apply.
+	if ColdStartSkip(nil, &ProvenanceConfig{ManifestURL: "https://example.com/manifest.yml"}) {
+		t.Errorf("expected cold-start skip=false for a cloned project (ManifestURL set)")
+	}
+}
+
+func TestColdStartSkip_FalseOnceRecordsExist(t *testing.T) {
+	records := []*Record{{ID: "prov-2026-0001"}}
+	if ColdStartSkip(records, &ProvenanceConfig{}) {
+		t.Errorf("expected cold-start skip=false once at least one record exists")
+	}
+}
+
+// --- Reconcile -----------------------------------------------------------------
+
+func TestReconcile_LocksUncoveredUnlocksCoveredIsIdempotent(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	covered := filepath.Join(repo, "pkg", "covered.go")
+	uncovered := filepath.Join(repo, "pkg", "uncovered.go")
+	// Start in the opposite state of what reconcile should produce, so the test
+	// actually exercises both directions.
+	writePerm(t, covered, 0o444)
+	writePerm(t, uncovered, 0o644)
+
+	records := []*Record{
+		{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/covered.go"}},
+	}
+	config := &ProvenanceConfig{Dir: "provenance"}
+
+	result, err := Reconcile(repo, []string{"pkg/covered.go", "pkg/uncovered.go"}, records, config)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !isWritableOnDisk(t, covered) {
+		t.Errorf("pkg/covered.go should be writable (in open record's affected_scope)")
+	}
+	if isWritableOnDisk(t, uncovered) {
+		t.Errorf("pkg/uncovered.go should be locked (governed tree defaults to non-writable)")
+	}
+	if len(result.Unlocked) != 1 || result.Unlocked[0] != "pkg/covered.go" {
+		t.Errorf("result.Unlocked = %v, want [pkg/covered.go]", result.Unlocked)
+	}
+	if len(result.Locked) != 1 || result.Locked[0] != "pkg/uncovered.go" {
+		t.Errorf("result.Locked = %v, want [pkg/uncovered.go]", result.Locked)
+	}
+
+	// Idempotent: running again from the now-reconciled state changes nothing.
+	result2, err := Reconcile(repo, []string{"pkg/covered.go", "pkg/uncovered.go"}, records, config)
+	if err != nil {
+		t.Fatalf("Reconcile (second pass): %v", err)
+	}
+	if len(result2.Unlocked) != 0 || len(result2.Locked) != 0 {
+		t.Errorf("second Reconcile pass should be a no-op, got unlocked=%v locked=%v", result2.Unlocked, result2.Locked)
+	}
+}
+
+func TestReconcile_AlwaysWritablePathsStayWritableEvenUncovered(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "provenance"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	recordFile := filepath.Join(repo, "provenance", "prov-2026-0001.yml")
+	writePerm(t, recordFile, 0o644)
+
+	records := []*Record{{ID: "prov-2026-0001", Status: StatusDraft}} // draft, not open: no scope granted
+	config := &ProvenanceConfig{Dir: "provenance"}
+
+	if _, err := Reconcile(repo, []string{"provenance/prov-2026-0001.yml"}, records, config); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !isWritableOnDisk(t, recordFile) {
+		t.Errorf("provenance directory must remain unconditionally writable")
+	}
+}
+
+func TestReconcile_ColdStartSkipsEnforcementEntirely(t *testing.T) {
+	repo := t.TempDir()
+	uncovered := filepath.Join(repo, "uncovered.go")
+	writePerm(t, uncovered, 0o644)
+
+	result, err := Reconcile(repo, []string{"uncovered.go"}, nil, &ProvenanceConfig{})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if len(result.Locked) != 0 {
+		t.Errorf("cold-start (no records yet) must defer enforcement, got locked=%v", result.Locked)
+	}
+	if !isWritableOnDisk(t, uncovered) {
+		t.Errorf("cold-start must leave files untouched")
+	}
+}
+
+func TestReconcile_UnlocksParentDirOfDeclaredNotYetExistingPath(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "pkg"), 0o555); err != nil {
+		t.Fatal(err)
+	}
+
+	records := []*Record{
+		{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/new_file.go"}},
+	}
+	if _, err := Reconcile(repo, nil, records, &ProvenanceConfig{Dir: "provenance"}); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	info, _ := os.Stat(filepath.Join(repo, "pkg"))
+	if info.Mode().Perm()&0o200 == 0 {
+		t.Errorf("expected pkg/ unlocked so pkg/new_file.go could be created, mode = %o", info.Mode().Perm())
+	}
+}

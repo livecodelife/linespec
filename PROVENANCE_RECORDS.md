@@ -326,6 +326,25 @@ Only records in `draft` status can be opened. Attempting to open a record in any
 - `--record prov-YYYY-XXXXXXXX` - Record ID to open (required)
 - `-c, --config path` - Use custom .linespec.yml
 
+**Filesystem write enforcement:** opening a record with a non-empty `affected_scope`
+(allowlist mode) also unlocks those paths on disk in the same atomic operation —
+declaration and write permission move together. The governed tree defaults to
+non-writable; a source path becomes writable only while an `open`, allowlist-mode
+record declares it. This moves provenance-before-code enforcement from the commit
+boundary to the filesystem write boundary, so it holds even when git hooks are
+absent or bypassed. Completing or deprecating a record gives up its exclusive
+claim on the paths it granted — they are re-locked unless another still-open
+record also covers them. The provenance directory, `.linespec.yml`, and every
+record's `associated_specs` paths are always writable, so authoring records and
+their proof artifacts can never be blocked by this. A project with no records
+yet defers enforcement (warn-until-first-record); a project created via
+`linespec clone` arrives pre-seeded with open records and enforces immediately.
+Writability is re-derived — never separately tracked — by a `reconcile` pass
+that runs automatically at Claude Code session start (see
+[Install Plugin](#install-plugin-claude-code)); `linespec provenance next` also
+surfaces the corrective action (widen scope, or create a governing record) when
+a file is blocked.
+
 ### Lint
 
 Validate provenance records:
@@ -489,6 +508,13 @@ linespec provenance lock-scope --record prov-2026-a1b2c3d4
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to lock
 - `--dry-run` - Print scope without writing
 - `-c, --config path` - Use custom config
+
+Running `lock-scope` again on a record that is already in allowlist mode widens
+it: it pulls any files from commits already tagged with the record that are not
+yet declared, adds them to `affected_scope`, and — if the record is `open` —
+unlocks their write permission in the same atomic operation (see the
+filesystem write enforcement note under [Open](#open)). It errors if there is
+nothing new to add.
 
 ### Lock Layer
 
@@ -752,7 +778,7 @@ linespec provenance next --json
 - `--json` - Machine-readable output
 - `-c, --config path` - Use custom config
 
-**Output:** one primary action — `create` a record, `open` a draft, add an `associated_spec`, commit tagged, complete the blueprint, or "nothing pending" — with the ready-to-run command. When records already govern your files, it tells you to create one new record and tag your commits with it (you do **not** need to supersede them). Cache-backed (see [scope cache](#scope-cache)) for a fast path.
+**Output:** one primary action — `create` a record, `open` a draft, widen scope, add an `associated_spec`, commit tagged, complete the blueprint, or "nothing pending" — with the ready-to-run command. When records already govern your files, it tells you to create one new record and tag your commits with it (you do **not** need to supersede them). If a file you intend to change is blocked by filesystem write enforcement — not yet in your active open record's `affected_scope` — `next` tells you to widen scope rather than add a spec or commit. Cache-backed (see [scope cache](#scope-cache)) for a fast path.
 
 ### Govern
 
