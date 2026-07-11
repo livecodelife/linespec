@@ -1,0 +1,58 @@
+id: prov-2026-a8de41cd
+title: 'fswrite: scope reuse of lock-scope, env-gated reconcile, bounded relock'
+status: open
+created_at: "2026-07-10"
+author: calebcowen@gmail.com
+intent: |-
+  cli.go (the cobra command tree) is outside prov-2026-8d2f5f2a's affected_scope,
+  so no new `linespec provenance` subcommand (e.g. add-scope, reconcile) could be
+  wired. Three decisions close that gap within the given scope:
+
+  1. Scope-widening (constraint 4) reuses the existing `lock-scope` command
+     instead of a new verb. Its guard was `if already allowlist: error` (only
+     handled the fresh observed->allowlist populate); it now also handles an
+     already-allowlist record by pulling files from commits already tagged with
+     it that are not yet declared, merging them into affected_scope, and calling
+     MaterializeScope for exactly the newly-added paths. The record's own YAML
+     path and any always-writable coop path are filtered out of that merge (the
+     commit that first authors the record also matches GetCommitsForRecord, so
+     its changed files include the record's own file — never a meaningful scope
+     addition).
+
+  2. Reconcile has no dedicated CLI verb either. It runs inside Commands.Next,
+     gated behind the LINESPEC_PROVENANCE_RECONCILE env var. Only
+     session-start.sh sets that var before calling `linespec provenance next
+     --json` (which it already called pre-existing), so an ordinary `next` call
+     (manual CLI use, a test constructing Commands directly, or any other hook)
+     never triggers a filesystem sweep. This satisfies "reconcile MUST run at
+     agent session start" without expanding the blueprint's file scope, and
+     without ever risking an unbounded chmod sweep of this actual repo while
+     this blueprint's own commands were exercised during implementation.
+
+  3. Complete/Deprecate re-lock only the CLOSING record's own affected_scope
+     paths (relockClosedScope), not a full-tree reconcile. A full sweep tied to
+     every Complete/Deprecate call would have made completing this blueprint's
+     own imprints risk locking down the whole live repo mid-session; scoping the
+     relock to just the closing record's own paths keeps the blast radius
+     bounded and made it safe to actually run Open/Complete against this repo
+     during implementation (imprints in this session intentionally carry no
+     affected_scope, so relockClosedScope is a guaranteed no-op for them).
+constraints:
+  - Scope-widening must go through the existing lock-scope command, not a new CLI verb (cli.go is out of affected_scope).
+  - Reconcile must only run when LINESPEC_PROVENANCE_RECONCILE is set, never unconditionally inside Next.
+  - Complete/Deprecate must re-lock only the closing record's own affected_scope paths, not sweep the whole tree.
+implements: prov-2026-8d2f5f2a
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/fswrite_transitions_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags: []
