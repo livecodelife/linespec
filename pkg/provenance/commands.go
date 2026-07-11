@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/livecodelife/linespec/pkg/config"
@@ -604,27 +605,84 @@ func (c *Commands) LockScope(opts LockScopeOptions) error {
 		return fmt.Errorf("record is implemented")
 	}
 
-	// Check if already in allowlist mode
-	if record.ScopeMode() == "allowlist" {
-		c.Formatter.FormatError(fmt.Sprintf("%s is already in allowlist mode", opts.RecordID))
-		return fmt.Errorf("already in allowlist mode")
-	}
+	origScope := append([]string(nil), record.AffectedScope...)
+	var added []string
 
-	// Auto-populate scope from git history
-	if err := c.Checker.AutoPopulateScope(record); err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to auto-populate scope: %v", err))
-		return err
+	if record.ScopeMode() == "allowlist" {
+		// Already allowlist mode: this is a scope-WIDENING call (prov-2026-8d2f5f2a,
+		// constraint 4) rather than the initial observed->allowlist populate below.
+		// Pull files from commits already tagged with this record that are not yet
+		// declared — AutoPopulateScope itself is a no-op once allowlist (git.go is
+		// outside this blueprint's affected_scope, so the merge is done inline here
+		// rather than by changing that guard).
+		commits, err := c.Git.GetCommitsForRecord(record.ID)
+		if err != nil {
+			c.Formatter.FormatError(fmt.Sprintf("Failed to look up commits for %s: %v", opts.RecordID, err))
+			return err
+		}
+		files, err := c.Git.GetFilesChangedInCommits(commits)
+		if err != nil {
+			c.Formatter.FormatError(fmt.Sprintf("Failed to list files changed for %s: %v", opts.RecordID, err))
+			return err
+		}
+		// The commit tagging this record as it was first authored (e.g. "add
+		// record [id]") also matches GetCommitsForRecord, so its changed files
+		// include the record's own YAML and any always-writable coop path — never
+		// meaningful additions to affected_scope, and always writable regardless.
+		always := AlwaysWritablePaths(c.Config, c.Loader.Records)
+		ownFile, _ := filepath.Rel(c.RepoRoot, record.FilePath)
+		existing := map[string]bool{}
+		for _, f := range record.AffectedScope {
+			existing[f] = true
+		}
+		for _, f := range files {
+			if existing[f] || f == ownFile || IsAlwaysWritable(f, always) {
+				continue
+			}
+			record.AffectedScope = append(record.AffectedScope, f)
+			existing[f] = true
+			added = append(added, f)
+		}
+		if len(added) == 0 {
+			c.Formatter.FormatError(fmt.Sprintf("%s is already in allowlist mode and has no newly committed files to add", opts.RecordID))
+			return fmt.Errorf("already in allowlist mode")
+		}
+		sort.Strings(added)
+	} else {
+		// Auto-populate scope from git history
+		if err := c.Checker.AutoPopulateScope(record); err != nil {
+			c.Formatter.FormatError(fmt.Sprintf("Failed to auto-populate scope: %v", err))
+			return err
+		}
+		added = append([]string(nil), record.AffectedScope...)
 	}
 
 	if opts.DryRun {
 		c.Formatter.FormatLockScopeSuccess(record, record.AffectedScope)
+		record.AffectedScope = origScope
 		return nil
 	}
 
 	// Save record
 	if err := c.Loader.SaveRecord(record); err != nil {
+		record.AffectedScope = origScope
 		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
 		return err
+	}
+
+	// Materialize write permission for the newly-declared paths in the same
+	// atomic operation that widens scope (prov-2026-8d2f5f2a, constraint 4).
+	// Permissions only apply to OPEN records (constraint 1) — a draft record's
+	// scope is not enforced yet, so there is nothing to materialize.
+	if record.Status == StatusOpen {
+		if err := MaterializeScope(c.RepoRoot, added); err != nil {
+			record.AffectedScope = origScope
+			if serr := c.Loader.SaveRecord(record); serr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to roll back %s after materialize failure: %v\n", opts.RecordID, serr)
+			}
+			c.Formatter.FormatError(fmt.Sprintf("Failed to materialize write permission for %s's widened scope: %v", opts.RecordID, err))
+			return err
+		}
 	}
 
 	c.Formatter.FormatLockScopeSuccess(record, record.AffectedScope)
@@ -746,6 +804,52 @@ func restoreFiles(snaps []fileSnapshot) {
 		}
 		if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "Warning: failed to remove %s during rollback: %v\n", s.path, err)
+		}
+	}
+}
+
+// reconcile re-derives the entire fswrite write-bit state (prov-2026-8d2f5f2a)
+// for the git-tracked files under RepoRoot from the current set of open
+// records' scopes, sourced from c.Loader.Records — which may already be the
+// cache-backed projection TryNextFromCache built, satisfying "sourced from the
+// existing scope-index cache" without a second load.
+func (c *Commands) reconcile() (*ReconcileResult, error) {
+	if ColdStartSkip(c.Loader.Records, c.Config) {
+		return &ReconcileResult{}, nil
+	}
+	files, err := listTrackedFiles(c.RepoRoot)
+	if err != nil {
+		return nil, err
+	}
+	return Reconcile(c.RepoRoot, files, c.Loader.Records, c.Config)
+}
+
+// relockClosedScope re-locks a record's own affected_scope paths after it
+// stops being open (complete or deprecate), unless another still-open
+// allowlist record also covers them — writability is a pure projection of the
+// CURRENT set of open records, so a record leaving the open set gives up its
+// exclusive claim on the paths it granted. Best-effort: a failure here must
+// not undo an otherwise-successful status transition, so it only warns.
+func (c *Commands) relockClosedScope(closed *Record) {
+	if closed.ScopeMode() != "allowlist" {
+		return // observed-mode records never granted writability (constraint 1)
+	}
+	always := AlwaysWritablePaths(c.Config, c.Loader.Records)
+	stillOpen := OpenAllowlistScope(c.Loader.Records) // closed.Status is already updated in memory, so it's excluded here
+	for _, rel := range closed.AffectedScope {
+		if rel == "" || containsGlobMeta(rel) {
+			continue
+		}
+		writable, err := IsWritablePath(rel, always, stillOpen)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to re-lock %s after closing %s: %v\n", rel, closed.ID, err)
+			continue
+		}
+		if writable {
+			continue
+		}
+		if err := LockFile(filepath.Join(c.RepoRoot, rel)); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to re-lock %s after closing %s: %v\n", rel, closed.ID, err)
 		}
 	}
 }
@@ -978,6 +1082,11 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 
 	c.Formatter.FormatCompleteSuccess(record)
 
+	// Completing gives up the record's exclusive claim on the write access its
+	// scope granted while open (prov-2026-8d2f5f2a) — re-lock any of its scope
+	// paths no other still-open allowlist record covers.
+	c.relockClosedScope(record)
+
 	// Generate and store embedding for the implemented record
 	if c.Embedder != nil && c.Embedder.IsConfigured() && c.Embedder.IndexOnComplete() {
 		text := embeddings.ExtractTextFromRecord(record.Title, record.Intent, record.Constraints)
@@ -1076,6 +1185,11 @@ func (c *Commands) Deprecate(opts DeprecateOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\n✓ %s marked as deprecated\n\n", opts.RecordID)
 
+	// Deprecating gives up the record's exclusive claim on the write access its
+	// scope granted while open (prov-2026-8d2f5f2a) — re-lock any of its scope
+	// paths no other still-open allowlist record covers.
+	c.relockClosedScope(record)
+
 	return nil
 }
 
@@ -1118,9 +1232,16 @@ func (c *Commands) Open(opts OpenOptions) error {
 	}
 	origStatus := record.Status
 
+	// Snapshot the permission bits MaterializeScope is about to flip (the fswrite
+	// blueprint, prov-2026-8d2f5f2a) so a rejected transition leaves permissions
+	// untouched, exactly like the file-content snapshot above.
+	permTargets := materializeTargets(c.RepoRoot, record.AffectedScope)
+	permSnaps := snapshotPerms(permTargets...)
+
 	rollback := func(unstage bool) {
 		record.Status = origStatus
 		restoreFiles(snaps)
+		restorePerms(permSnaps)
 		if unstage {
 			if err := c.Git.Unstage(snapshotPaths(snaps)...); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to unstage during rollback: %v\n", err)
@@ -1150,6 +1271,20 @@ func (c *Commands) Open(opts OpenOptions) error {
 			))
 			return fmt.Errorf("record failed validation")
 		}
+	}
+
+	// Materialize write permission for the record's declared scope as part of the
+	// same atomic operation that opens it (prov-2026-8d2f5f2a, constraint 3):
+	// declaration and permission move together, and a rejected transition below
+	// rolls the chmod back via permSnaps.
+	if err := MaterializeScope(c.RepoRoot, record.AffectedScope); err != nil {
+		rollback(false)
+		c.Formatter.FormatError(fmt.Sprintf(
+			"Cannot open %s: failed to materialize write permission for its scope: %v\n\n"+
+				"  The transition was rolled back — %s is unchanged (still %s).",
+			opts.RecordID, err, opts.RecordID, origStatus,
+		))
+		return err
 	}
 
 	if c.Config.CommitOnStatusChange {
@@ -2200,7 +2335,21 @@ type NextOptions struct {
 // staged files, and working-tree changes, then hands a fully-populated NextState
 // to the pure Advise function. Both the `next` command and the routed error
 // hints (Phase 2c) render from that one engine.
+// reconcileEnvVar gates the fswrite reconcile pass (prov-2026-8d2f5f2a) inside
+// Next: only session-start.sh sets it, so an ordinary `next` call (manual CLI
+// use, the per-edit hook fast path, or a test constructing Commands directly)
+// never pays for — or risks — a filesystem permission sweep. This is how
+// "reconcile MUST run at agent session start" is satisfied without a dedicated
+// CLI verb: session-start.sh already invokes `next --json`.
+const reconcileEnvVar = "LINESPEC_PROVENANCE_RECONCILE"
+
 func (c *Commands) Next(opts NextOptions) error {
+	if os.Getenv(reconcileEnvVar) != "" {
+		if _, err := c.reconcile(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: provenance reconcile failed: %v\n", err)
+		}
+	}
+
 	state := NextState{
 		Records:           c.Loader.Records,
 		IntendedFiles:     opts.Files,
