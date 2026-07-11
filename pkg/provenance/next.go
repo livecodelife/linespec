@@ -213,16 +213,17 @@ func openAction(r *Record) NextAction {
 // addScopeAction recommends widening active's affected_scope to cover missing —
 // files that stay non-writable on disk until they are declared (fswrite
 // enforcement, prov-2026-8d2f5f2a). affected_scope itself lives in the always-
-// writable provenance directory, so it can be hand-edited directly; `lock-scope`
-// materializes permission for already-committed files in one atomic step.
+// writable provenance directory, so it can be hand-edited directly; the
+// dedicated `add-scope` verb materializes permission for already-committed
+// files in one atomic step.
 func addScopeAction(r *Record, missing []string) NextAction {
 	return NextAction{
 		Kind: ActionAddScope,
 		Reason: fmt.Sprintf(
 			"Blocked by filesystem enforcement: %s not yet in open record %s's affected_scope, so they stay "+
 				"read-only on disk. Add them to affected_scope in %s's YAML (the provenance directory is always "+
-				"writable), then run 'linespec provenance lock-scope --record %s' to materialize write access "+
-				"for already-committed files, or wait for the next reconcile at session start.",
+				"writable), then run 'linespec provenance add-scope --record %s' to materialize write access "+
+				"for already-committed files, or run 'linespec provenance reconcile' directly.",
 			strings.Join(missing, ", "), r.ID, r.ID, r.ID),
 		RecordID: r.ID,
 	}

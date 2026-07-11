@@ -10,28 +10,30 @@ import (
 )
 
 // hooks_test.go verifies two things for the fswrite blueprint (prov-2026-8d2f5f2a):
-//   - the embedded plugin tree (Files) actually ships the reconcile wiring in
-//     hooks/session-start.sh, so what gets installed matches source;
-//   - the session-start.sh hook, run as a real subprocess, sets
-//     LINESPEC_PROVENANCE_RECONCILE=1 around its `linespec provenance next`
-//     call — the one and only trigger point for "reconcile MUST run at agent
-//     session start" (constraint 5). A stub `linespec` on PATH only produces a
-//     usable reason when that env var is present, so a regression that drops
-//     the env var manifests as the hook going silent, not a subtler diff.
+//   - the embedded plugin tree (Files) actually ships hooks/session-start.sh as
+//     a thin renderer of `linespec provenance next --json`, so what gets
+//     installed matches source;
+//   - the session-start.sh hook, run as a real subprocess, faithfully surfaces
+//     whatever `next --json` reports. Enforcement must not depend on this hook
+//     being installed at all — reconcile runs unconditionally inside `next`
+//     itself (see pkg/provenance/commands.go's Next), not gated behind
+//     anything this script sets. A stub `linespec` on PATH always answers with
+//     a reason, so these tests exercise relaying, not gating.
 
 // --- embedded plugin tree ------------------------------------------------------
 
-func TestFiles_EmbedsSessionStartReconcileWiring(t *testing.T) {
+func TestFiles_EmbedsSessionStartNextWiring(t *testing.T) {
 	data, err := Files.ReadFile("hooks/session-start.sh")
 	if err != nil {
 		t.Fatalf("ReadFile hooks/session-start.sh: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, "LINESPEC_PROVENANCE_RECONCILE") {
-		t.Errorf("embedded session-start.sh should set LINESPEC_PROVENANCE_RECONCILE around the `next` call, got:\n%s", content)
-	}
 	if !strings.Contains(content, "linespec provenance next --json") {
-		t.Errorf("embedded session-start.sh should still call `linespec provenance next --json`, got:\n%s", content)
+		t.Errorf("embedded session-start.sh should call `linespec provenance next --json`, got:\n%s", content)
+	}
+	if strings.Contains(content, "LINESPEC_PROVENANCE_RECONCILE") {
+		t.Errorf("embedded session-start.sh must not depend on an env var to trigger reconcile — reconcile runs "+
+			"unconditionally inside `next` itself, since a user may not have this hook installed at all, got:\n%s", content)
 	}
 }
 
@@ -63,17 +65,14 @@ func TestFiles_EmbedsHooksJSONWiringSessionStart(t *testing.T) {
 
 // --- session-start.sh subprocess behavior --------------------------------------
 
-// linespecStub is a shell script that only answers `linespec provenance next
-// --json` — and only with a usable reason when LINESPEC_PROVENANCE_RECONCILE is
-// set — so its output is a direct signal of whether session-start.sh propagated
-// that env var, without needing to fake a real provenance repo.
+// linespecStub is a shell script that answers `linespec provenance next
+// --json` unconditionally — session-start.sh no longer needs to set any env
+// var for a real `next` call to reconcile (that now happens inside `next`
+// itself), so this stub only needs to prove the hook relays the command's
+// output faithfully.
 const linespecStub = `#!/usr/bin/env bash
 if [ "$1" = "provenance" ] && [ "$2" = "next" ] && [ "$3" = "--json" ]; then
-  if [ -n "$LINESPEC_PROVENANCE_RECONCILE" ]; then
-    echo '{"primary":{"reason":"reconcile ran","command":"linespec provenance open --record prov-2026-stub"}}'
-  else
-    echo '{}'
-  fi
+  echo '{"primary":{"reason":"stub next reason","command":"linespec provenance open --record prov-2026-stub"}}'
   exit 0
 fi
 exit 1
@@ -107,15 +106,15 @@ func runSessionStart(t *testing.T, cwd string) string {
 	return string(out)
 }
 
-func TestSessionStartHook_PropagatesReconcileEnvVarToNext(t *testing.T) {
+func TestSessionStartHook_SurfacesNextReason(t *testing.T) {
 	repo := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repo, ".linespec.yml"), []byte("service:\n  name: test\n"), 0o644); err != nil {
 		t.Fatalf("write .linespec.yml: %v", err)
 	}
 
 	out := runSessionStart(t, repo)
-	if !strings.Contains(out, "reconcile ran") {
-		t.Errorf("session-start.sh should surface the stub's reconcile-gated reason, got: %q", out)
+	if !strings.Contains(out, "stub next reason") {
+		t.Errorf("session-start.sh should surface the stub's `next` reason, got: %q", out)
 	}
 
 	var payload struct {
@@ -126,8 +125,8 @@ func TestSessionStartHook_PropagatesReconcileEnvVarToNext(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &payload); err != nil {
 		t.Fatalf("session-start.sh output is not valid JSON: %v\noutput: %s", err, out)
 	}
-	if !strings.Contains(payload.HookSpecificOutput.AdditionalContext, "reconcile ran") {
-		t.Errorf("additionalContext = %q, want it to include the stub's reconcile-gated reason", payload.HookSpecificOutput.AdditionalContext)
+	if !strings.Contains(payload.HookSpecificOutput.AdditionalContext, "stub next reason") {
+		t.Errorf("additionalContext = %q, want it to include the stub's `next` reason", payload.HookSpecificOutput.AdditionalContext)
 	}
 }
 
