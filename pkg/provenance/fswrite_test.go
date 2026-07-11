@@ -35,7 +35,7 @@ func TestAlwaysWritablePaths_IsDerivedNotHandMaintained(t *testing.T) {
 		{ID: "prov-2026-aaaa0002", AssociatedSpecs: []AssociatedSpec{{Path: "pkg/foo_test.go"}, {Path: "specs/bar.linespec"}}},
 	}
 
-	always := AlwaysWritablePaths(config, records)
+	always := AlwaysWritablePaths(config, records, "")
 
 	for _, want := range []string{"*.md", "vendor/", "provenance", ".linespec.yml", "pkg/foo_test.go", "specs/bar.linespec"} {
 		if !slices.Contains(always, want) {
@@ -55,14 +55,30 @@ func TestAlwaysWritablePaths_IsDerivedNotHandMaintained(t *testing.T) {
 }
 
 func TestAlwaysWritablePaths_DefaultsDirToProvenance(t *testing.T) {
-	always := AlwaysWritablePaths(&ProvenanceConfig{}, nil)
+	always := AlwaysWritablePaths(&ProvenanceConfig{}, nil, "")
 	if !slices.Contains(always, "provenance") {
 		t.Errorf("expected default provenance dir in always-writable set, got %v", always)
 	}
 }
 
+// TestAlwaysWritablePaths_NormalizesAbsoluteDirToRepoRelative guards against a
+// regression where an absolute config.Dir (as tests elsewhere construct, or a
+// user's .linespec.yml could set) never matches the repo-relative paths
+// `git ls-files` produces, silently locking the entire provenance directory
+// out from under reconcile.
+func TestAlwaysWritablePaths_NormalizesAbsoluteDirToRepoRelative(t *testing.T) {
+	repoRoot := "/repo"
+	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "/repo/provenance"}, nil, repoRoot)
+	if !slices.Contains(always, "provenance") {
+		t.Errorf("expected absolute config.Dir normalized to repo-relative \"provenance\", got %v", always)
+	}
+	if !IsAlwaysWritable("provenance/prov-2026-aaaa0001.yml", always) {
+		t.Errorf("a repo-relative record path should match the normalized always-writable dir")
+	}
+}
+
 func TestIsAlwaysWritable_MatchesDirectoryPrefixAndGlob(t *testing.T) {
-	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "provenance", ExcludePaths: []string{"*.md"}}, nil)
+	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "provenance", ExcludePaths: []string{"*.md"}}, nil, "")
 
 	cases := map[string]bool{
 		"provenance/prov-2026-aaaa0001.yml": true,

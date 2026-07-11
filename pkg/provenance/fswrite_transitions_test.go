@@ -9,10 +9,12 @@ import (
 )
 
 // fswrite_transitions_test.go covers the fswrite blueprint's (prov-2026-8d2f5f2a)
-// integration into the record lifecycle: Open/LockScope materialize write
+// integration into the record lifecycle: Open/AddScope materialize write
 // permission for newly-declared scope atomically with the status/scope change,
 // and rolled-back transitions leave permissions untouched; Complete/Deprecate
-// give up a record's exclusive claim on the write access it granted.
+// give up a record's exclusive claim on the write access it granted; Next
+// reconciles the entire write-bit projection on every call, unconditionally —
+// enforcement must not depend on the Claude Code plugin hooks being installed.
 //
 // The pre-existing linter (linter.go, outside this blueprint's affected_scope)
 // requires an open (non-terminal, strict-mode) record to have both its
@@ -230,7 +232,7 @@ func TestDeprecate_RelocksScopeNoLongerCoveredByAnyOpenRecord(t *testing.T) {
 	}
 }
 
-// --- LockScope (scope widening) -----------------------------------------------
+// --- AddScope (scope widening) -------------------------------------------------
 
 // observedRecord returns a record with no declared affected_scope (observed
 // mode) so LockScope's initial auto-populate-from-git-history path runs.
@@ -264,7 +266,7 @@ func withChecker(cmds *Commands) *Commands {
 	return cmds
 }
 
-func TestLockScope_WideningOpenRecordMaterializesNewlyAddedPath(t *testing.T) {
+func TestAddScope_WideningOpenRecordMaterializesNewlyAddedPath(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 	cmds = withChecker(cmds)
 	id := "prov-2026-bbbb0009"
@@ -285,8 +287,8 @@ func TestLockScope_WideningOpenRecordMaterializesNewlyAddedPath(t *testing.T) {
 		t.Fatalf("precondition: pkg/other.go should still be locked before widening scope")
 	}
 
-	if err := cmds.LockScope(LockScopeOptions{RecordID: id}); err != nil {
-		t.Fatalf("LockScope (widen): %v", err)
+	if err := cmds.AddScope(AddScopeOptions{RecordID: id}); err != nil {
+		t.Fatalf("AddScope: %v", err)
 	}
 
 	rec := loadedRecord(t, cmds, id)
@@ -302,7 +304,7 @@ func TestLockScope_WideningOpenRecordMaterializesNewlyAddedPath(t *testing.T) {
 	}
 }
 
-func TestLockScope_ErrorsWhenAlreadyAllowlistWithNothingNewToAdd(t *testing.T) {
+func TestAddScope_ErrorsWhenNothingNewToAdd(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 	cmds = withChecker(cmds)
 	id := "prov-2026-bbbb0010"
@@ -312,8 +314,35 @@ func TestLockScope_ErrorsWhenAlreadyAllowlistWithNothingNewToAdd(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 
+	if err := cmds.AddScope(AddScopeOptions{RecordID: id}); err == nil {
+		t.Fatal("expected AddScope to error when already allowlist with nothing new committed to add")
+	}
+}
+
+func TestAddScope_ErrorsWhenNotYetAllowlist(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	cmds = withChecker(cmds)
+	id := "prov-2026-bbbb0012"
+	writeAndCommitRecord(t, cmds, repo, id, observedRecord(id, "draft"))
+	t.Chdir(repo)
+
+	if err := cmds.AddScope(AddScopeOptions{RecordID: id}); err == nil {
+		t.Fatal("expected AddScope to error on a record that is still in observed mode (use lock-scope first)")
+	}
+}
+
+func TestLockScope_ErrorsWhenAlreadyAllowlist(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	cmds = withChecker(cmds)
+	id := "prov-2026-bbbb0013"
+	setupOpenableRecord(t, cmds, repo, id)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
 	if err := cmds.LockScope(LockScopeOptions{RecordID: id}); err == nil {
-		t.Fatal("expected LockScope to error when already allowlist with nothing new committed to add")
+		t.Fatal("expected LockScope to error on an already-allowlist record and point at add-scope")
 	}
 }
 
@@ -343,5 +372,68 @@ func TestLockScope_DraftRecordDoesNotMaterializePermissions(t *testing.T) {
 	// scope must not materialize write access.
 	if isWritableOnDisk(t, target) {
 		t.Errorf("pkg/draftfile.go must stay locked — the record is still draft, not open")
+	}
+}
+
+// --- Next (unconditional reconcile) --------------------------------------------
+
+// TestNext_ReconcilesWriteBitsUnconditionally proves reconcile no longer
+// depends on anything external setting an env var (prov-2026-8d2f5f2a):
+// calling Next with no special setup must self-heal write bits that have
+// drifted out of sync with the current set of open records' scopes, in
+// either direction, since enforcement must not depend on the Claude Code
+// plugin hooks being installed.
+func TestNext_ReconcilesWriteBitsUnconditionally(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0014"
+	target := setupOpenableRecord(t, cmds, repo, id)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !isWritableOnDisk(t, target) {
+		t.Fatalf("precondition: pkg/thing.go should be writable after Open")
+	}
+
+	// Reconcile only ever walks git-tracked files (fswrite.go's Reconcile never
+	// reaches into untracked build output) — commit it so it is one.
+	gitExec(t, repo, "add", "pkg/thing.go")
+	gitExec(t, repo, "commit", "-m", "add pkg/thing.go ["+id+"]")
+
+	// Simulate drift: something outside this CLI (a `git checkout`, a stale
+	// clone, manual tampering) re-locked a path that an open record still
+	// covers.
+	if err := LockFile(target); err != nil {
+		t.Fatalf("LockFile: %v", err)
+	}
+	if isWritableOnDisk(t, target) {
+		t.Fatalf("precondition: pkg/thing.go should be locked before calling Next")
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !isWritableOnDisk(t, target) {
+		t.Errorf("Next should have reconciled pkg/thing.go back to writable, with no env var or special setup required")
+	}
+
+	// Now drift the other way: complete the record without going through
+	// relockClosedScope's own path (simulate an out-of-band unlock that
+	// outlived the record's closure), and confirm Next re-locks it too.
+	if err := cmds.Complete(CompleteOptions{RecordID: id}); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if err := UnlockFile(target); err != nil {
+		t.Fatalf("UnlockFile: %v", err)
+	}
+	if !isWritableOnDisk(t, target) {
+		t.Fatalf("precondition: pkg/thing.go should be writable before calling Next")
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if isWritableOnDisk(t, target) {
+		t.Errorf("Next should have reconciled pkg/thing.go back to locked — no open record covers it anymore")
 	}
 }
