@@ -1,10 +1,10 @@
 id: prov-2026-8d2f5f2a
 title: Enforce provenance-before-code via filesystem write permissions
-status: draft
-created_at: "2026-07-10"
+status: open
+created_at: '2026-07-10'
 author: calebcowen@gmail.com
 implements: prov-2026-e8fb1e96
-intent: |
+intent: |-
   Move provenance-before-code enforcement from the commit boundary to the
   filesystem write boundary, so an agent cannot write source first and author
   the governing record afterward to satisfy a commit-time check. The governed
@@ -19,48 +19,16 @@ intent: |
   holds regardless of which agent harness is driving and remains in effect
   even when git hooks are absent or bypassed.
 constraints:
-  - The governed tree MUST default to non-writable. A source path becomes
-    writable only when covered by the affected_scope of an open,
-    allowlist-mode record.
-  - Writability MUST be a pure projection of the current set of open records'
-    scopes. Enforcement state changes MUST occur only at discrete CLI command
-    boundaries (open, scope-widen, complete, deprecate, reconcile), never via
-    a resident watching process.
-  - "`linespec provenance open` MUST materialize write permissions for the\
-    \ record's affected_scope as part of the same operation that transitions\
-    \ the record to open. Declaration and permission MUST move together\
-    \ atomically, reusing the existing snapshot/rollback machinery\
-    \ (snapshotFiles/restoreFiles) so a rejected transition leaves\
-    \ permissions untouched."
-  - Adding a path to an already-open record's affected_scope via CLI MUST
-    materialize that path's write permission in the same atomic operation.
-  - A `reconcile` operation MUST re-derive the entire write-bit state from
-    the current set of open records' scopes (sourced from the existing
-    scope-index cache), unlocking covered paths and re-locking uncovered
-    ones, and MUST be idempotent. It MUST run at agent session start
-    (plugins/provenance/hooks/session-start.sh) so work always begins
-    against correctly projected permissions.
-  - The always-writable set MUST be derived, not separately hand-maintained.
-    It is the union of the existing provenance.exclude_paths whitelist
-    (pkg/provenance/exclude.go) and the authoring coop (the configured
-    provenance.dir, .linespec.yml, and associated_specs paths).
-  - The configured provenance directory MUST be treated as unconditionally
-    writable, reusing the existing provenance.dir configuration. No path
-    under it may ever be locked, so the Brief-to-Blueprint-to-Imprint
-    authoring chain can never block its own creation.
-  - Unlocking a directory to permit creation of a not-yet-existing declared
-    path MUST NOT alter the permission bits of files already present in that
-    directory. Already-locked files MUST remain locked.
-  - Cold-start posture MUST default to warn-until-first-record for
-    hand-initialized projects (no records yet), deferring enforcement until
-    the first record exists. A project created via `linespec clone` MUST
-    default to strict-deny, since it arrives pre-seeded with open records to
-    enforce against.
-  - "`linespec provenance next` MUST incorporate this workflow: when a source\
-    \ path is blocked or the agent is uncertain how to proceed, `next` MUST\
-    \ surface the corrective action — opening a governing record, or\
-    \ adding the path to an existing open record's scope — as the\
-    \ guided next step."
+  - The governed tree MUST default to non-writable. A source path becomes writable only when covered by the affected_scope of an open, allowlist-mode record.
+  - Writability MUST be a pure projection of the current set of open records' scopes. Enforcement state changes MUST occur only at discrete CLI command boundaries (open, scope-widen, complete, deprecate, reconcile), never via a resident watching process.
+  - '`linespec provenance open` MUST materialize write permissions for the record''s affected_scope as part of the same operation that transitions the record to open. Declaration and permission MUST move together atomically, reusing the existing snapshot/rollback machinery (snapshotFiles/restoreFiles) so a rejected transition leaves permissions untouched.'
+  - Adding a path to an already-open record's affected_scope via CLI MUST materialize that path's write permission in the same atomic operation.
+  - A `reconcile` operation MUST re-derive the entire write-bit state from the current set of open records' scopes (sourced from the existing scope-index cache), unlocking covered paths and re-locking uncovered ones, and MUST be idempotent. It MUST run at agent session start (plugins/provenance/hooks/session-start.sh) so work always begins against correctly projected permissions.
+  - The always-writable set MUST be derived, not separately hand-maintained. It is the union of the existing provenance.exclude_paths whitelist (pkg/provenance/exclude.go) and the authoring coop (the configured provenance.dir, .linespec.yml, and associated_specs paths).
+  - The configured provenance directory MUST be treated as unconditionally writable, reusing the existing provenance.dir configuration. No path under it may ever be locked, so the Brief-to-Blueprint-to-Imprint authoring chain can never block its own creation.
+  - Unlocking a directory to permit creation of a not-yet-existing declared path MUST NOT alter the permission bits of files already present in that directory. Already-locked files MUST remain locked.
+  - Cold-start posture MUST default to warn-until-first-record for hand-initialized projects (no records yet), deferring enforcement until the first record exists. A project created via `linespec clone` MUST default to strict-deny, since it arrives pre-seeded with open records to enforce against.
+  - '`linespec provenance next` MUST incorporate this workflow: when a source path is blocked or the agent is uncertain how to proceed, `next` MUST surface the corrective action — opening a governing record, or adding the path to an existing open record''s scope — as the guided next step.'
 affected_scope:
   - pkg/provenance/fswrite.go
   - pkg/provenance/fswrite_test.go
@@ -73,22 +41,15 @@ affected_scope:
   - plugins/provenance/hooks/session-start.sh
   - plugins/provenance/hooks_test.go
   - PROVENANCE_RECORDS.md
-forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
-related: []
-sealed_at_sha: ""
+superseded_by: ''
+sealed_at_sha: ''
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
-    type: go_test
-    run_command: make test # {{path}}
+    run_command: make test
   - path: pkg/provenance/fswrite_transitions_test.go
-    type: go_test
-    run_command: make test # {{path}}
+    run_command: make test
   - path: plugins/provenance/hooks_test.go
-    type: go_test
-    run_command: make test # {{path}} — runs session-start.sh against a fixture repo and asserts write bits are actually reconciled, not just that the script mentions reconcile
+    run_command: make test
 associated_traces: []
 monitors: []
-tags: []
