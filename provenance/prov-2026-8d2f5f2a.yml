@@ -71,6 +71,7 @@ affected_scope:
   - pkg/provenance/next.go
   - pkg/config/types.go
   - plugins/provenance/hooks/session-start.sh
+  - plugins/provenance/hooks_test.go
   - PROVENANCE_RECORDS.md
 forbidden_scope: []
 type: blueprint
@@ -85,9 +86,9 @@ associated_specs:
   - path: pkg/provenance/fswrite_transitions_test.go
     type: go_test
     run_command: make test # {{path}}
-  - path: plugins/provenance/hooks/session-start.sh
-    type: code
-    run_command: grep -q reconcile {{path}}
+  - path: plugins/provenance/hooks_test.go
+    type: go_test
+    run_command: make test # {{path}} — runs session-start.sh against a fixture repo and asserts write bits are actually reconciled, not just that the script mentions reconcile
 associated_traces: []
 monitors: []
 tags: []
