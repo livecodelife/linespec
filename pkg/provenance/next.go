@@ -25,6 +25,10 @@ const (
 	ActionOpen ActionKind = "open"
 	// ActionAddSpec — an open record has no associated_specs; add a proof artifact.
 	ActionAddSpec ActionKind = "add_spec"
+	// ActionAddScope — a file is blocked by fswrite enforcement (prov-2026-8d2f5f2a):
+	// the active open record does not yet declare it in affected_scope, so it stays
+	// non-writable on disk.
+	ActionAddScope ActionKind = "add_scope"
 	// ActionCommit — there are staged changes; commit them tagged with the record.
 	ActionCommit ActionKind = "commit"
 	// ActionImplementImprint — an imprint of the active blueprint is not implemented.
@@ -151,8 +155,8 @@ func Advise(state NextState) []NextAction {
 	// Nothing governs the files and there is no draft.
 	if len(files) == 0 {
 		return []NextAction{{
-			Kind:   ActionNone,
-			Reason: "No work in flight and no staged changes. Start a blueprint when you begin a change.",
+			Kind:    ActionNone,
+			Reason:  "No work in flight and no staged changes. Start a blueprint when you begin a change.",
 			Command: `linespec provenance create --title "..." --type blueprint --no-edit`,
 		}}
 	}
@@ -160,9 +164,14 @@ func Advise(state NextState) []NextAction {
 }
 
 // adviseOnActive returns the next action for an open record the agent is working
-// under. Precedence: add missing spec -> commit staged work -> close pending
-// imprints -> complete.
+// under. Precedence: widen scope for any blocked file -> add missing spec ->
+// commit staged work -> close pending imprints -> complete. Widening scope comes
+// first because a file fswrite is blocking (prov-2026-8d2f5f2a) cannot even be
+// written to create the missing spec.
 func adviseOnActive(state NextState, active *Record) []NextAction {
+	if missing := uncoveredFiles(active, relevantFiles(state)); len(missing) > 0 {
+		return []NextAction{addScopeAction(active, missing)}
+	}
 	if len(active.AssociatedSpecs) == 0 {
 		return []NextAction{addSpecAction(active)}
 	}
@@ -197,6 +206,24 @@ func openAction(r *Record) NextAction {
 		Kind:     ActionOpen,
 		Command:  "linespec provenance open --record " + r.ID,
 		Reason:   "Draft " + r.ID + " covers this work — open it to enable scope/spec enforcement.",
+		RecordID: r.ID,
+	}
+}
+
+// addScopeAction recommends widening active's affected_scope to cover missing —
+// files that stay non-writable on disk until they are declared (fswrite
+// enforcement, prov-2026-8d2f5f2a). affected_scope itself lives in the always-
+// writable provenance directory, so it can be hand-edited directly; `lock-scope`
+// materializes permission for already-committed files in one atomic step.
+func addScopeAction(r *Record, missing []string) NextAction {
+	return NextAction{
+		Kind: ActionAddScope,
+		Reason: fmt.Sprintf(
+			"Blocked by filesystem enforcement: %s not yet in open record %s's affected_scope, so they stay "+
+				"read-only on disk. Add them to affected_scope in %s's YAML (the provenance directory is always "+
+				"writable), then run 'linespec provenance lock-scope --record %s' to materialize write access "+
+				"for already-committed files, or wait for the next reconcile at session start.",
+			strings.Join(missing, ", "), r.ID, r.ID, r.ID),
 		RecordID: r.ID,
 	}
 }
@@ -357,6 +384,19 @@ func governingRecords(records []*Record, files []string) []string {
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+// uncoveredFiles returns the subset of files NOT explicitly governed by active
+// — the ones fswrite enforcement (prov-2026-8d2f5f2a) leaves non-writable
+// because active's affected_scope does not declare them.
+func uncoveredFiles(active *Record, files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !explicitlyGoverns(active, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // unimplementedImprints returns the imprints that implement blueprintID and are
