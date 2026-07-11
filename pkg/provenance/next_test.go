@@ -187,6 +187,144 @@ func TestAdvise_NeverEmpty(t *testing.T) {
 	}
 }
 
+// --- ActionAddScope (fswrite enforcement, prov-2026-8d2f5f2a) ---------------
+
+func TestAdvise_ActiveRecordMissingScopeForOneFile_AddScope(t *testing.T) {
+	// open explicitly governs auth.go (making it the active record) but does not
+	// declare other.go — other.go should stay non-writable on disk until scope is
+	// widened, so the engine must recommend widening scope, not adding a spec.
+	open := bp("prov-2026-0000fff1", StatusOpen, []string{"pkg/core/auth.go"})
+	s := NextState{
+		Records:       []*Record{open},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope || got.RecordID != open.ID {
+		t.Fatalf("want ActionAddScope on %s, got %s/%s", open.ID, got.Kind, got.RecordID)
+	}
+	if !containsAny(got.Reason, "pkg/core/other.go") {
+		t.Fatalf("reason must name the uncovered file: %q", got.Reason)
+	}
+	if containsAny(got.Reason, "pkg/core/auth.go, ") || containsAny(got.Reason, ", pkg/core/auth.go") {
+		t.Fatalf("reason must not list the already-covered file as missing: %q", got.Reason)
+	}
+	if !containsAny(got.Reason, "lock-scope --record "+open.ID) {
+		t.Fatalf("reason must point at the lock-scope remedy for %s: %q", open.ID, got.Reason)
+	}
+}
+
+func TestAdvise_AddScopeTakesPrecedenceOverAddSpec(t *testing.T) {
+	// open has no associated_specs (which alone would trigger ActionAddSpec) AND
+	// an uncovered file — widening scope must win, since the missing file can't
+	// even be written to create the spec (prov-2026-8d2f5f2a).
+	open := bp("prov-2026-0000fff2", StatusOpen, []string{"pkg/core/auth.go"})
+	s := NextState{
+		Records:       []*Record{open},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope {
+		t.Fatalf("want ActionAddScope to take precedence over ActionAddSpec, got %s", got.Kind)
+	}
+}
+
+func TestAdvise_AddScopeTakesPrecedenceOverCommit(t *testing.T) {
+	// open has specs and staged changes (which alone would trigger ActionCommit)
+	// AND an uncovered intended file — widening scope must still come first.
+	open := bp("prov-2026-0000fff3", StatusOpen, []string{"pkg/core/auth.go"}, spec("pkg/core/auth_test.go"))
+	s := NextState{
+		Records:       []*Record{open},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go"},
+		StagedFiles:   []string{"pkg/core/auth.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope {
+		t.Fatalf("want ActionAddScope to take precedence over ActionCommit, got %s", got.Kind)
+	}
+}
+
+func TestAdvise_AllIntendedFilesCovered_NoAddScope(t *testing.T) {
+	// Glob scope covers every intended file — nothing is blocked, so the engine
+	// must proceed straight to the next step in the precedence chain (add_spec).
+	open := bp("prov-2026-0000fff4", StatusOpen, []string{"pkg/core/**"})
+	s := NextState{
+		Records:       []*Record{open},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddSpec {
+		t.Fatalf("want ActionAddSpec once all files are covered, got %s", got.Kind)
+	}
+}
+
+func TestAdvise_AddScopeReasonListsMultipleMissingFiles(t *testing.T) {
+	open := bp("prov-2026-0000fff5", StatusOpen, []string{"pkg/core/auth.go"})
+	s := NextState{
+		Records:       []*Record{open},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go", "pkg/core/third.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope {
+		t.Fatalf("want ActionAddScope, got %s", got.Kind)
+	}
+	for _, want := range []string{"pkg/core/other.go", "pkg/core/third.go"} {
+		if !containsAny(got.Reason, want) {
+			t.Fatalf("reason must list every missing file, missing %q: %q", want, got.Reason)
+		}
+	}
+}
+
+func TestUncoveredFiles_ReturnsOnlyFilesNotExplicitlyGoverned(t *testing.T) {
+	active := bp("prov-2026-0000fff6", StatusOpen, []string{"pkg/core/auth.go"})
+	got := uncoveredFiles(active, []string{"pkg/core/auth.go", "pkg/core/other.go"})
+	want := []string{"pkg/core/other.go"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("uncoveredFiles = %v, want %v", got, want)
+	}
+}
+
+func TestUncoveredFiles_EmptyWhenAllFilesCovered(t *testing.T) {
+	active := bp("prov-2026-0000fff7", StatusOpen, []string{"pkg/core/**"})
+	got := uncoveredFiles(active, []string{"pkg/core/auth.go", "pkg/core/other.go"})
+	if len(got) != 0 {
+		t.Fatalf("uncoveredFiles = %v, want empty", got)
+	}
+}
+
+func TestUncoveredFiles_ObservedModeRecordCoversNothingExplicitly(t *testing.T) {
+	// Observed-mode records (empty affected_scope) never explicitly govern any
+	// file, so every file is reported as uncovered/blocked for them.
+	active := bp("prov-2026-0000fff8", StatusOpen, nil)
+	got := uncoveredFiles(active, []string{"pkg/core/auth.go"})
+	if len(got) != 1 || got[0] != "pkg/core/auth.go" {
+		t.Fatalf("uncoveredFiles = %v, want [pkg/core/auth.go]", got)
+	}
+}
+
+func TestUncoveredFiles_NilWhenNoFilesGiven(t *testing.T) {
+	active := bp("prov-2026-0000fff9", StatusOpen, []string{"pkg/core/auth.go"})
+	if got := uncoveredFiles(active, nil); len(got) != 0 {
+		t.Fatalf("uncoveredFiles(nil) = %v, want empty", got)
+	}
+}
+
+func TestAddScopeAction_FieldsAndReasonContent(t *testing.T) {
+	r := bp("prov-2026-0000ffaa", StatusOpen, []string{"pkg/core/auth.go"})
+	action := addScopeAction(r, []string{"pkg/core/other.go"})
+
+	if action.Kind != ActionAddScope {
+		t.Fatalf("Kind = %s, want %s", action.Kind, ActionAddScope)
+	}
+	if action.RecordID != r.ID {
+		t.Fatalf("RecordID = %s, want %s", action.RecordID, r.ID)
+	}
+	for _, want := range []string{"pkg/core/other.go", r.ID, "affected_scope", "lock-scope --record " + r.ID, "reconcile"} {
+		if !containsAny(action.Reason, want) {
+			t.Fatalf("Reason missing %q: %q", want, action.Reason)
+		}
+	}
+}
+
 func containsAny(haystack string, needles ...string) bool {
 	for _, n := range needles {
 		if n != "" && stringsContains(haystack, n) {
