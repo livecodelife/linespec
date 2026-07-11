@@ -110,6 +110,120 @@ func TestAdvise_OpenReadyAllImprintsImplemented_Complete(t *testing.T) {
 	}
 }
 
+// --- fswrite (prov-2026-8d2f5f2a): ActionAddScope precedence and content ----
+
+func TestAdvise_ActiveRecordPartialScope_AddScopeForUncoveredFiles(t *testing.T) {
+	// active governs pkg/core/** (and is thus selected as active via one of the
+	// intended files matching), but a second intended file falls outside its
+	// affected_scope — fswrite enforcement leaves it non-writable, so the engine
+	// must recommend widening scope rather than jump straight to add_spec.
+	active := bp("prov-2026-0000fed0", StatusOpen, []string{"pkg/core/**"})
+	s := NextState{
+		Records:       []*Record{active},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/other/thing.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope || got.RecordID != active.ID {
+		t.Fatalf("want ActionAddScope on %s, got %s/%s", active.ID, got.Kind, got.RecordID)
+	}
+	if !containsAny(got.Reason, "pkg/other/thing.go") {
+		t.Fatalf("reason should name the uncovered file: %q", got.Reason)
+	}
+	if containsAny(got.Reason, "pkg/core/auth.go") {
+		t.Fatalf("reason should not list the already-covered file: %q", got.Reason)
+	}
+}
+
+func TestAdvise_AddScopeTakesPrecedenceOverAddSpec(t *testing.T) {
+	// active has no associated_specs (which would normally trigger ActionAddSpec)
+	// AND an uncovered file. Widening scope must win: a spec file the agent
+	// cannot yet write (fswrite enforcement) cannot be added first.
+	active := bp("prov-2026-0000fed1", StatusOpen, []string{"pkg/core/**"}) // no specs
+	s := NextState{
+		Records:       []*Record{active},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/other/thing.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddScope {
+		t.Fatalf("want ActionAddScope to take precedence over ActionAddSpec, got %s", got.Kind)
+	}
+}
+
+func TestAdvise_FullyCoveredFiles_NoAddScope_FallsThroughToAddSpec(t *testing.T) {
+	// Regression: when every intended file is already in affected_scope, the new
+	// addScope check must not fire, and existing behavior (fall through to
+	// add_spec) must be preserved.
+	active := bp("prov-2026-0000fed2", StatusOpen, []string{"pkg/core/**"})
+	s := NextState{
+		Records:       []*Record{active},
+		IntendedFiles: []string{"pkg/core/auth.go", "pkg/core/other.go"},
+	}
+	got := primary(t, s)
+	if got.Kind != ActionAddSpec || got.RecordID != active.ID {
+		t.Fatalf("want ActionAddSpec (fully covered scope), got %s/%s", got.Kind, got.RecordID)
+	}
+}
+
+func TestAdvise_AmbientNoFiles_NeverTriggersAddScope(t *testing.T) {
+	// Ambient path (no intended/staged files): relevantFiles is empty, so
+	// uncoveredFiles must be empty too, even for an observed-mode (empty scope)
+	// active record. Regression guard for the ambient branch in Advise.
+	open := bp("prov-2026-0000fed3", StatusOpen, nil, spec("pkg/core/auth_test.go")) // observed mode
+	s := NextState{Records: []*Record{open}}
+	got := primary(t, s)
+	if got.Kind == ActionAddScope {
+		t.Fatalf("ambient (no files) state must never produce ActionAddScope, got reason %q", got.Reason)
+	}
+	if got.Kind != ActionComplete {
+		t.Fatalf("want ActionComplete for the ambient ready blueprint, got %s", got.Kind)
+	}
+}
+
+func TestUncoveredFiles_AllowlistRecord_ReturnsOnlyFilesOutsideScope(t *testing.T) {
+	active := bp("prov-2026-0000fed4", StatusOpen, []string{"pkg/core/**"})
+	got := uncoveredFiles(active, []string{"pkg/core/a.go", "pkg/other/b.go", "pkg/core/c.go"})
+	want := []string{"pkg/other/b.go"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("uncoveredFiles = %v, want %v", got, want)
+	}
+}
+
+func TestUncoveredFiles_ObservedModeRecord_TreatsAllFilesAsUncovered(t *testing.T) {
+	// An observed-mode record (empty affected_scope) never explicitly governs any
+	// file (see explicitlyGoverns), so every file is reported as uncovered. In
+	// practice Advise never calls this with a non-empty file list for an
+	// observed-mode active record (it can only become active via the files==0
+	// ambient path), but the helper's own contract must hold regardless.
+	observed := bp("prov-2026-0000fed5", StatusOpen, nil)
+	got := uncoveredFiles(observed, []string{"pkg/a.go", "pkg/b.go"})
+	if len(got) != 2 {
+		t.Fatalf("uncoveredFiles = %v, want both files reported uncovered", got)
+	}
+}
+
+func TestUncoveredFiles_EmptyFileList_ReturnsNil(t *testing.T) {
+	active := bp("prov-2026-0000fed6", StatusOpen, []string{"pkg/core/**"})
+	if got := uncoveredFiles(active, nil); len(got) != 0 {
+		t.Fatalf("uncoveredFiles(nil) = %v, want empty", got)
+	}
+}
+
+func TestAddScopeAction_RecommendsLockScopeAndNamesRecord(t *testing.T) {
+	r := bp("prov-2026-0000fed7", StatusOpen, []string{"pkg/core/**"})
+	got := addScopeAction(r, []string{"pkg/other/a.go", "pkg/other/b.go"})
+	if got.Kind != ActionAddScope {
+		t.Fatalf("Kind = %s, want ActionAddScope", got.Kind)
+	}
+	if got.RecordID != r.ID {
+		t.Fatalf("RecordID = %s, want %s", got.RecordID, r.ID)
+	}
+	for _, want := range []string{"pkg/other/a.go, pkg/other/b.go", "affected_scope", r.ID, "lock-scope --record " + r.ID} {
+		if !containsAny(got.Reason, want) {
+			t.Fatalf("addScopeAction reason missing %q: %q", want, got.Reason)
+		}
+	}
+}
+
 func TestAdvise_MultipleOpenGoverning_ChooseNotSupersede(t *testing.T) {
 	a := bp("prov-2026-0000aaaa", StatusOpen, []string{"pkg/core/**"}, spec("a_test.go"))
 	b := bp("prov-2026-0000bbbb", StatusOpen, []string{"pkg/core/**"}, spec("b_test.go"))
