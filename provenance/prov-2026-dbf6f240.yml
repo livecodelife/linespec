@@ -1,6 +1,6 @@
 id: prov-2026-dbf6f240
 title: 'fswrite: dedicated add-scope/reconcile verbs, unconditional Next reconcile'
-status: open
+status: implemented
 created_at: "2026-07-13"
 author: calebcowen@gmail.com
 intent: |-
@@ -51,7 +51,7 @@ type: imprint
 supersedes: prov-2026-a8de41cd
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: b903f695d60c1d1518ee6342e70fe3906f3a7ea2
 associated_specs:
   - path: pkg/provenance/fswrite_transitions_test.go
     type: go_test
