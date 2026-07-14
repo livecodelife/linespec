@@ -1,0 +1,64 @@
+id: prov-2026-dbf6f240
+title: 'fswrite: dedicated add-scope/reconcile verbs, unconditional Next reconcile'
+status: open
+created_at: "2026-07-13"
+author: calebcowen@gmail.com
+intent: |-
+  Supersedes prov-2026-a8de41cd. That imprint scoped scope-widening and
+  reconcile down to fit within the blueprint's then-current affected_scope,
+  which excluded cmd/linespec/cli.go: scope-widening was folded into the
+  existing `lock-scope` verb instead of a new one, and reconcile ran inside
+  `Next` only when session-start.sh set LINESPEC_PROVENANCE_RECONCILE, so an
+  ordinary `next` call never triggered a filesystem sweep.
+
+  0f20fd5 widened the blueprint's affected_scope to cover cli.go, removing
+  the constraint that forced those workarounds. Reviewer feedback on the
+  resulting PR asked to go back to the blueprint's original intent now that
+  cli.go is in scope, rather than keep the interim workarounds:
+
+  1. Scope-widening is now a dedicated `linespec provenance add-scope` verb,
+     split out of `lock-scope`. `lock-scope` keeps its original job (observed
+     -> allowlist, initial populate); `add-scope` handles widening an
+     already-allowlist record's scope from newly-committed files and
+     materializes write permissions for exactly the newly-added paths.
+  2. Reconcile is now also a dedicated `linespec provenance reconcile` verb
+     for explicit invocation, AND `Next` reconciles the write-bit projection
+     unconditionally on every call — no env var gate. Enforcement now holds
+     regardless of whether session-start.sh (or any hook) is installed,
+     satisfying the blueprint's constraint that reconcile must not depend on
+     the Claude Code plugin hooks being present.
+  3. Decision 3 from the superseded imprint (Complete/Deprecate re-lock only
+     the closing record's own affected_scope paths via relockClosedScope,
+     not a full-tree reconcile) is unchanged — it was never scope-constrained
+     by cli.go's exclusion and still holds for the same reason: a full sweep
+     tied to every Complete/Deprecate call would risk locking down the whole
+     live repo mid-session.
+  4. session-start.sh is simplified to a thin `next --json` renderer with no
+     special env var, since Next's unconditional reconcile makes the
+     env-var-gated trigger redundant.
+  5. AlwaysWritablePaths now normalizes an absolute config.Dir to
+     repo-relative, since reconcile matches paths against the repo-relative
+     output of `git ls-files`.
+constraints:
+  - Scope-widening MUST go through a dedicated `add-scope` verb, not overloaded onto `lock-scope`.
+  - '`Next` MUST reconcile the write-bit projection unconditionally on every call; reconcile MUST NOT be gated behind an env var only a hook script sets.'
+  - A dedicated `reconcile` verb MUST exist for explicit invocation outside of `Next`.
+  - Complete/Deprecate MUST continue to re-lock only the closing record's own affected_scope paths (relockClosedScope), not sweep the whole tree.
+implements: prov-2026-8d2f5f2a
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: prov-2026-a8de41cd
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/fswrite_transitions_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: plugins/provenance/hooks_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags: []
