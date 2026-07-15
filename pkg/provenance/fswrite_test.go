@@ -389,13 +389,12 @@ func TestReconcile_UnlocksParentDirOfDeclaredNotYetExistingPath(t *testing.T) {
 // TestAlwaysWritablePaths_IncludesManagedLinespecStateFiles reproduces the bug:
 // LineSpec's own regenerated state files under .linespec/ (embeddings.bin,
 // hash_manifest.json) were not part of the always-writable "authoring coop",
-// so reconcile locked them whenever they happened to be git-tracked.
+// so reconcile locked them whenever they happened to be git-tracked. The whole
+// .linespec/ directory is exempted rather than individual filenames, so any
+// file under it — including ones not yet named here — stays writable.
 func TestAlwaysWritablePaths_IncludesManagedLinespecStateFiles(t *testing.T) {
 	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "provenance"}, nil, "")
-	for _, want := range []string{".linespec/embeddings.bin", ".linespec/hash_manifest.json"} {
-		if !slices.Contains(always, want) {
-			t.Errorf("AlwaysWritablePaths missing managed state path %q, got %v", want, always)
-		}
+	for _, want := range []string{".linespec/embeddings.bin", ".linespec/hash_manifest.json", ".linespec/anything_else.json"} {
 		if !IsAlwaysWritable(want, always) {
 			t.Errorf("IsAlwaysWritable(%q) = false, want true (managed LineSpec state must never be locked)", want)
 		}
