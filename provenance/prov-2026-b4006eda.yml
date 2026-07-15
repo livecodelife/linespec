@@ -1,5 +1,5 @@
 id: prov-2026-b4006eda
-title: open rejects not-yet-existing exact affected_scope path, defeating record-before-file-creation
+title: open rejects not-yet-existing affected_scope path (exact/glob/regex), defeating record-before-file-creation
 status: open
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
@@ -31,22 +31,41 @@ intent: |
     1. create a blueprint, affected_scope: [src/new.go]  (src/new.go absent)
     2. linespec provenance open --record <id>
        → REJECTED: "Scope path does not exist: src/new.go", rolled back.
-    3. change affected_scope to a glob, e.g. src/*.go
+    3. change affected_scope to a glob, e.g. src/*.go, in a src/ dir that
+       ALREADY contains other .go files
     4. linespec provenance open --record <id>
-       → SUCCEEDS; reconcile unlocks src/; `echo ... > src/new.go` is ALLOWED.
+       → SUCCEEDS; reconcile unlocks src/ (because an existing matched file
+         lives there); `echo ... > src/new.go` is ALLOWED.
+    5. BUT change affected_scope to a glob into an empty/new dir with no
+       existing match, e.g. emptydir/*.go, then open
+       → REJECTED identically: "Glob pattern matches no files: emptydir/*.go".
+         (Verified.) So the glob is NOT a general escape hatch — it only
+         "works" in step 4 because the directory already held a matching file.
 
-  Root cause: linter.go validateScopePaths applies SeverityError to missing
-  EXACT open-record scope paths, with no exemption for a path that is declared
-  precisely because it is about-to-be-created. Glob/regex patterns escape the
-  check (validateGlobPattern/validateRegexPattern do not require a match), which
-  is why the glob workaround exists — but requiring authors to use a glob to
-  declare a single new file is an inconsistent, undocumented escape hatch.
+  Root cause: linter.go validateScopePaths requires every open-record scope
+  pattern to match at least one EXISTING file, and applies the same missingSev
+  (SeverityError for open records) when none does: an exact path must exist
+  (validateExactPath, linter.go:455), a glob must match >=1 file
+  (validateGlobPattern, "matches no files", linter.go:499), and a regex must
+  match >=1 walked file (validateRegexPattern). None of the three pattern kinds
+  is exempted for a path that is declared precisely because it is
+  about-to-be-created. The earlier draft of this record wrongly claimed
+  glob/regex "escape the check"; they do not — the step-4 glob only passed
+  because src/ already contained pre-existing .go files.
 
-  Impact: the feature's primary advertised workflow (open a record naming the
-  exact new file, then create it under the unlocked directory) does not work.
-  Authors must either (a) use a glob instead of the exact path, or (b) create an
-  empty file first and then open — which violates "record before file creation",
-  the whole point of the blueprint.
+  Compounding this on the reconcile side: fswrite.go Reconcile's
+  not-yet-existing-path dir-unlock loop (~L371-385) explicitly SKIPS glob
+  patterns (`if containsGlobMeta(p) { continue }`), so even if `open` accepted a
+  glob naming a new file in an otherwise-empty directory, reconcile would still
+  not unlock that directory for it. In step 4 the dir got unlocked only as a
+  side effect of an existing matched file setting writableDirs — not by the
+  not-yet-existing handling. A complete fix therefore spans BOTH layers.
+
+  Impact: the feature's primary advertised workflow (declare the new path in an
+  open record, then create the file under the unlocked directory) does not work
+  for ANY pattern kind when the declared path does not already match an existing
+  file. Authors are forced to create an empty file first and then open — which
+  violates "record before file creation", the whole point of the blueprint.
 
   Secondary observations found during the same manual test pass, recorded here
   for traceability but NOT fixed by this bug (each is arguably by-design and, if
@@ -64,12 +83,12 @@ intent: |
       Minor/heuristic, not a correctness defect.
 constraints:
   - |
-    Opening a record MUST NOT be blocked solely because an EXACT affected_scope
-    path does not yet exist on disk. A record that declares a brand-new file by
-    its exact path must be openable, so that reconcile can unlock the parent
-    directory and the declared file can then be created — matching the behavior
-    already implemented for globs and the not-yet-existing-path handling in
-    fswrite.go Reconcile.
+    Opening a record MUST NOT be blocked solely because a declared
+    affected_scope path does not yet exist on disk, so that reconcile can unlock
+    the parent directory and the declared file can then be created. This is the
+    not-yet-existing-path handling fswrite.go Reconcile (~L371-385) already
+    intends to support — but which is currently unreachable because `open`
+    rejects the declaration first.
   - |
     The relaxation MUST be scoped to the missing-path (existence) check only. It
     MUST NOT weaken other open-time validations (e.g. forbidden_scope handling,
@@ -77,15 +96,28 @@ constraints:
     an excluded location). A scope path that exists but is a directory, or other
     genuinely invalid patterns, must keep their current severity.
   - |
-    Behavior MUST be consistent across pattern kinds: an exact path, a glob, and
-    a regex that each name only not-yet-existing files must all be treated the
-    same way at `open` time (today the glob/regex paths already succeed; the
-    exact path is the outlier).
+    The fix MUST cover ALL pattern kinds, not just the exact path. Today an
+    exact path ("Scope path does not exist"), a glob ("Glob pattern matches no
+    files"), and a regex (no walked match) that each name only not-yet-existing
+    files ALL fail at `open` — none is a working escape hatch. Whatever
+    relaxation is applied MUST let all three be opened when they name
+    declared-but-not-yet-existing paths; do not merely align the exact path to a
+    (mistakenly assumed) already-working glob.
   - |
-    make test must pass, and a regression test MUST assert that opening a record
-    whose affected_scope contains an exact, not-yet-existing path succeeds (and
-    that reconcile then unlocks its parent directory so the file can be created),
-    guarding the exact failure reproduced above.
+    Because the glob case spans two layers, the fix MUST also address reconcile:
+    fswrite.go Reconcile's not-yet-existing-path dir-unlock loop currently skips
+    glob patterns (`containsGlobMeta`), so a glob naming a new file in an
+    otherwise-empty directory would still not get its parent unlocked even after
+    `open` accepts it. Opening a not-yet-existing glob/regex scope MUST result in
+    a usable (unlocked) parent directory for the declared file.
+  - |
+    make test must pass, and regression tests MUST assert that opening a record
+    whose affected_scope names a not-yet-existing path succeeds — covering the
+    exact path, a glob into an otherwise-empty directory, and a regex with no
+    existing match — and that reconcile then unlocks each declared path's parent
+    directory so the file can be created, guarding all three failures reproduced
+    above (the empty-directory glob case is the one the earlier draft wrongly
+    assumed already worked).
 affected_scope:
   - pkg/provenance/linter.go
   - pkg/provenance/fswrite_transitions_test.go
