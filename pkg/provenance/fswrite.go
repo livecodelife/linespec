@@ -37,23 +37,25 @@ const (
 	dirPermUnlockAdd os.FileMode = 0o300
 )
 
-// managedStatePaths returns LineSpec's own machine-regenerated state files
-// under .linespec/ that are sometimes git-tracked (e.g. embeddings.bin,
-// hash_manifest.json) but must never be locked by the write-permission
-// projection: they are not human-authored source the provenance-before-code
-// invariant is meant to gate, and reconcile locking them breaks the very
-// tools (embeddings index, hash manifest) that regenerate them (prov-2026-26efc162).
+// managedStatePaths returns the directory of LineSpec's own machine-regenerated
+// state under .linespec/ (e.g. embeddings.bin, hash_manifest.json, and any
+// future managed file placed there) that must never be locked by the
+// write-permission projection: it is not human-authored source the
+// provenance-before-code invariant is meant to gate, and reconcile locking it
+// breaks the very tools (embeddings index, hash manifest) that regenerate it
+// (prov-2026-26efc162). The whole directory is exempted, rather than naming
+// individual files, so newly added managed state never needs a matching
+// AlwaysWritablePaths update.
 func managedStatePaths() []string {
 	return []string{
-		".linespec/embeddings.bin",
-		".linespec/hash_manifest.json",
+		".linespec",
 	}
 }
 
 // AlwaysWritablePaths returns the derived always-writable pattern set: the
 // existing provenance.exclude_paths whitelist plus the authoring coop — the
 // configured provenance directory, .linespec.yml, LineSpec's own managed
-// .linespec/ state files (managedStatePaths), and every associated_spec path
+// .linespec/ state directory (managedStatePaths), and every associated_spec path
 // across all loaded records (regardless of status), so the
 // Brief-to-Blueprint-to-Imprint authoring chain can never block its own
 // creation. This set is derived, never separately hand-maintained. repoRoot
