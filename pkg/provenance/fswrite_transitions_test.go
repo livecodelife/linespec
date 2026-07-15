@@ -73,14 +73,17 @@ func setupOpenableRecord(t *testing.T, cmds *Commands, repo, id string) string {
 // pattern's parent directory even when it names no existing file yet.
 func TestPatternParentDir(t *testing.T) {
 	cases := map[string]string{
-		"pkg/*.go":           "pkg",
-		"pkg/sub/*.go":       "pkg/sub",
-		"*.go":               ".",
-		"emptydir/*.go":      "emptydir",
-		"pkg/fil?.go":        "pkg",
-		`re:^pkg/.*\.go$`:    "pkg",
-		`re:^pkg/thing\.go$`: "pkg",
-		`re:nonexistent_\d+`: ".",
+		"pkg/*.go":                "pkg",
+		"pkg/sub/*.go":            "pkg/sub",
+		"*.go":                    ".",
+		"emptydir/*.go":           "emptydir",
+		"pkg/fil?.go":             "pkg",
+		`re:^pkg/.*\.go$`:         "pkg",
+		`re:^pkg/thing\.go$`:      "pkg",
+		`re:nonexistent_\d+`:      ".",
+		".github/workflows/*.yml": ".github/workflows",
+		"docs.v2/*.md":            "docs.v2",
+		"pkg/v1.2/*.go":           "pkg/v1.2",
 	}
 	for pattern, want := range cases {
 		if got := patternParentDir(pattern); got != want {

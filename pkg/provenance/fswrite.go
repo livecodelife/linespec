@@ -151,17 +151,38 @@ func containsGlobMeta(s string) bool {
 // patternParentDir computes the directory that must be unlocked so a
 // declared-but-not-yet-existing glob or regex affected_scope pattern's file
 // can be created inside it (prov-2026-b4006eda): the literal path segment
-// before the pattern's first wildcard/regex metacharacter. For a "re:"
-// pattern, the leading "^" anchor (if present) is stripped first, since scope
-// regexes are conventionally anchored literal paths with only a suffix (e.g.
-// the extension) expressed as a regex. Returns "." when no literal directory
-// segment can be determined (e.g. the pattern's first path segment is itself
-// a wildcard), matching Reconcile's existing skip of "." as already-writable.
+// before the pattern's first wildcard/regex metacharacter. Glob and regex
+// patterns use different metacharacter sets — a glob's only wildcards are
+// "*" and "?" (see GlobToRegex, which escapes ".", "+", "(", etc. as
+// literals), while a regex pattern's whole body is meta-significant — so the
+// scan is keyed off the "re:" prefix rather than one shared charset. In both
+// modes, a backslash-escaped character (e.g. "\." in a regex, or "\*" in a
+// glob) is treated as a single literal unit, never a metacharacter trigger.
+// For a "re:" pattern, the leading "^" anchor (if present) is stripped first,
+// since scope regexes are conventionally anchored literal paths with only a
+// suffix (e.g. the extension) expressed as a regex. Returns "." when no
+// literal directory segment can be determined (e.g. the pattern's first path
+// segment is itself a wildcard), matching Reconcile's existing skip of "."
+// as already-writable.
 func patternParentDir(pattern string) string {
-	body := strings.TrimPrefix(pattern, "re:")
-	body = strings.TrimPrefix(body, "^")
+	body := pattern
+	metaChars := "*?"
+	if strings.HasPrefix(pattern, "re:") {
+		body = strings.TrimPrefix(strings.TrimPrefix(pattern, "re:"), "^")
+		metaChars = "*?.+()[]{}|^$"
+	}
 
-	metaIdx := strings.IndexAny(body, "*?.+()[]{}|\\^$")
+	metaIdx := -1
+	for i := 0; i < len(body); i++ {
+		if body[i] == '\\' && i+1 < len(body) {
+			i++ // skip the escaped char too; the pair is one literal unit
+			continue
+		}
+		if strings.IndexByte(metaChars, body[i]) >= 0 {
+			metaIdx = i
+			break
+		}
+	}
 	if metaIdx == -1 {
 		return filepath.Dir(body)
 	}
