@@ -1,6 +1,6 @@
 id: prov-2026-26efc162
 title: reconcile locks LineSpec's own tracked .linespec/ state files (embeddings.bin, hash_manifest.json)
-status: open
+status: implemented
 created_at: "2026-07-14"
 author: calebcowen@gmail.com
 intent: |
@@ -62,7 +62,7 @@ extends: prov-2026-8d2f5f2a
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: b9706752b540772d9370e62f722af5a530c7eb55
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
     type: go_test
