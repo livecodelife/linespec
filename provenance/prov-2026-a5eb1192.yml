@@ -1,6 +1,6 @@
 id: prov-2026-a5eb1192
 title: 'Framework-agnostic discover: language detection, symbol extraction, directory grouping'
-status: draft
+status: open
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
 intent: |
@@ -29,9 +29,6 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - pkg/discover/treesitter/lang.go
-  - pkg/discover/lang/
-  - pkg/discover/symbols/
-  - pkg/discover/graph/
 forbidden_scope: []
 type: blueprint
 supersedes: ""
@@ -39,15 +36,6 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/discover/lang/lang_test.go
-    type: go_test
-    run_command: "go test ./pkg/discover/lang/ && echo {{path}}"
-  - path: pkg/discover/symbols/symbols_test.go
-    type: go_test
-    run_command: "go test ./pkg/discover/symbols/ && echo {{path}}"
-  - path: pkg/discover/graph/graph_test.go
-    type: go_test
-    run_command: "go test ./pkg/discover/graph/ && echo {{path}}"
   - path: pkg/discover/treesitter/treesitter_test.go
     type: go_test
     run_command: "go test ./pkg/discover/treesitter/ && echo {{path}}"
