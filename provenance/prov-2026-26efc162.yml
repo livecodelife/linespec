@@ -54,6 +54,7 @@ constraints:
     visible instead of silently stale. Secondary to the always-writable fix.
 affected_scope:
   - pkg/provenance/fswrite.go
+  - pkg/provenance/fswrite_test.go
   - pkg/provenance/scope_index.go
 forbidden_scope: []
 type: bug
