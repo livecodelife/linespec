@@ -1,0 +1,110 @@
+id: prov-2026-b4006eda
+title: open rejects not-yet-existing exact affected_scope path, defeating record-before-file-creation
+status: draft
+created_at: "2026-07-15"
+author: calebcowen@gmail.com
+intent: |
+  The filesystem-write-enforcement feature (blueprint prov-2026-8d2f5f2a, brief
+  prov-2026-e8fb1e96) is built around enforcing "record creation BEFORE file
+  creation": you declare a path in an open record's affected_scope, and that
+  declaration is what unlocks the path so the file can be written/created.
+  Reconcile explicitly supports this for files that do not exist yet — see
+  fswrite.go Reconcile (the loop at ~L371-385, "Unlock parent directories of
+  declared-but-not-yet-existing open-scope paths so they can be created").
+
+  But the `open` transition cannot be reached for such a declaration. Opening a
+  record runs the linter's scope-existence check (linter.go validateScopePaths /
+  validateExactPath), and for an OPEN record a missing EXACT path is a hard
+  SeverityError (linter.go:419), which rolls the transition back:
+
+      $ linespec provenance open --record <id>
+      ✗ Cannot open <id>: the record does not pass validation:
+          · scope: Scope path does not exist: src/new.go
+        The transition was rolled back — <id> is unchanged (still draft).
+
+  So a record that declares a brand-new file by its exact path (the headline
+  "declare before you create it" case) can never be opened, and reconcile's
+  not-yet-existing-path dir-unlock logic is therefore unreachable through the
+  exact-path flow. The two layers contradict each other.
+
+  Reproduction (verified manually in an isolated repo, enforcement: strict):
+    1. create a blueprint, affected_scope: [src/new.go]  (src/new.go absent)
+    2. linespec provenance open --record <id>
+       → REJECTED: "Scope path does not exist: src/new.go", rolled back.
+    3. change affected_scope to a glob, e.g. src/*.go
+    4. linespec provenance open --record <id>
+       → SUCCEEDS; reconcile unlocks src/; `echo ... > src/new.go` is ALLOWED.
+
+  Root cause: linter.go validateScopePaths applies SeverityError to missing
+  EXACT open-record scope paths, with no exemption for a path that is declared
+  precisely because it is about-to-be-created. Glob/regex patterns escape the
+  check (validateGlobPattern/validateRegexPattern do not require a match), which
+  is why the glob workaround exists — but requiring authors to use a glob to
+  declare a single new file is an inconsistent, undocumented escape hatch.
+
+  Impact: the feature's primary advertised workflow (open a record naming the
+  exact new file, then create it under the unlocked directory) does not work.
+  Authors must either (a) use a glob instead of the exact path, or (b) create an
+  empty file first and then open — which violates "record before file creation",
+  the whole point of the blueprint.
+
+  Secondary observations found during the same manual test pass, recorded here
+  for traceability but NOT fixed by this bug (each is arguably by-design and, if
+  actioned, warrants its own record):
+    - associated_specs paths are always-writable regardless of record status
+      (fswrite.go AlwaysWritablePaths, ~L82-89, intentional per its comment).
+      Consequence: a `type: code` spec whose path IS a source file (the pattern
+      this repo uses with run_command: make test) makes that source file
+      permanently writable and exempt from lock enforcement, even after the
+      governing record is completed. May be intended (specs must stay
+      runnable/editable); flagged for confirmation.
+    - `linespec provenance next` for an uncovered file only ever suggests
+      "create a new blueprint", never "add this path to an existing open
+      record's scope", although the blueprint constraint lists both remediations.
+      Minor/heuristic, not a correctness defect.
+constraints:
+  - |
+    Opening a record MUST NOT be blocked solely because an EXACT affected_scope
+    path does not yet exist on disk. A record that declares a brand-new file by
+    its exact path must be openable, so that reconcile can unlock the parent
+    directory and the declared file can then be created — matching the behavior
+    already implemented for globs and the not-yet-existing-path handling in
+    fswrite.go Reconcile.
+  - |
+    The relaxation MUST be scoped to the missing-path (existence) check only. It
+    MUST NOT weaken other open-time validations (e.g. forbidden_scope handling,
+    associated_specs-required-under-strict, or matching a path that resolves to
+    an excluded location). A scope path that exists but is a directory, or other
+    genuinely invalid patterns, must keep their current severity.
+  - |
+    Behavior MUST be consistent across pattern kinds: an exact path, a glob, and
+    a regex that each name only not-yet-existing files must all be treated the
+    same way at `open` time (today the glob/regex paths already succeed; the
+    exact path is the outlier).
+  - |
+    make test must pass, and a regression test MUST assert that opening a record
+    whose affected_scope contains an exact, not-yet-existing path succeeds (and
+    that reconcile then unlocks its parent directory so the file can be created),
+    guarding the exact failure reproduced above.
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/fswrite_transitions_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-8d2f5f2a
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-e8fb1e96
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/fswrite_transitions_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - provenance-enforcement
+  - fswrite
+  - linter
+  - record-before-file-creation
