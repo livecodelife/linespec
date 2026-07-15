@@ -1,6 +1,6 @@
 id: prov-2026-f61d53bc
 title: Bootstrap pkg/discover/lang, symbols, graph package stubs
-status: open
+status: implemented
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
 intent: Create minimal package stubs for lang, symbols, and graph so the blueprint's affected_scope can be widened to include them and the reviewer's scope concern is addressed.
@@ -15,7 +15,7 @@ implements: prov-2026-a5eb1192
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 47854f98874db922b7c946bffed6115a478420bb
 associated_specs:
   - path: pkg/discover/lang/lang.go
     type: code
