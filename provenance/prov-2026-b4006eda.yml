@@ -134,6 +134,7 @@ affected_scope:
   - pkg/provenance/linter.go
   - pkg/provenance/fswrite.go
   - pkg/provenance/fswrite_transitions_test.go
+  - pkg/provenance/linter_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-8d2f5f2a
