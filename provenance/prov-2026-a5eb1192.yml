@@ -1,0 +1,44 @@
+id: prov-2026-a5eb1192
+title: 'Framework-agnostic discover: language detection, symbol extraction, directory grouping'
+status: draft
+created_at: "2026-07-15"
+author: calebcowen@gmail.com
+intent: |
+  The discover command currently requires a framework description to run — without one it
+  exits with an error. Many codebases (CLIs, workers, libraries, unsupported frameworks)
+  have no supported framework yet still benefit from provenance scaffolding. This blueprint
+  adds a framework-agnostic code path that detects language from file extensions, extracts
+  top-level symbols and import relationships using tree-sitter, groups files by
+  package/directory, and generates blueprint records per group — without generating
+  .linespec stubs (which require route and boundary information that only a framework
+  description provides). A Grouper interface is defined so that future community-detection
+  grouping (Option B) can replace directory grouping without changing the rest of the
+  pipeline.
+constraints:
+  - When --framework is unspecified and auto-detection fails, discover MUST warn and
+    proceed in framework-agnostic mode rather than exiting with an error.
+  - Framework-agnostic mode MUST NOT generate .linespec stubs (no routes or boundaries
+    are known). It MUST generate blueprint records per group.
+  - Grouping in framework-agnostic mode MUST be driven through a Grouper interface so
+    that community-detection grouping can be substituted without pipeline changes.
+  - Language detection MUST be extension-based and require no framework description.
+  - The existing framework-driven pipeline (when a framework IS detected or specified)
+    MUST be unchanged.
+  - New language grammars added to pkg/discover/treesitter/ MUST be additive only;
+    existing Go and Ruby support must not regress.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/discover/treesitter/lang.go
+  - pkg/discover/lang/
+  - pkg/discover/symbols/
+  - pkg/discover/graph/
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
