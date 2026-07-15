@@ -2,6 +2,5 @@
   "name": "linespec-provenance",
   "description": "Surfaces LineSpec provenance guidance in the agent loop: an ambient next-action at session start, advisory governing-record context on the first edit of a governed file, and the engine's exact remediation when a commit is rejected. Every hook renders from `linespec provenance` (the advice engine); none duplicates its logic.",
   "version": "0.1.0",
-  "keywords": ["provenance", "governance", "linespec"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": ["provenance", "governance", "linespec"]
 }
