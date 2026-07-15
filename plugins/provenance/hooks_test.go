@@ -63,6 +63,34 @@ func TestFiles_EmbedsHooksJSONWiringSessionStart(t *testing.T) {
 	}
 }
 
+// TestFiles_ManifestHooksDoesNotShadowAutoloadedHooksJSON guards prov-2026-dda67c29:
+// Claude Code auto-loads a plugin's hooks from the conventional hooks/hooks.json path.
+// If plugin.json's `hooks` field ALSO points at hooks/hooks.json, Claude Code rejects the
+// plugin with "Duplicate hooks file detected" and it loads disabled. The manifest `hooks`
+// field must therefore never reference the auto-loaded hooks/hooks.json (it is only for
+// ADDITIONAL, non-standard hook files).
+func TestFiles_ManifestHooksDoesNotShadowAutoloadedHooksJSON(t *testing.T) {
+	data, err := Files.ReadFile(".claude-plugin/plugin.json")
+	if err != nil {
+		t.Fatalf("ReadFile .claude-plugin/plugin.json: %v", err)
+	}
+	var manifest struct {
+		Hooks json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("Unmarshal plugin.json: %v", err)
+	}
+	// A string `hooks` pointing at the conventional hooks/hooks.json is the exact defect.
+	var hooksPath string
+	if len(manifest.Hooks) > 0 && json.Unmarshal(manifest.Hooks, &hooksPath) == nil {
+		normalized := strings.TrimPrefix(hooksPath, "./")
+		if normalized == "hooks/hooks.json" {
+			t.Errorf("plugin.json `hooks` must not point at the auto-loaded hooks/hooks.json "+
+				"(Claude Code rejects it as a duplicate hooks file); got %q", hooksPath)
+		}
+	}
+}
+
 // --- session-start.sh subprocess behavior --------------------------------------
 
 // linespecStub is a shell script that answers `linespec provenance next
