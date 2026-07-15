@@ -63,9 +63,14 @@ constraints:
   - |
     make test must pass; add a regression test asserting the embedded plugin.json does NOT
     set `hooks` to the auto-loaded hooks/hooks.json path (guarding the exact failure).
+  - |
+    scripts/install-plugin must not ship build-time Go sources into the installed plugin
+    tree: drop hooks_test.go (and embed.go) so the shell install produces the same tree as
+    the embed.FS / `linespec provenance install-plugin` path, which excludes them.
 affected_scope:
   - plugins/provenance/.claude-plugin/plugin.json
   - plugins/provenance/hooks_test.go
+  - scripts/install-plugin
 forbidden_scope: []
 type: bug
 extends: prov-2026-cd1405fb
