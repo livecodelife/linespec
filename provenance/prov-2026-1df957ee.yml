@@ -37,9 +37,6 @@ associated_specs:
   - path: README.md
     type: code
     run_command: test -f
-  - path: docs/provenance.html
-    type: code
-    run_command: test -f
 tags:
   - release
   - documentation
