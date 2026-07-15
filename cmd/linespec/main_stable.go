@@ -33,9 +33,12 @@ import (
 	"github.com/livecodelife/linespec/pkg/discover/boundaries"
 	"github.com/livecodelife/linespec/pkg/discover/enrich"
 	"github.com/livecodelife/linespec/pkg/discover/framework"
+	"github.com/livecodelife/linespec/pkg/discover/graph"
+	"github.com/livecodelife/linespec/pkg/discover/lang"
 	discoverrecords "github.com/livecodelife/linespec/pkg/discover/records"
 	discoverroutes "github.com/livecodelife/linespec/pkg/discover/routes"
 	"github.com/livecodelife/linespec/pkg/discover/stubs"
+	"github.com/livecodelife/linespec/pkg/discover/symbols"
 	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
 	"github.com/livecodelife/linespec/pkg/proxy/kafka"
@@ -1000,8 +1003,9 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 	} else {
 		result := framework.Detect(scanDir, descs)
 		if result == nil {
-			logger.Error("Could not detect framework in %q. Use --lang and --framework to specify.", scanDir)
-			os.Exit(1)
+			logger.Info("Warning: could not detect a supported framework in %q; proceeding in framework-agnostic mode (language detection + symbol extraction only, no route or .linespec discovery).", scanDir)
+			runDiscoverAgnostic(opts, cfg, scanDir)
+			return
 		}
 		if opts.Lang != "" && result.Language != opts.Lang {
 			logger.Error("Detected framework language %q does not match --lang %q", result.Language, opts.Lang)
@@ -1103,6 +1107,317 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 			enrichRoot = strings.TrimSpace(string(out))
 		}
 		runDiscoverEnrich(recordResults, enrichRoot, opts.LLMBaseURL)
+	}
+}
+
+// agnosticSkipDirs lists directory names skipped during a framework-agnostic scan —
+// dependency and VCS directories whose contents are not the user's own code.
+var agnosticSkipDirs = map[string]bool{
+	".git":         true,
+	"node_modules": true,
+	"vendor":       true,
+	".venv":        true,
+	"venv":         true,
+	"__pycache__":  true,
+}
+
+// agnosticResult is the outcome of generating one blueprint record for a directory group.
+type agnosticResult struct {
+	GroupName string
+	RecordID  string
+	FilePath  string
+	Title     string
+	FileCount int
+}
+
+// agnosticSummary is the framework-agnostic discover report.
+type agnosticSummary struct {
+	FilesScanned   int
+	SymbolCount    int
+	GroupCount     int
+	RecordsCreated int
+	Unclassified   []string
+}
+
+// runDiscoverAgnostic runs discover's framework-agnostic path: extension-based
+// language detection, tree-sitter symbol/import extraction, and directory-based
+// grouping. It is used when --framework is unspecified and auto-detection finds
+// no supported framework. Unlike the framework-driven pipeline, it never
+// generates .linespec stubs — no routes or protocol boundaries are known — it
+// only writes draft blueprint records, one per group.
+func runDiscoverAgnostic(opts discoverOptions, cfg *provenance.ProvenanceConfig, scanDir string) {
+	ctx := context.Background()
+
+	files, unclassified, err := scanAgnosticFiles(ctx, scanDir)
+	if err != nil {
+		logger.Error("Framework-agnostic scan failed: %v", err)
+		os.Exit(1)
+	}
+
+	var grouper graph.Grouper = graph.DirectoryGrouper{}
+	groups, err := grouper.Group(files)
+	if err != nil {
+		logger.Error("Grouping failed: %v", err)
+		os.Exit(1)
+	}
+
+	provenanceDir := cfg.Dir
+	if opts.Dir != "" {
+		provenanceDir = filepath.Join(scanDir, filepath.Base(cfg.Dir))
+	}
+
+	existingLoader := provenance.NewLoader(provenanceDir, nil)
+	_ = existingLoader.LoadAll()
+	existingIDs := existingLoader.GetAllIDs()
+
+	sum := computeAgnosticSummary(files, groups, unclassified)
+
+	if opts.DryRun {
+		results := planAgnosticRecords(groups, provenanceDir, existingIDs)
+		sum.RecordsCreated = len(results)
+		printDiscoverAgnosticDryRun(scanDir, results, sum, opts.Format)
+		return
+	}
+
+	author := "linespec-discover"
+	if helperCmds, cerr := provenance.NewCommands(cfg, scanDir, os.Stdout, false); cerr == nil {
+		if email, gerr := helperCmds.Git.GetGitEmail(); gerr == nil && email != "" {
+			author = email
+		}
+	}
+
+	results, err := writeAgnosticRecords(groups, provenanceDir, author, existingIDs)
+	if err != nil {
+		logger.Error("Record generation failed: %v", err)
+		os.Exit(1)
+	}
+	sum.RecordsCreated = len(results)
+
+	printDiscoverAgnosticSummary(scanDir, results, sum)
+
+	if opts.Enrich {
+		enrichRoot := scanDir
+		if out, err := exec.Command("git", "-C", scanDir, "rev-parse", "--show-toplevel").Output(); err == nil {
+			enrichRoot = strings.TrimSpace(string(out))
+		}
+		enrichResults := make([]discoverrecords.Result, len(results))
+		for i, r := range results {
+			enrichResults[i] = discoverrecords.Result{FilePath: r.FilePath}
+		}
+		runDiscoverEnrich(enrichResults, enrichRoot, opts.LLMBaseURL)
+	}
+}
+
+// scanAgnosticFiles walks dir, detecting language by extension and extracting
+// symbols/imports for every recognized, tree-sitter-supported language. Files
+// with a recognized extension that tree-sitter cannot yet parse are returned
+// as unclassified; files with no recognized extension are skipped entirely
+// (they are not source code discover can reason about).
+func scanAgnosticFiles(ctx context.Context, dir string) ([]graph.File, []string, error) {
+	var files []graph.File
+	var unclassified []string
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			if path != dir && agnosticSkipDirs[info.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		l, ok := lang.Detect(path)
+		if !ok {
+			return nil
+		}
+		if !symbols.Supported(l) {
+			unclassified = append(unclassified, path)
+			return nil
+		}
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		extracted, err := symbols.Extract(ctx, l, src)
+		if err != nil {
+			// A single unparsable file should not abort the whole scan.
+			logger.Info("Warning: skipping %s: %v", path, err)
+			unclassified = append(unclassified, path)
+			return nil
+		}
+
+		files = append(files, graph.File{
+			Path:    path,
+			Lang:    l,
+			Symbols: extracted.Symbols,
+			Imports: extracted.Imports,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	sort.Strings(unclassified)
+	return files, unclassified, nil
+}
+
+func computeAgnosticSummary(files []graph.File, groups []graph.Group, unclassified []string) agnosticSummary {
+	symbolCount := 0
+	for _, f := range files {
+		symbolCount += len(f.Symbols)
+	}
+	return agnosticSummary{
+		FilesScanned: len(files),
+		SymbolCount:  symbolCount,
+		GroupCount:   len(groups),
+		Unclassified: unclassified,
+	}
+}
+
+// planAgnosticRecords computes what writeAgnosticRecords would produce without touching the filesystem.
+func planAgnosticRecords(groups []graph.Group, provenanceDir string, existingIDs []string) []agnosticResult {
+	year := provenance.CurrentYear()
+	ids := append([]string(nil), existingIDs...)
+
+	results := make([]agnosticResult, 0, len(groups))
+	for _, g := range groups {
+		id, err := provenance.NextID(year, ids)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, id)
+		results = append(results, agnosticResult{
+			GroupName: g.Name,
+			RecordID:  id,
+			FilePath:  filepath.Join(provenanceDir, id+".yml"),
+			Title:     agnosticGroupTitle(g.Name),
+			FileCount: len(g.Files),
+		})
+	}
+	return results
+}
+
+// writeAgnosticRecords generates and saves draft blueprint records to provenanceDir,
+// one per group. No .linespec stubs are generated — framework-agnostic mode has no
+// route or boundary information to seed them with.
+func writeAgnosticRecords(groups []graph.Group, provenanceDir, author string, existingIDs []string) ([]agnosticResult, error) {
+	loader := provenance.NewLoader(provenanceDir, nil)
+
+	year := provenance.CurrentYear()
+	ids := append([]string(nil), existingIDs...)
+
+	results := make([]agnosticResult, 0, len(groups))
+	for _, g := range groups {
+		id, err := provenance.NextID(year, ids)
+		if err != nil {
+			return nil, fmt.Errorf("generate record ID: %w", err)
+		}
+		ids = append(ids, id)
+
+		title := agnosticGroupTitle(g.Name)
+		filePath := filepath.Join(provenanceDir, id+".yml")
+
+		scope := make([]string, 0, len(g.Files))
+		for _, f := range g.Files {
+			scope = append(scope, f.Path)
+		}
+
+		record := &provenance.Record{
+			ID:               id,
+			Title:            title,
+			Status:           provenance.StatusDraft,
+			Type:             provenance.RecordTypeBlueprint,
+			CreatedAt:        provenance.CurrentDate(),
+			Author:           author,
+			Intent:           "",
+			Constraints:      []string{},
+			AffectedScope:    scope,
+			ForbiddenScope:   []string{},
+			Supersedes:       "",
+			SupersededBy:     "",
+			Related:          []string{},
+			AssociatedSpecs:  []provenance.AssociatedSpec{},
+			AssociatedTraces: []string{},
+			Monitors:         []string{},
+			Tags:             []string{"discover", "framework-agnostic"},
+			FilePath:         filePath,
+		}
+
+		if err := loader.SaveRecord(record); err != nil {
+			return nil, fmt.Errorf("save record %s: %w", id, err)
+		}
+
+		results = append(results, agnosticResult{
+			GroupName: g.Name,
+			RecordID:  id,
+			FilePath:  filePath,
+			Title:     title,
+			FileCount: len(g.Files),
+		})
+	}
+	return results, nil
+}
+
+// agnosticGroupTitle converts a directory group name into a human-readable blueprint title.
+func agnosticGroupTitle(name string) string {
+	if name == "." {
+		return "root module"
+	}
+	return name + " module"
+}
+
+// printDiscoverAgnosticSummary prints the post-run summary for a successful framework-agnostic run.
+func printDiscoverAgnosticSummary(scanDir string, results []agnosticResult, sum agnosticSummary) {
+	fmt.Fprintf(os.Stdout, "\nlinespec provenance discover — complete (framework-agnostic)\n\n")
+	fmt.Fprintf(os.Stdout, "  Scanned:                   %s\n", scanDir)
+	fmt.Fprintf(os.Stdout, "  Source files scanned:      %d\n", sum.FilesScanned)
+	fmt.Fprintf(os.Stdout, "  Symbols extracted:         %d\n", sum.SymbolCount)
+	fmt.Fprintf(os.Stdout, "  Groups discovered:         %d\n", sum.GroupCount)
+	fmt.Fprintf(os.Stdout, "  Blueprint records created: %d\n\n", sum.RecordsCreated)
+	if len(results) > 0 {
+		fmt.Fprintf(os.Stdout, "  Records:\n")
+		for _, r := range results {
+			fmt.Fprintf(os.Stdout, "    %-20s  %s  (%d file(s))\n", r.RecordID, r.Title, r.FileCount)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+	if len(sum.Unclassified) > 0 {
+		fmt.Fprintf(os.Stdout, "  Unclassified files (%d):\n", len(sum.Unclassified))
+		for _, f := range sum.Unclassified {
+			fmt.Fprintf(os.Stdout, "    %s\n", f)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+}
+
+// printDiscoverAgnosticDryRun prints the dry-run output for a framework-agnostic run.
+func printDiscoverAgnosticDryRun(scanDir string, results []agnosticResult, sum agnosticSummary, format string) {
+	if format == "json" {
+		data, err := json.MarshalIndent(struct {
+			Results []agnosticResult `json:"results"`
+			Summary agnosticSummary  `json:"summary"`
+		}{results, sum}, "", "  ")
+		if err != nil {
+			logger.Error("Failed to format JSON: %v", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stdout, string(data))
+		return
+	}
+	fmt.Fprintf(os.Stdout, "\nlinespec provenance discover — DRY RUN, framework-agnostic (no files written)\n\n")
+	fmt.Fprintf(os.Stdout, "  Scanned: %s\n\n", scanDir)
+	fmt.Fprintf(os.Stdout, "Records:\n")
+	if len(results) == 0 {
+		fmt.Fprintln(os.Stdout, "  (none)")
+		return
+	}
+	for _, r := range results {
+		fmt.Fprintf(os.Stdout, "  %-20s  %s  (%d file(s))\n", r.RecordID, r.Title, r.FileCount)
 	}
 }
 

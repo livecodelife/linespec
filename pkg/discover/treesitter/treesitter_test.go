@@ -79,6 +79,69 @@ end
 	}
 }
 
+func TestEngine_QueryPython(t *testing.T) {
+	src := []byte(`
+import os
+
+def handler():
+    return os.getenv("PORT")
+`)
+	eng, err := treesitter.New(context.Background(), treesitter.LangPython, src)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	matches, err := eng.Query(`(function_definition name: (identifier) @name)`)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("expected at least one match, got none")
+	}
+
+	found := false
+	for _, m := range matches {
+		if m.Captures["name"] == "handler" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected to find 'handler' function definition")
+	}
+}
+
+func TestEngine_QueryJavaScript(t *testing.T) {
+	src := []byte(`
+function handler(req, res) {
+	res.send('hello');
+}
+`)
+	eng, err := treesitter.New(context.Background(), treesitter.LangJavaScript, src)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	matches, err := eng.Query(`(function_declaration name: (identifier) @name)`)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("expected at least one match, got none")
+	}
+
+	found := false
+	for _, m := range matches {
+		if m.Captures["name"] == "handler" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected to find 'handler' function declaration")
+	}
+}
+
 func TestEngine_BadQuery(t *testing.T) {
 	src := []byte(`package main`)
 	eng, err := treesitter.New(context.Background(), treesitter.LangGo, src)
@@ -100,7 +163,9 @@ func TestParseLang(t *testing.T) {
 	}{
 		{"go", treesitter.LangGo, true},
 		{"ruby", treesitter.LangRuby, true},
-		{"python", 0, false},
+		{"python", treesitter.LangPython, true},
+		{"javascript", treesitter.LangJavaScript, true},
+		{"rust", 0, false},
 		{"", 0, false},
 	}
 	for _, tc := range tests {
