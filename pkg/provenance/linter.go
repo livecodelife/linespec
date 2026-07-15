@@ -408,18 +408,26 @@ func (l *Linter) validateScopePatterns(record *Record, result *LintResult) {
 }
 
 // validateScopePaths checks that scope patterns match actual files.
-// Open records produce errors for missing paths; terminal-state records produce warnings.
-// Draft records are skipped entirely.
-// Patterns that resolve only to excluded files are silently skipped.
+// A pattern that matches no EXISTING file (not-yet-existing, per the "declare
+// before you create it" workflow fswrite.go Reconcile's dir-unlock loop is
+// built around, prov-2026-b4006eda) is never more than a Warning, regardless
+// of record status — it is the intended workflow, not a defect, so it must
+// never block `open`. A pattern that resolves to something genuinely invalid
+// (an existing path of the wrong shape, e.g. a directory where a file was
+// declared, or a filesystem error) keeps escalating to Error for an open
+// (non-terminal) record; terminal-state records produce warnings for that too.
+// Draft records are skipped entirely. Patterns that resolve only to excluded
+// files are silently skipped.
 func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 	if record.Status == StatusDraft {
 		return
 	}
 
-	missingSev := SeverityError
+	invalidSev := SeverityError
 	if isTerminalStatus(record.Status) {
-		missingSev = SeverityWarning
+		invalidSev = SeverityWarning
 	}
+	notYetExistingSev := SeverityWarning
 
 	allPatterns := append(record.AffectedScope, record.ForbiddenScope...)
 
@@ -436,38 +444,41 @@ func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 
 		// Check for regex prefix
 		if len(pattern) > 3 && pattern[:3] == "re:" {
-			l.validateRegexPattern(record, pattern, missingSev, result)
+			l.validateRegexPattern(record, pattern, invalidSev, notYetExistingSev, result)
 			continue
 		}
 
 		// Check for glob pattern
 		if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
-			l.validateGlobPattern(record, pattern, missingSev, result)
+			l.validateGlobPattern(record, pattern, notYetExistingSev, result)
 			continue
 		}
 
 		// Exact path validation
-		l.validateExactPath(record, pattern, missingSev, result)
+		l.validateExactPath(record, pattern, invalidSev, notYetExistingSev, result)
 	}
 }
 
-// validateExactPath checks that an exact path exists and is a file
-func (l *Linter) validateExactPath(record *Record, path string, missingSev Severity, result *LintResult) {
+// validateExactPath checks that an exact path exists and is a file. A path
+// that does not exist at all uses notYetExistingSev (it may simply be
+// declared ahead of its own creation); a path that exists but is the wrong
+// shape (a directory) or errors on access uses invalidSev.
+func (l *Linter) validateExactPath(record *Record, path string, invalidSev, notYetExistingSev Severity, result *LintResult) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "scope",
-				Message:  fmt.Sprintf("Scope path does not exist: %s", path),
-				Severity: missingSev,
+				Message:  fmt.Sprintf("Scope path does not exist yet: %s", path),
+				Severity: notYetExistingSev,
 			})
 		} else {
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "scope",
 				Message:  fmt.Sprintf("Cannot access scope path %s: %v", path, err),
-				Severity: missingSev,
+				Severity: invalidSev,
 			})
 		}
 		return
@@ -478,13 +489,15 @@ func (l *Linter) validateExactPath(record *Record, path string, missingSev Sever
 			RecordID: record.ID,
 			Field:    "scope",
 			Message:  fmt.Sprintf("Scope path is a directory, not a file (use glob pattern for directories): %s", path),
-			Severity: missingSev,
+			Severity: invalidSev,
 		})
 	}
 }
 
-// validateGlobPattern checks that a glob pattern matches at least one file
-func (l *Linter) validateGlobPattern(record *Record, pattern string, missingSev Severity, result *LintResult) {
+// validateGlobPattern checks that a glob pattern matches at least one file.
+// A pattern that currently matches nothing uses notYetExistingSev; an
+// unparsable glob syntax is always an Error.
+func (l *Linter) validateGlobPattern(record *Record, pattern string, notYetExistingSev Severity, result *LintResult) {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		result.Add(Issue{
@@ -500,14 +513,17 @@ func (l *Linter) validateGlobPattern(record *Record, pattern string, missingSev 
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "scope",
-			Message:  fmt.Sprintf("Glob pattern matches no files: %s", pattern),
-			Severity: missingSev,
+			Message:  fmt.Sprintf("Glob pattern matches no files yet: %s", pattern),
+			Severity: notYetExistingSev,
 		})
 	}
 }
 
-// validateRegexPattern checks that a regex pattern matches at least one file
-func (l *Linter) validateRegexPattern(record *Record, pattern string, missingSev Severity, result *LintResult) {
+// validateRegexPattern checks that a regex pattern matches at least one file.
+// A pattern that currently matches nothing uses notYetExistingSev; an
+// unparsable regex, or a filesystem error while walking for matches, is
+// always an Error.
+func (l *Linter) validateRegexPattern(record *Record, pattern string, invalidSev, notYetExistingSev Severity, result *LintResult) {
 	regex := pattern[3:] // Strip "re:" prefix
 	re, err := regexp.Compile(regex)
 	if err != nil {
@@ -542,7 +558,7 @@ func (l *Linter) validateRegexPattern(record *Record, pattern string, missingSev
 			RecordID: record.ID,
 			Field:    "scope",
 			Message:  fmt.Sprintf("Error walking filesystem for regex pattern %s: %v", pattern, walkErr),
-			Severity: SeverityError,
+			Severity: invalidSev,
 		})
 		return
 	}
@@ -551,8 +567,8 @@ func (l *Linter) validateRegexPattern(record *Record, pattern string, missingSev
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "scope",
-			Message:  fmt.Sprintf("Regex pattern matches no files: %s", pattern),
-			Severity: missingSev,
+			Message:  fmt.Sprintf("Regex pattern matches no files yet: %s", pattern),
+			Severity: notYetExistingSev,
 		})
 	}
 }

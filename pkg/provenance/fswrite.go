@@ -148,6 +148,31 @@ func containsGlobMeta(s string) bool {
 	return strings.ContainsAny(s, "*?")
 }
 
+// patternParentDir computes the directory that must be unlocked so a
+// declared-but-not-yet-existing glob or regex affected_scope pattern's file
+// can be created inside it (prov-2026-b4006eda): the literal path segment
+// before the pattern's first wildcard/regex metacharacter. For a "re:"
+// pattern, the leading "^" anchor (if present) is stripped first, since scope
+// regexes are conventionally anchored literal paths with only a suffix (e.g.
+// the extension) expressed as a regex. Returns "." when no literal directory
+// segment can be determined (e.g. the pattern's first path segment is itself
+// a wildcard), matching Reconcile's existing skip of "." as already-writable.
+func patternParentDir(pattern string) string {
+	body := strings.TrimPrefix(pattern, "re:")
+	body = strings.TrimPrefix(body, "^")
+
+	metaIdx := strings.IndexAny(body, "*?.+()[]{}|\\^$")
+	if metaIdx == -1 {
+		return filepath.Dir(body)
+	}
+
+	prefix := body[:metaIdx]
+	if i := strings.LastIndex(prefix, "/"); i >= 0 {
+		return prefix[:i]
+	}
+	return "."
+}
+
 // LockFile strips write permission from every permission class of the file at
 // path, leaving other bits (e.g. execute) untouched. Missing paths and
 // directories are a no-op — reconcile only ever locks files it actually finds.
@@ -370,12 +395,20 @@ func Reconcile(repoRoot string, files []string, records []*Record, config *Prove
 
 	// Unlock parent directories of declared-but-not-yet-existing open-scope
 	// paths so they can be created, without altering any sibling file's bits.
+	// Glob and regex patterns are declarations too (prov-2026-b4006eda) — they
+	// have no single file to Lstat, so their parent directory is derived from
+	// the pattern's literal prefix (patternParentDir) unconditionally, rather
+	// than gated on an existence check the way an exact path is.
 	for _, r := range records {
 		if r.Status != StatusOpen || r.ScopeMode() != "allowlist" {
 			continue
 		}
 		for _, p := range r.AffectedScope {
-			if p == "" || containsGlobMeta(p) {
+			if p == "" {
+				continue
+			}
+			if containsGlobMeta(p) || strings.HasPrefix(p, "re:") {
+				writableDirs[patternParentDir(p)] = true
 				continue
 			}
 			if _, err := os.Lstat(filepath.Join(repoRoot, p)); os.IsNotExist(err) {

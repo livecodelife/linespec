@@ -66,6 +66,29 @@ func setupOpenableRecord(t *testing.T, cmds *Commands, repo, id string) string {
 	return target
 }
 
+// --- patternParentDir ---------------------------------------------------------
+
+// TestPatternParentDir covers the literal-prefix-directory extraction Reconcile
+// relies on (prov-2026-b4006eda) to unlock a glob or regex affected_scope
+// pattern's parent directory even when it names no existing file yet.
+func TestPatternParentDir(t *testing.T) {
+	cases := map[string]string{
+		"pkg/*.go":           "pkg",
+		"pkg/sub/*.go":       "pkg/sub",
+		"*.go":               ".",
+		"emptydir/*.go":      "emptydir",
+		"pkg/fil?.go":        "pkg",
+		`re:^pkg/.*\.go$`:    "pkg",
+		`re:^pkg/thing\.go$`: "pkg",
+		`re:nonexistent_\d+`: ".",
+	}
+	for pattern, want := range cases {
+		if got := patternParentDir(pattern); got != want {
+			t.Errorf("patternParentDir(%q) = %q, want %q", pattern, got, want)
+		}
+	}
+}
+
 // --- Open --------------------------------------------------------------------
 
 func TestOpen_MaterializesWritePermissionForAffectedScope(t *testing.T) {
@@ -81,24 +104,157 @@ func TestOpen_MaterializesWritePermissionForAffectedScope(t *testing.T) {
 	}
 }
 
-func TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing(t *testing.T) {
-	// validRecord (transition_rollback_test.go) declares pkg/thing.go, which does
-	// not exist anywhere here — the pre-existing linter blocks Open for a missing
-	// scope path on a non-terminal record. Materialize must never run before that
-	// lint gate, so nothing is unlocked as a side effect of the failed attempt.
-	cmds, repo, buf := newTransitionTestRepo(t, false)
+// notYetExistingPatternRecord returns YAML for a record whose sole
+// affected_scope entry is pattern (an exact path, glob, or "re:"-prefixed
+// regex naming a file that does not exist yet) and whose associated_specs
+// declares spec.md, exactly like openableRecord — strict enforcement requires
+// an open (non-brief) record to carry at least one associated_spec
+// regardless of this bug's fix, so callers must create spec.md on disk before
+// Open (prov-2026-b4006eda).
+func notYetExistingPatternRecord(id, status, pattern string) string {
+	return "id: " + id + "\n" +
+		"title: Test record\n" +
+		"status: " + status + "\n" +
+		"created_at: \"2026-01-01\"\n" +
+		"author: test@example.com\n" +
+		"intent: Build the thing.\n" +
+		"constraints:\n  - Must work\n" +
+		"affected_scope:\n  - " + pattern + "\n" +
+		"forbidden_scope: []\n" +
+		"type: blueprint\n" +
+		"supersedes: \"\"\n" +
+		"superseded_by: \"\"\n" +
+		"related: []\n" +
+		"sealed_at_sha: \"\"\n" +
+		"associated_specs:\n  - path: spec.md\n" +
+		"associated_traces: []\n" +
+		"monitors: []\n" +
+		"tags: []\n"
+}
+
+// TestOpen_SucceedsAndUnlocksParentDirWhenScopePathMissing replaces
+// TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing
+// (prov-2026-b4006eda): a declared-but-not-yet-existing affected_scope path is
+// the headline "declare the path before you create the file" workflow
+// fswrite.go Reconcile's not-yet-existing-path dir-unlock loop is built
+// around (prov-2026-8d2f5f2a) — Open must not reject it, and its
+// MaterializeScope call must unlock the parent directory immediately so the
+// declared file can be created.
+func TestOpen_SucceedsAndUnlocksParentDirWhenScopePathMissing(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
 	id := "prov-2026-bbbb0002"
+	writeAndCommitRecord(t, cmds, repo, id, notYetExistingPatternRecord(id, "draft", "pkg/thing.go"))
+	writePerm(t, filepath.Join(repo, "spec.md"), 0o644)
+
+	// The directory starts locked (as the governed tree defaults to) so
+	// unlocking it is actually exercised, not just already-true by default.
+	// pkg/thing.go itself is deliberately never created — it does not exist
+	// anywhere in this repo.
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.Mkdir(pkgDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("expected Open to succeed for a declared-but-not-yet-existing affected_scope path, got: %v", err)
+	}
+	if got := loadedRecord(t, cmds, id).Status; got != StatusOpen {
+		t.Errorf("in-memory status = %q, want open", got)
+	}
+	if !isWritableOnDisk(t, pkgDir) {
+		t.Errorf("pkg/ should be unlocked by Open's MaterializeScope so pkg/thing.go can be created")
+	}
+}
+
+// TestOpen_SucceedsWhenGlobScopeMatchesNoFilesYet covers the bug's step-5
+// repro: a glob into an otherwise-empty directory (as opposed to step-4's
+// already-working case where a matching file already lived there) must also
+// open successfully, and reconcile (not MaterializeScope, which has no single
+// concrete path to chmod for a glob) must then unlock its parent directory.
+func TestOpen_SucceedsWhenGlobScopeMatchesNoFilesYet(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0016"
+	writeAndCommitRecord(t, cmds, repo, id, notYetExistingPatternRecord(id, "draft", "pkg/*.go"))
+	writePerm(t, filepath.Join(repo, "spec.md"), 0o644)
+
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.Mkdir(pkgDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("expected Open to succeed for a glob scope matching no files yet, got: %v", err)
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !isWritableOnDisk(t, pkgDir) {
+		t.Errorf("pkg/ should be unlocked by reconcile so a file matching pkg/*.go can be created")
+	}
+}
+
+// TestOpen_SucceedsWhenRegexScopeMatchesNoFilesYet mirrors
+// TestOpen_SucceedsWhenGlobScopeMatchesNoFilesYet for a "re:"-prefixed regex
+// scope pattern — the third pattern kind the bug's constraints require to be
+// openable when it names only not-yet-existing files.
+func TestOpen_SucceedsWhenRegexScopeMatchesNoFilesYet(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0017"
+	writeAndCommitRecord(t, cmds, repo, id, notYetExistingPatternRecord(id, "draft", `re:^pkg/.*\.go$`))
+	writePerm(t, filepath.Join(repo, "spec.md"), 0o644)
+
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.Mkdir(pkgDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("expected Open to succeed for a regex scope matching no files yet, got: %v", err)
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !isWritableOnDisk(t, pkgDir) {
+		t.Errorf("pkg/ should be unlocked by reconcile so a file matching the regex can be created")
+	}
+}
+
+// TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathIsDirectory
+// carries forward the "genuinely invalid Open fails cleanly, no permission
+// side effects" guarantee that
+// TestOpen_SucceedsAndUnlocksParentDirWhenScopePathMissing no longer covers,
+// retargeted onto a still-invalid case per prov-2026-b4006eda's constraints: a
+// scope path that exists but is a directory (not a file) is not a
+// not-yet-existing declaration and must keep failing Open.
+func TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathIsDirectory(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0018"
 	writeAndCommitRecord(t, cmds, repo, id, validRecord(id, "draft", "blueprint"))
+
+	// "pkg/thing.go" resolves to a directory here, not a file.
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.MkdirAll(filepath.Join(pkgDir, "thing.go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(pkgDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(pkgDir, 0o755) }) // let t.TempDir() clean up pkg/thing.go
 	t.Chdir(repo)
 
 	if err := cmds.Open(OpenOptions{RecordID: id}); err == nil {
-		t.Fatal("expected Open to fail when a declared affected_scope path does not exist on disk")
+		t.Fatal("expected Open to fail when a declared affected_scope path resolves to a directory")
 	}
 	if !strings.Contains(buf.String(), "does not pass validation") {
 		t.Errorf("expected validation-failure message, got:\n%s", buf.String())
 	}
-	if _, err := os.Stat(filepath.Join(repo, "pkg")); err == nil {
-		t.Errorf("a failed Open must not create or unlock the scope path's parent directory")
+	if isWritableOnDisk(t, pkgDir) {
+		t.Errorf("a failed Open must not unlock the scope path's parent directory")
 	}
 }
 

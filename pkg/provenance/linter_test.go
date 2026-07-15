@@ -90,7 +90,9 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 	loader := NewLoader(tmpDir, nil)
 	linter := NewLinter(loader, "strict")
 
-	// Test 1: Non-existent exact path should error for open records
+	// Test 1: A not-yet-existing exact path is a Warning, not an Error, even for
+	// an open record — it is the "declare the path before you create it"
+	// workflow (prov-2026-b4006eda), not a defect, so it must never block Open.
 	record1 := &Record{
 		ID:            "prov-2025-001",
 		Status:        StatusOpen,
@@ -98,8 +100,11 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 	}
 	result1 := &LintResult{}
 	linter.validateScopePaths(record1, result1)
-	if result1.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for non-existent exact path, got %d: %v", result1.ErrorCount, result1.Issues)
+	if result1.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for not-yet-existing exact path, got %d: %v", result1.ErrorCount, result1.Issues)
+	}
+	if result1.WarningCount != 1 {
+		t.Errorf("Expected 1 warning for not-yet-existing exact path, got %d: %v", result1.WarningCount, result1.Issues)
 	}
 
 	// Test 2: Existing exact path should pass
@@ -172,7 +177,9 @@ func TestValidateScopePaths_GlobPattern(t *testing.T) {
 		t.Errorf("Expected 0 errors for glob matching files, got %d: %v", result1.ErrorCount, result1.Issues)
 	}
 
-	// Test 2: Glob matching no files should error
+	// Test 2: A glob matching no files yet is a Warning, not an Error, even for
+	// an open record — same not-yet-existing relaxation as the exact-path case
+	// (prov-2026-b4006eda), covering a glob into an otherwise-empty directory.
 	record2 := &Record{
 		ID:            "prov-2025-002",
 		Status:        StatusOpen,
@@ -180,8 +187,11 @@ func TestValidateScopePaths_GlobPattern(t *testing.T) {
 	}
 	result2 := &LintResult{}
 	linter.validateScopePaths(record2, result2)
-	if result2.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for glob matching no files, got %d: %v", result2.ErrorCount, result2.Issues)
+	if result2.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for glob matching no files yet, got %d: %v", result2.ErrorCount, result2.Issues)
+	}
+	if result2.WarningCount != 1 {
+		t.Errorf("Expected 1 warning for glob matching no files yet, got %d: %v", result2.WarningCount, result2.Issues)
 	}
 }
 
@@ -220,7 +230,9 @@ func TestValidateScopePaths_RegexPattern(t *testing.T) {
 		t.Errorf("Expected 0 errors for regex matching files, got %d: %v", result1.ErrorCount, result1.Issues)
 	}
 
-	// Test 2: Regex matching no files should error
+	// Test 2: A regex matching no files yet is a Warning, not an Error, even for
+	// an open record — same not-yet-existing relaxation as the exact-path and
+	// glob cases (prov-2026-b4006eda).
 	record2 := &Record{
 		ID:            "prov-2025-002",
 		Status:        StatusOpen,
@@ -228,8 +240,11 @@ func TestValidateScopePaths_RegexPattern(t *testing.T) {
 	}
 	result2 := &LintResult{}
 	linter.validateScopePaths(record2, result2)
-	if result2.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for regex matching no files, got %d: %v", result2.ErrorCount, result2.Issues)
+	if result2.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for regex matching no files yet, got %d: %v", result2.ErrorCount, result2.Issues)
+	}
+	if result2.WarningCount != 1 {
+		t.Errorf("Expected 1 warning for regex matching no files yet, got %d: %v", result2.WarningCount, result2.Issues)
 	}
 }
 
