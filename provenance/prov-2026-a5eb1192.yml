@@ -38,7 +38,22 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/lang/lang_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/lang/ && echo {{path}}"
+  - path: pkg/discover/symbols/symbols_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/symbols/ && echo {{path}}"
+  - path: pkg/discover/graph/graph_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/graph/ && echo {{path}}"
+  - path: pkg/discover/treesitter/treesitter_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/treesitter/ && echo {{path}}"
+  - path: cmd/linespec/main_stable.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
