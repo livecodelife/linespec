@@ -1,0 +1,75 @@
+id: prov-2026-26efc162
+title: reconcile locks LineSpec's own tracked .linespec/ state files (embeddings.bin, hash_manifest.json)
+status: draft
+created_at: "2026-07-14"
+author: calebcowen@gmail.com
+intent: |
+  The fswrite write-permission projection (blueprint prov-2026-8d2f5f2a) locks every
+  git-tracked file that is not covered by an open, allowlist-mode record's affected_scope,
+  and holds writable only the "authoring coop" returned by AlwaysWritablePaths
+  (pkg/provenance/fswrite.go): provenance.exclude_paths, the provenance dir, .linespec.yml,
+  and every associated_spec path. That coop does NOT include LineSpec's own tracked,
+  regenerated state files under .linespec/. In this repo two such files are git-tracked:
+  .linespec/embeddings.bin and .linespec/hash_manifest.json. Because they fall outside the
+  coop and outside any open record's scope, reconcile chmods them read-only.
+
+  This is easy to trigger during normal use: Next() runs reconcile unconditionally on every
+  invocation (pkg/provenance/commands.go:2467), and the Claude Code plugin's session-start
+  hook calls `next`. So merely using the tool locks these files. Subsequent regeneration
+  then fails hard: the embeddings store writes via os.Create (pkg/embeddings/store.go:123),
+  which returns EACCES on a read-only file, so the next `provenance index` fails with
+  "failed to create file: permission denied"; hash_manifest.json is written via
+  os.WriteFile and fails the same way.
+
+  A related, quieter instance: .linespec/scope-index.json hits the identical projection but
+  is gitignored in this repo, so reconcile never walks it — it is spared only by accident of
+  being untracked. Where it (or any managed state file) is tracked, its write failure is
+  additionally SILENT: refreshScopeIndexCache discards the error (`_ = ...save(path)` in
+  pkg/provenance/scope_index.go), leaving a permanently stale cache with no user signal.
+  Reproduced in an isolated sandbox: after locking, a record scope change never propagated
+  to the cache and no error surfaced.
+
+  Root cause: LineSpec's own managed, machine-regenerated state under .linespec/ is treated
+  as governed source and locked, even though it is not human-authored code the
+  provenance-before-code invariant is meant to gate. The fix is to exempt LineSpec's managed
+  .linespec/ state from the write-permission projection, the same way the provenance dir and
+  .linespec.yml are already always-writable.
+constraints:
+  - |
+    Add LineSpec's managed .linespec/ state files to the always-writable set in
+    AlwaysWritablePaths (pkg/provenance/fswrite.go) — at minimum .linespec/embeddings.bin and
+    .linespec/hash_manifest.json, preferably the managed-state paths as a group — mirroring the
+    existing always-writable treatment of the provenance dir and .linespec.yml, so reconcile
+    never locks state LineSpec itself regenerates.
+  - |
+    After the fix, running `reconcile` (directly, or via `next`) in a repo that tracks
+    .linespec/embeddings.bin and/or .linespec/hash_manifest.json leaves both writable, and a
+    subsequent `provenance index` succeeds instead of failing with "permission denied".
+  - |
+    Projection semantics for genuine source are unchanged: out-of-scope tracked source files
+    still lock, and files covered by an open allowlist record's affected_scope stay writable.
+  - |
+    Consider surfacing rather than swallowing scope-index cache write failures
+    (refreshScopeIndexCache in pkg/provenance/scope_index.go) so an unwritable cache is
+    visible instead of silently stale. Secondary to the always-writable fix.
+affected_scope:
+  - pkg/provenance/fswrite.go
+  - pkg/provenance/scope_index.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-8d2f5f2a
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - fswrite
+  - reconcile
+  - write-permissions
+  - provenance
