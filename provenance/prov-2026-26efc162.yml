@@ -1,6 +1,6 @@
 id: prov-2026-26efc162
 title: reconcile locks LineSpec's own tracked .linespec/ state files (embeddings.bin, hash_manifest.json)
-status: draft
+status: open
 created_at: "2026-07-14"
 author: calebcowen@gmail.com
 intent: |
