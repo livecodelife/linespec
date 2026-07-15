@@ -29,6 +29,7 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - pkg/discover/treesitter/lang.go
+  - pkg/discover/treesitter/treesitter_test.go
   - pkg/discover/lang/**
   - pkg/discover/symbols/**
   - pkg/discover/graph/**
