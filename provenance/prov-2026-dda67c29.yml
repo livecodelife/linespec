@@ -1,0 +1,85 @@
+id: prov-2026-dda67c29
+title: 'Plugin fails to load: plugin.json hooks field points at auto-loaded hooks/hooks.json (duplicate hooks file)'
+status: draft
+created_at: "2026-07-15"
+author: calebcowen@gmail.com
+intent: |
+  The Claude Code provenance plugin (prov-2026-cd1405fb / prov-2026-a4204f20) does not
+  install correctly: after `claude plugin install linespec-provenance@linespec` the plugin
+  is present but disabled, and `claude plugin list` reports:
+
+      Status: ✘ failed to load
+      Error: Hook load failed: Duplicate hooks file detected: ./hooks/hooks.json resolves
+      to already-loaded file .../plugins/provenance/hooks/hooks.json. The standard
+      hooks/hooks.json is loaded automatically, so manifest.hooks should only reference
+      additional hook files.
+
+  Root cause: plugins/provenance/.claude-plugin/plugin.json declares
+
+      "hooks": "./hooks/hooks.json"
+
+  but Claude Code auto-loads a plugin's hooks from the conventional path hooks/hooks.json
+  already. Pointing the manifest `hooks` field at that same conventional file makes Claude
+  Code load it twice, which it rejects — so ALL three hooks (SessionStart guidance,
+  per-edit governance, commit remediation) never register and the plugin loads disabled.
+  The `hooks` manifest field is only meant to reference ADDITIONAL, non-standard hook
+  files; it must not point back at the auto-loaded hooks/hooks.json.
+
+  This affects BOTH advertised install paths equally, because both ship the same
+  plugin.json: the marketplace path (`claude plugin marketplace add` +
+  `claude plugin install`, printed by scripts/install-plugin and by
+  Commands.InstallPlugin) and the file-copy paths (scripts/install-plugin and
+  `linespec provenance install-plugin`, which write the same manifest into
+  .claude/plugins/linespec-provenance).
+
+  Reproduction (verified):
+    1. claude plugin marketplace add <repo>/plugins/provenance   → succeeds
+    2. claude plugin install linespec-provenance@linespec         → "succeeds"
+    3. claude plugin list  → linespec-provenance: ✘ failed to load (duplicate hooks file)
+  Fix verified: installing an otherwise-identical copy with the `hooks` field deleted from
+  plugin.json loads with Status ✔ enabled and all three hooks active.
+
+  Secondary observation (not load-breaking, hygiene only): scripts/install-plugin copies
+  the entire plugins/provenance/ directory and removes only embed.go, so it also ships the
+  Go test file hooks_test.go into the installed plugin. The embed.FS / Go install path does
+  not carry hooks_test.go (it is a _test.go file, excluded from the embed). Worth removing
+  hooks_test.go in the shell path too so the two install paths yield identical trees, but
+  it does not affect plugin loading.
+constraints:
+  - |
+    Remove the `hooks` field from plugins/provenance/.claude-plugin/plugin.json (its value
+    points at the auto-loaded hooks/hooks.json, which Claude Code rejects as a duplicate).
+    The plugin's hooks must continue to load automatically from the conventional
+    hooks/hooks.json path — do not move or rename that file.
+  - |
+    After the fix, `claude plugin marketplace add <repo>/plugins/provenance` followed by
+    `claude plugin install linespec-provenance@linespec` yields Status ✔ enabled in
+    `claude plugin list`, with the SessionStart, PreToolUse(Edit|Write), and
+    PostToolUse(Bash) hooks all registered.
+  - |
+    Both install paths remain equivalent: the file-copy install (scripts/install-plugin and
+    `linespec provenance install-plugin`) and the marketplace install produce a plugin that
+    loads without the duplicate-hooks error.
+  - |
+    make test must pass; add a regression test asserting the embedded plugin.json does NOT
+    set `hooks` to the auto-loaded hooks/hooks.json path (guarding the exact failure).
+affected_scope:
+  - plugins/provenance/.claude-plugin/plugin.json
+forbidden_scope: []
+type: bug
+extends: prov-2026-cd1405fb
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a4204f20
+sealed_at_sha: ""
+associated_specs:
+  - path: plugins/provenance/hooks_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+    - claude-code-plugin
+    - plugin-install
+    - hooks
