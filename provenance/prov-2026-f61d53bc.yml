@@ -6,9 +6,9 @@ author: calebcowen@gmail.com
 intent: Create minimal package stubs for lang, symbols, and graph so the blueprint's affected_scope can be widened to include them and the reviewer's scope concern is addressed.
 constraints: []
 affected_scope:
-  - pkg/discover/lang/
-  - pkg/discover/symbols/
-  - pkg/discover/graph/
+  - pkg/discover/lang/**
+  - pkg/discover/symbols/**
+  - pkg/discover/graph/**
 forbidden_scope: []
 type: imprint
 implements: prov-2026-a5eb1192
@@ -16,7 +16,16 @@ supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/lang/lang.go
+    type: code
+    run_command: make test
+  - path: pkg/discover/symbols/symbols.go
+    type: code
+    run_command: make test
+  - path: pkg/discover/graph/graph.go
+    type: code
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
