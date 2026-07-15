@@ -37,10 +37,24 @@ const (
 	dirPermUnlockAdd os.FileMode = 0o300
 )
 
+// managedStatePaths returns LineSpec's own machine-regenerated state files
+// under .linespec/ that are sometimes git-tracked (e.g. embeddings.bin,
+// hash_manifest.json) but must never be locked by the write-permission
+// projection: they are not human-authored source the provenance-before-code
+// invariant is meant to gate, and reconcile locking them breaks the very
+// tools (embeddings index, hash manifest) that regenerate them (prov-2026-26efc162).
+func managedStatePaths() []string {
+	return []string{
+		".linespec/embeddings.bin",
+		".linespec/hash_manifest.json",
+	}
+}
+
 // AlwaysWritablePaths returns the derived always-writable pattern set: the
 // existing provenance.exclude_paths whitelist plus the authoring coop — the
-// configured provenance directory, .linespec.yml, and every associated_spec
-// path across all loaded records (regardless of status), so the
+// configured provenance directory, .linespec.yml, LineSpec's own managed
+// .linespec/ state files (managedStatePaths), and every associated_spec path
+// across all loaded records (regardless of status), so the
 // Brief-to-Blueprint-to-Imprint authoring chain can never block its own
 // creation. This set is derived, never separately hand-maintained. repoRoot
 // normalizes an absolute config.Dir to repo-relative, since every path this
@@ -60,6 +74,7 @@ func AlwaysWritablePaths(config *ProvenanceConfig, records []*Record, repoRoot s
 		}
 	}
 	out = append(out, dir, ".linespec.yml")
+	out = append(out, managedStatePaths()...)
 
 	seen := map[string]bool{}
 	for _, r := range records {

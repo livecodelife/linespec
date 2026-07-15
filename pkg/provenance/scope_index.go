@@ -169,8 +169,10 @@ func loadFreshScopeIndex(repoRoot string, dirs []string) (*ScopeIndex, bool) {
 
 // refreshScopeIndexCache rewrites the scope cache from the freshly-loaded records,
 // but only when the on-disk cache is missing or stale — so the common already-fresh
-// case costs one stat-walk and no write. Best-effort: the cache is advisory, so all
-// errors are ignored.
+// case costs one stat-walk and no write. Best-effort: the cache is advisory, so a
+// write failure never blocks the caller — but it is surfaced as a warning rather
+// than swallowed, so a permanently stale cache (e.g. reconcile having locked the
+// cache file itself, prov-2026-26efc162) leaves a visible signal instead of none.
 func refreshScopeIndexCache(repoRoot string, dirs []string, records []*Record) {
 	if repoRoot == "" {
 		return
@@ -183,7 +185,9 @@ func refreshScopeIndexCache(repoRoot string, dirs []string, records []*Record) {
 	if existing, err := loadScopeIndex(path); err == nil && existing.Fingerprint == fp {
 		return // already fresh
 	}
-	_ = buildScopeIndex(records, fp).save(path)
+	if err := buildScopeIndex(records, fp).save(path); err != nil {
+		fmtWarnf("failed to refresh scope index cache at %s: %v", path, err)
+	}
 }
 
 // loaderDirs returns the directories LoadAll reads: the (absolute) local provenance

@@ -1,9 +1,11 @@
 package provenance
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -379,5 +381,108 @@ func TestReconcile_UnlocksParentDirOfDeclaredNotYetExistingPath(t *testing.T) {
 	info, _ := os.Stat(filepath.Join(repo, "pkg"))
 	if info.Mode().Perm()&0o200 == 0 {
 		t.Errorf("expected pkg/ unlocked so pkg/new_file.go could be created, mode = %o", info.Mode().Perm())
+	}
+}
+
+// --- Managed .linespec/ state (prov-2026-26efc162) --------------------------
+
+// TestAlwaysWritablePaths_IncludesManagedLinespecStateFiles reproduces the bug:
+// LineSpec's own regenerated state files under .linespec/ (embeddings.bin,
+// hash_manifest.json) were not part of the always-writable "authoring coop",
+// so reconcile locked them whenever they happened to be git-tracked.
+func TestAlwaysWritablePaths_IncludesManagedLinespecStateFiles(t *testing.T) {
+	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "provenance"}, nil, "")
+	for _, want := range []string{".linespec/embeddings.bin", ".linespec/hash_manifest.json"} {
+		if !slices.Contains(always, want) {
+			t.Errorf("AlwaysWritablePaths missing managed state path %q, got %v", want, always)
+		}
+		if !IsAlwaysWritable(want, always) {
+			t.Errorf("IsAlwaysWritable(%q) = false, want true (managed LineSpec state must never be locked)", want)
+		}
+	}
+}
+
+// TestReconcile_NeverLocksTrackedLinespecStateFiles reproduces the reported
+// failure end to end: a repo that git-tracks .linespec/embeddings.bin and
+// .linespec/hash_manifest.json (as this repo does) must come out of reconcile
+// with both still writable, even though no open record's affected_scope covers
+// them and they are not in provenance.exclude_paths. Before the fix these were
+// locked read-only, and the next `provenance index` / `complete` failed with
+// "permission denied" trying to regenerate them.
+func TestReconcile_NeverLocksTrackedLinespecStateFiles(t *testing.T) {
+	repo := t.TempDir()
+	linespecDir := filepath.Join(repo, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	embeddingsPath := filepath.Join(linespecDir, "embeddings.bin")
+	manifestPath := filepath.Join(linespecDir, "hash_manifest.json")
+	writePerm(t, embeddingsPath, 0o644)
+	writePerm(t, manifestPath, 0o644)
+
+	// An unrelated open record whose scope does not cover .linespec/ at all —
+	// mirrors the reported repro where these files fall outside every open
+	// record's affected_scope.
+	records := []*Record{
+		{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/unrelated.go"}},
+	}
+	config := &ProvenanceConfig{Dir: "provenance"}
+
+	result, err := Reconcile(repo, []string{".linespec/embeddings.bin", ".linespec/hash_manifest.json"}, records, config)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !isWritableOnDisk(t, embeddingsPath) {
+		t.Errorf(".linespec/embeddings.bin must stay writable — it is LineSpec's own regenerated state, not governed source")
+	}
+	if !isWritableOnDisk(t, manifestPath) {
+		t.Errorf(".linespec/hash_manifest.json must stay writable — it is LineSpec's own regenerated state, not governed source")
+	}
+	if slices.Contains(result.Locked, ".linespec/embeddings.bin") || slices.Contains(result.Locked, ".linespec/hash_manifest.json") {
+		t.Errorf("reconcile must never report managed .linespec/ state as locked, got Locked=%v", result.Locked)
+	}
+}
+
+// TestRefreshScopeIndexCache_WarnsOnSaveFailureInsteadOfSwallowingIt covers the
+// secondary half of prov-2026-26efc162: when the scope-index cache write fails
+// (e.g. its directory got locked, or is otherwise unwritable), the failure must
+// be visible on stderr rather than silently discarded, which previously left a
+// permanently stale cache with no signal to the user (refreshScopeIndexCache in
+// pkg/provenance/scope_index.go).
+func TestRefreshScopeIndexCache_WarnsOnSaveFailureInsteadOfSwallowingIt(t *testing.T) {
+	repo := t.TempDir()
+	provDir := filepath.Join(repo, "provenance")
+	if err := os.MkdirAll(provDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(provDir, "prov-2026-00000001.yml"), []byte("id: x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make .linespec/ itself unwritable so save() fails trying to MkdirAll into it.
+	linespecDir := filepath.Join(repo, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(linespecDir, 0o755) })
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	refreshScopeIndexCache(repo, []string{provDir}, []*Record{{ID: "prov-2026-00000001", Status: StatusDraft}})
+
+	w.Close()
+	os.Stderr = origStderr
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "Warning") {
+		t.Errorf("expected a warning on stderr when the scope index cache fails to save, got %q", buf.String())
 	}
 }
