@@ -34,6 +34,7 @@ affected_scope:
   - pkg/discover/graph/**
 forbidden_scope: []
 type: blueprint
+implements: prov-2026-0071506f
 supersedes: ""
 superseded_by: ""
 related:
