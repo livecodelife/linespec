@@ -65,6 +65,7 @@ constraints:
     set `hooks` to the auto-loaded hooks/hooks.json path (guarding the exact failure).
 affected_scope:
   - plugins/provenance/.claude-plugin/plugin.json
+  - plugins/provenance/hooks_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-cd1405fb
