@@ -33,7 +33,9 @@ forbidden_scope: []
 type: blueprint
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-0071506f  # Codebase discovery for bootstrapping provenance records and behavioral specs
+  - prov-2026-c60ec2ad  # Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra)
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/discover/treesitter/treesitter_test.go
