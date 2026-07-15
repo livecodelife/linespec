@@ -1,6 +1,6 @@
 id: prov-2026-dda67c29
 title: 'Plugin fails to load: plugin.json hooks field points at auto-loaded hooks/hooks.json (duplicate hooks file)'
-status: open
+status: implemented
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
 intent: |
@@ -78,7 +78,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-a4204f20
-sealed_at_sha: ""
+sealed_at_sha: b4bebe8701e59e82942cf5e5c45ebeac066f0050
 associated_specs:
   - path: plugins/provenance/hooks_test.go
     type: go_test
