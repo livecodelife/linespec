@@ -42,8 +42,10 @@ rm -rf "$DEST_DIR"
 cp -r "$SOURCE_DIR" "$DEST_DIR"
 # embed.FS drops modes for the Go path; here cp preserves them, but re-assert anyway.
 chmod +x "$DEST_DIR"/hooks/*.sh 2>/dev/null || true
-# The Go source file is not part of the installed plugin.
-rm -f "$DEST_DIR/embed.go"
+# The Go sources (embed.go and *_test.go) are build-time only — the embed.FS /
+# `linespec provenance install-plugin` path excludes them. Drop them here too so both
+# install paths yield an identical installed tree.
+rm -f "$DEST_DIR"/*.go
 
 echo "Installed plugin 'linespec-provenance' to $DEST_DIR"
 echo ""
