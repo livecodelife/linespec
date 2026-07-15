@@ -118,8 +118,21 @@ constraints:
     directory so the file can be created, guarding all three failures reproduced
     above (the empty-directory glob case is the one the earlier draft wrongly
     assumed already worked).
+  - |
+    The existing test TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing
+    (pkg/provenance/fswrite_transitions_test.go:84) currently encodes the pre-fix
+    behavior as correct — it asserts Open MUST fail, and MUST NOT unlock the
+    parent directory, when a declared scope path is missing. This is exactly the
+    behavior the fix inverts, so the implementer MUST rewrite (not merely
+    supplement) that test: the missing-declared-path case flips to success +
+    parent-dir unlock. The test's OTHER guarantee — that a genuinely-invalid
+    Open (e.g. a real validation failure, or the commit-rejection rollback
+    covered by TestOpen_RollsBackPermissionsOnCommitRejection) leaves
+    permissions untouched with no side effects — MUST be preserved, retargeted
+    onto a still-invalid case rather than deleted.
 affected_scope:
   - pkg/provenance/linter.go
+  - pkg/provenance/fswrite.go
   - pkg/provenance/fswrite_transitions_test.go
 forbidden_scope: []
 type: bug
