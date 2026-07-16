@@ -5,6 +5,8 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
+	"github.com/smacker/go-tree-sitter/javascript"
+	"github.com/smacker/go-tree-sitter/python"
 	"github.com/smacker/go-tree-sitter/ruby"
 )
 
@@ -12,8 +14,10 @@ import (
 type Lang int
 
 const (
-	LangGo   Lang = iota
-	LangRuby Lang = iota
+	LangGo Lang = iota
+	LangRuby
+	LangPython
+	LangJavaScript
 )
 
 // ParseLang converts a string like "go" or "ruby" to a Lang constant.
@@ -23,6 +27,10 @@ func ParseLang(s string) (Lang, bool) {
 		return LangGo, true
 	case "ruby":
 		return LangRuby, true
+	case "python":
+		return LangPython, true
+	case "javascript":
+		return LangJavaScript, true
 	default:
 		return 0, false
 	}
@@ -34,6 +42,10 @@ func sitterLang(l Lang) (*sitter.Language, error) {
 		return golang.GetLanguage(), nil
 	case LangRuby:
 		return ruby.GetLanguage(), nil
+	case LangPython:
+		return python.GetLanguage(), nil
+	case LangJavaScript:
+		return javascript.GetLanguage(), nil
 	default:
 		return nil, fmt.Errorf("unsupported language: %d", l)
 	}

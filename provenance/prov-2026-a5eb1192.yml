@@ -1,6 +1,6 @@
 id: prov-2026-a5eb1192
 title: 'Framework-agnostic discover: language detection, symbol extraction, directory grouping'
-status: open
+status: implemented
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
 intent: |
@@ -29,6 +29,7 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - pkg/discover/treesitter/lang.go
+  - pkg/discover/treesitter/treesitter_test.go
   - pkg/discover/lang/**
   - pkg/discover/symbols/**
   - pkg/discover/graph/**
@@ -40,7 +41,7 @@ superseded_by: ""
 related:
   - prov-2026-0071506f  # Codebase discovery for bootstrapping provenance records and behavioral specs
   - prov-2026-c60ec2ad  # Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra)
-sealed_at_sha: ""
+sealed_at_sha: f5213c729ce58c59e11fe1a7b5f59987e689db80
 associated_specs:
   - path: pkg/discover/treesitter/treesitter_test.go
     type: go_test

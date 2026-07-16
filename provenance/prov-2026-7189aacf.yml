@@ -1,0 +1,66 @@
+id: prov-2026-7189aacf
+title: 'Framework-agnostic discover: lang/symbols/graph packages + agnostic pipeline wiring'
+status: implemented
+created_at: "2026-07-15"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Implements prov-2026-a5eb1192: fills in the pkg/discover/lang, pkg/discover/symbols,
+  and pkg/discover/graph package stubs, additively extends pkg/discover/treesitter with
+  Python and JavaScript grammars, and wires a framework-agnostic discover path into
+  cmd/linespec/main_stable.go that runs when --framework is unspecified and
+  framework.Detect finds nothing. Key decisions:
+  - lang.Detect is a pure extension->Language map (go/ruby/python/javascript); it
+    requires no framework description, matching the blueprint's language-detection
+    constraint.
+  - symbols.Extract holds a per-language registry of tree-sitter query patterns for
+    top-level functions/types/classes and import/require paths, verified against real
+    parse trees (see pkg/discover/symbols/symbols_test.go) rather than guessed from
+    grammar docs. Python/JavaScript symbol queries are anchored to (module ...) /
+    (program ...) so only top-level defs are captured; Ruby intentionally captures
+    nested defs (methods inside classes) since that is where Ruby's meaningful
+    top-level-ish symbols actually live.
+  - graph.Grouper is a one-method interface (Group([]File) ([]Group, error));
+    graph.DirectoryGrouper is the only implementation, grouping by containing
+    directory. This satisfies the blueprint's requirement that a future
+    community-detection grouper be substitutable without pipeline changes.
+  - runDiscoverAgnostic in main_stable.go never generates .linespec stubs and leaves
+    intent/constraints empty on generated blueprint records, mirroring the existing
+    framework-driven discoverrecords.Write behavior (see PROVENANCE_RECORDS.md's note
+    that discover output is a starting point, not a finished artifact) — draft records
+    with empty intent are expected to fail `provenance lint` until a human or --enrich
+    fills them in, same as the existing route-based path.
+  - The existing framework-driven branch (opts.Framework set, or framework.Detect
+    succeeds) is untouched; only the "detection failed" error path was replaced with a
+    warning + call into the new agnostic path.
+constraints:
+  - Must not alter the framework-driven pipeline's behavior when a framework is
+    specified or auto-detected.
+  - Must not generate .linespec stubs in framework-agnostic mode.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/discover/treesitter/lang.go
+  - pkg/discover/treesitter/treesitter_test.go
+  - pkg/discover/lang/lang.go
+  - pkg/discover/lang/lang_test.go
+  - pkg/discover/symbols/symbols.go
+  - pkg/discover/symbols/symbols_test.go
+  - pkg/discover/graph/graph.go
+  - pkg/discover/graph/graph_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a5eb1192
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: e52b879574f675ca141df3a0da867f123e11afa0
+associated_specs:
+  - path: pkg/discover/symbols/symbols_test.go
+    type: go_test
+    run_command: "make test # {{path}}"
+  - path: pkg/discover/graph/graph_test.go
+    type: go_test
+    run_command: "make test # {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discover
