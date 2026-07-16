@@ -393,7 +393,7 @@ func (l *Linter) validateScopePatterns(record *Record, result *LintResult) {
 
 	for _, pattern := range allPatterns {
 		// Check for regex prefix
-		if len(pattern) > 3 && pattern[:3] == "re:" {
+		if isRegexScopePattern(pattern) {
 			regex := pattern[3:]
 			if _, err := regexp.Compile(regex); err != nil {
 				result.Add(Issue{
@@ -462,7 +462,7 @@ func (l *Linter) validateScopePatternList(record *Record, patterns []string, inv
 		}
 
 		// Check for regex prefix
-		if len(pattern) > 3 && pattern[:3] == "re:" {
+		if isRegexScopePattern(pattern) {
 			l.validateRegexPattern(record, pattern, notFoundSev, result)
 			continue
 		}
