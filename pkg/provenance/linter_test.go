@@ -90,7 +90,10 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 	loader := NewLoader(tmpDir, nil)
 	linter := NewLinter(loader, "strict")
 
-	// Test 1: Non-existent exact path should error for open records
+	// Test 1: A not-yet-existing exact path is a hint (not an error) for open
+	// records — prov-2026-b4006eda: opening a record MUST NOT be blocked
+	// solely because a declared affected_scope path doesn't exist yet, so
+	// Reconcile's not-yet-existing-path dir-unlock handling can run.
 	record1 := &Record{
 		ID:            "prov-2025-001",
 		Status:        StatusOpen,
@@ -98,8 +101,11 @@ func TestValidateScopePaths_ExactPath(t *testing.T) {
 	}
 	result1 := &LintResult{}
 	linter.validateScopePaths(record1, result1)
-	if result1.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for non-existent exact path, got %d: %v", result1.ErrorCount, result1.Issues)
+	if result1.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for not-yet-existing exact path on an open record, got %d: %v", result1.ErrorCount, result1.Issues)
+	}
+	if result1.HintCount != 1 {
+		t.Errorf("Expected 1 hint for not-yet-existing exact path on an open record, got %d: %v", result1.HintCount, result1.Issues)
 	}
 
 	// Test 2: Existing exact path should pass
@@ -172,7 +178,10 @@ func TestValidateScopePaths_GlobPattern(t *testing.T) {
 		t.Errorf("Expected 0 errors for glob matching files, got %d: %v", result1.ErrorCount, result1.Issues)
 	}
 
-	// Test 2: Glob matching no files should error
+	// Test 2: A glob matching no files yet is a hint (not an error) for open
+	// records — the same not-yet-existing-path exemption as the exact-path
+	// case above (prov-2026-b4006eda), so a glob naming a not-yet-existing
+	// file can still be opened.
 	record2 := &Record{
 		ID:            "prov-2025-002",
 		Status:        StatusOpen,
@@ -180,8 +189,11 @@ func TestValidateScopePaths_GlobPattern(t *testing.T) {
 	}
 	result2 := &LintResult{}
 	linter.validateScopePaths(record2, result2)
-	if result2.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for glob matching no files, got %d: %v", result2.ErrorCount, result2.Issues)
+	if result2.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for glob matching no files yet on an open record, got %d: %v", result2.ErrorCount, result2.Issues)
+	}
+	if result2.HintCount != 1 {
+		t.Errorf("Expected 1 hint for glob matching no files yet on an open record, got %d: %v", result2.HintCount, result2.Issues)
 	}
 }
 
@@ -220,7 +232,10 @@ func TestValidateScopePaths_RegexPattern(t *testing.T) {
 		t.Errorf("Expected 0 errors for regex matching files, got %d: %v", result1.ErrorCount, result1.Issues)
 	}
 
-	// Test 2: Regex matching no files should error
+	// Test 2: A regex matching no files yet is a hint (not an error) for open
+	// records — the same not-yet-existing-path exemption as the exact-path and
+	// glob cases above (prov-2026-b4006eda), so a regex naming a not-yet-
+	// existing file can still be opened.
 	record2 := &Record{
 		ID:            "prov-2025-002",
 		Status:        StatusOpen,
@@ -228,8 +243,11 @@ func TestValidateScopePaths_RegexPattern(t *testing.T) {
 	}
 	result2 := &LintResult{}
 	linter.validateScopePaths(record2, result2)
-	if result2.ErrorCount != 1 {
-		t.Errorf("Expected 1 error for regex matching no files, got %d: %v", result2.ErrorCount, result2.Issues)
+	if result2.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors for regex matching no files yet on an open record, got %d: %v", result2.ErrorCount, result2.Issues)
+	}
+	if result2.HintCount != 1 {
+		t.Errorf("Expected 1 hint for regex matching no files yet on an open record, got %d: %v", result2.HintCount, result2.Issues)
 	}
 }
 
