@@ -411,6 +411,20 @@ func (l *Linter) validateScopePatterns(record *Record, result *LintResult) {
 // Open records produce errors for missing paths; terminal-state records produce warnings.
 // Draft records are skipped entirely.
 // Patterns that resolve only to excluded files are silently skipped.
+//
+// affected_scope and forbidden_scope are validated separately (rather than as
+// one combined pattern list) because they are relaxed independently: an
+// affected_scope pattern (exact, glob, or regex) naming a declared-but-not-yet-
+// existing path is downgraded to a hint for an open record, rather than the
+// error that would otherwise block `open` — the fswrite blueprint's
+// (prov-2026-8d2f5f2a) "declare before you create it" workflow requires this,
+// since Reconcile's not-yet-existing-path dir-unlock handling is only useful
+// if `open` can actually be reached for such a declaration (prov-2026-b4006eda).
+// forbidden_scope keeps its normal severity unconditionally: forbidding a path
+// that will never exist is not the "declare before you create it" case this
+// exemption exists for. A scope path that exists but is a directory, or a
+// pattern with invalid glob/regex syntax, also keeps its normal severity —
+// only the "does not match anything yet" case for affected_scope is relaxed.
 func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 	if record.Status == StatusDraft {
 		return
@@ -421,9 +435,22 @@ func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 		missingSev = SeverityWarning
 	}
 
-	allPatterns := append(record.AffectedScope, record.ForbiddenScope...)
+	affectedNotFoundSev := missingSev
+	if record.Status == StatusOpen {
+		affectedNotFoundSev = SeverityHint
+	}
 
-	for _, pattern := range allPatterns {
+	l.validateScopePatternList(record, record.AffectedScope, missingSev, affectedNotFoundSev, result)
+	l.validateScopePatternList(record, record.ForbiddenScope, missingSev, missingSev, result)
+}
+
+// validateScopePatternList validates one scope list (affected_scope or
+// forbidden_scope) against the filesystem. invalidSev governs genuinely
+// invalid patterns (a path that resolves to a directory, or that cannot be
+// accessed); notFoundSev governs a pattern that simply does not match
+// anything yet, which the caller may have relaxed independently of invalidSev.
+func (l *Linter) validateScopePatternList(record *Record, patterns []string, invalidSev, notFoundSev Severity, result *LintResult) {
+	for _, pattern := range patterns {
 		// Skip empty patterns
 		if strings.TrimSpace(pattern) == "" {
 			continue
@@ -436,38 +463,42 @@ func (l *Linter) validateScopePaths(record *Record, result *LintResult) {
 
 		// Check for regex prefix
 		if len(pattern) > 3 && pattern[:3] == "re:" {
-			l.validateRegexPattern(record, pattern, missingSev, result)
+			l.validateRegexPattern(record, pattern, invalidSev, notFoundSev, result)
 			continue
 		}
 
 		// Check for glob pattern
 		if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
-			l.validateGlobPattern(record, pattern, missingSev, result)
+			l.validateGlobPattern(record, pattern, notFoundSev, result)
 			continue
 		}
 
 		// Exact path validation
-		l.validateExactPath(record, pattern, missingSev, result)
+		l.validateExactPath(record, pattern, invalidSev, notFoundSev, result)
 	}
 }
 
 // validateExactPath checks that an exact path exists and is a file
-func (l *Linter) validateExactPath(record *Record, path string, missingSev Severity, result *LintResult) {
+func (l *Linter) validateExactPath(record *Record, path string, invalidSev, notFoundSev Severity, result *LintResult) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			msg := fmt.Sprintf("Scope path does not exist: %s", path)
+			if notFoundSev == SeverityHint {
+				msg = fmt.Sprintf("Scope path does not exist yet — declared for creation; opening unlocks its parent directory so it can be created: %s", path)
+			}
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "scope",
-				Message:  fmt.Sprintf("Scope path does not exist: %s", path),
-				Severity: missingSev,
+				Message:  msg,
+				Severity: notFoundSev,
 			})
 		} else {
 			result.Add(Issue{
 				RecordID: record.ID,
 				Field:    "scope",
 				Message:  fmt.Sprintf("Cannot access scope path %s: %v", path, err),
-				Severity: missingSev,
+				Severity: invalidSev,
 			})
 		}
 		return
@@ -478,13 +509,16 @@ func (l *Linter) validateExactPath(record *Record, path string, missingSev Sever
 			RecordID: record.ID,
 			Field:    "scope",
 			Message:  fmt.Sprintf("Scope path is a directory, not a file (use glob pattern for directories): %s", path),
-			Severity: missingSev,
+			Severity: invalidSev,
 		})
 	}
 }
 
-// validateGlobPattern checks that a glob pattern matches at least one file
-func (l *Linter) validateGlobPattern(record *Record, pattern string, missingSev Severity, result *LintResult) {
+// validateGlobPattern checks that a glob pattern matches at least one file.
+// A compile error is always a genuine defect in the pattern, not a
+// not-yet-existing declaration, so it stays a hardcoded error unconditionally
+// (matching pre-existing behavior — it never varied with missingSev either).
+func (l *Linter) validateGlobPattern(record *Record, pattern string, notFoundSev Severity, result *LintResult) {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		result.Add(Issue{
@@ -497,17 +531,21 @@ func (l *Linter) validateGlobPattern(record *Record, pattern string, missingSev 
 	}
 
 	if len(matches) == 0 {
+		msg := fmt.Sprintf("Glob pattern matches no files: %s", pattern)
+		if notFoundSev == SeverityHint {
+			msg = fmt.Sprintf("Glob pattern matches no files yet — declared for creation; opening unlocks its base directory so a matching file can be created: %s", pattern)
+		}
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "scope",
-			Message:  fmt.Sprintf("Glob pattern matches no files: %s", pattern),
-			Severity: missingSev,
+			Message:  msg,
+			Severity: notFoundSev,
 		})
 	}
 }
 
 // validateRegexPattern checks that a regex pattern matches at least one file
-func (l *Linter) validateRegexPattern(record *Record, pattern string, missingSev Severity, result *LintResult) {
+func (l *Linter) validateRegexPattern(record *Record, pattern string, invalidSev, notFoundSev Severity, result *LintResult) {
 	regex := pattern[3:] // Strip "re:" prefix
 	re, err := regexp.Compile(regex)
 	if err != nil {
@@ -542,17 +580,21 @@ func (l *Linter) validateRegexPattern(record *Record, pattern string, missingSev
 			RecordID: record.ID,
 			Field:    "scope",
 			Message:  fmt.Sprintf("Error walking filesystem for regex pattern %s: %v", pattern, walkErr),
-			Severity: SeverityError,
+			Severity: invalidSev,
 		})
 		return
 	}
 
 	if !foundMatch {
+		msg := fmt.Sprintf("Regex pattern matches no files: %s", pattern)
+		if notFoundSev == SeverityHint {
+			msg = fmt.Sprintf("Regex pattern matches no files yet — declared for creation; opening unlocks its base directory so a matching file can be created: %s", pattern)
+		}
 		result.Add(Issue{
 			RecordID: record.ID,
 			Field:    "scope",
-			Message:  fmt.Sprintf("Regex pattern matches no files: %s", pattern),
-			Severity: missingSev,
+			Message:  msg,
+			Severity: notFoundSev,
 		})
 	}
 }
