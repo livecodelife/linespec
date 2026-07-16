@@ -463,7 +463,7 @@ func (l *Linter) validateScopePatternList(record *Record, patterns []string, inv
 
 		// Check for regex prefix
 		if len(pattern) > 3 && pattern[:3] == "re:" {
-			l.validateRegexPattern(record, pattern, invalidSev, notFoundSev, result)
+			l.validateRegexPattern(record, pattern, notFoundSev, result)
 			continue
 		}
 
@@ -544,8 +544,11 @@ func (l *Linter) validateGlobPattern(record *Record, pattern string, notFoundSev
 	}
 }
 
-// validateRegexPattern checks that a regex pattern matches at least one file
-func (l *Linter) validateRegexPattern(record *Record, pattern string, invalidSev, notFoundSev Severity, result *LintResult) {
+// validateRegexPattern checks that a regex pattern matches at least one file.
+// A compile error or filesystem walk failure is always a genuine defect, not
+// a not-yet-existing declaration, so both stay hardcoded errors unconditionally
+// (matching pre-existing behavior — neither ever varied with missingSev either).
+func (l *Linter) validateRegexPattern(record *Record, pattern string, notFoundSev Severity, result *LintResult) {
 	regex := pattern[3:] // Strip "re:" prefix
 	re, err := regexp.Compile(regex)
 	if err != nil {
@@ -580,7 +583,7 @@ func (l *Linter) validateRegexPattern(record *Record, pattern string, invalidSev
 			RecordID: record.ID,
 			Field:    "scope",
 			Message:  fmt.Sprintf("Error walking filesystem for regex pattern %s: %v", pattern, walkErr),
-			Severity: invalidSev,
+			Severity: SeverityError,
 		})
 		return
 	}
