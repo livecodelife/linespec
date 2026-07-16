@@ -1,6 +1,6 @@
 id: prov-2026-3c5aaad2
 title: Update linter_test.go for open-record not-yet-existing-scope-path relaxation
-status: open
+status: implemented
 created_at: "2026-07-16"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -39,7 +39,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-b4006eda
-sealed_at_sha: ""
+sealed_at_sha: 118ac6345a3ded47b86ba55ac6fb4322094dfddd
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: go_test
