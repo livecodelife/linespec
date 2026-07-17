@@ -61,6 +61,8 @@ affected_scope:
   - LINESPEC_DISCOVER.md
   - docs/templates/index.html
   - scripts/bump-version.sh
+  - skills/**
+  - .claude/skills/**
 forbidden_scope: []
 type: blueprint
 supersedes: ""

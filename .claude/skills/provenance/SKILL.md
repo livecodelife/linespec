@@ -12,7 +12,7 @@ Follow these rules precisely whenever working with provenance records or making 
 
 Before touching anything, follow this sequence and you will not get stuck on enforcement:
 
-1. **Investigate.** Run `linespec provenance context -f <file>` for every file you plan to change. This shows which records govern them. (Those governing records do **not** need to be superseded — see below.)
+1. **Investigate.** Run `linespec provenance next --plan <file>...` for every file you plan to change. It computes the single correct next action — with record IDs already filled in — so start here, not with a manual read of the graph. (Governing records `next` surfaces do **not** need to be superseded — see below.)
 2. **Create one record:** `linespec provenance create --type blueprint --no-edit --title "…"`.
 3. **Set its `affected_scope`** to exactly the files you will change.
 4. **Create your proof artifact, then `open`** the record with that spec referenced in `associated_specs`.
@@ -21,12 +21,28 @@ Before touching anything, follow this sequence and you will not get stuck on enf
 
 ## Step 1 — Investigate Before Creating
 
-**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code.
+**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code — and grep/find/cat cannot see any of it: they can't tell you which records govern a file, whether a file is exempted, what the ancestry of a decision is, or whether two open records conflict over the same file. **Always use `linespec provenance` commands for provenance investigation; never fall back to raw bash grep/find/cat to infer governance.**
 
-For every file you plan to touch, check which records govern it:
+**Start with `next`** — it computes the single correct next provenance action for the files you're about to touch, with record IDs already filled in, so you don't have to manually reason through the state machine:
 
 ```bash
-linespec provenance context -f <file> [-c <config>]
+linespec provenance next --plan <file>... [-c <config>]   # or: next [files...]
+```
+
+It tells you, precisely: create a new record, open an existing draft, add specs before opening, commit under an existing ID, or complete — with the exact command to run next. Run this before you write a line of code or create a record.
+
+For a lighter-weight lookup — just the active records currently governing a set of files, without the full graph context — use `govern`:
+
+```bash
+linespec provenance govern --files <file>... [-c <config>]   # or: govern [files...]
+```
+
+`govern` returns only **open + implemented** records (cache-backed, like `next`). Reach for it when you already know what you're doing and just need to confirm what currently governs the files you're about to change.
+
+For the full picture — all statuses, ancestry, and any cross-record conflicts on your files — use `context`:
+
+```bash
+linespec provenance context <file>... [-c <config>]
 ```
 
 If embeddings are configured, search semantically:
@@ -42,6 +58,22 @@ linespec provenance status --record prov-YYYY-XXXXXXXX [-c <config>]
 ```
 
 **Important:** discovering that several records govern your files does NOT mean you must supersede them. The scope check only validates the record you tag. You will create one new record covering your files (Step 2). See "Scope Enforcement & When You're Blocked" below.
+
+### Bootstrapping provenance on an existing codebase — `discover`
+
+`discover` scans a codebase with tree-sitter and generates **draft** blueprint records plus `.linespec` stubs, so you don't hand-author provenance from a blank page for code that predates it:
+
+```bash
+linespec provenance discover [--dir <path>] [--lang <lang>] [--framework <name>] [--dry-run] [--enrich] [--format table|json] [-c <config>]
+```
+
+- `--dir` — scope the scan to a subdirectory instead of the repo root (useful in monorepos).
+- `--lang` / `--framework` — override auto-detection when the codebase's dependency manifests don't make it obvious.
+- `--dry-run` — print what would be generated (routes, boundaries, records) without writing any files; pair with `--format json` for machine-readable output.
+- `--enrich` — populate `intent` fields from git history instead of leaving them as placeholders.
+- Supported frameworks: Chi (Go), and Rails/Sinatra (Ruby).
+
+It emits **draft** blueprint records under `provenance/` and skeleton `.linespec` files under `linespecs/` — a starting point, not finished output. Review and refine every generated record and spec (fill in real `intent`/`constraints`, correct any misdetected routes) before opening them; `discover` never overwrites existing records or specs.
 
 ## Step 2 — Create a Blueprint Record (Draft)
 
@@ -73,6 +105,8 @@ As you work, create `imprint` records to log micro-decisions, trade-offs, pivots
 type: imprint
 implements: prov-YYYY-XXXXXXXX   # the blueprint ID
 ```
+
+**Write and commit the imprint BEFORE writing the code it documents, not after.** An imprint captures the decision you're about to make — the trade-off, the pivot, the reasoning — so it must exist before the commit that acts on it, the same way the blueprint must exist before any implementation code. Retroactively writing an imprint after the fact turns it into a summary instead of a record of the decision, and defeats the purpose of provenance as a decision log.
 
 **All imprints must be implemented before the blueprint can be completed.** Tag every implementation commit with the relevant record ID.
 
@@ -117,8 +151,20 @@ Before any create, open, or complete commit: `linespec provenance lint` and `lin
 | `forbids changes to <file>` / scope violation | Add `<file>` to **your tagged record's** `affected_scope` (editable in draft). |
 | `No associated specs (open) [strict]` | Add `associated_specs` (proof) to the open record before committing/completing. |
 | `overlaps with locked record Y` | A deliberate governance gate (only if locked layers exist). **Stop and ask the maintainer** — do not blindly supersede multiple records. |
+| `permission denied` writing/creating a source file | Not a bug — the filesystem write-access lock (see below) keeps ungoverned files read-only on disk. Declare the file in an `open` record's `affected_scope` (open a draft that covers it, or `add-scope` an already-open record) and it unlocks. Never `chmod` to force it. |
 
 > **Stale-scope warnings are non-blocking.** When you edit a file governed by an *implemented* record you may see a warning that the file "is governed by implemented record … create a superseding record." This is informational only — the commit still succeeds, no action is required, and it is **not** a reason to supersede anything. Proceed under your own new record.
+
+### Filesystem write-access lock — why a file is read-only
+
+Enforcement also runs at the **filesystem boundary**, so it holds even when git hooks are absent and regardless of which agent (or none) is driving. The governed tree defaults to **non-writable**: a source file is writable **only while an `open`, allowlist-mode record declares it** in `affected_scope`. That is why an edit can fail with `permission denied` *before* you ever commit — the path simply isn't covered by open work yet. It is the system telling you to declare your scope, not a bug to route around with `chmod`.
+
+- **Unlock by declaring the path.** `open` a draft whose `affected_scope` covers the file, or `add-scope --record <id>` to widen an already-open record. Declaration and write permission are granted in the same atomic step.
+- **Always writable, never locked:** the provenance directory, `.linespec.yml`, LineSpec's own `.linespec/` state dir, and every record's `associated_specs` paths — so authoring records and their proof files is never blocked.
+- **Re-locked on `complete`/`deprecate`,** unless another still-open record also covers the path.
+- **Self-healing.** `linespec provenance next` re-derives the write bits on every run, and `linespec provenance reconcile` does it on demand (a fresh clone, or bits that drifted). Running `next --plan <file>` first (Step 1) both tells you the correct action and unlocks what your declared work needs — you rarely call `reconcile` by hand.
+
+The loop never changes: **investigate with `next`, declare your scope, and the files you may touch become writable.** A blocked write means "declare this file in an open record," never "bypass enforcement."
 
 **Hard rules:** Never use `--no-verify`. Never relax enforcement (`strict` → `warn`/`none`) to get unblocked — that is a maintainer + settings-level decision, not yours. When a wall is genuinely a governance call, stop and ask rather than brute-forcing.
 
@@ -205,9 +251,12 @@ In monorepos with multiple `.linespec.yml` files, **always use `-c <path>`** to 
 
 ```bash
 # Investigation
+linespec provenance next --plan <file>... [-c <config>]    # the single correct next action (start here)
+linespec provenance govern --files <file>... [-c <config>] # active (open+implemented) records governing files
 linespec provenance status [--record <id>] [-c <config>]   # list records / detail
 linespec provenance search --query "<query>" [-c <config>] # semantic search
-linespec provenance context -f <file> [-c <config>]        # which records govern a file
+linespec provenance context <file>... [-c <config>]        # full context: which records govern a file
+linespec provenance discover [--dir <path>] [--dry-run]    # bootstrap draft records + .linespec stubs
 linespec provenance audit [-c <config>]                    # audit recent changes
 linespec provenance graph [--root <id>] [-c <config>]      # render the graph
 
@@ -223,6 +272,8 @@ linespec provenance lint [--warn|--info|--all] [-c <config>]  # validate; filter
 linespec provenance check [--staged] [-c <config>]            # check commits for violations
 linespec provenance run-specs --record <id> [-c <config>]     # run a record's associated_specs
 linespec provenance lock-scope --record <id> [-c <config>]    # freeze affected_scope from git
+linespec provenance add-scope --record <id> [--dry-run]       # widen an open record's scope (unlocks those paths on disk)
+linespec provenance reconcile [--json] [-c <config>]          # re-derive filesystem write-locks from open records
 linespec provenance lock-layer --title "..." --no-edit        # create a locked governance layer
 
 # Cross-repo and maintenance

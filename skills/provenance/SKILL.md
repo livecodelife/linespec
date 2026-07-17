@@ -151,8 +151,20 @@ Before any create, open, or complete commit: `linespec provenance lint` and `lin
 | `forbids changes to <file>` / scope violation | Add `<file>` to **your tagged record's** `affected_scope` (editable in draft). |
 | `No associated specs (open) [strict]` | Add `associated_specs` (proof) to the open record before committing/completing. |
 | `overlaps with locked record Y` | A deliberate governance gate (only if locked layers exist). **Stop and ask the maintainer** — do not blindly supersede multiple records. |
+| `permission denied` writing/creating a source file | Not a bug — the filesystem write-access lock (see below) keeps ungoverned files read-only on disk. Declare the file in an `open` record's `affected_scope` (open a draft that covers it, or `add-scope` an already-open record) and it unlocks. Never `chmod` to force it. |
 
 > **Stale-scope warnings are non-blocking.** When you edit a file governed by an *implemented* record you may see a warning that the file "is governed by implemented record … create a superseding record." This is informational only — the commit still succeeds, no action is required, and it is **not** a reason to supersede anything. Proceed under your own new record.
+
+### Filesystem write-access lock — why a file is read-only
+
+Enforcement also runs at the **filesystem boundary**, so it holds even when git hooks are absent and regardless of which agent (or none) is driving. The governed tree defaults to **non-writable**: a source file is writable **only while an `open`, allowlist-mode record declares it** in `affected_scope`. That is why an edit can fail with `permission denied` *before* you ever commit — the path simply isn't covered by open work yet. It is the system telling you to declare your scope, not a bug to route around with `chmod`.
+
+- **Unlock by declaring the path.** `open` a draft whose `affected_scope` covers the file, or `add-scope --record <id>` to widen an already-open record. Declaration and write permission are granted in the same atomic step.
+- **Always writable, never locked:** the provenance directory, `.linespec.yml`, LineSpec's own `.linespec/` state dir, and every record's `associated_specs` paths — so authoring records and their proof files is never blocked.
+- **Re-locked on `complete`/`deprecate`,** unless another still-open record also covers the path.
+- **Self-healing.** `linespec provenance next` re-derives the write bits on every run, and `linespec provenance reconcile` does it on demand (a fresh clone, or bits that drifted). Running `next --plan <file>` first (Step 1) both tells you the correct action and unlocks what your declared work needs — you rarely call `reconcile` by hand.
+
+The loop never changes: **investigate with `next`, declare your scope, and the files you may touch become writable.** A blocked write means "declare this file in an open record," never "bypass enforcement."
 
 **Hard rules:** Never use `--no-verify`. Never relax enforcement (`strict` → `warn`/`none`) to get unblocked — that is a maintainer + settings-level decision, not yours. When a wall is genuinely a governance call, stop and ask rather than brute-forcing.
 
@@ -260,6 +272,8 @@ linespec provenance lint [--warn|--info|--all] [-c <config>]  # validate; filter
 linespec provenance check [--staged] [-c <config>]            # check commits for violations
 linespec provenance run-specs --record <id> [-c <config>]     # run a record's associated_specs
 linespec provenance lock-scope --record <id> [-c <config>]    # freeze affected_scope from git
+linespec provenance add-scope --record <id> [--dry-run]       # widen an open record's scope (unlocks those paths on disk)
+linespec provenance reconcile [--json] [-c <config>]          # re-derive filesystem write-locks from open records
 linespec provenance lock-layer --title "..." --no-edit        # create a locked governance layer
 
 # Cross-repo and maintenance
