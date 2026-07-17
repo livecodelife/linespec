@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/enrich"
-	"github.com/livecodelife/linespec/pkg/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/discover/enrich"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
 )
 
 // cleanGitEnv returns the process environment with GIT_DIR / GIT_WORK_TREE /

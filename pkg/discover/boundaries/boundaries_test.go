@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/boundaries"
-	"github.com/livecodelife/linespec/pkg/discover/framework"
-	"github.com/livecodelife/linespec/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
+	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
 )
 
 func loadFramework(t *testing.T, name string) *framework.Description {

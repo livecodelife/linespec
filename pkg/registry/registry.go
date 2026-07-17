@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 type MockRegistry struct {

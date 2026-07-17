@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/livecodelife/linespec/pkg/discover/lang"
-	"github.com/livecodelife/linespec/pkg/discover/symbols"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
+	"github.com/livecodelife/linespec/v3/pkg/discover/symbols"
 )
 
 // File is one source file discovered during a framework-agnostic scan.

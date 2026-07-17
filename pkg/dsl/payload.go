@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
 	"gopkg.in/yaml.v3"
 )
 

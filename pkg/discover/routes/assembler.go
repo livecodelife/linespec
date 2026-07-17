@@ -12,7 +12,7 @@ import (
 	sittergo "github.com/smacker/go-tree-sitter/golang"
 	sitterruby "github.com/smacker/go-tree-sitter/ruby"
 
-	"github.com/livecodelife/linespec/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
 )
 
 // Assembler discovers routes in a project directory using a framework description.

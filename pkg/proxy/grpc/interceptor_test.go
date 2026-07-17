@@ -18,8 +18,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 	"golang.org/x/net/http2"
 )
 

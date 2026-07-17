@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 // Package-level compiled regex patterns — compiled once at program startup.

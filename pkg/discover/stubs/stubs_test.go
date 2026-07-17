@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/routes"
-	"github.com/livecodelife/linespec/pkg/discover/stubs"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
 )
 
 // --- FileName ---

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/config"
 )
 
 // TestProvenanceConfigManifestURL verifies the ManifestURL field is present

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/config"
 )
 
 // CacheManager handles fetching and storing remote provenance directories.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
 )
 
 // BoundaryHit is a protocol boundary hit detected in a handler's call chain.

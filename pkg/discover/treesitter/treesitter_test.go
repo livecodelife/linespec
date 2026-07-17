@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/treesitter"
+	"github.com/livecodelife/linespec/v3/pkg/discover/treesitter"
 )
 
 func TestEngine_QueryGo(t *testing.T) {

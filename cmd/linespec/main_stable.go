@@ -23,31 +23,31 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
-	"github.com/livecodelife/linespec/pkg/config"
-	"github.com/livecodelife/linespec/pkg/manifest"
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/initcmd"
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/provenance"
-	"github.com/livecodelife/linespec/pkg/discover/boundaries"
-	"github.com/livecodelife/linespec/pkg/discover/enrich"
-	"github.com/livecodelife/linespec/pkg/discover/framework"
-	"github.com/livecodelife/linespec/pkg/discover/graph"
-	"github.com/livecodelife/linespec/pkg/discover/lang"
-	discoverrecords "github.com/livecodelife/linespec/pkg/discover/records"
-	discoverroutes "github.com/livecodelife/linespec/pkg/discover/routes"
-	"github.com/livecodelife/linespec/pkg/discover/stubs"
-	"github.com/livecodelife/linespec/pkg/discover/symbols"
-	grpcproxy "github.com/livecodelife/linespec/pkg/proxy/grpc"
-	httpproxy "github.com/livecodelife/linespec/pkg/proxy/http"
-	"github.com/livecodelife/linespec/pkg/proxy/kafka"
-	mongodbproxy "github.com/livecodelife/linespec/pkg/proxy/mongodb"
-	"github.com/livecodelife/linespec/pkg/proxy/mysql"
-	"github.com/livecodelife/linespec/pkg/proxy/postgresql"
-	redisproxy "github.com/livecodelife/linespec/pkg/proxy/redis"
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/runner"
+	"github.com/livecodelife/linespec/v3/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/manifest"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/initcmd"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
+	"github.com/livecodelife/linespec/v3/pkg/discover/enrich"
+	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/graph"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
+	discoverrecords "github.com/livecodelife/linespec/v3/pkg/discover/records"
+	discoverroutes "github.com/livecodelife/linespec/v3/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
+	"github.com/livecodelife/linespec/v3/pkg/discover/symbols"
+	grpcproxy "github.com/livecodelife/linespec/v3/pkg/proxy/grpc"
+	httpproxy "github.com/livecodelife/linespec/v3/pkg/proxy/http"
+	"github.com/livecodelife/linespec/v3/pkg/proxy/kafka"
+	mongodbproxy "github.com/livecodelife/linespec/v3/pkg/proxy/mongodb"
+	"github.com/livecodelife/linespec/v3/pkg/proxy/mysql"
+	"github.com/livecodelife/linespec/v3/pkg/proxy/postgresql"
+	redisproxy "github.com/livecodelife/linespec/v3/pkg/proxy/redis"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/runner"
 	"gopkg.in/yaml.v3"
 )
 
@@ -388,7 +388,7 @@ func runBuild() {
 			logger.Error("Failed to build a Linux binary for the Docker image: %v", err)
 			logger.Error("Ensure `go` is in PATH and one of the following is true:")
 			logger.Error("  • Run `linespec build` from within the linespec source directory")
-			logger.Error("  • Or install via: go install github.com/livecodelife/linespec/cmd/linespec@VERSION")
+			logger.Error("  • Or install via: go install github.com/livecodelife/linespec/v3/cmd/linespec@VERSION")
 			os.Exit(1)
 		}
 		linuxBinaryPath = compiled
@@ -453,12 +453,12 @@ func runBuild() {
 // It tries two strategies in order:
 //  1. Find the linespec source root (go.mod) by walking up from CWD or the
 //     executable directory, then run `go build GOOS=linux`.
-//  2. Run `go install github.com/livecodelife/linespec/cmd/linespec@VERSION`
+//  2. Run `go install github.com/livecodelife/linespec/v3/cmd/linespec@VERSION`
 //     with GOOS=linux, using the version embedded in the current binary.
 func crossCompileLinuxBinary(execPath, tmpDir string) (string, error) {
 	goarch := runtime.GOARCH
 	outPath := filepath.Join(tmpDir, "linespec-linux")
-	const modulePrefix = "module github.com/livecodelife/linespec"
+	const modulePrefix = "module github.com/livecodelife/linespec/v3"
 
 	// Strategy 1a: walk up from the current working directory.
 	if cwd, err := os.Getwd(); err == nil {
@@ -481,7 +481,7 @@ func crossCompileLinuxBinary(execPath, tmpDir string) (string, error) {
 	// Strategy 2: go install from the module proxy using the embedded version.
 	moduleVersion := embeddedModuleVersion()
 	logger.Info("Cross-compiling Linux/%s binary via go install @%s", goarch, moduleVersion)
-	return outPath, goInstallForLinux("github.com/livecodelife/linespec/cmd/linespec", moduleVersion, outPath, goarch)
+	return outPath, goInstallForLinux("github.com/livecodelife/linespec/v3/cmd/linespec", moduleVersion, outPath, goarch)
 }
 
 // findGoModRoot walks up from startDir looking for a go.mod file that contains

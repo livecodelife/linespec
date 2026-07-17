@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/verify"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
 
 // readCommands is the set of Redis commands that map to READ:REDIS expectations.

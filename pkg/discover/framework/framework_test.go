@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
 )
 
 const testDescYAML = `

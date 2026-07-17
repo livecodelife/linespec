@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 // HTTPRequest holds HTTP request data for verification

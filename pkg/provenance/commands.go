@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/config"
-	"github.com/livecodelife/linespec/pkg/embeddings"
-	plugin "github.com/livecodelife/linespec/plugins/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/embeddings"
+	plugin "github.com/livecodelife/linespec/v3/plugins/provenance"
 )
 
 // Commands provides all provenance CLI commands

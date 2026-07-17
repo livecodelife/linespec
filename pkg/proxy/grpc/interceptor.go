@@ -14,11 +14,11 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/verify"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
 
 type Interceptor struct {

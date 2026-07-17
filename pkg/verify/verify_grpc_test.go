@@ -3,7 +3,7 @@ package verify
 import (
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 func TestVerifyGRPC_RequestBody(t *testing.T) {

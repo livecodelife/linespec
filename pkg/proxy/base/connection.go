@@ -1,7 +1,7 @@
 package base
 
 import (
-	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
 )
 
 // Proxy manages database proxy connections using the MySQL pattern:

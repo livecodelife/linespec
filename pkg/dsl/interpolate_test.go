@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 func TestParserWithResolver_ReceivePath(t *testing.T) {

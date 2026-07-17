@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/proxy/base"
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/types"
-	"github.com/livecodelife/linespec/pkg/verify"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/proxy/base"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
 
 const (

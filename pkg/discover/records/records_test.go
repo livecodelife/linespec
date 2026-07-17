@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/boundaries"
-	"github.com/livecodelife/linespec/pkg/discover/records"
-	"github.com/livecodelife/linespec/pkg/discover/routes"
-	"github.com/livecodelife/linespec/pkg/discover/stubs"
+	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
+	"github.com/livecodelife/linespec/v3/pkg/discover/records"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
 )
 
 // --- deriveTitle (via Plan output) ---

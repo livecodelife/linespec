@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/discover/lang"
-	"github.com/livecodelife/linespec/pkg/discover/treesitter"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
+	"github.com/livecodelife/linespec/v3/pkg/discover/treesitter"
 )
 
 // Kind categorizes a top-level symbol.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/config"
 )
 
 func TestNewClient(t *testing.T) {

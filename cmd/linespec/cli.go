@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/embeddings"
-	"github.com/livecodelife/linespec/pkg/logger"
-	"github.com/livecodelife/linespec/pkg/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/embeddings"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
 	"github.com/spf13/cobra"
 )
 

@@ -3,8 +3,8 @@ package graph_test
 import (
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/graph"
-	"github.com/livecodelife/linespec/pkg/discover/lang"
+	"github.com/livecodelife/linespec/v3/pkg/discover/graph"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
 )
 
 func TestDirectoryGrouper_Group(t *testing.T) {

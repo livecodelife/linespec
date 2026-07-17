@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/framework"
-	"github.com/livecodelife/linespec/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
 )
 
 // loadBuiltinFramework loads a named framework from the built-in descriptions.

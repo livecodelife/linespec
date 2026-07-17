@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/discover/boundaries"
-	"github.com/livecodelife/linespec/pkg/discover/routes"
-	"github.com/livecodelife/linespec/pkg/discover/stubs"
-	"github.com/livecodelife/linespec/pkg/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
+	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
+	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
 )
 
 // Input holds all data needed to generate draft blueprint records for discovered route groups.

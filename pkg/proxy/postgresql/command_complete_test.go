@@ -3,8 +3,8 @@ package postgresql
 import (
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/registry"
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 func TestCreateCommandCompleteTag(t *testing.T) {

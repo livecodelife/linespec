@@ -3,7 +3,7 @@ package mysql
 import (
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/registry"
 )
 
 func TestProxyDatabaseName(t *testing.T) {

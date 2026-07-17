@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/config"
 )
 
 func TestGetGRPCProxyDependencies(t *testing.T) {

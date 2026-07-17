@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/config"
+	"github.com/livecodelife/linespec/v3/pkg/config"
 	"gopkg.in/yaml.v3"
 )
 

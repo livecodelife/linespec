@@ -3,7 +3,7 @@ package lang_test
 import (
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/lang"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
 )
 
 func TestDetect(t *testing.T) {

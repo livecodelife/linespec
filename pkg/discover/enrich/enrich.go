@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/livecodelife/linespec/pkg/provenance"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
 	"gopkg.in/yaml.v3"
 )
 

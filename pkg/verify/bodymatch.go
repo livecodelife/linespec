@@ -3,9 +3,9 @@ package verify
 import (
 	"encoding/json"
 
-	"github.com/livecodelife/linespec/pkg/dsl"
-	"github.com/livecodelife/linespec/pkg/interpolate"
-	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
 )
 
 // MakeJSONBodyMatcher returns a registry body-match callback shared by the HTTP

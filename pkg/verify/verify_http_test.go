@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/types"
+	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
 func TestVerifyHTTP_Headers(t *testing.T) {

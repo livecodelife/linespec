@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/livecodelife/linespec/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"

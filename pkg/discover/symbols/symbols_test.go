@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/livecodelife/linespec/pkg/discover/lang"
-	"github.com/livecodelife/linespec/pkg/discover/symbols"
+	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
+	"github.com/livecodelife/linespec/v3/pkg/discover/symbols"
 )
 
 func hasSymbol(f symbols.File, name string, kind symbols.Kind) bool {
