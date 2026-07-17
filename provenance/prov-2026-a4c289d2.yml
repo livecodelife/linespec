@@ -1,0 +1,75 @@
+id: prov-2026-a4c289d2
+title: 'Release v3.15.0: fix go install @latest via /v3 module path, version embedding, docs'
+status: draft
+created_at: "2026-07-17"
+author: calebcowen@gmail.com
+intent: |
+  Cut the v3.15.0 release and fix the two defects that make `go install` unusable
+  for end users.
+
+  (1) `go install github.com/livecodelife/linespec/cmd/linespec@latest` resolves to
+  v1.5.0, not the newest release, because the module path carries no major-version
+  suffix while the module is tagged v2/v3. Go's semantic-import-versioning ignores
+  every v2+ tag for a v1-shaped path. Rename the module to
+  `github.com/livecodelife/linespec/v3` and rewrite every internal import so that
+  `.../v3/cmd/linespec@latest` resolves to the newest v3 tag.
+
+  (2) Binaries not produced by goreleaser (`make build`, `go install`) report
+  `LineSpec vdev` because the Makefile never injects `-X main.version` and the
+  display version never falls back to the module version embedded in build info.
+  Resolve the display version from `debug.ReadBuildInfo()` when the ldflag is
+  unset, inject the version from the VERSION file in the Makefile, and declare the
+  `commit`/`date` vars that `.goreleaser.yml` already references so its ldflags stop
+  being silent no-ops.
+
+  (3) Update every version string and install command across the Markdown sources
+  and doc-site templates (README, PROVENANCE_RECORDS, LINESPEC, docs/templates),
+  add the `/v3` path to all install commands, repair the stale `@v3.11.7` pins that
+  bump-version.sh never caught, write the CHANGELOG entry, and bump VERSION to
+  3.15.0. Tag v3.15.0 to drive release.yml/goreleaser.
+constraints:
+  - The module path MUST become github.com/livecodelife/linespec/v3 and EVERY
+    internal import MUST be rewritten to match. `go build ./...` and `go test ./...`
+    MUST pass after the rewrite and `go mod tidy` MUST leave go.mod/go.sum clean.
+  - After the rename, `go install github.com/livecodelife/linespec/v3/cmd/linespec@latest`
+    MUST be the documented install command everywhere. No install command in any
+    committed doc source may reference the pathless module or a stale version pin.
+  - The display version MUST resolve to the real version for goreleaser builds
+    (ldflag), `make build` (ldflag from VERSION), and `go install` (build-info
+    fallback), and only report "dev" when genuinely built from an untagged,
+    ldflag-less local tree. Version resolution MUST be a pure, unit-tested function.
+  - Declaring commit/date vars MUST NOT change behavior beyond making
+    .goreleaser.yml's existing -X ldflags effective; the CLI surface is unchanged.
+  - VERSION, all Markdown sources, and the CHANGELOG MUST agree on 3.15.0. The
+    doc-site HTML/llms artifacts remain gitignored and are NOT hand-edited; only
+    their Markdown/template sources change.
+  - The release MUST NOT be tagged until `make test`, the four example LineSpec
+    suites, and the code-quality gate all pass on the release commit.
+affected_scope:
+  - go.mod
+  - go.sum
+  - cmd/linespec/
+  - pkg/
+  - plugins/
+  - Makefile
+  - .goreleaser.yml
+  - VERSION
+  - CHANGELOG.md
+  - README.md
+  - PROVENANCE_RECORDS.md
+  - LINESPEC.md
+  - docs/templates/index.html
+  - scripts/bump-version.sh
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: cmd/linespec/version_test.go
+    type: go_test
+    run_command: make test # {{path}} — unit-tests resolveDisplayVersion across ldflag/build-info/dev cases
+associated_traces: []
+monitors: []
+tags: []
