@@ -21,7 +21,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "linespec",
 		Short:         "LineSpec - Provenance Records & Integration Testing",
-		Version:       version,
+		Version:       displayVersion() + buildMetadata(),
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {

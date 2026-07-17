@@ -51,9 +51,61 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// version is injected at build time via -X main.version (goreleaser and
+// `make build`). commit and date are likewise injected by goreleaser; they are
+// declared here so those -X ldflags are effective rather than silent no-ops.
 var (
 	version = "dev"
+	commit  = ""
+	date    = ""
 )
+
+// displayVersion is the version string rendered by `--version`. It is resolved
+// from the ldflag when set, otherwise from the module version embedded in the
+// binary's build info — so a plain `go install` (which applies no ldflags)
+// still reports the release it was built from instead of "dev".
+func displayVersion() string {
+	info, ok := debugpkg.ReadBuildInfo()
+	return resolveDisplayVersion(version, info, ok)
+}
+
+// resolveDisplayVersion picks the best available version string. Preference:
+// an explicit ldflag value, then the build-info module version (with any
+// +dirty/local suffix stripped), then the raw ldflag, then "dev". The result is
+// returned without a leading "v" so the "LineSpec v{{.Version}}" template never
+// double-prints it (build info reports "v3.15.0" while the ldflag is bare).
+// Kept pure so it can be unit-tested without a real build info.
+func resolveDisplayVersion(ldflagVersion string, info *debugpkg.BuildInfo, infoOK bool) string {
+	if ldflagVersion != "" && ldflagVersion != "dev" {
+		return strings.TrimPrefix(ldflagVersion, "v")
+	}
+	if infoOK && info != nil {
+		v := info.Main.Version
+		if idx := strings.Index(v, "+"); idx >= 0 {
+			v = v[:idx]
+		}
+		if v != "" && v != "(devel)" {
+			return strings.TrimPrefix(v, "v")
+		}
+	}
+	if ldflagVersion != "" {
+		return strings.TrimPrefix(ldflagVersion, "v")
+	}
+	return "dev"
+}
+
+// buildMetadata returns the injected commit/date suffix for the version line,
+// empty when neither was injected (local dev / go install).
+func buildMetadata() string {
+	switch {
+	case commit != "" && date != "":
+		return fmt.Sprintf(" (%s, %s)", commit, date)
+	case commit != "":
+		return fmt.Sprintf(" (%s)", commit)
+	default:
+		return ""
+	}
+}
 
 func main() {
 	// Preserve the legacy `-p` alias for the provenance command. Cobra cannot
