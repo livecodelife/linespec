@@ -1,5 +1,12 @@
 .PHONY: test test-integration test-integration-mysql test-integration-postgres clean bump-version quality install-hooks-quality
 
+# Version injected into the binary so `linespec --version` matches the VERSION
+# file for local `make build`/`make install`. Release archives get their version
+# from goreleaser's own -X ldflag; a plain `go install` falls back to the module
+# version embedded in build info (see resolveDisplayVersion).
+VERSION := $(shell cat VERSION)
+LDFLAGS := -s -w -X main.version=$(VERSION)
+
 # Run all unit tests (fast, no external dependencies)
 test:
 	go test ./...
@@ -59,19 +66,19 @@ clean:
 
 # Build linespec (Provenance Records + LineSpec Testing)
 build:
-	go build -ldflags="-s -w" -trimpath -o linespec ./cmd/linespec
+	go build -ldflags="$(LDFLAGS)" -trimpath -o linespec ./cmd/linespec
 
 # Build linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 build-beta:
-	go build -ldflags="-s -w" -trimpath -o linespec-beta ./cmd/linespec
+	go build -ldflags="$(LDFLAGS)" -trimpath -o linespec-beta ./cmd/linespec
 
 # Install linespec
 install:
-	go install -ldflags="-s -w" -trimpath ./cmd/linespec
+	go install -ldflags="$(LDFLAGS)" -trimpath ./cmd/linespec
 
 # Install linespec-beta (identical to stable since v2.0.0; kept for backward compat)
 install-beta:
-	go install -ldflags="-s -w" -trimpath ./cmd/linespec
+	go install -ldflags="$(LDFLAGS)" -trimpath ./cmd/linespec
 
 # Bump version across all docs and the doc site
 # Usage: make bump-version NEW=2.1.0
