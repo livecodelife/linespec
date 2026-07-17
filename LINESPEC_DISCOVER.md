@@ -33,6 +33,31 @@ linespec provenance discover [--dir path/to/scope] [--lang go|ruby] [--framework
 
 No `linespec provenance discover watch` or incremental mode in v1. The change-driven use case (re-discover on touched files) can be a fast-follow, but the primary value is the initial full scan.
 
+### Framework-agnostic mode
+
+`discover` has two modes. The **framework-driven** mode above runs whenever a
+supported framework is detected (or forced with `--framework`): it recognizes
+routes and protocol boundaries and emits `.linespec` stubs alongside the records.
+
+When no `--framework` is given and none of the built-in framework descriptions
+match the codebase, `discover` falls back to **framework-agnostic mode** instead
+of failing. It prints a notice and proceeds with structure-only analysis:
+
+- **Language detection** by file extension and dependency manifests (respecting
+  `--lang` when given), and **symbol extraction** for the detected language.
+- Files are **grouped by directory**, and one **draft blueprint record** is
+  written per group, with `affected_scope` set to that directory's source files.
+- **No routes, protocol boundaries, or `.linespec` stubs are produced** — there
+  is no framework description to derive them from, so the records capture *what
+  code exists and how it clusters*, not its HTTP surface or cross-service calls.
+
+This makes `discover` useful on any codebase — a library, a CLI, or a service in
+a language/framework LineSpec doesn't yet have a description for — as a
+directory-level provenance skeleton to refine by hand. Adding a framework
+description (see [Shared Framework Descriptions](#shared-framework-descriptions-and-sedum-integration))
+upgrades that same project to the full route- and boundary-aware mode. `--dry-run`
+and `--format table|json` work identically in both modes.
+
 ---
 
 ## Technical Approach

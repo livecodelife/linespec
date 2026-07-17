@@ -58,6 +58,7 @@ affected_scope:
   - README.md
   - PROVENANCE_RECORDS.md
   - LINESPEC.md
+  - LINESPEC_DISCOVER.md
   - docs/templates/index.html
   - scripts/bump-version.sh
 forbidden_scope: []
