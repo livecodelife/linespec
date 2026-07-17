@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.15.0] - 2026-07-17
+
+### Fixed
+
+- **`go install …@latest` now resolves the latest release** ([prov-2026-a4c289d2](./provenance/prov-2026-a4c289d2.yml)) — the Go module path is now `github.com/livecodelife/linespec/v3`, carrying the major-version suffix that Go's semantic-import-versioning requires for a v2+ module. Previously `go install github.com/livecodelife/linespec/cmd/linespec@latest` silently resolved to **v1.5.0** because every v2/v3 tag was ignored for the suffix-less path. **The install command is now:**
+
+  ```bash
+  go install github.com/livecodelife/linespec/v3/cmd/linespec@latest
+  ```
+
+  Anyone importing LineSpec as a library must update their import paths to include `/v3`.
+
+- **`linespec --version` no longer reports `dev`** ([prov-2026-a4c289d2](./provenance/prov-2026-a4c289d2.yml)) — binaries produced by `go install` and `make build` now report their real version: the display version resolves from the `-X main.version` ldflag when set (goreleaser and `make build`, which now injects it from the `VERSION` file) and otherwise falls back to the module version embedded in Go build info. `commit`/`date` are now declared so goreleaser's existing `-X` ldflags are effective.
+
+- **`provenance open` no longer rejects a not-yet-existing declared path** ([prov-2026-b4006eda](./provenance/prov-2026-b4006eda.yml)) — exact, glob, and regex `affected_scope` entries for files that don't exist yet are accepted, so a record can be authored before the file it governs is created (#143).
+
+- **`provenance reconcile` no longer locks LineSpec's own state files** ([prov-2026-26efc162](./provenance/prov-2026-26efc162.yml)) — the whole `.linespec/` directory is exempt from the write-permission projection, so `embeddings.bin` and `hash_manifest.json` stay writable and `provenance index`/`compile` keep working under enforcement.
+
+- **Claude Code provenance plugin loads correctly** ([prov-2026-dda67c29](./provenance/prov-2026-dda67c29.yml)) — `plugin.json` no longer points at the auto-loaded `hooks/hooks.json`, fixing a duplicate-hooks load failure.
+
+### Added
+
+- **Framework-agnostic `provenance discover`** ([prov-2026-a5eb1192](./provenance/prov-2026-a5eb1192.yml), [prov-2026-f61d53bc](./provenance/prov-2026-f61d53bc.yml)) — language detection, symbol extraction, and directory grouping generalize `discover` beyond the initial framework set (#142).
+
+- **Provenance-before-code enforcement via filesystem write permissions** ([prov-2026-8d2f5f2a](./provenance/prov-2026-8d2f5f2a.yml), [prov-2026-dbf6f240](./provenance/prov-2026-dbf6f240.yml)) — the governed tree defaults to non-writable; a source path becomes writable only when covered by an open, allowlist-mode record's `affected_scope`. New `provenance reconcile` re-derives the write-bit projection from current record state, and `provenance add-scope` widens an open record's scope and materializes write access in one atomic step; `provenance next` surfaces the corrective action when a path is blocked. Because the filesystem performs the enforcement, it holds regardless of which agent harness is driving, even when git hooks are absent.
+
+### Changed
+
+- **Provenance skill guidance updated** ([prov-2026-25d0b28d](./provenance/prov-2026-25d0b28d.yml)) — refreshed with `next`, `discover`, and `govern` workflow and CLI-first guidance.
+
 ## [3.14.0] - 2026-07-09
 
 ### Added
