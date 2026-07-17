@@ -148,6 +148,55 @@ func containsGlobMeta(s string) bool {
 	return strings.ContainsAny(s, "*?")
 }
 
+// isRegexScopePattern reports whether p is a "re:"-prefixed scope pattern.
+func isRegexScopePattern(p string) bool {
+	return len(p) > 3 && p[:3] == "re:"
+}
+
+// globMetaChars and regexMetaChars are the characters that make a path
+// segment a pattern rather than a literal directory name, for each pattern
+// kind patternBaseDir understands.
+const (
+	globMetaChars  = "*?"
+	regexMetaChars = `.+*?()[]{}^$|\`
+)
+
+// patternBaseDir returns the deepest literal (metacharacter-free) leading
+// directory of a glob or regex affected_scope pattern, or "" if the pattern
+// has no literal path segment to unlock (e.g. a wildcard in its very first
+// component). This lets Reconcile unlock the parent directory of a
+// declared-but-not-yet-existing file named by a glob/regex pattern, mirroring
+// what it already does for an exact path (prov-2026-b4006eda) — a leading "^"
+// regex anchor is stripped first since it is not itself a directory-name
+// character. Only the path segments before the final one are considered,
+// since the final segment is the filename, not a directory to unlock.
+func patternBaseDir(pattern string) string {
+	isRegex := isRegexScopePattern(pattern)
+	body := pattern
+	metaChars := globMetaChars
+	if isRegex {
+		body = strings.TrimPrefix(pattern[3:], "^")
+		metaChars = regexMetaChars
+	}
+
+	segments := strings.Split(body, "/")
+	if len(segments) < 2 {
+		return ""
+	}
+
+	var literal []string
+	for _, seg := range segments[:len(segments)-1] {
+		if strings.ContainsAny(seg, metaChars) {
+			break
+		}
+		literal = append(literal, seg)
+	}
+	if len(literal) == 0 {
+		return ""
+	}
+	return strings.Join(literal, "/")
+}
+
 // LockFile strips write permission from every permission class of the file at
 // path, leaving other bits (e.g. execute) untouched. Missing paths and
 // directories are a no-op — reconcile only ever locks files it actually finds.
@@ -370,12 +419,25 @@ func Reconcile(repoRoot string, files []string, records []*Record, config *Prove
 
 	// Unlock parent directories of declared-but-not-yet-existing open-scope
 	// paths so they can be created, without altering any sibling file's bits.
+	// A glob or regex pattern has no single file to Lstat, so its literal base
+	// directory (patternBaseDir) is unlocked instead — this is what lets a
+	// glob/regex naming only not-yet-existing files (e.g. "emptydir/*.go" into
+	// an otherwise-empty directory) actually become usable after `open`
+	// accepts it (prov-2026-b4006eda); an exact path keeps unlocking only when
+	// it does not already exist, since an existing match is already handled by
+	// the writable-files loop above.
 	for _, r := range records {
 		if r.Status != StatusOpen || r.ScopeMode() != "allowlist" {
 			continue
 		}
 		for _, p := range r.AffectedScope {
-			if p == "" || containsGlobMeta(p) {
+			if p == "" {
+				continue
+			}
+			if containsGlobMeta(p) || isRegexScopePattern(p) {
+				if dir := patternBaseDir(p); dir != "" {
+					writableDirs[dir] = true
+				}
 				continue
 			}
 			if _, err := os.Lstat(filepath.Join(repoRoot, p)); os.IsNotExist(err) {

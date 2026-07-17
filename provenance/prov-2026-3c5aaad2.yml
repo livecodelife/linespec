@@ -1,0 +1,52 @@
+id: prov-2026-3c5aaad2
+title: Update linter_test.go for open-record not-yet-existing-scope-path relaxation
+status: implemented
+created_at: "2026-07-16"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Companion to bug record prov-2026-b4006eda, which relaxes validateScopePaths
+  (linter.go) so an open record's affected_scope may name a not-yet-existing
+  path (exact, glob, or regex) without blocking `open`. That behavior change
+  is directly unit-tested by three assertions in linter_test.go
+  (TestValidateScopePaths_ExactPath, TestValidateScopePaths_GlobPattern,
+  TestValidateScopePaths_RegexPattern) which encode the pre-fix behavior
+  (missing affected_scope path on an open record = 1 error) as correct. Since
+  linter_test.go is not in prov-2026-b4006eda's declared affected_scope, and
+  `linespec provenance check --staged` itself directs "create a new record
+  that governs this file and tag your commit with it" rather than widening an
+  existing record's scope after the fact, this record exists solely to govern
+  that companion test-assertion update so `make test` passes against the
+  corrected behavior.
+constraints:
+  - |
+    The three "Test 1"/"Test 2" assertions in TestValidateScopePaths_ExactPath,
+    TestValidateScopePaths_GlobPattern, and TestValidateScopePaths_RegexPattern
+    that assert a missing affected_scope path on an open (non-terminal) record
+    produces 1 error MUST be updated to assert 0 errors and 1 hint instead,
+    matching validateScopePaths' corrected severity for that case.
+  - |
+    No other assertion in linter_test.go may change: the terminal-status
+    warning case, the draft-record skip case, the directory-is-invalid case,
+    and the matching-files-pass case must all keep asserting exactly what they
+    asserted before.
+  - |
+    make test must pass.
+affected_scope:
+  - pkg/provenance/linter_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-b4006eda
+sealed_at_sha: 118ac6345a3ded47b86ba55ac6fb4322094dfddd
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - provenance-enforcement
+  - fswrite
+  - linter

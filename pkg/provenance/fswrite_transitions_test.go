@@ -81,24 +81,164 @@ func TestOpen_MaterializesWritePermissionForAffectedScope(t *testing.T) {
 	}
 }
 
-func TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing(t *testing.T) {
-	// validRecord (transition_rollback_test.go) declares pkg/thing.go, which does
-	// not exist anywhere here — the pre-existing linter blocks Open for a missing
-	// scope path on a non-terminal record. Materialize must never run before that
-	// lint gate, so nothing is unlocked as a side effect of the failed attempt.
-	cmds, repo, buf := newTransitionTestRepo(t, false)
+// openableRecordWithScope is like openableRecord but lets the caller supply
+// the affected_scope pattern (exact, glob, or regex), so tests can exercise
+// declaring a not-yet-existing path through every pattern kind.
+func openableRecordWithScope(id, status, scopePattern string) string {
+	return "id: " + id + "\n" +
+		"title: Test record\n" +
+		"status: " + status + "\n" +
+		"created_at: \"2026-01-01\"\n" +
+		"author: test@example.com\n" +
+		"intent: Build the thing.\n" +
+		"constraints:\n  - Must work\n" +
+		"affected_scope:\n  - " + scopePattern + "\n" +
+		"forbidden_scope: []\n" +
+		"type: blueprint\n" +
+		"supersedes: \"\"\n" +
+		"superseded_by: \"\"\n" +
+		"related: []\n" +
+		"sealed_at_sha: \"\"\n" +
+		"associated_specs:\n  - path: spec.md\n" +
+		"associated_traces: []\n" +
+		"monitors: []\n" +
+		"tags: []\n"
+}
+
+// setupOpenableRecordWithScope is setupOpenableRecord's not-yet-existing-path
+// counterpart: it writes id's record (declaring scopePattern, which must not
+// match anything on disk) plus the spec.md proof file, then t.Chdir's into
+// repo. It deliberately does NOT create scopePattern itself — the whole point
+// is that Open must succeed despite the declared path not existing yet.
+func setupOpenableRecordWithScope(t *testing.T, cmds *Commands, repo, id, scopePattern string) {
+	t.Helper()
+	writeAndCommitRecord(t, cmds, repo, id, openableRecordWithScope(id, "draft", scopePattern))
+	writePerm(t, filepath.Join(repo, "spec.md"), 0o644)
+	t.Chdir(repo)
+}
+
+// lockDir makes an already-existing directory non-writable, matching the
+// governed tree's default-locked posture, so a test can observe Open (or a
+// later Reconcile) actually flip the write bit rather than finding it already
+// set by os.MkdirAll's default mode.
+func lockDir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0o555); err != nil {
+		t.Fatalf("Chmod %s: %v", path, err)
+	}
+}
+
+func TestOpen_SucceedsAndUnlocksParentDirWhenExactAffectedScopePathDoesNotExistYet(t *testing.T) {
+	// The headline "declare before you create it" case (prov-2026-b4006eda):
+	// affected_scope names a brand-new exact path, pkg/newfile.go, which does
+	// not exist anywhere. Open must succeed, and — since MaterializeScope
+	// handles exact not-yet-existing paths directly — pkg/ must be unlocked as
+	// part of the same atomic transition, with no need for a separate reconcile.
+	cmds, repo, _ := newTransitionTestRepo(t, false)
 	id := "prov-2026-bbbb0002"
-	writeAndCommitRecord(t, cmds, repo, id, validRecord(id, "draft", "blueprint"))
+	pkgDir := filepath.Join(repo, "pkg")
+	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockDir(t, pkgDir)
+	setupOpenableRecordWithScope(t, cmds, repo, id, "pkg/newfile.go")
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !isWritableOnDisk(t, pkgDir) {
+		t.Errorf("pkg/ should be unlocked so pkg/newfile.go (declared but not yet created) can be created")
+	}
+	if _, err := os.Stat(filepath.Join(pkgDir, "newfile.go")); err == nil {
+		t.Errorf("Open must not create the declared file itself, only unlock its parent directory")
+	}
+}
+
+func TestOpen_SucceedsAndReconcileUnlocksBaseDirWhenGlobAffectedScopeMatchesNoFilesYet(t *testing.T) {
+	// The glob variant of the same not-yet-existing-path case: affected_scope
+	// is "emptydir/*.go", naming a directory that exists but currently holds no
+	// matching file at all (not even an unrelated one — the earlier draft of
+	// this bug wrongly assumed this already worked). Open must succeed, and a
+	// subsequent reconcile pass (fswrite.go Reconcile, driven here via `next`)
+	// must unlock emptydir/ so a matching file can be created — MaterializeScope
+	// itself skips glob patterns by design, so the unlock is reconcile's job.
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0015"
+	emptyDir := filepath.Join(repo, "emptydir")
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockDir(t, emptyDir)
+	setupOpenableRecordWithScope(t, cmds, repo, id, "emptydir/*.go")
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !isWritableOnDisk(t, emptyDir) {
+		t.Errorf("emptydir/ should be unlocked after reconcile so a file matching emptydir/*.go can be created")
+	}
+}
+
+func TestOpen_SucceedsAndReconcileUnlocksBaseDirWhenRegexAffectedScopeMatchesNoFilesYet(t *testing.T) {
+	// The regex variant: affected_scope is "re:newdir/newfile\.go$", naming a
+	// directory that exists but has no file matching the regex anywhere in the
+	// repo. Open must succeed, and a subsequent reconcile pass must unlock
+	// newdir/ for the same reason as the glob case above.
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0016"
+	newDir := filepath.Join(repo, "newdir")
+	if err := os.MkdirAll(newDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockDir(t, newDir)
+	setupOpenableRecordWithScope(t, cmds, repo, id, `re:newdir/newfile\.go$`)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := cmds.Next(NextOptions{}); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !isWritableOnDisk(t, newDir) {
+		t.Errorf("newdir/ should be unlocked after reconcile so a file matching the regex can be created")
+	}
+}
+
+func TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathIsADirectory(t *testing.T) {
+	// A scope path that resolves to a directory is a genuinely invalid
+	// declaration — not a "create this later" declaration — and must keep
+	// blocking Open with no permission side effects, unlike the not-yet-
+	// existing-path cases above that this bug fixes (constraint: the
+	// relaxation must not weaken this "genuinely invalid pattern" guarantee).
+	cmds, repo, buf := newTransitionTestRepo(t, false)
+	id := "prov-2026-bbbb0017"
+	writeAndCommitRecord(t, cmds, repo, id, openableRecordWithScope(id, "draft", "pkg/thing.go"))
+	// pkg/thing.go is declared as a file but actually exists as a directory.
+	// pkg/ itself starts locked, matching the governed tree's default posture.
+	if err := os.MkdirAll(filepath.Join(repo, "pkg", "thing.go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pkgDir := filepath.Join(repo, "pkg")
+	lockDir(t, pkgDir)
+	// t.TempDir's cleanup needs to unlink pkg/thing.go/, which requires pkg/ to
+	// be writable again — restore it regardless of test outcome.
+	t.Cleanup(func() { _ = os.Chmod(pkgDir, 0o755) })
+	writePerm(t, filepath.Join(repo, "spec.md"), 0o644)
 	t.Chdir(repo)
 
 	if err := cmds.Open(OpenOptions{RecordID: id}); err == nil {
-		t.Fatal("expected Open to fail when a declared affected_scope path does not exist on disk")
+		t.Fatal("expected Open to fail when a declared affected_scope path is a directory")
 	}
 	if !strings.Contains(buf.String(), "does not pass validation") {
 		t.Errorf("expected validation-failure message, got:\n%s", buf.String())
 	}
-	if _, err := os.Stat(filepath.Join(repo, "pkg")); err == nil {
-		t.Errorf("a failed Open must not create or unlock the scope path's parent directory")
+	if isWritableOnDisk(t, pkgDir) {
+		t.Errorf("a failed Open must not unlock the scope path's parent directory")
 	}
 }
 
