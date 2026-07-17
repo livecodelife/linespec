@@ -1,6 +1,6 @@
 id: prov-2026-a4c289d2
 title: 'Release v3.15.0: fix go install @latest via /v3 module path, version embedding, docs'
-status: draft
+status: open
 created_at: "2026-07-17"
 author: calebcowen@gmail.com
 intent: |
@@ -48,9 +48,9 @@ constraints:
 affected_scope:
   - go.mod
   - go.sum
-  - cmd/linespec/
-  - pkg/
-  - plugins/
+  - cmd/linespec/**
+  - pkg/**
+  - plugins/**
   - Makefile
   - .goreleaser.yml
   - VERSION
