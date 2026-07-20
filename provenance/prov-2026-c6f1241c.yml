@@ -1,6 +1,6 @@
 id: prov-2026-c6f1241c
 title: 'discover --enrich: configurable model & max_tokens, robust empty-response handling for local LLMs'
-status: draft
+status: open
 created_at: "2026-07-20"
 author: calebcowen@gmail.com
 implements: prov-2026-0071506f
@@ -23,7 +23,7 @@ intent: |
     - Add `--model` and `--max-tokens` flags to `provenance discover`, threaded
       through `runDiscoverEnrich` into `enrich.Input` (existing `Model` field +
       a new `MaxTokens` field).
-    - Raise the default `max_tokens` from 256 to a value that leaves room for
+    - Raise the default `max_tokens` from 256 to 2048, leaving room for
       reasoning models to still emit a completion; an unset/zero flag uses the
       default.
     - Treat an empty completion (HTTP 200, blank `content`) as a per-record
@@ -34,7 +34,7 @@ intent: |
 constraints:
   - MUST add --model and --max-tokens flags to the `provenance discover` command
   - Flags MUST thread through runDiscoverEnrich into enrich.Input (Model + new MaxTokens field)
-  - Default max_tokens MUST be raised above 256 to accommodate reasoning models; an unset/zero value MUST use the default
+  - Default max_tokens MUST be raised from 256 to 2048 to accommodate reasoning models; an unset/zero value MUST use the default
   - An empty LLM completion (HTTP 200 with blank content) MUST surface as a per-record error (✗), never a silent ✓ with empty intent
   - MUST keep phases 0-4 deterministic and network-free; changes confined to the --enrich path
   - MUST NOT change provider auto-detection or endpoint construction behavior
