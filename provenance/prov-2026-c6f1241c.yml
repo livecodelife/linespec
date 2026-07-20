@@ -1,0 +1,62 @@
+id: prov-2026-c6f1241c
+title: 'discover --enrich: configurable model & max_tokens, robust empty-response handling for local LLMs'
+status: draft
+created_at: "2026-07-20"
+author: calebcowen@gmail.com
+implements: prov-2026-0071506f
+intent: |
+  Phase 5 (`--enrich`) hard-codes the LLM request: the model is always the
+  provider default (`gpt-4o-mini` / `claude-haiku-4-5-...`) and `max_tokens` is
+  fixed at 256, with no CLI surface to change either. Against a local
+  OpenAI-compatible server this breaks intent generation two ways:
+
+    1. Reasoning models spend the 256-token budget on hidden reasoning and
+       return `finish_reason: "length"` with an EMPTY `content` field.
+    2. There is no way to name the locally-loaded model, so requests go out as
+       `gpt-4o-mini`, which many local servers do not recognize.
+
+  Worse, an HTTP-200 response with empty `content` is not treated as an error:
+  `parseOpenAIResponse` returns "" with no error, so `updateRecordIntent` writes
+  an empty intent and the progress line prints a green ✓. The failure is silent.
+
+  This blueprint makes the enrich LLM call configurable and honest:
+    - Add `--model` and `--max-tokens` flags to `provenance discover`, threaded
+      through `runDiscoverEnrich` into `enrich.Input` (existing `Model` field +
+      a new `MaxTokens` field).
+    - Raise the default `max_tokens` from 256 to a value that leaves room for
+      reasoning models to still emit a completion; an unset/zero flag uses the
+      default.
+    - Treat an empty completion (HTTP 200, blank `content`) as a per-record
+      error so it renders as ✗ with a clear message instead of a silent ✓.
+
+  Phases 0-4 remain deterministic and network-free; this only touches the
+  opt-in, already-non-deterministic enrich path.
+constraints:
+  - MUST add --model and --max-tokens flags to the `provenance discover` command
+  - Flags MUST thread through runDiscoverEnrich into enrich.Input (Model + new MaxTokens field)
+  - Default max_tokens MUST be raised above 256 to accommodate reasoning models; an unset/zero value MUST use the default
+  - An empty LLM completion (HTTP 200 with blank content) MUST surface as a per-record error (✗), never a silent ✓ with empty intent
+  - MUST keep phases 0-4 deterministic and network-free; changes confined to the --enrich path
+  - MUST NOT change provider auto-detection or endpoint construction behavior
+affected_scope:
+  - cmd/linespec/cli.go
+  - cmd/linespec/main_stable.go
+  - pkg/discover/enrich/**
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "sh -c 'go test ./pkg/discover/enrich/...'"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - enrich
+  - llm
+  - local-llm
+  - bugfix
