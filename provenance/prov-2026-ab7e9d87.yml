@@ -1,6 +1,6 @@
 id: prov-2026-ab7e9d87
 title: Release v3.16.0
-status: open
+status: implemented
 created_at: "2026-07-20"
 author: calebcowen@gmail.com
 intent: |
@@ -46,7 +46,7 @@ superseded_by: ""
 related:
   - prov-2026-c6f1241c
   - prov-2026-d0d0cfeb
-sealed_at_sha: ""
+sealed_at_sha: 145e2de272e6853586351061244885b36088e883
 associated_specs:
   - type: code
     path: CHANGELOG.md
