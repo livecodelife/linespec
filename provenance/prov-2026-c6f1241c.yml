@@ -1,6 +1,6 @@
 id: prov-2026-c6f1241c
 title: 'discover --enrich: configurable model & max_tokens, robust empty-response handling for local LLMs'
-status: open
+status: implemented
 created_at: "2026-07-20"
 author: calebcowen@gmail.com
 implements: prov-2026-0071506f
@@ -47,7 +47,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e19e5ddc7e2ff7167002951af845fd9d8beb23c9
 associated_specs:
   - path: pkg/discover/enrich/enrich_test.go
     type: go_test
