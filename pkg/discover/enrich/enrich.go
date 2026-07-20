@@ -15,14 +15,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultMaxTokens is used when Input.MaxTokens is unset or zero. It leaves
+// headroom for reasoning models that spend part of the budget on hidden
+// reasoning tokens before emitting a visible completion; the previous default
+// of 256 was too tight and produced empty completions against such models.
+const DefaultMaxTokens = 2048
+
 // Input holds everything needed to run git history enrichment on a set of draft records.
 type Input struct {
-	RepoDir     string   // root of the git repository (working dir for git log)
-	RecordFiles []string // paths to draft blueprint records to enrich
-	APIKey      string   // LLM API key; falls back to OPENAI_API_KEY or ANTHROPIC_API_KEY env vars
-	Provider    string   // "openai" or "anthropic"; auto-detected from env vars if empty
-	Model       string   // optional model override; sensible defaults per provider
-	LLMBaseURL  string   // optional base URL for local LLMs (e.g., http://localhost:1234); provider path appended automatically
+	RepoDir     string           // root of the git repository (working dir for git log)
+	RecordFiles []string         // paths to draft blueprint records to enrich
+	APIKey      string           // LLM API key; falls back to OPENAI_API_KEY or ANTHROPIC_API_KEY env vars
+	Provider    string           // "openai" or "anthropic"; auto-detected from env vars if empty
+	Model       string           // optional model override; sensible defaults per provider
+	MaxTokens   int              // optional max_tokens override; unset/zero uses DefaultMaxTokens
+	LLMBaseURL  string           // optional base URL for local LLMs (e.g., http://localhost:1234); provider path appended automatically
 	Progress    func(msg string) // optional; called at each stage per record for progress reporting
 }
 
@@ -49,6 +56,10 @@ func EnrichWithBaseURL(in Input, baseURL string) ([]Result, error) {
 	progress := in.Progress
 	if progress == nil {
 		progress = func(string) {}
+	}
+	maxTokens := in.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = DefaultMaxTokens
 	}
 
 	fileLoader := provenance.NewLoader("", nil)
@@ -90,7 +101,7 @@ func EnrichWithBaseURL(in Input, baseURL string) ([]Result, error) {
 		}
 
 		progress(fmt.Sprintf("  → %s: calling %s (%d commit messages)...", id, provider, len(messages)))
-		intent, err := synthesizeIntent(provider, in.Model, apiKey, baseURL, messages, record.AffectedScope)
+		intent, err := synthesizeIntent(provider, in.Model, apiKey, baseURL, maxTokens, messages, record.AffectedScope)
 		if err != nil {
 			res.Err = fmt.Errorf("LLM synthesis: %v", err)
 			progress(fmt.Sprintf("  ✗ %s: %v", id, res.Err))
@@ -190,13 +201,13 @@ func resolveProvider(provider, apiKey string) (string, string) {
 
 // synthesizeIntent calls the configured LLM with a focused prompt and returns
 // a 1-2 sentence intent summary.
-func synthesizeIntent(provider, model, apiKey, baseURL string, messages, files []string) (string, error) {
+func synthesizeIntent(provider, model, apiKey, baseURL string, maxTokens int, messages, files []string) (string, error) {
 	prompt := buildPrompt(messages, files)
 	switch provider {
 	case "openai":
-		return callOpenAI(apiKey, model, baseURL, prompt)
+		return callOpenAI(apiKey, model, baseURL, maxTokens, prompt)
 	case "anthropic":
-		return callAnthropic(apiKey, model, baseURL, prompt)
+		return callAnthropic(apiKey, model, baseURL, maxTokens, prompt)
 	default:
 		return "", fmt.Errorf("unsupported LLM provider: %q", provider)
 	}
@@ -221,9 +232,9 @@ func buildPrompt(messages, files []string) string {
 // --- OpenAI ---
 
 type openAIChatRequest struct {
-	Model     string         `json:"model"`
+	Model     string          `json:"model"`
 	Messages  []openAIChatMsg `json:"messages"`
-	MaxTokens int            `json:"max_tokens,omitempty"`
+	MaxTokens int             `json:"max_tokens,omitempty"`
 }
 
 type openAIChatMsg struct {
@@ -233,11 +244,12 @@ type openAIChatMsg struct {
 
 type openAIChatResponse struct {
 	Choices []struct {
-		Message openAIChatMsg `json:"message"`
+		Message      openAIChatMsg `json:"message"`
+		FinishReason string        `json:"finish_reason"`
 	} `json:"choices"`
 }
 
-func callOpenAI(apiKey, model, baseURL, prompt string) (string, error) {
+func callOpenAI(apiKey, model, baseURL string, maxTokens int, prompt string) (string, error) {
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
@@ -248,7 +260,7 @@ func callOpenAI(apiKey, model, baseURL, prompt string) (string, error) {
 	reqBody := openAIChatRequest{
 		Model:     model,
 		Messages:  []openAIChatMsg{{Role: "user", Content: prompt}},
-		MaxTokens: 256,
+		MaxTokens: maxTokens,
 	}
 	return doLLMCall(endpoint, apiKey, nil, reqBody, parseOpenAIResponse)
 }
@@ -261,7 +273,15 @@ func parseOpenAIResponse(body []byte) (string, error) {
 	if len(resp.Choices) == 0 {
 		return "", fmt.Errorf("no choices in OpenAI response")
 	}
-	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
+	content := strings.TrimSpace(resp.Choices[0].Message.Content)
+	if content == "" {
+		reason := resp.Choices[0].FinishReason
+		if reason == "" {
+			reason = "unknown"
+		}
+		return "", fmt.Errorf("empty completion from LLM (finish_reason=%s); try raising --max-tokens", reason)
+	}
+	return content, nil
 }
 
 // --- Anthropic ---
@@ -281,9 +301,10 @@ type anthropicResponse struct {
 	Content []struct {
 		Text string `json:"text"`
 	} `json:"content"`
+	StopReason string `json:"stop_reason"`
 }
 
-func callAnthropic(apiKey, model, baseURL, prompt string) (string, error) {
+func callAnthropic(apiKey, model, baseURL string, maxTokens int, prompt string) (string, error) {
 	if model == "" {
 		model = "claude-haiku-4-5-20251001"
 	}
@@ -293,7 +314,7 @@ func callAnthropic(apiKey, model, baseURL, prompt string) (string, error) {
 	endpoint := strings.TrimRight(baseURL, "/") + "/v1/messages"
 	reqBody := anthropicRequest{
 		Model:     model,
-		MaxTokens: 256,
+		MaxTokens: maxTokens,
 		Messages:  []anthropicMsg{{Role: "user", Content: prompt}},
 	}
 	return doLLMCall(endpoint, apiKey, map[string]string{"anthropic-version": "2023-06-01"}, reqBody, parseAnthropicResponse)
@@ -304,10 +325,19 @@ func parseAnthropicResponse(body []byte) (string, error) {
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return "", fmt.Errorf("parse Anthropic response: %w", err)
 	}
-	if len(resp.Content) == 0 {
-		return "", fmt.Errorf("no content in Anthropic response")
+	var text strings.Builder
+	for _, c := range resp.Content {
+		text.WriteString(c.Text)
 	}
-	return strings.TrimSpace(resp.Content[0].Text), nil
+	content := strings.TrimSpace(text.String())
+	if content == "" {
+		reason := resp.StopReason
+		if reason == "" {
+			reason = "unknown"
+		}
+		return "", fmt.Errorf("empty completion from LLM (stop_reason=%s); try raising --max-tokens", reason)
+	}
+	return content, nil
 }
 
 // --- shared HTTP helper ---

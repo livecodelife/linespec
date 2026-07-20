@@ -24,12 +24,6 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	"github.com/livecodelife/linespec/v3/pkg/config"
-	"github.com/livecodelife/linespec/v3/pkg/manifest"
-	"github.com/livecodelife/linespec/v3/pkg/dsl"
-	"github.com/livecodelife/linespec/v3/pkg/initcmd"
-	"github.com/livecodelife/linespec/v3/pkg/interpolate"
-	"github.com/livecodelife/linespec/v3/pkg/logger"
-	"github.com/livecodelife/linespec/v3/pkg/provenance"
 	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
 	"github.com/livecodelife/linespec/v3/pkg/discover/enrich"
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
@@ -39,6 +33,12 @@ import (
 	discoverroutes "github.com/livecodelife/linespec/v3/pkg/discover/routes"
 	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
 	"github.com/livecodelife/linespec/v3/pkg/discover/symbols"
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/initcmd"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/manifest"
+	"github.com/livecodelife/linespec/v3/pkg/provenance"
 	grpcproxy "github.com/livecodelife/linespec/v3/pkg/proxy/grpc"
 	httpproxy "github.com/livecodelife/linespec/v3/pkg/proxy/http"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/kafka"
@@ -1015,6 +1015,8 @@ type discoverOptions struct {
 	Framework  string
 	Enrich     bool
 	LLMBaseURL string
+	Model      string
+	MaxTokens  int
 	DryRun     bool
 	Format     string
 	ConfigFile string
@@ -1158,7 +1160,7 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 		if out, err := exec.Command("git", "-C", scanDir, "rev-parse", "--show-toplevel").Output(); err == nil {
 			enrichRoot = strings.TrimSpace(string(out))
 		}
-		runDiscoverEnrich(recordResults, enrichRoot, opts.LLMBaseURL)
+		runDiscoverEnrich(recordResults, enrichRoot, opts.LLMBaseURL, opts.Model, opts.MaxTokens)
 	}
 }
 
@@ -1256,7 +1258,7 @@ func runDiscoverAgnostic(opts discoverOptions, cfg *provenance.ProvenanceConfig,
 		for i, r := range results {
 			enrichResults[i] = discoverrecords.Result{FilePath: r.FilePath}
 		}
-		runDiscoverEnrich(enrichResults, enrichRoot, opts.LLMBaseURL)
+		runDiscoverEnrich(enrichResults, enrichRoot, opts.LLMBaseURL, opts.Model, opts.MaxTokens)
 	}
 }
 
@@ -1475,7 +1477,7 @@ func printDiscoverAgnosticDryRun(scanDir string, results []agnosticResult, sum a
 
 // runDiscoverEnrich runs Phase 5: git history analysis + LLM intent synthesis.
 // Errors are non-fatal: each failure is logged as a warning and the pipeline continues.
-func runDiscoverEnrich(results []discoverrecords.Result, repoRoot, llmBaseURL string) {
+func runDiscoverEnrich(results []discoverrecords.Result, repoRoot, llmBaseURL, model string, maxTokens int) {
 	recordFiles := make([]string, 0, len(results))
 	for _, r := range results {
 		recordFiles = append(recordFiles, r.FilePath)
@@ -1486,6 +1488,8 @@ func runDiscoverEnrich(results []discoverrecords.Result, repoRoot, llmBaseURL st
 		RepoDir:     repoRoot,
 		RecordFiles: recordFiles,
 		LLMBaseURL:  llmBaseURL,
+		Model:       model,
+		MaxTokens:   maxTokens,
 		Progress:    func(msg string) { fmt.Fprintln(os.Stdout, msg) },
 	})
 	if err != nil {

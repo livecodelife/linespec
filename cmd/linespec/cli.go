@@ -883,6 +883,8 @@ func newProvDiscoverCmd() *cobra.Command {
 	f.StringVar(&opts.Framework, "framework", "", "Framework override (auto-detected if omitted)")
 	f.BoolVar(&opts.Enrich, "enrich", false, "Populate intent fields from git history (Phase 5)")
 	f.StringVar(&opts.LLMBaseURL, "llm-url", "", "Base URL for local LLM server (provider path appended automatically)")
+	f.StringVar(&opts.Model, "model", "", "Model name for --enrich LLM calls (defaults to the provider's default model; needed to name a locally-loaded model)")
+	f.IntVar(&opts.MaxTokens, "max-tokens", 0, "Max tokens for --enrich LLM completions (default: 2048; 0 uses the default)")
 	f.BoolVar(&opts.DryRun, "dry-run", false, "Print what would be generated without writing files")
 	f.StringVar(&opts.Format, "format", "table", "Output format for --dry-run (table|json)")
 	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")

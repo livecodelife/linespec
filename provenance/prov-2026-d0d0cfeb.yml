@@ -1,0 +1,42 @@
+id: prov-2026-d0d0cfeb
+title: Thread --model/--max-tokens through enrich.Input; treat empty completions as errors
+status: implemented
+created_at: "2026-07-20"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+implements: prov-2026-c6f1241c
+intent: |
+  Added `Model`/`MaxTokens` fields to enrich.Input (Model already existed;
+  MaxTokens is new), a `DefaultMaxTokens = 2048` constant used whenever
+  MaxTokens is unset/zero, and `--model`/`--max-tokens` flags on
+  `provenance discover` that thread through runDiscoverEnrich into
+  enrich.Input. Also changed parseOpenAIResponse/parseAnthropicResponse to
+  treat a trimmed-empty completion as an error (including finish_reason /
+  stop_reason in the message) instead of returning "" with a nil error, so
+  updateRecordIntent is never called with an empty string and the CLI
+  progress line renders ✗ instead of a silent ✓.
+constraints:
+  - Kept the change confined to pkg/discover/enrich and the discover CLI
+    surface (cmd/linespec/cli.go, cmd/linespec/main_stable.go)
+  - Did not touch provider auto-detection (resolveProvider) or endpoint
+    construction (baseURL handling)
+affected_scope:
+  - cmd/linespec/cli.go
+  - cmd/linespec/main_stable.go
+  - pkg/discover/enrich/enrich.go
+  - pkg/discover/enrich/enrich_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 70113d336e3bf18a118f890278b24cab0083ce7e
+associated_specs:
+  - path: pkg/discover/enrich/enrich_test.go
+    type: go_test
+    run_command: "make test # {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - enrich
+  - llm
