@@ -1,0 +1,57 @@
+id: prov-2026-ab7e9d87
+title: Release v3.16.0
+status: draft
+created_at: "2026-07-20"
+author: calebcowen@gmail.com
+intent: |
+  Version bump and release artifacts for v3.16.0. Minor release bundling the
+  work accumulated on main since v3.15.0. The single functional change adds new
+  backwards-compatible CLI flags plus a bugfix, so a minor bump is correct.
+
+  Highlights:
+    - Added: `--model` and `--max-tokens` flags on `provenance discover`,
+      threaded through `runDiscoverEnrich` into `enrich.Input` (existing `Model`
+      field plus a new `MaxTokens` field). Lets `discover --enrich` name a
+      locally-loaded model and give reasoning models enough token budget to
+      emit a completion (prov-2026-c6f1241c, prov-2026-d0d0cfeb).
+    - Changed: the default `enrich` `max_tokens` is raised from 256 to 2048 so
+      reasoning models leave room for a completion after hidden reasoning; an
+      unset/zero flag uses the default (prov-2026-c6f1241c).
+    - Fixed: an empty LLM completion (HTTP 200 with blank `content`) is now
+      treated as a per-record error and rendered as ✗ with a clear message
+      instead of silently writing an empty intent and printing a green ✓
+      (prov-2026-c6f1241c, prov-2026-d0d0cfeb).
+constraints:
+  - |
+    Promote [Unreleased] in CHANGELOG.md to [3.16.0] - 2026-07-20; add a fresh
+    empty [Unreleased] section above it. The [Unreleased] section is currently
+    empty, so the changelog for this release is reconstructed from the records
+    completed since v3.15.0 (prov-2026-c6f1241c and its imprint).
+  - ./scripts/bump-version.sh 3.16.0 handles VERSION and the doc references
+    (README.md, LINESPEC.md, PROVENANCE_RECORDS.md).
+  - Run ./linespec provenance compile to rebuild the hash manifest.
+  - Docs/*.html and llms*.txt are gitignored build artifacts and are NOT part of
+    the release commit; the Pages workflow rebuilds them on push to main.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c6f1241c
+  - prov-2026-d0d0cfeb
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - release
