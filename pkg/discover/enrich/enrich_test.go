@@ -357,6 +357,178 @@ func TestEnrich_CommitMessagesDeduplicatedAcrossFiles(t *testing.T) {
 	}
 }
 
+func TestEnrich_DefaultMaxTokensIs2048(t *testing.T) {
+	var gotMaxTokens float64
+	var gotModel string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		gotMaxTokens, _ = body["max_tokens"].(float64)
+		gotModel, _ = body["model"].(string)
+		resp := map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"role": "assistant", "content": "An intent."}, "finish_reason": "stop"},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	repoDir := initRepo(t)
+	writeAndCommit(t, repoDir, "handlers/users.go", "add user handler")
+	recordFile := writeMinimalRecord(t, repoDir, []string{"handlers/users.go"})
+
+	results, err := enrich.EnrichWithBaseURL(enrich.Input{
+		RepoDir:     repoDir,
+		RecordFiles: []string{recordFile},
+		Provider:    "openai",
+		APIKey:      "test-key",
+	}, srv.URL)
+	if err != nil {
+		t.Fatalf("EnrichWithBaseURL: %v", err)
+	}
+	if results[0].Err != nil {
+		t.Fatalf("unexpected error: %v", results[0].Err)
+	}
+	if gotMaxTokens != 2048 {
+		t.Errorf("max_tokens = %v; want default 2048", gotMaxTokens)
+	}
+	if gotModel != "gpt-4o-mini" {
+		t.Errorf("model = %q; want default gpt-4o-mini", gotModel)
+	}
+}
+
+func TestEnrich_CustomModelAndMaxTokensThreadThrough(t *testing.T) {
+	var gotMaxTokens float64
+	var gotModel string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		gotMaxTokens, _ = body["max_tokens"].(float64)
+		gotModel, _ = body["model"].(string)
+		resp := map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"role": "assistant", "content": "An intent."}, "finish_reason": "stop"},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	repoDir := initRepo(t)
+	writeAndCommit(t, repoDir, "handlers/users.go", "add user handler")
+	recordFile := writeMinimalRecord(t, repoDir, []string{"handlers/users.go"})
+
+	results, err := enrich.EnrichWithBaseURL(enrich.Input{
+		RepoDir:     repoDir,
+		RecordFiles: []string{recordFile},
+		Provider:    "openai",
+		APIKey:      "test-key",
+		Model:       "local-reasoning-model",
+		MaxTokens:   8192,
+	}, srv.URL)
+	if err != nil {
+		t.Fatalf("EnrichWithBaseURL: %v", err)
+	}
+	if results[0].Err != nil {
+		t.Fatalf("unexpected error: %v", results[0].Err)
+	}
+	if gotMaxTokens != 8192 {
+		t.Errorf("max_tokens = %v; want 8192", gotMaxTokens)
+	}
+	if gotModel != "local-reasoning-model" {
+		t.Errorf("model = %q; want local-reasoning-model", gotModel)
+	}
+}
+
+func TestEnrich_EmptyOpenAICompletionIsPerRecordError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulates a reasoning model that exhausts max_tokens on hidden
+		// reasoning and returns an HTTP-200 with blank content.
+		resp := map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"role": "assistant", "content": ""}, "finish_reason": "length"},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	repoDir := initRepo(t)
+	writeAndCommit(t, repoDir, "handlers/users.go", "add user handler")
+	recordFile := writeMinimalRecord(t, repoDir, []string{"handlers/users.go"})
+
+	results, err := enrich.EnrichWithBaseURL(enrich.Input{
+		RepoDir:     repoDir,
+		RecordFiles: []string{recordFile},
+		Provider:    "openai",
+		APIKey:      "test-key",
+	}, srv.URL)
+	if err != nil {
+		t.Fatalf("EnrichWithBaseURL: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Err == nil {
+		t.Fatal("expected per-record error for empty OpenAI completion, got nil (silent success)")
+	}
+	if results[0].Skipped {
+		t.Error("empty completion should be an error, not Skipped")
+	}
+
+	record, err := provenance.NewLoader("", nil).LoadFile(recordFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Intent != "" {
+		t.Errorf("intent should remain empty after empty-completion error, got %q", record.Intent)
+	}
+}
+
+func TestEnrich_EmptyAnthropicCompletionIsPerRecordError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"content":     []map[string]any{{"type": "text", "text": ""}},
+			"stop_reason": "max_tokens",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	repoDir := initRepo(t)
+	writeAndCommit(t, repoDir, "handlers/users.go", "add user handler")
+	recordFile := writeMinimalRecord(t, repoDir, []string{"handlers/users.go"})
+
+	results, err := enrich.EnrichWithBaseURL(enrich.Input{
+		RepoDir:     repoDir,
+		RecordFiles: []string{recordFile},
+		Provider:    "anthropic",
+		APIKey:      "test-key",
+	}, srv.URL)
+	if err != nil {
+		t.Fatalf("EnrichWithBaseURL: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Err == nil {
+		t.Fatal("expected per-record error for empty Anthropic completion, got nil (silent success)")
+	}
+
+	record, err := provenance.NewLoader("", nil).LoadFile(recordFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Intent != "" {
+		t.Errorf("intent should remain empty after empty-completion error, got %q", record.Intent)
+	}
+}
+
 func TestEnrich_MissingRecordFileProducesPerResultError(t *testing.T) {
 	results, err := enrich.Enrich(enrich.Input{
 		RecordFiles: []string{"/nonexistent/record.yml"},

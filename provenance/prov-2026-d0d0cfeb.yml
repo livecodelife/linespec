@@ -23,6 +23,7 @@ affected_scope:
   - cmd/linespec/cli.go
   - cmd/linespec/main_stable.go
   - pkg/discover/enrich/enrich.go
+  - pkg/discover/enrich/enrich_test.go
 forbidden_scope: []
 type: imprint
 supersedes: ""
