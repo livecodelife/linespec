@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.16.0] - 2026-07-20
+
+### Added
+
+- **`discover --enrich` configurable model & token budget** ([prov-2026-c6f1241c](./provenance/prov-2026-c6f1241c.yml), [prov-2026-d0d0cfeb](./provenance/prov-2026-d0d0cfeb.yml)) — new `--model` and `--max-tokens` flags on `provenance discover`, threaded through `runDiscoverEnrich` into the enrich LLM call (existing `Model` field plus a new `MaxTokens` field). Lets `discover --enrich` name a locally-loaded model and give reasoning models enough token budget to emit a completion (#145).
+
+### Changed
+
+- **Default enrich `max_tokens` raised 256 → 2048** ([prov-2026-c6f1241c](./provenance/prov-2026-c6f1241c.yml)) — reasoning models spend part of their budget on hidden reasoning, so the old 256-token ceiling left no room for a completion; an unset/zero `--max-tokens` flag uses the new default.
+
+### Fixed
+
+- **Silent empty-intent on local LLMs** ([prov-2026-c6f1241c](./provenance/prov-2026-c6f1241c.yml), [prov-2026-d0d0cfeb](./provenance/prov-2026-d0d0cfeb.yml)) — an HTTP-200 response with blank `content` (including `finish_reason`/`stop_reason` in the message) is now treated as a per-record error and rendered as ✗ with a clear message, instead of writing an empty intent and printing a green ✓.
+
 ## [3.15.0] - 2026-07-17
 
 ### Fixed
