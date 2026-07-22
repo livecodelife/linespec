@@ -125,3 +125,76 @@ func TestRunDiscover_FrameworkDetected_NoDuplicateForRouteDirectory(t *testing.T
 		t.Fatalf("expected exactly 1 blueprint covering handlers/router.go, got %d", handlersBlueprints)
 	}
 }
+
+// writeChiProjectWithMixedHandlersDir is writeChiProject plus a non-route file
+// (helper.go) living in the same directory as the route file (router.go) —
+// the common Chi handler-package shape called out in review of
+// prov-2026-3486daec: a directory containing both a route file and a
+// non-route file.
+func writeChiProjectWithMixedHandlersDir(t *testing.T) string {
+	t.Helper()
+	dir := writeChiProject(t)
+
+	helper := filepath.Join(dir, "handlers", "helper.go")
+	content := "package handlers\n\nfunc formatUser(id int) string { return \"\" }\n"
+	if err := os.WriteFile(helper, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestRunDiscover_FrameworkDetected_CoversNonRouteFileInRouteDirectory
+// reproduces the review gap in prov-2026-3486daec: a non-route file sharing a
+// directory with a route file (helpers.go next to router.go) must still get
+// blueprint coverage — merged into the existing route group's blueprint —
+// rather than being silently dropped by both the route assembler (it has no
+// route) and the supplemental agnostic pass (its directory is already
+// route-covered).
+func TestRunDiscover_FrameworkDetected_CoversNonRouteFileInRouteDirectory(t *testing.T) {
+	dir := writeChiProjectWithMixedHandlersDir(t)
+
+	cfg := &provenance.ProvenanceConfig{Dir: "provenance", Enforcement: "warn"}
+	opts := discoverOptions{Dir: dir, Format: "table"}
+
+	runDiscover(opts, cfg, dir)
+
+	provDir := filepath.Join(dir, "provenance")
+	entries, err := os.ReadDir(provDir)
+	if err != nil {
+		t.Fatalf("read provenance dir: %v", err)
+	}
+
+	total := 0
+	handlersBlueprints := 0
+	sawHelper := false
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		total++
+		data, err := os.ReadFile(filepath.Join(provDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "handlers/router.go") {
+			handlersBlueprints++
+			if strings.Contains(string(data), "handlers/helper.go") {
+				sawHelper = true
+			}
+		} else if strings.Contains(string(data), "handlers/helper.go") {
+			t.Fatalf("handlers/helper.go got its own blueprint (%s) instead of being merged into the router.go blueprint", e.Name())
+		}
+	}
+
+	// Same 4 blueprints as the base fixture — helper.go must not create a 5th.
+	const want = 4
+	if total != want {
+		t.Fatalf("expected %d blueprint records, got %d in %s", want, total, provDir)
+	}
+	if handlersBlueprints != 1 {
+		t.Fatalf("expected exactly 1 blueprint covering handlers/router.go, got %d", handlersBlueprints)
+	}
+	if !sawHelper {
+		t.Fatalf("expected handlers/helper.go to be merged into the handlers/router.go blueprint's affected_scope, but it was not found there")
+	}
+}

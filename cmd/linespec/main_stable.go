@@ -1144,7 +1144,7 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 	if opts.DryRun {
 		recordResults, sum := discoverrecords.Plan(recordInput, existingIDs)
 
-		suppResults, suppSum, serr := runSupplementalAgnostic(ctx, scanDir, groups, provenanceDir, author, idsAfter(existingIDs, recordResults), true)
+		suppResults, suppSum, serr := runSupplementalAgnostic(ctx, scanDir, groups, recordResults, provenanceDir, author, idsAfter(existingIDs, recordResults), true)
 		if serr != nil {
 			logger.Error("Supplemental framework-agnostic scan failed: %v", serr)
 			os.Exit(1)
@@ -1168,7 +1168,7 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 	// gets no blueprint from it, which is the bug this pass fixes — run the same
 	// framework-agnostic scan the no-framework-detected path uses, but skip any
 	// directory already covered by a route group so blueprints are never doubled up.
-	suppResults, suppSum, err := runSupplementalAgnostic(ctx, scanDir, groups, provenanceDir, author, idsAfter(existingIDs, recordResults), false)
+	suppResults, suppSum, err := runSupplementalAgnostic(ctx, scanDir, groups, recordResults, provenanceDir, author, idsAfter(existingIDs, recordResults), false)
 	if err != nil {
 		logger.Error("Supplemental framework-agnostic scan failed: %v", err)
 		os.Exit(1)
@@ -1202,7 +1202,11 @@ func idsAfter(existingIDs []string, results []discoverrecords.Result) []string {
 // language detection + directory grouping) restricted to directories that contain
 // no framework-discovered route, so files invisible to the route assembler —
 // services, repositories, models, utilities — still get blueprint coverage.
-func runSupplementalAgnostic(ctx context.Context, scanDir string, groups []discoverroutes.Group, provenanceDir, author string, existingIDs []string, dryRun bool) ([]agnosticResult, agnosticSummary, error) {
+// routeResults must be the discoverrecords results for groups, in the same order,
+// so that non-route files sharing a directory with a route file (e.g. helper.go
+// next to router.go) can be merged into that route group's already-written
+// blueprint instead of being silently dropped.
+func runSupplementalAgnostic(ctx context.Context, scanDir string, groups []discoverroutes.Group, routeResults []discoverrecords.Result, provenanceDir, author string, existingIDs []string, dryRun bool) ([]agnosticResult, agnosticSummary, error) {
 	files, unclassified, err := scanAgnosticFiles(ctx, scanDir)
 	if err != nil {
 		return nil, agnosticSummary{}, err
@@ -1216,7 +1220,15 @@ func runSupplementalAgnostic(ctx context.Context, scanDir string, groups []disco
 			}
 		}
 	}
-	uncovered := graph.FilterUncovered(files, graph.CoveredDirs(routeFiles))
+	covered := graph.CoveredDirs(routeFiles)
+	uncovered := graph.FilterUncovered(files, covered)
+
+	if !dryRun {
+		extras := graph.CoveredDirExtras(files, covered, routeFiles)
+		if err := mergeExtrasIntoRouteGroups(extras, groups, routeResults, provenanceDir); err != nil {
+			return nil, agnosticSummary{}, err
+		}
+	}
 
 	var grouper graph.Grouper = graph.DirectoryGrouper{}
 	dirGroups, err := grouper.Group(uncovered)
@@ -1238,6 +1250,75 @@ func runSupplementalAgnostic(ctx context.Context, scanDir string, groups []disco
 	}
 	sum.RecordsCreated = len(results)
 	return results, sum, nil
+}
+
+// mergeExtrasIntoRouteGroups merges each extra file's path into the
+// affected_scope of the already-written blueprint record for the route group
+// that owns its directory. A directory's owning group is identified by the
+// directory of its route files; the corresponding entry in routeResults (same
+// index as in groups) points at the record file on disk to update.
+func mergeExtrasIntoRouteGroups(extras []graph.File, groups []discoverroutes.Group, routeResults []discoverrecords.Result, provenanceDir string) error {
+	if len(extras) == 0 {
+		return nil
+	}
+
+	dirToFilePath := make(map[string]string)
+	for i, g := range groups {
+		if i >= len(routeResults) {
+			break
+		}
+		for _, r := range g.Routes {
+			if r.Source.File == "" {
+				continue
+			}
+			dir := filepath.Dir(r.Source.File)
+			if _, ok := dirToFilePath[dir]; !ok {
+				dirToFilePath[dir] = routeResults[i].FilePath
+			}
+		}
+	}
+
+	extraPaths := make(map[string][]string)
+	for _, f := range extras {
+		recordPath, ok := dirToFilePath[filepath.Dir(f.Path)]
+		if !ok {
+			continue
+		}
+		extraPaths[recordPath] = append(extraPaths[recordPath], f.Path)
+	}
+
+	loader := provenance.NewLoader(provenanceDir, nil)
+	for recordPath, paths := range extraPaths {
+		record, err := loader.LoadFile(recordPath)
+		if err != nil {
+			return fmt.Errorf("load record %s: %w", recordPath, err)
+		}
+		seen := make(map[string]bool, len(record.AffectedScope))
+		for _, p := range record.AffectedScope {
+			seen[p] = true
+		}
+		for _, p := range paths {
+			if !seen[p] {
+				record.AffectedScope = append(record.AffectedScope, p)
+				seen[p] = true
+			}
+		}
+		sort.Strings(record.AffectedScope)
+
+		// SaveRecord preserves formatting for an already-existing file by
+		// patching status/sealed_at_sha/superseded_by in place; it does not
+		// rewrite affected_scope for a file that already exists. Since this
+		// record was written moments ago by this same discover run (nothing
+		// user-authored to preserve yet), remove it first so SaveRecord takes
+		// its fresh-marshal path and the merged scope actually lands on disk.
+		if err := os.Remove(recordPath); err != nil {
+			return fmt.Errorf("remove record %s for scope merge: %w", recordPath, err)
+		}
+		if err := loader.SaveRecord(record); err != nil {
+			return fmt.Errorf("save record %s: %w", recordPath, err)
+		}
+	}
+	return nil
 }
 
 // agnosticResultsToDiscoverResults adapts framework-agnostic supplemental results
