@@ -26,7 +26,11 @@ constraints:
   - "Chi (grouping_strategy:package): non-route directories AND over-collapsed route groups both undercount."
   - "Rails (grouping_strategy:controller): only config/routes.rb is read; models, jobs, mailers, services, concerns produce no blueprints."
   - "Sinatra (grouping_strategy:file): per-file route grouping is least severe but helpers, models, and lib/ dirs are still skipped."
-affected_scope: []
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/discover_test.go
+  - pkg/discover/graph/graph.go
+  - pkg/discover/graph/graph_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-a5eb1192
@@ -37,8 +41,12 @@ related:
   - prov-2026-c60ec2ad
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/discover/framework/builtin/chi.yml
-    run_command: test -f {{path}}
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: "go test ./cmd/linespec/... -run TestRunDiscover && echo {{path}}"
+  - path: pkg/discover/graph/graph_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/graph/... && echo {{path}}"
 associated_traces: []
 monitors: []
 tags:

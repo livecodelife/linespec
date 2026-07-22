@@ -52,3 +52,49 @@ func TestDirectoryGrouper_Empty(t *testing.T) {
 // grouperInterface is a compile-time check that DirectoryGrouper satisfies Grouper,
 // so a future community-detection grouper can be substituted without pipeline changes.
 var _ graph.Grouper = graph.DirectoryGrouper{}
+
+func TestCoveredDirs(t *testing.T) {
+	covered := graph.CoveredDirs([]string{
+		"pkg/handlers/router.go",
+		"pkg/handlers/other.go",
+		"main.go",
+	})
+	if len(covered) != 2 {
+		t.Fatalf("expected 2 covered dirs, got %d: %+v", len(covered), covered)
+	}
+	if !covered["pkg/handlers"] || !covered["."] {
+		t.Errorf("expected pkg/handlers and . to be covered, got %+v", covered)
+	}
+	if covered["pkg/services"] {
+		t.Errorf("pkg/services should not be covered")
+	}
+}
+
+func TestFilterUncovered(t *testing.T) {
+	files := []graph.File{
+		{Path: "pkg/handlers/router.go", Lang: lang.Go},
+		{Path: "pkg/services/worker.go", Lang: lang.Go},
+		{Path: "pkg/models/user.go", Lang: lang.Go},
+	}
+	covered := map[string]bool{"pkg/handlers": true}
+
+	got := graph.FilterUncovered(files, covered)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 uncovered files, got %d: %+v", len(got), got)
+	}
+	for _, f := range got {
+		if f.Path == "pkg/handlers/router.go" {
+			t.Errorf("covered file %q should have been filtered out", f.Path)
+		}
+	}
+}
+
+func TestFilterUncovered_NoneCovered(t *testing.T) {
+	files := []graph.File{
+		{Path: "pkg/services/worker.go", Lang: lang.Go},
+	}
+	got := graph.FilterUncovered(files, map[string]bool{})
+	if len(got) != 1 {
+		t.Fatalf("expected all files to pass through when nothing is covered, got %+v", got)
+	}
+}

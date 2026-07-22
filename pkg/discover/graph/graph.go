@@ -32,6 +32,31 @@ type Grouper interface {
 	Group(files []File) ([]Group, error)
 }
 
+// CoveredDirs returns the set of directories containing at least one of routeFiles.
+// A directory in this set already has framework-based blueprint coverage (it
+// contributed a route to some group) and must not be re-grouped by a
+// supplemental, framework-agnostic pass — otherwise the same directory would
+// receive two blueprint records.
+func CoveredDirs(routeFiles []string) map[string]bool {
+	covered := make(map[string]bool, len(routeFiles))
+	for _, f := range routeFiles {
+		covered[filepath.Dir(f)] = true
+	}
+	return covered
+}
+
+// FilterUncovered returns the subset of files whose containing directory is
+// not in covered, preserving order.
+func FilterUncovered(files []File, covered map[string]bool) []File {
+	var out []File
+	for _, f := range files {
+		if !covered[filepath.Dir(f.Path)] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // DirectoryGrouper groups files by their containing directory.
 type DirectoryGrouper struct{}
 

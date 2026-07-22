@@ -1143,6 +1143,16 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 
 	if opts.DryRun {
 		recordResults, sum := discoverrecords.Plan(recordInput, existingIDs)
+
+		suppResults, suppSum, serr := runSupplementalAgnostic(ctx, scanDir, groups, provenanceDir, author, idsAfter(existingIDs, recordResults), true)
+		if serr != nil {
+			logger.Error("Supplemental framework-agnostic scan failed: %v", serr)
+			os.Exit(1)
+		}
+		recordResults = append(recordResults, agnosticResultsToDiscoverResults(suppResults)...)
+		sum.RecordsCreated += suppSum.RecordsCreated
+		sum.Unclassified = append(sum.Unclassified, suppSum.Unclassified...)
+
 		printDiscoverDryRun(desc, scanDir, stubResults, recordResults, sum, opts.Format)
 		return
 	}
@@ -1153,6 +1163,20 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 		os.Exit(1)
 	}
 
+	// Supplemental pass: the route assembler above only sees files with HTTP route
+	// registrations. Every other directory (services, models, repositories, ...)
+	// gets no blueprint from it, which is the bug this pass fixes — run the same
+	// framework-agnostic scan the no-framework-detected path uses, but skip any
+	// directory already covered by a route group so blueprints are never doubled up.
+	suppResults, suppSum, err := runSupplementalAgnostic(ctx, scanDir, groups, provenanceDir, author, idsAfter(existingIDs, recordResults), false)
+	if err != nil {
+		logger.Error("Supplemental framework-agnostic scan failed: %v", err)
+		os.Exit(1)
+	}
+	recordResults = append(recordResults, agnosticResultsToDiscoverResults(suppResults)...)
+	sum.RecordsCreated += suppSum.RecordsCreated
+	sum.Unclassified = append(sum.Unclassified, suppSum.Unclassified...)
+
 	printDiscoverSummary(desc, scanDir, recordResults, sum)
 
 	if opts.Enrich {
@@ -1162,6 +1186,76 @@ func runDiscover(opts discoverOptions, cfg *provenance.ProvenanceConfig, repoRoo
 		}
 		runDiscoverEnrich(recordResults, enrichRoot, opts.LLMBaseURL, opts.Model, opts.MaxTokens)
 	}
+}
+
+// idsAfter returns existingIDs plus the record IDs already allocated to results,
+// so a subsequent record-generation pass never collides with them.
+func idsAfter(existingIDs []string, results []discoverrecords.Result) []string {
+	ids := append([]string(nil), existingIDs...)
+	for _, r := range results {
+		ids = append(ids, r.RecordID)
+	}
+	return ids
+}
+
+// runSupplementalAgnostic runs discover's framework-agnostic scan (extension-based
+// language detection + directory grouping) restricted to directories that contain
+// no framework-discovered route, so files invisible to the route assembler —
+// services, repositories, models, utilities — still get blueprint coverage.
+func runSupplementalAgnostic(ctx context.Context, scanDir string, groups []discoverroutes.Group, provenanceDir, author string, existingIDs []string, dryRun bool) ([]agnosticResult, agnosticSummary, error) {
+	files, unclassified, err := scanAgnosticFiles(ctx, scanDir)
+	if err != nil {
+		return nil, agnosticSummary{}, err
+	}
+
+	var routeFiles []string
+	for _, g := range groups {
+		for _, r := range g.Routes {
+			if r.Source.File != "" {
+				routeFiles = append(routeFiles, r.Source.File)
+			}
+		}
+	}
+	uncovered := graph.FilterUncovered(files, graph.CoveredDirs(routeFiles))
+
+	var grouper graph.Grouper = graph.DirectoryGrouper{}
+	dirGroups, err := grouper.Group(uncovered)
+	if err != nil {
+		return nil, agnosticSummary{}, err
+	}
+
+	sum := computeAgnosticSummary(uncovered, dirGroups, unclassified)
+
+	if dryRun {
+		results := planAgnosticRecords(dirGroups, provenanceDir, existingIDs)
+		sum.RecordsCreated = len(results)
+		return results, sum, nil
+	}
+
+	results, err := writeAgnosticRecords(dirGroups, provenanceDir, author, existingIDs)
+	if err != nil {
+		return nil, agnosticSummary{}, err
+	}
+	sum.RecordsCreated = len(results)
+	return results, sum, nil
+}
+
+// agnosticResultsToDiscoverResults adapts framework-agnostic supplemental results
+// to discoverrecords.Result so they print and JSON-marshal alongside route-based
+// results in the same summary. RouteCount is 0 — these blueprints cover files with
+// no framework-discovered route.
+func agnosticResultsToDiscoverResults(results []agnosticResult) []discoverrecords.Result {
+	out := make([]discoverrecords.Result, 0, len(results))
+	for _, r := range results {
+		out = append(out, discoverrecords.Result{
+			GroupName:  r.GroupName,
+			RecordID:   r.RecordID,
+			FilePath:   r.FilePath,
+			Title:      r.Title,
+			RouteCount: 0,
+		})
+	}
+	return out
 }
 
 // agnosticSkipDirs lists directory names skipped during a framework-agnostic scan —
