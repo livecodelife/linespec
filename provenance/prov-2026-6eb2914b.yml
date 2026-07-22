@@ -1,0 +1,62 @@
+id: prov-2026-6eb2914b
+title: Supplemental agnostic pass covers non-route directories without duplicating route-covered ones
+status: open
+created_at: "2026-07-22"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Implements prov-2026-3486daec. After the framework route assembler builds its
+  groups, runDiscover now also runs the same scan/directory-grouping the
+  no-framework-detected path uses (scanAgnosticFiles + DirectoryGrouper), but
+  restricted to files whose containing directory contributed no route to any
+  group. Two small pure helpers were added to pkg/discover/graph
+  (CoveredDirs/FilterUncovered) so "which directories are already covered" is
+  computed from a flat list of route source files, independent of the routes
+  package — this keeps graph decoupled from routes and made the filtering
+  trivially unit-testable without spinning up tree-sitter or a framework
+  description.
+
+  Decision: this fix does NOT change chi's package-based grouping_strategy
+  (the "over-collapsed route groups" detail in the bug's constraints, where two
+  directories sharing a Go package name still produce only one blueprint
+  between them). The record's hard constraint is "must not duplicate
+  blueprints for directories already covered by a route group" — collapsing
+  itself is pre-existing, intentional grouping behavior, not literally
+  "skipping" a directory, so it was left alone to keep this change surgical.
+  The severe undercount the bug describes (~8 vs. 35-50 blueprints for ~40
+  subdirectories) is overwhelmingly caused by non-route directories getting
+  zero coverage, which this fix closes; a supplemental blueprint count is now
+  1-per-route-group plus 1-per-uncovered-directory.
+
+  Supplemental results are converted from agnosticResult to
+  discoverrecords.Result (RouteCount forced to 0) so they merge into the
+  existing table/JSON summary output rather than requiring a second print path.
+constraints:
+  - MUST NOT change grouping_strategy or route-group identity for any framework.
+  - MUST NOT emit a blueprint for a directory that already contains a
+    framework-discovered route (no duplicate coverage).
+  - MUST work identically for chi, rails, and sinatra since the supplemental
+    pass is purely filesystem/extension based, not framework-specific.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/discover/graph/graph.go
+  - pkg/discover/graph/graph_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a5eb1192
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-3486daec  # bug this imprint fixes (imprint must implement a blueprint, not a bug — see linter PROV021)
+sealed_at_sha: ""
+associated_specs:
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: "make test # {{path}}"
+  - path: pkg/discover/graph/graph_test.go
+    type: go_test
+    run_command: "make test # {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - discover
+  - bug
