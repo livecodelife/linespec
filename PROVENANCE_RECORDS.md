@@ -24,22 +24,33 @@ Provenance Records are structured YAML artifacts that capture the organizational
 ## Quick Start
 
 ```bash
-# Install LineSpec
+# 1. Install LineSpec
 brew tap livecodelife/linespec
 brew install linespec
-
-# Or use go install
+# Or use go install:
 go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.16.0
 
-# Create your first provenance record
+# 2. Set up your repo (run these from the repo root)
+linespec init                          # interactive: writes .linespec.yml
+linespec provenance install-hooks      # commit-time validation via git hooks
+
+# 3. Onboard Claude Code / AI agents (optional but recommended)
+linespec provenance install-skills     # /provenance + /linespec-testing skills
+linespec provenance install-plugin     # in-loop next-action advice + /provenance-next
+
+# 4. Create your first provenance record
 linespec provenance create --title "Add user authentication"
 
-# Validate all records
+# 5. Validate all records
 linespec provenance lint
 
-# View the decision graph
+# 6. View the decision graph
 linespec provenance graph
 ```
+
+> **Tip:** `linespec init` is interactive — it prompts for your project's framework,
+> port, and database so it can write a sensible `.linespec.yml`. Steps 1–3 set up the
+> repo once; steps 4–6 are your everyday loop.
 
 ---
 
