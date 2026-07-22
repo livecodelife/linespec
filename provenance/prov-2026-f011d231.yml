@@ -1,6 +1,6 @@
 id: prov-2026-f011d231
 title: Expand Quick Start with init and Claude Code install commands
-status: open
+status: implemented
 created_at: "2026-07-22"
 author: calebcowen@gmail.com
 intent: >
@@ -27,7 +27,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ce101d09eb77a0a3e006038e68770d717dba301a
 associated_specs:
   - type: code
     path: PROVENANCE_RECORDS.md
