@@ -1,6 +1,6 @@
 id: prov-2026-3486daec
 title: 'discover: framework-detected path skips non-route directories, generating far fewer blueprints than expected'
-status: open
+status: implemented
 created_at: "2026-07-22"
 author: calebcowen@gmail.com
 intent: |
@@ -39,7 +39,7 @@ superseded_by: ""
 related:
   - prov-2026-2042c6a2
   - prov-2026-c60ec2ad
-sealed_at_sha: ""
+sealed_at_sha: fc73a709db70525646e9d6f4b80c186dea195e5a
 associated_specs:
   - path: cmd/linespec/discover_test.go
     type: go_test
