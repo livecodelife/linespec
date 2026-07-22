@@ -33,7 +33,7 @@ related:
   - prov-2026-c60ec2ad
 sealed_at_sha: ""
 associated_specs:
-  - path: provenance/prov-2026-3486daec-repro.md
+  - path: pkg/discover/framework/builtin/chi.yml
     run_command: test -f {{path}}
 associated_traces: []
 monitors: []
