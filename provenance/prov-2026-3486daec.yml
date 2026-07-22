@@ -1,0 +1,42 @@
+id: prov-2026-3486daec
+title: 'discover: framework-detected path skips non-route directories, generating far fewer blueprints than expected'
+status: open
+created_at: "2026-07-22"
+author: calebcowen@gmail.com
+intent: |
+  When `linespec provenance discover` runs on a directory where a framework is detected
+  (chi, rails, sinatra), the framework-based pipeline only processes files that contain
+  HTTP route registrations. All other source files — services, repositories, models,
+  utilities — are invisible to the assembler and receive no blueprint coverage.
+
+  Additionally, chi's `grouping_strategy: package` collapses all routes sharing a Go
+  package name into a single blueprint group. A service with N route-bearing packages
+  produces exactly N blueprints regardless of how many files or subdirectories exist.
+
+  The framework-agnostic path (runDiscoverAgnostic) does the correct thing — one
+  blueprint per directory with source files — but it only fires when no framework is
+  detected. Once a framework is found, the agnostic supplemental pass never runs.
+
+  This causes a severe undercount: a monorepo package with ~40 subdirectories produces
+  ~8 blueprints instead of the expected 35–50.
+constraints:
+  - Fix must not regress framework-based route discovery (routes still get blueprints).
+  - Fix must not duplicate blueprints for directories already covered by a route group.
+affected_scope: []
+forbidden_scope: []
+type: bug
+extends: prov-2026-a5eb1192
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-2042c6a2
+  - prov-2026-c60ec2ad
+sealed_at_sha: ""
+associated_specs:
+  - path: provenance/prov-2026-3486daec-repro.md
+    run_command: test -f {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - discover
+  - bug
