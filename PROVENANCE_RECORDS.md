@@ -34,9 +34,10 @@ go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.16.0
 linespec init                          # interactive: writes .linespec.yml
 linespec provenance install-hooks      # commit-time validation via git hooks
 
-# 3. Onboard Claude Code / AI agents (optional but recommended)
+# 3. Onboard Claude Code (optional but recommended — Claude Code only)
 linespec provenance install-skills     # /provenance + /linespec-testing skills
 linespec provenance install-plugin     # in-loop next-action advice + /provenance-next
+#    Then, in Claude Code, ask: "set up the linespec provenance plugin"
 
 # 4. Create your first provenance record
 linespec provenance create --title "Add user authentication"
@@ -51,6 +52,14 @@ linespec provenance graph
 > **Tip:** `linespec init` is interactive — it prompts for your project's framework,
 > port, and database so it can write a sensible `.linespec.yml`. Steps 1–3 set up the
 > repo once; steps 4–6 are your everyday loop.
+>
+> **Claude Code users:** `install-skills` and `install-plugin` are specific to
+> [Claude Code](https://claude.ai/code) — they write the LineSpec skills and the
+> provenance plugin into your repo's `.claude/` directory. Installing the plugin drops
+> the files in place; to actually wire it into your session, open Claude Code in the
+> repo and ask it to **"set up the linespec provenance plugin"** — it will enable the
+> SessionStart / per-edit / commit-rejection hooks and the `/provenance-next` command
+> for you. See [Install Plugin](#install-plugin-claude-code) for what the hooks do.
 
 ---
 
