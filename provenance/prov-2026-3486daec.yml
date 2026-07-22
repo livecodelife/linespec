@@ -1,6 +1,6 @@
 id: prov-2026-3486daec
 title: 'discover: framework-detected path skips non-route directories, generating far fewer blueprints than expected'
-status: open
+status: implemented
 created_at: "2026-07-22"
 author: calebcowen@gmail.com
 intent: |
@@ -26,7 +26,11 @@ constraints:
   - "Chi (grouping_strategy:package): non-route directories AND over-collapsed route groups both undercount."
   - "Rails (grouping_strategy:controller): only config/routes.rb is read; models, jobs, mailers, services, concerns produce no blueprints."
   - "Sinatra (grouping_strategy:file): per-file route grouping is least severe but helpers, models, and lib/ dirs are still skipped."
-affected_scope: []
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/discover_test.go
+  - pkg/discover/graph/graph.go
+  - pkg/discover/graph/graph_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-a5eb1192
@@ -35,10 +39,14 @@ superseded_by: ""
 related:
   - prov-2026-2042c6a2
   - prov-2026-c60ec2ad
-sealed_at_sha: ""
+sealed_at_sha: fc73a709db70525646e9d6f4b80c186dea195e5a
 associated_specs:
-  - path: pkg/discover/framework/builtin/chi.yml
-    run_command: test -f {{path}}
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: "go test ./cmd/linespec/... -run TestRunDiscover && echo {{path}}"
+  - path: pkg/discover/graph/graph_test.go
+    type: go_test
+    run_command: "go test ./pkg/discover/graph/... && echo {{path}}"
 associated_traces: []
 monitors: []
 tags:
