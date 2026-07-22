@@ -24,22 +24,42 @@ Provenance Records are structured YAML artifacts that capture the organizational
 ## Quick Start
 
 ```bash
-# Install LineSpec
+# 1. Install LineSpec
 brew tap livecodelife/linespec
 brew install linespec
-
-# Or use go install
+# Or use go install:
 go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.16.0
 
-# Create your first provenance record
+# 2. Set up your repo (run these from the repo root)
+linespec init                          # interactive: writes .linespec.yml
+linespec provenance install-hooks      # commit-time validation via git hooks
+
+# 3. Onboard Claude Code (optional but recommended — Claude Code only)
+linespec provenance install-skills     # /provenance + /linespec-testing skills
+linespec provenance install-plugin     # in-loop next-action advice + /provenance-next
+#    Then, in Claude Code, ask: "set up the linespec provenance plugin"
+
+# 4. Create your first provenance record
 linespec provenance create --title "Add user authentication"
 
-# Validate all records
+# 5. Validate all records
 linespec provenance lint
 
-# View the decision graph
+# 6. View the decision graph
 linespec provenance graph
 ```
+
+> **Tip:** `linespec init` is interactive — it prompts for your project's framework,
+> port, and database so it can write a sensible `.linespec.yml`. Steps 1–3 set up the
+> repo once; steps 4–6 are your everyday loop.
+>
+> **Claude Code users:** `install-skills` and `install-plugin` are specific to
+> [Claude Code](https://claude.ai/code) — they write the LineSpec skills and the
+> provenance plugin into your repo's `.claude/` directory. Installing the plugin drops
+> the files in place; to actually wire it into your session, open Claude Code in the
+> repo and ask it to **"set up the linespec provenance plugin"** — it will enable the
+> SessionStart / per-edit / commit-rejection hooks and the `/provenance-next` command
+> for you. See [Install Plugin](#install-plugin-claude-code) for what the hooks do.
 
 ---
 
