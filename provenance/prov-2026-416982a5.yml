@@ -1,0 +1,73 @@
+id: prov-2026-416982a5
+title: Bound fswrite reconcile to the closest parent linespec config directory
+status: deprecated
+created_at: "2026-07-31"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |-
+  Reconcile derives writability from the current set of open, allowlist-mode
+  records' scopes over the git-tracked file list (fswrite.go Reconcile), and
+  Commands.reconcile() has always passed it the full repo-wide file list
+  regardless of which .linespec.yml produced the Commands' Config. In a
+  monorepo with a nested .linespec.yml (e.g. examples/user-service/.linespec.yml,
+  already present in this repo), that nested config's own reconcile pass would
+  evaluate every file in the entire repo against its own (package-local)
+  records, locking files it has no business touching, while the repo-root
+  config's pass would do the same to the nested package's files — reachable
+  proof of this: before the fix, examples/user-service/provenance/*.yml (that
+  package's own always-writable record files) were locked 444 by the
+  repo-root pass, which has no visibility into that package's provenance
+  directory at all.
+implements: prov-2026-bde50f4d
+constraints:
+  - >-
+    Commands.reconcile() must restrict the candidate file list to the
+    boundary owned by its own config's directory (ProvenanceConfig.ConfigFileDir,
+    "." for the repo root) before calling Reconcile, so a pass never
+    locks/unlocks a file that a more specific nested linespec config already
+    claims (fswrite.go boundToOwnConfigDir/nestedConfigDirs), and never
+    reaches outside its own directory into unrelated sibling territory.
+  - >-
+    Discovering nested configs must reuse the git-tracked candidate file list
+    reconcile already has (any .linespec.yml entry in that list) rather than
+    a second filesystem walk, and must be a complete no-op — returning the
+    input file list unchanged — whenever no nested .linespec.yml appears in
+    that list, so every pre-existing Reconcile-level test (which constructs
+    ProvenanceConfig in Go without ever writing a .linespec.yml to disk)
+    keeps passing unmodified.
+  - >-
+    loadProvenanceConfigFromFile must always stamp ConfigFileDir from the
+    config path it was given, independent of whether the file parses or has
+    a provenance: section, so every caller (default repo-root load, -c
+    override, and the lint/check-style multi-config fan-out) produces a
+    Commands whose reconcile pass is correctly bounded.
+  - >-
+    `linespec provenance reconcile` run without -c must fan out over every
+    discovered .linespec.yml (mirroring lint/check's existing
+    findAllLinespecConfigs fan-out) instead of only ever reconciling the
+    repo-root config, so each directory's own restrictions actually get
+    applied. The fan-out loop is factored into runProvReconcile so it is
+    directly testable without cobra.
+affected_scope:
+  - pkg/provenance/fswrite.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/cli.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    run_command: make test # pkg/provenance/fswrite_test.go
+  - path: pkg/provenance/reconcile_scope_test.go
+    run_command: make test # pkg/provenance/reconcile_scope_test.go
+  - path: cmd/linespec/reconcile_test.go
+    run_command: make test # cmd/linespec/reconcile_test.go
+associated_traces: []
+monitors: []
+tags:
+  - config
+  - provenance
+  - restriction
