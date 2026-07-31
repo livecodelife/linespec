@@ -28,8 +28,8 @@ associated_specs:
     run_command: make test
   - path: pkg/config/parser_test.go
     run_command: make test
-tags:
 sealed_at_sha: 23311612ca2629e53967c1208baf9168404f13f1
+tags:
   - restriction
   - config
   - provenance
