@@ -1,0 +1,36 @@
+id: prov-2026-93bcd5b8
+title: 'write_restriction config toggle: *bool default-true, gate both Reconcile call sites and relockClosedScope'
+status: open
+created_at: "2026-07-31"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+implements: prov-2026-c1515def
+intent: |-
+  Record the implementation decisions behind provenance.write_restriction: the
+  *bool encoding chosen for the config field, and the two non-obvious places
+  that had to be gated for the toggle to actually mean "no restriction is
+  present" rather than just "no further locking."
+constraints:
+  - '`WriteRestriction` is `*bool` (not `bool`) on both pkg/config.ProvenanceConfig and pkg/provenance.ProvenanceConfig, mirroring the existing NeedsWarmup/Proxy pattern in pkg/config/types.go. A plain bool''s zero value is false, which would have silently flipped the default to "unrestricted" for every pre-existing .linespec.yml that predates this key — the opposite of constraint 5 ("All other functionality must work as is"). `WriteRestrictionEnabled(cfg)` treats nil config or nil pointer as true (enabled), so silence means "restricted," matching pre-existing behavior exactly.'
+  - 'Both places that skip write enforcement on cold start (fswrite.go''s exported `Reconcile`, and `Commands.reconcile`''s own independent `ColdStartSkip` short-circuit in commands.go) had to be updated together. A first pass only gated `Reconcile`, leaving `Commands.reconcile`''s early return unconditional — so on a zero-record project with `write_restriction: false`, the CLI wrapper returned empty before `Reconcile`''s disabled-restriction unlock path ever ran, and a locked file stayed locked. Caught by a manual end-to-end smoke test (fresh repo, `write_restriction: false`, a pre-locked file, `linespec provenance reconcile`) that the unit tests alone had not covered — the unit tests exercised `Reconcile` directly, never the CLI-facing wrapper''s own short-circuit. Fixed by gating both with the identical `restricted && ColdStartSkip(...)` condition, and locked in with `TestCommandsReconcile_WriteRestrictionDisabled_BypassesColdStartSkip`.'
+  - '`relockClosedScope` (re-locks a record''s scope after Complete/Deprecate unless another open record still covers it) also needed an explicit `WriteRestrictionEnabled` guard. Without it, completing a record while `write_restriction: false` would re-lock files via `LockFile` directly, bypassing `Reconcile` entirely and violating "write restrictions must not be present."'
+  - 'When disabled, `Reconcile` actively unlocks any already-locked file rather than merely skipping further lock changes — matching the literal constraint "write restrictions must not be present" for repos that flip the flag after some files were already locked, not just newly-cloned ones.'
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ''
+superseded_by: ''
+related: []
+sealed_at_sha: ''
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    run_command: make test # {{path}}
+  - path: pkg/provenance/fswrite_transitions_test.go
+    run_command: make test # {{path}}
+  - path: pkg/config/parser_test.go
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - restriction
+  - config
+  - provenance
