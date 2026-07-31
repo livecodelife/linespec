@@ -30,8 +30,8 @@ associated_specs:
     run_command: make test
 related:
   - prov-2026-c1515def
-tags:
 sealed_at_sha: c51faa708e35a231929866302c4fbcfd8ac08940
+tags:
   - config
   - provenance
   - restriction
