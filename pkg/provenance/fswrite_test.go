@@ -384,6 +384,109 @@ func TestReconcile_UnlocksParentDirOfDeclaredNotYetExistingPath(t *testing.T) {
 	}
 }
 
+// --- boundToOwnConfigDir / nestedConfigDirs (prov-2026-bde50f4d) ------------
+//
+// Reproduces the bug: a monorepo with a nested pkg/foo/.linespec.yml governing
+// its own provenance/ was previously invisible to the boundary logic, so the
+// repo-root config's reconcile pass walked (and could lock) every file in the
+// repo, including files under pkg/foo/ that belong to a more specific,
+// directory-local config. The closest parent directory of a linespec config
+// file must be the one that governs a path.
+
+func TestNestedConfigDirs_FindsConfigsStrictlyBeneathOwnDir(t *testing.T) {
+	files := []string{
+		".linespec.yml",
+		"pkg/foo/.linespec.yml",
+		"pkg/foo/bar/.linespec.yml",
+		"other/.linespec.yml",
+		"pkg/foo/main.go",
+	}
+
+	got := nestedConfigDirs(".", files)
+	want := []string{"other", "pkg/foo", "pkg/foo/bar"}
+	if len(got) != len(want) {
+		t.Fatalf("nestedConfigDirs(\".\") = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("nestedConfigDirs(\".\")[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+
+	// From pkg/foo's own perspective, only its own deeper nested config
+	// (pkg/foo/bar) counts — the root config and the sibling "other" config are
+	// not beneath it.
+	gotFoo := nestedConfigDirs("pkg/foo", files)
+	if len(gotFoo) != 1 || gotFoo[0] != "pkg/foo/bar" {
+		t.Errorf("nestedConfigDirs(\"pkg/foo\") = %v, want [pkg/foo/bar]", gotFoo)
+	}
+}
+
+func TestNestedConfigDirs_EmptyWhenFilesListHasNoOtherConfig(t *testing.T) {
+	// The common case exercised by every other fswrite test in this file: no
+	// .linespec.yml appears in the candidate file list at all (tests construct
+	// ProvenanceConfig directly, never writing an actual config file to disk).
+	// Boundary logic must be a complete no-op here, preserving legacy behavior.
+	files := []string{"pkg/a.go", "pkg/b.go"}
+	if got := nestedConfigDirs(".", files); len(got) != 0 {
+		t.Errorf("nestedConfigDirs = %v, want empty", got)
+	}
+}
+
+func TestBoundToOwnConfigDir_RootExcludesNestedConfigSubtreeEntirely(t *testing.T) {
+	files := []string{
+		".linespec.yml",
+		"pkg/root.go",
+		"pkg/uncovered.go",
+		"pkg/foo/.linespec.yml",
+		"pkg/foo/foo.go",
+		"pkg/foo/other.go",
+	}
+
+	got := boundToOwnConfigDir(".", files)
+	for _, want := range []string{".linespec.yml", "pkg/root.go", "pkg/uncovered.go"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("boundToOwnConfigDir(\".\") missing %q, got %v", want, got)
+		}
+	}
+	for _, notWant := range []string{"pkg/foo/.linespec.yml", "pkg/foo/foo.go", "pkg/foo/other.go"} {
+		if slices.Contains(got, notWant) {
+			t.Errorf("boundToOwnConfigDir(\".\") must exclude %q (governed by the closer pkg/foo config), got %v", notWant, got)
+		}
+	}
+}
+
+func TestBoundToOwnConfigDir_NestedConfigOnlySeesItsOwnDirectory(t *testing.T) {
+	files := []string{
+		".linespec.yml",
+		"pkg/root.go",
+		"pkg/foo/.linespec.yml",
+		"pkg/foo/foo.go",
+		"other/other.go",
+	}
+
+	got := boundToOwnConfigDir("pkg/foo", files)
+	want := []string{"pkg/foo/.linespec.yml", "pkg/foo/foo.go"}
+	if len(got) != len(want) {
+		t.Fatalf("boundToOwnConfigDir(\"pkg/foo\") = %v, want %v", got, want)
+	}
+	for _, w := range want {
+		if !slices.Contains(got, w) {
+			t.Errorf("boundToOwnConfigDir(\"pkg/foo\") missing %q, got %v", w, got)
+		}
+	}
+}
+
+func TestBoundToOwnConfigDir_UnrestrictedWhenNoNestedConfigExists(t *testing.T) {
+	// Matches every pre-existing Reconcile test in this file: no nested config
+	// in the candidate list means the full file list passes through unchanged.
+	files := []string{"pkg/a.go", "pkg/b.go", "provenance/prov-2026-0001.yml"}
+	got := boundToOwnConfigDir(".", files)
+	if len(got) != len(files) {
+		t.Errorf("boundToOwnConfigDir with no nested config = %v, want unchanged %v", got, files)
+	}
+}
+
 // --- Managed .linespec/ state (prov-2026-26efc162) --------------------------
 
 // TestAlwaysWritablePaths_IncludesManagedLinespecStateFiles reproduces the bug:

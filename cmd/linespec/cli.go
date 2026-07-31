@@ -498,8 +498,7 @@ func newProvReconcileCmd() *cobra.Command {
 			if jsonOut {
 				opts.Format = "json"
 			}
-			cmds := provCmds(opts.ConfigFile)
-			if err := cmds.Reconcile(opts); err != nil {
+			if !runProvReconcile(opts) {
 				os.Exit(1)
 			}
 		},
@@ -509,6 +508,43 @@ func newProvReconcileCmd() *cobra.Command {
 	f.StringVar(&opts.Format, "format", "", "Output format (human|json)")
 	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")
 	return cmd
+}
+
+// runProvReconcile executes the reconcile command's fan-out logic
+// (prov-2026-bde50f4d): when opts.ConfigFile is empty, it reconciles once per
+// .linespec.yml discovered under the working tree, mirroring lint/check's
+// multi-config fan-out, so each directory's write restriction is derived from
+// its own closest config rather than only the repo-root one. Each
+// Commands.reconcile() pass is itself bounded to that config's own directory
+// (see boundToOwnConfigDir in pkg/provenance/fswrite.go), so passes never step
+// on each other regardless of iteration order. Returns false if any pass
+// failed. Factored out of newProvReconcileCmd's Run closure so it can be
+// exercised directly by tests without cobra machinery.
+func runProvReconcile(opts provenance.ReconcileOptions) bool {
+	cfg, cmds, repoRoot, embedder := provSetup()
+	if opts.ConfigFile == "" {
+		if configs := findAllLinespecConfigs("."); len(configs) > 0 {
+			ok := true
+			for _, cfgPath := range configs {
+				localCfg := loadProvenanceConfigFromFile(cfgPath)
+				localCmds, err := provenance.NewCommandsWithEmbedder(localCfg, repoRoot, os.Stdout, true, embedder)
+				if err != nil {
+					logger.Error("Failed to initialize provenance for %s: %v", cfgPath, err)
+					ok = false
+					continue
+				}
+				if err := localCmds.Reconcile(opts); err != nil {
+					ok = false
+				}
+			}
+			return ok
+		}
+	}
+	if err := reloadConfigIfNeeded(&cfg, &cmds, opts.ConfigFile, repoRoot); err != nil {
+		logger.Error("Failed to reload config: %v", err)
+		return false
+	}
+	return cmds.Reconcile(opts) == nil
 }
 
 func newProvLockLayerCmd() *cobra.Command {

@@ -1,6 +1,6 @@
 id: prov-2026-bde50f4d
 title: Write access restriction should only restrict directories governed by config file
-status: open
+status: implemented
 created_at: '2026-07-31'
 author: livecodelife
 type: bug
@@ -10,8 +10,27 @@ constraints:
   - Write access restriction must only apply to the closest parent directory of a linespec config file.
   - The configuration of a directory specific linespec config file must take precedence for that directory over a higher directory linespec config file.
   - When the reconcile command is run without specifying a linespec config file, it must run per config file to apply the write restrictions correctly for each directory containing a config file.
+affected_scope:
+  - pkg/provenance/fswrite.go
+  - pkg/provenance/fswrite_test.go
+  - pkg/provenance/reconcile_scope_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/cli.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/reconcile_test.go
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/reconcile_scope_test.go
+    type: go_test
+    run_command: make test
+  - path: cmd/linespec/reconcile_test.go
+    type: go_test
+    run_command: make test
 related:
   - prov-2026-c1515def
+sealed_at_sha: c51faa708e35a231929866302c4fbcfd8ac08940
 tags:
   - config
   - provenance
