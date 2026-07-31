@@ -1,6 +1,6 @@
 id: prov-2026-93bcd5b8
 title: 'write_restriction config toggle: *bool default-true, gate both Reconcile call sites and relockClosedScope'
-status: open
+status: implemented
 created_at: "2026-07-31"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 implements: prov-2026-c1515def
@@ -20,7 +20,7 @@ type: imprint
 supersedes: ''
 superseded_by: ''
 related: []
-sealed_at_sha: ''
+sealed_at_sha: 9e24c78c80d4392c53ddbc34af9960f2314044b2
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
     run_command: make test # {{path}}
