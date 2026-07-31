@@ -1,0 +1,18 @@
+id: prov-2026-c1515def
+title: Add config for write access restriction
+status: open
+created_at: '2026-07-31'
+author: livecodelife
+type: blueprint
+intent: Users need to be able to update the configuration in their .linespec.yml file to disallow the write mode restriction. It's unlikely that users would want this level of restriction right away
+implements: prov-2026-e8fb1e96
+constraints:
+  - A provenance configuration must be able to be configured for write access restriction.
+  - The config must have a true or false value.
+  - When the value is true the write access must be restricted without an open imprint record governing the target file.
+  - When the value is false write restrictions must not be present.
+  - All other functionality must work as is.
+tags:
+  - restriction
+  - config
+  - provenance
