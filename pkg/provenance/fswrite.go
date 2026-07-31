@@ -357,6 +357,84 @@ func WriteRestrictionEnabled(config *ProvenanceConfig) bool {
 	return *config.WriteRestriction
 }
 
+// isWithinDir reports whether repo-relative path is dir itself or nested
+// under it. dir == "." (or "") matches every path, since the repo root
+// governs everything not more specifically claimed by a nested config.
+func isWithinDir(path, dir string) bool {
+	if dir == "." || dir == "" {
+		return true
+	}
+	return path == dir || strings.HasPrefix(path, dir+"/")
+}
+
+// nestedConfigDirs returns the repo-relative directories, strictly nested
+// beneath ownDir, that contain a .linespec.yml file other than ownDir's own —
+// the set of more specific configs whose subtree must be excluded from
+// ownDir's reconcile pass. Per prov-2026-bde50f4d, write-access restriction
+// must only apply to the closest parent directory of a linespec config file,
+// so a higher directory's config must never lock/unlock files a nested
+// config already claims. files is the same git-tracked candidate list
+// reconcile already has, so finding nested configs costs no extra
+// filesystem walk.
+func nestedConfigDirs(ownDir string, files []string) []string {
+	own := filepath.Clean(ownDir)
+	if own == "" {
+		own = "."
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		if filepath.Base(f) != ".linespec.yml" {
+			continue
+		}
+		dir := filepath.Dir(f)
+		if dir == own || !isWithinDir(dir, own) {
+			continue
+		}
+		if !seen[dir] {
+			seen[dir] = true
+			out = append(out, dir)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// boundToOwnConfigDir restricts files to the subtree a single config's
+// reconcile pass is allowed to touch: files under ownDir, excluding any
+// subtree governed by a more specific nested linespec config
+// (nestedConfigDirs). ownDir == "." (the repo-root config, or any Commands
+// whose ConfigFileDir was never set) is unrestricted except for those nested
+// exclusions, matching legacy single-config behavior exactly when no nested
+// config exists in files. This is the closest-parent-wins partition
+// prov-2026-bde50f4d requires: a directory's write restriction comes from
+// its own closest linespec config, never from an ancestor or sibling one.
+func boundToOwnConfigDir(ownDir string, files []string) []string {
+	own := filepath.Clean(ownDir)
+	if own == "" {
+		own = "."
+	}
+	nested := nestedConfigDirs(own, files)
+
+	var out []string
+	for _, f := range files {
+		if !isWithinDir(f, own) {
+			continue
+		}
+		claimed := false
+		for _, n := range nested {
+			if isWithinDir(f, n) {
+				claimed = true
+				break
+			}
+		}
+		if !claimed {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // ColdStartSkip reports whether reconcile should skip enforcement entirely
 // because the project has no provenance records yet. Hand-initialized projects
 // default to warn-until-first-record (skip=true) so the tree is never locked

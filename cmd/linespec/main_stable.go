@@ -938,6 +938,10 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 		Enforcement:       "warn",
 		CommitTagRequired: false,
 		AutoAffectedScope: true,
+		// ConfigFileDir bounds fswrite reconcile to the closest parent directory
+		// of this config file (prov-2026-bde50f4d), regardless of whether the
+		// file parses or has a provenance: section below.
+		ConfigFileDir: filepath.Dir(filePath),
 	}
 
 	// Try to load from specified file if it exists

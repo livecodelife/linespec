@@ -43,6 +43,16 @@ type ProvenanceConfig struct {
 	Embedding                    *config.EmbeddingConfig
 	ManifestURL                  string // source manifest URL, set by linespec clone
 	WriteRestriction             *bool  // whether the fswrite permission projection is enforced; nil/true (default) restricts, false disables it entirely
+	// ConfigFileDir is the repo-relative directory containing the .linespec.yml
+	// this config was loaded from ("." for the repo root). It bounds fswrite
+	// reconcile passes to the closest parent directory of a linespec config
+	// file (prov-2026-bde50f4d) — a directory-specific config's write
+	// restriction must never reach outside its own directory nor into a more
+	// deeply nested config's directory. Empty is treated as "." (repo root),
+	// which is also what a Commands built directly in Go (not through the
+	// .linespec.yml loader) gets by default, preserving legacy unrestricted
+	// behavior when no nested config exists.
+	ConfigFileDir string
 }
 
 // Overlap-teeth severity modes for overlap_specs_on_complete. block is the default
@@ -893,6 +903,11 @@ func (c *Commands) reconcile() (*ReconcileResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	ownDir := "."
+	if c.Config != nil && c.Config.ConfigFileDir != "" {
+		ownDir = c.Config.ConfigFileDir
+	}
+	files = boundToOwnConfigDir(ownDir, files)
 	return Reconcile(c.RepoRoot, files, c.Loader.Records, c.Config)
 }
 
