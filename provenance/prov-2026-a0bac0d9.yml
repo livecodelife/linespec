@@ -29,7 +29,7 @@ superseded_by: ''
 sealed_at_sha: ''
 associated_specs:
   - path: examples/asynq-worker/linespecs/process_report_job.linespec
-    run_command: linespec test examples/asynq-worker/linespecs/process_report_job.linespec
+    run_command: linespec test {{path}}
   - path: pkg/config/database_port_default_test.go
     run_command: go test ./pkg/config/... -run TestDatabasePortDefaultsWithExplicitImage -v
   - path: pkg/runner/network_cleanup_test.go
