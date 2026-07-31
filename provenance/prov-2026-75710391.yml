@@ -1,4 +1,4 @@
-id: prov-2026-46cdc1c0
+id: prov-2026-75710391
 title: 'Test: intake dry-run probe'
 status: draft
 created_at: "2026-07-31"
@@ -23,7 +23,7 @@ constraints:
   - The record must be completable (or deprecatable) without leaving residual untracked
     changes in the working tree, matching the source issue's "safe to close" instruction.
 affected_scope:
-  - provenance/prov-2026-46cdc1c0.yml
+  - provenance/prov-2026-75710391.yml
   - provenance/probes/issue-153-intake-probe.md
 forbidden_scope: []
 type: bug
