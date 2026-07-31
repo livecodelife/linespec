@@ -1,0 +1,18 @@
+id: prov-2026-bde50f4d
+title: Write access restriction should only restrict directories governed by config file
+status: open
+created_at: '2026-07-31'
+author: livecodelife
+type: bug
+intent: Currently the write restrictions lock down all files in the repo. While this is generally okay, for nested projects like monorepos or repos using packwerk or other modularity strategies, this can cause problems. If a linespec config file is present in a package or sub directory, the write access restriction should only be applied to that directory
+extends: prov-2026-8d2f5f2a
+constraints:
+  - Write access restriction must only apply to the closest parent directory of a linespec config file.
+  - The configuration of a directory specific linespec config file must take precedence for that directory over a higher directory linespec config file.
+  - When the reconcile command is run without specifying a linespec config file, it must run per config file to apply the write restrictions correctly for each directory containing a config file.
+related:
+  - prov-2026-c1515def
+tags:
+  - config
+  - provenance
+  - restriction
