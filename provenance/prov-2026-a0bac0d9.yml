@@ -1,0 +1,77 @@
+id: prov-2026-a0bac0d9
+title: 'PostgreSQL: matched expectations never marked satisfied (async/JOB), and mocked result sets sent with OID 0'
+status: draft
+created_at: "2026-07-31"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Fix two PostgreSQL proxy defects reported against LineSpec v3.16.0 in a Rails +
+  Sidekiq (RECEIVE JOB / async) integration test suite with prepared_statements: false
+  (simple-query protocol) and an EXPECT that supplies RETURNS.
+  (1) An interaction matched via the PostgreSQL simple-query ('Q') path is logged as
+  mocked, but the async verification loop never reports "all expected interactions
+  satisfied" and the spec times out with "context deadline exceeded" even though the
+  triggered job actually succeeded. A related log format-string bug at
+  proxy.go:807 applies %s to a uint8 message-type byte, producing the diagnostic-hostile
+  %!s(uint8=81) instead of the readable 'Q' or numeric 81.
+  (2) When the matching EXPECT supplies RETURNS, the mocked RowDescription is sent with
+  OID 0 (or an unreliable name-based heuristic fallback) for every column because the
+  PostgreSQL proxy's schemaCache field is declared but never populated on any code path
+  — unlike the MySQL proxy, which has real --schema-file plumbing (runner.go ->
+  main_stable.go -> mysql.Proxy.LoadSchema) that PostgreSQL never received. The client
+  cannot decode the response and the job fails deep inside application code.
+  Both are suspected by the reporter to share a root cause (the schema cache never being
+  populated for PostgreSQL), but code inspection did not find a single shared defect —
+  fix each precisely, and use the schema-cache wiring gap to explain (2) and, if
+  substantiated during implementation, also (1).
+  Also fix two smaller correctness issues raised in the same report: a missing
+  database.port default when database.image is set explicitly (produces a confusing
+  "invalid port specification: 0/tcp" Docker error instead of defaulting to 5432/3306/27017
+  per db.Type), and a leaked linespec-shared-net Docker network after a failed run
+  (CleanupSharedInfrastructure silently discards the RemoveNetwork error) that masks the
+  original failure on the next run with "network with name linespec-shared-net already
+  exists".
+constraints:
+  - "An EXPECT matched via the PostgreSQL simple-query ('Q') protocol path is recorded as a registry hit and observed by the async verification poll loop (runner.go runTestPhase / collectHits / VerifyAll) so that a RECEIVE JOB/EVENT spec with no RETURNS clause reports satisfaction and completes before its timeout, matching behavior already exhibited by the extended-protocol (Parse/Bind) path."
+  - "The mock-response debug log in pkg/proxy/postgresql/proxy.go (sendMockResponse) uses %c (or an explicit numeric verb), not %s, for the uint8 message-type byte, so it no longer prints %!s(uint8=81)."
+  - "When an EXPECT includes RETURNS, the RowDescription sent to the client carries real column OIDs derived from the target table's actual introspected schema (not OID 0 and not the oidForColumn name-based heuristic fallback) for both the simple-query and extended-protocol response paths."
+  - "The PostgreSQL proxy gains schema-loading wiring equivalent to the MySQL proxy: the runner passes a schema source when building the postgres proxy command, cmd/linespec/main_stable.go's postgresql case loads it into the proxy, and the proxy's existing schemaCache field is actually populated and consulted for OID lookup."
+  - "database.port defaults per db.Type (5432 postgresql, 3306 mysql, 27017 mongodb) whenever it is unset, regardless of whether database.image was also explicitly set — not only when db.Image == \"\"."
+  - "CleanupSharedInfrastructure surfaces or retries a failed Docker network removal instead of silently discarding the error, so a subsequent run's CreateNetwork does not fail with \"network with name linespec-shared-net already exists\" after a prior failed run."
+  - "No regression to the existing MySQL --schema-file loading path, and no regression to synchronous (non-JOB/EVENT) PostgreSQL specs."
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result.go
+  - pkg/registry/registry.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/cli.go
+  - pkg/config/parser.go
+  - pkg/config/database_port_default_test.go
+  - pkg/docker/orchestrator.go
+  - pkg/runner/network_cleanup_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: examples/asynq-worker/linespecs/process_report_job.linespec
+    type: linespec
+    run_command: linespec test examples/asynq-worker/linespecs/process_report_job.linespec
+  - path: pkg/config/database_port_default_test.go
+    type: unit_test
+    run_command: go test ./pkg/config/... -run TestDatabasePortDefaultsWithExplicitImage -v
+  - path: pkg/runner/network_cleanup_test.go
+    type: unit_test
+    run_command: go test ./pkg/runner/... -run TestCleanupSharedInfrastructureSurfacesNetworkRemovalFailure -v
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - proxy
+  - schema-cache
+  - async
+  - verification
+  - issue-152
