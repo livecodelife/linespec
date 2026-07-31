@@ -42,6 +42,7 @@ type ProvenanceConfig struct {
 	CommitOnStatusChange         bool
 	Embedding                    *config.EmbeddingConfig
 	ManifestURL                  string // source manifest URL, set by linespec clone
+	WriteRestriction             *bool  // whether the fswrite permission projection is enforced; nil/true (default) restricts, false disables it entirely
 }
 
 // Overlap-teeth severity modes for overlap_specs_on_complete. block is the default
@@ -885,7 +886,7 @@ func restoreFiles(snaps []fileSnapshot) {
 // cache-backed projection TryNextFromCache built, satisfying "sourced from the
 // existing scope-index cache" without a second load.
 func (c *Commands) reconcile() (*ReconcileResult, error) {
-	if ColdStartSkip(c.Loader.Records, c.Config) {
+	if WriteRestrictionEnabled(c.Config) && ColdStartSkip(c.Loader.Records, c.Config) {
 		return &ReconcileResult{}, nil
 	}
 	files, err := listTrackedFiles(c.RepoRoot)
@@ -949,6 +950,9 @@ func (c *Commands) Reconcile(opts ReconcileOptions) error {
 // exclusive claim on the paths it granted. Best-effort: a failure here must
 // not undo an otherwise-successful status transition, so it only warns.
 func (c *Commands) relockClosedScope(closed *Record) {
+	if !WriteRestrictionEnabled(c.Config) {
+		return // restriction disabled entirely (prov-2026-c1515def): nothing to re-lock
+	}
 	if closed.ScopeMode() != "allowlist" {
 		return // observed-mode records never granted writability (constraint 1)
 	}

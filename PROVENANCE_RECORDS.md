@@ -1048,6 +1048,14 @@ provenance:
     - "**/*_gen.go"         # glob — generated Go files anywhere
     - CHANGELOG.md          # exact path
     - /.*\.pb\.go$/         # regex — protobuf-generated files
+
+  # Whether the filesystem write-permission projection (see "Filesystem write
+  # enforcement" under Open, above) is enforced at all (default: true).
+  # Set to false to opt a project out of the restriction entirely — every file
+  # stays writable, including previously-locked ones, regardless of open
+  # record scope. Most projects don't want this level of restriction from day
+  # one; leave it unset (or true) to keep the default behavior.
+  write_restriction: true
 ```
 
 ### Configuration Options
@@ -1062,6 +1070,11 @@ provenance:
 | `overlap_specs_on_complete` | string | `block` | Completion-time overlap teeth severity: `block`\|`warn`\|`off` |
 | `shared_repos` | array | `[]` | Additional directories |
 | `exclude_paths` | array | `[]` | Files exempt from all governance (globs, paths, dir prefixes, `/regex/`) |
+| `write_restriction` | bool | `true` | Whether the filesystem write-permission projection is enforced at all |
+
+#### `write_restriction`
+
+The [filesystem write enforcement](#open) described under `open` locks down every file not covered by an open record's `affected_scope`. Set `write_restriction: false` to disable that projection entirely: `linespec provenance reconcile` (and every command that calls it, including `next`) then leaves — or makes — every file writable, with no dependency on open record scope. Completing or deprecating a record also skips re-locking its scope while the key is `false`. Unset or `true` keeps today's default behavior unchanged, since most projects don't want this level of restriction from the very start.
 
 #### `overlap_specs_on_complete`
 

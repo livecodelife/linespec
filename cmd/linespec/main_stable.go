@@ -963,6 +963,7 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.CacheTTLMinutes = fullConfig.Provenance.CacheTTLMinutes
 			cfg.ManifestURL = fullConfig.Provenance.ManifestURL
 			cfg.ExcludePaths = fullConfig.Provenance.ExcludePaths
+			cfg.WriteRestriction = fullConfig.Provenance.WriteRestriction
 
 			if fullConfig.Provenance.Embedding != nil {
 				cfg.Embedding = fullConfig.Provenance.Embedding

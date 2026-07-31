@@ -342,6 +342,21 @@ func restorePerms(snaps []permSnapshot) {
 	}
 }
 
+// WriteRestrictionEnabled reports whether the filesystem write-permission
+// projection (prov-2026-8d2f5f2a) is enforced at all. A nil config or an unset
+// write_restriction key both mean the default — enabled — so installations
+// that predate this key keep today's behavior unchanged (prov-2026-c1515def
+// constraint: "All other functionality must work as is"). Setting
+// write_restriction: false opts a project out of the restriction entirely: it
+// is unlikely that every project wants this level of restriction from the
+// start.
+func WriteRestrictionEnabled(config *ProvenanceConfig) bool {
+	if config == nil || config.WriteRestriction == nil {
+		return true
+	}
+	return *config.WriteRestriction
+}
+
 // ColdStartSkip reports whether reconcile should skip enforcement entirely
 // because the project has no provenance records yet. Hand-initialized projects
 // default to warn-until-first-record (skip=true) so the tree is never locked
@@ -367,24 +382,36 @@ type ReconcileResult struct {
 // the correct state is left untouched — and it never invents candidate paths:
 // it walks only the caller-supplied files (e.g. a git-tracked file list), so it
 // never reaches into VCS internals or untracked build output. Cold-start
-// projects with no records yet are skipped entirely (see ColdStartSkip).
+// projects with no records yet are skipped entirely (see ColdStartSkip). When
+// WriteRestrictionEnabled(config) is false (prov-2026-c1515def), the projection
+// is off entirely: every file is treated as writable — including unlocking any
+// path a prior reconcile pass had already locked — so no restriction is
+// present regardless of open record scope.
 func Reconcile(repoRoot string, files []string, records []*Record, config *ProvenanceConfig) (*ReconcileResult, error) {
 	result := &ReconcileResult{}
-	if ColdStartSkip(records, config) {
+	restricted := WriteRestrictionEnabled(config)
+	if restricted && ColdStartSkip(records, config) {
 		return result, nil
 	}
 
-	always := AlwaysWritablePaths(config, records, repoRoot)
-	openScope := OpenAllowlistScope(records)
+	var always, openScope []string
+	if restricted {
+		always = AlwaysWritablePaths(config, records, repoRoot)
+		openScope = OpenAllowlistScope(records)
+	}
 
 	writableDirs := map[string]bool{}
 	for _, rel := range files {
 		if rel == "" {
 			continue
 		}
-		writable, err := IsWritablePath(rel, always, openScope)
-		if err != nil {
-			return result, err
+		writable := true
+		if restricted {
+			var err error
+			writable, err = IsWritablePath(rel, always, openScope)
+			if err != nil {
+				return result, err
+			}
 		}
 		if writable {
 			writableDirs[filepath.Dir(rel)] = true
@@ -425,23 +452,26 @@ func Reconcile(repoRoot string, files []string, records []*Record, config *Prove
 	// an otherwise-empty directory) actually become usable after `open`
 	// accepts it (prov-2026-b4006eda); an exact path keeps unlocking only when
 	// it does not already exist, since an existing match is already handled by
-	// the writable-files loop above.
-	for _, r := range records {
-		if r.Status != StatusOpen || r.ScopeMode() != "allowlist" {
-			continue
-		}
-		for _, p := range r.AffectedScope {
-			if p == "" {
+	// the writable-files loop above. Not needed when restriction is disabled —
+	// every file (existing or not) is already treated as writable above.
+	if restricted {
+		for _, r := range records {
+			if r.Status != StatusOpen || r.ScopeMode() != "allowlist" {
 				continue
 			}
-			if containsGlobMeta(p) || isRegexScopePattern(p) {
-				if dir := patternBaseDir(p); dir != "" {
-					writableDirs[dir] = true
+			for _, p := range r.AffectedScope {
+				if p == "" {
+					continue
 				}
-				continue
-			}
-			if _, err := os.Lstat(filepath.Join(repoRoot, p)); os.IsNotExist(err) {
-				writableDirs[filepath.Dir(p)] = true
+				if containsGlobMeta(p) || isRegexScopePattern(p) {
+					if dir := patternBaseDir(p); dir != "" {
+						writableDirs[dir] = true
+					}
+					continue
+				}
+				if _, err := os.Lstat(filepath.Join(repoRoot, p)); os.IsNotExist(err) {
+					writableDirs[filepath.Dir(p)] = true
+				}
 			}
 		}
 	}

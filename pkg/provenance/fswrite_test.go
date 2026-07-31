@@ -485,3 +485,86 @@ func TestRefreshScopeIndexCache_WarnsOnSaveFailureInsteadOfSwallowingIt(t *testi
 		t.Errorf("expected a warning on stderr when the scope index cache fails to save, got %q", buf.String())
 	}
 }
+
+// --- WriteRestrictionEnabled / write_restriction config (prov-2026-c1515def) ----
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestWriteRestrictionEnabled_DefaultsTrueOnNilConfigOrUnsetKey(t *testing.T) {
+	if !WriteRestrictionEnabled(nil) {
+		t.Errorf("expected enabled=true for a nil config")
+	}
+	if !WriteRestrictionEnabled(&ProvenanceConfig{}) {
+		t.Errorf("expected enabled=true when write_restriction is unset, to preserve pre-existing behavior")
+	}
+}
+
+func TestWriteRestrictionEnabled_HonorsExplicitValue(t *testing.T) {
+	if !WriteRestrictionEnabled(&ProvenanceConfig{WriteRestriction: boolPtr(true)}) {
+		t.Errorf("expected enabled=true when write_restriction: true")
+	}
+	if WriteRestrictionEnabled(&ProvenanceConfig{WriteRestriction: boolPtr(false)}) {
+		t.Errorf("expected enabled=false when write_restriction: false")
+	}
+}
+
+func TestReconcile_WriteRestrictionDisabled_LeavesUncoveredFileWritable(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	uncovered := filepath.Join(repo, "pkg", "uncovered.go")
+	writePerm(t, uncovered, 0o644)
+
+	records := []*Record{{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/covered.go"}}}
+	config := &ProvenanceConfig{Dir: "provenance", WriteRestriction: boolPtr(false)}
+
+	if _, err := Reconcile(repo, []string{"pkg/uncovered.go"}, records, config); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !isWritableOnDisk(t, uncovered) {
+		t.Errorf("pkg/uncovered.go should remain writable — write_restriction: false must leave no restriction present")
+	}
+}
+
+func TestReconcile_WriteRestrictionDisabled_UnlocksAlreadyLockedFile(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(repo, "pkg", "locked.go")
+	writePerm(t, locked, 0o444)
+
+	records := []*Record{{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/other.go"}}}
+	config := &ProvenanceConfig{Dir: "provenance", WriteRestriction: boolPtr(false)}
+
+	result, err := Reconcile(repo, []string{"pkg/locked.go"}, records, config)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !isWritableOnDisk(t, locked) {
+		t.Errorf("a previously-locked file must be unlocked once write_restriction: false is set")
+	}
+	if len(result.Unlocked) != 1 || result.Unlocked[0] != "pkg/locked.go" {
+		t.Errorf("result.Unlocked = %v, want [pkg/locked.go]", result.Unlocked)
+	}
+}
+
+func TestReconcile_WriteRestrictionEnabled_StillLocksUncovered(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	uncovered := filepath.Join(repo, "pkg", "uncovered.go")
+	writePerm(t, uncovered, 0o644)
+
+	records := []*Record{{ID: "prov-2026-0001", Status: StatusOpen, AffectedScope: []string{"pkg/covered.go"}}}
+	config := &ProvenanceConfig{Dir: "provenance", WriteRestriction: boolPtr(true)}
+
+	if _, err := Reconcile(repo, []string{"pkg/uncovered.go"}, records, config); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if isWritableOnDisk(t, uncovered) {
+		t.Errorf("write_restriction: true must keep restricting exactly as the default does")
+	}
+}

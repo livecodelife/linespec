@@ -182,3 +182,52 @@ payload:
 		t.Errorf("Expected 2 supported formats, got %d", len(cfg.Payload.SupportedFormats))
 	}
 }
+
+func TestProvenanceWriteRestrictionUnsetByDefault(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, ".linespec.yml")
+	configContent := `
+service:
+  name: test-service
+  port: 3000
+provenance:
+  dir: provenance
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	cfg, err := LoadConfig(tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Provenance.WriteRestriction != nil {
+		t.Errorf("Expected WriteRestriction to stay nil (default/enabled) when write_restriction is unset, got %v", *cfg.Provenance.WriteRestriction)
+	}
+}
+
+func TestProvenanceWriteRestrictionParsesExplicitFalse(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, ".linespec.yml")
+	configContent := `
+service:
+  name: test-service
+  port: 3000
+provenance:
+  dir: provenance
+  write_restriction: false
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	cfg, err := LoadConfig(tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Provenance.WriteRestriction == nil || *cfg.Provenance.WriteRestriction {
+		t.Errorf("Expected WriteRestriction to parse to a pointer to false, got %v", cfg.Provenance.WriteRestriction)
+	}
+}
