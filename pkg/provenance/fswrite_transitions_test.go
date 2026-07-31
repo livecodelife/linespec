@@ -303,6 +303,23 @@ func TestComplete_RelocksScopeNoLongerCoveredByAnyOpenRecord(t *testing.T) {
 	}
 }
 
+func TestComplete_WriteRestrictionDisabled_DoesNotRelockScope(t *testing.T) {
+	cmds, repo, _ := newTransitionTestRepo(t, false)
+	cmds.Config.WriteRestriction = boolPtr(false)
+	id := "prov-2026-bbbb0009"
+	target := setupOpenableRecord(t, cmds, repo, id)
+
+	if err := cmds.Open(OpenOptions{RecordID: id}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := cmds.Complete(CompleteOptions{RecordID: id}); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if !isWritableOnDisk(t, target) {
+		t.Errorf("pkg/thing.go must stay writable after Complete — write_restriction: false means no restriction is present")
+	}
+}
+
 func TestComplete_LeavesScopeWritableWhenAnotherOpenRecordStillCoversIt(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 	idA := "prov-2026-bbbb0006"
@@ -523,6 +540,30 @@ func TestLockScope_DraftRecordDoesNotMaterializePermissions(t *testing.T) {
 // drifted out of sync with the current set of open records' scopes, in
 // either direction, since enforcement must not depend on the Claude Code
 // plugin hooks being installed.
+// TestCommandsReconcile_WriteRestrictionDisabled_BypassesColdStartSkip guards
+// against a bug where Commands.reconcile's own cold-start short-circuit (a
+// micro-optimization to skip the git-tracked-files walk on a fresh project)
+// ran ahead of, and independently from, Reconcile's write_restriction check —
+// so a zero-record project with write_restriction: false never actually
+// reached the disabled-restriction unlock path.
+func TestCommandsReconcile_WriteRestrictionDisabled_BypassesColdStartSkip(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, false)
+	cmds.Config.WriteRestriction = boolPtr(false)
+	t.Chdir(repo)
+
+	locked := filepath.Join(repo, "locked.go")
+	writePerm(t, locked, 0o444)
+	gitExec(t, repo, "add", "locked.go")
+	gitExec(t, repo, "commit", "-m", "add locked.go")
+
+	if err := cmds.Reconcile(ReconcileOptions{}); err != nil {
+		t.Fatalf("Reconcile: %v (output: %s)", err, buf.String())
+	}
+	if !isWritableOnDisk(t, locked) {
+		t.Errorf("locked.go should be unlocked — write_restriction: false must apply even with zero records (cold start)")
+	}
+}
+
 func TestNext_ReconcilesWriteBitsUnconditionally(t *testing.T) {
 	cmds, repo, _ := newTransitionTestRepo(t, false)
 	id := "prov-2026-bbbb0014"

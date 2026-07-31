@@ -12,6 +12,22 @@ constraints:
   - When the value is true the write access must be restricted without an open imprint record governing the target file.
   - When the value is false write restrictions must not be present.
   - All other functionality must work as is.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/config/parser_test.go
+  - pkg/provenance/fswrite.go
+  - pkg/provenance/fswrite_test.go
+  - pkg/provenance/fswrite_transitions_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - PROVENANCE_RECORDS.md
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    run_command: make test
+  - path: pkg/provenance/fswrite_transitions_test.go
+    run_command: make test
+  - path: pkg/config/parser_test.go
+    run_command: make test
 tags:
   - restriction
   - config

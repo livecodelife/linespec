@@ -352,6 +352,7 @@ type ProvenanceConfig struct {
 	CommitOnStatusChange         bool               `yaml:"commit_on_status_change"`          // whether to auto-commit after open, complete, or deprecate transitions
 	Embedding                    *EmbeddingConfig   `yaml:"embedding,omitempty"`              // embedding API configuration
 	ManifestURL                  string             `yaml:"manifest_url,omitempty"`           // source manifest URL set by linespec clone
+	WriteRestriction             *bool              `yaml:"write_restriction,omitempty"`      // whether the filesystem write-permission projection is enforced; unset/true (default) restricts, false disables it entirely
 }
 
 // DependencyConfig defines external service dependencies
