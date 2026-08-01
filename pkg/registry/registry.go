@@ -1188,12 +1188,17 @@ func mockHitKey(mock *types.ExpectStatement) string {
 	switch mock.Channel {
 	case types.HTTP:
 		return fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-	case types.ReadMySQL, types.ReadPostgreSQL:
+	case types.ReadMySQL, types.ReadPostgreSQL, types.WriteMySQL, types.WritePostgreSQL:
+		// WriteMySQL/WritePostgreSQL used to fall through to the generic
+		// Channel+Table default below, which drops both the SQL text and CallN —
+		// two USING_SQL WRITE mocks on the same table (a common CALL N sequence
+		// of INSERTs, or two differently-worded EXPECTs) collided onto the same
+		// key, so a hit on one silently satisfied the other on the host side.
 		sqlKey := mock.SQL
 		if sqlKey == "" && mock.SQLContains != "" {
 			sqlKey = "~" + mock.SQLContains
 		}
-		return fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
+		return fmt.Sprintf("%s-%s-%s-%d", mock.Channel, mock.Table, sqlKey, mock.CallN)
 	case types.GRPC:
 		return fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
 	case types.ReadRedis, types.WriteRedis:
@@ -1213,13 +1218,19 @@ func (r *MockRegistry) GetHits() map[string]int {
 	return res
 }
 
+// SetHits merges hit counts reported by a proxy sidecar into the host-side
+// registry. hostHits values are cumulative totals from the container (per
+// GetHits), so this takes the max rather than adding — the async poll loop in
+// runTestPhase calls collectHits repeatedly (every 500ms, plus once more after
+// the loop breaks), and adding the same cumulative total on every poll would
+// inflate counts by a multiple of the true hit count on every call.
 func (r *MockRegistry) SetHits(hostHits map[string]int) {
 	r.Lock()
 	defer r.Unlock()
 	for _, mocks := range r.mocks {
 		for _, mock := range mocks {
-			if count, ok := hostHits[mockHitKey(mock)]; ok {
-				r.hits[mock] += count
+			if count, ok := hostHits[mockHitKey(mock)]; ok && count > r.hits[mock] {
+				r.hits[mock] = count
 			}
 		}
 	}

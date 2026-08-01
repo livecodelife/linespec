@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -124,6 +125,32 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 // ${VAR} tokens in RETURNS payload files are resolved at runtime.
 func (p *Proxy) SetResolver(resolver *interpolate.Resolver) {
 	p.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
+}
+
+// LoadSchema reads table schema (keyed by table name, produced by the runner
+// via live information_schema introspection of the just-started PostgreSQL
+// container) from a JSON file and populates schemaCache, mirroring the MySQL
+// proxy's --schema-file support. Column .Type values are expected to be raw
+// PostgreSQL information_schema.columns.data_type strings (e.g. "numeric",
+// "character varying"), which columnOID maps to real type OIDs.
+func (p *Proxy) LoadSchema(schemaFile string) error {
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+	return p.LoadSchemaFromBytes(data)
+}
+
+// LoadSchemaFromBytes unmarshals schema directly from bytes without file I/O.
+func (p *Proxy) LoadSchemaFromBytes(data []byte) error {
+	if err := json.Unmarshal(data, &p.schemaCache); err != nil {
+		return fmt.Errorf("failed to parse schema data: %w", err)
+	}
+	logger.Debug("Loaded schema for %d tables", len(p.schemaCache))
+	for table := range p.schemaCache {
+		logger.Debug("  - %s", table)
+	}
+	return nil
 }
 
 // Start starts the proxy server
@@ -556,15 +583,19 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 							// id columns must be declared as OID 2950 so typed clients like
 							// tokio-postgres accept the value without a type-mismatch error).
 							var sampleRow map[string]interface{}
-							if mock, found := p.peekMock(query, nil); found && mock.ReturnsFile != "" {
-								p.loader.BaseDir = mock.BaseDir
-								if pld, err := p.loader.Load(mock.ReturnsFile); err == nil {
-									if rows := p.extractRowsFromPayload(pld); len(rows) > 0 {
-										sampleRow = rows[0]
+							var mockTable string
+							if mock, found := p.peekMock(query, nil); found {
+								mockTable = mockTableName(mock)
+								if mock.ReturnsFile != "" {
+									p.loader.BaseDir = mock.BaseDir
+									if pld, err := p.loader.Load(mock.ReturnsFile); err == nil {
+										if rows := p.extractRowsFromPayload(pld); len(rows) > 0 {
+											sampleRow = rows[0]
+										}
 									}
 								}
 							}
-							if err := p.result.SendRowDescriptionWithHints(clientConn, cols, sampleRow); err != nil {
+							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, sampleRow, p.schemaCache); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -596,7 +627,8 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 							// READ mock: send RowDescription so Execute can skip it.
 							// Use value-based hints so UUID-valued id columns are declared
 							// as OID 2950 rather than INT4.
-							cols := p.inferColumnsForTable(mp.Mock.Table)
+							mockTable := mockTableName(mp.Mock)
+							cols := p.inferColumnsForTable(mockTable)
 							var sampleRow map[string]interface{}
 							if mp.Mock.ReturnsFile != "" {
 								p.loader.BaseDir = mp.Mock.BaseDir
@@ -606,7 +638,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 									}
 								}
 							}
-							if err := p.result.SendRowDescriptionWithHints(clientConn, cols, sampleRow); err != nil {
+							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, sampleRow, p.schemaCache); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -804,7 +836,7 @@ func containsReadyForQuery(data []byte) bool {
 // txStatus is the PostgreSQL transaction status byte ('T' = in transaction, 'I' = idle)
 // to include in the ReadyForQuery message.
 func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatement, msgType byte, query string, txStatus byte) error {
-	logger.Debug("PostgreSQL Proxy: Sending mock response for %s query", msgType)
+	logger.Debug("PostgreSQL Proxy: Sending mock response for %c query", msgType)
 
 	// Execute VERIFY rules if any
 	if len(mock.Verify) > 0 {
@@ -830,9 +862,10 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 // txStatus is the transaction status byte for the ReadyForQuery message.
 func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStatement, query string, txStatus byte) error {
 	// Determine columns
+	table := mockTableName(mock)
 	columns := []string{"id", "name", "email"}
-	if mock.Table != "" {
-		columns = p.inferColumnsForTable(mock.Table)
+	if table != "" {
+		columns = p.inferColumnsForTable(table)
 	}
 
 	// For reads, send RowDescription + DataRows
@@ -853,7 +886,7 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 		}
 		if mock.ReturnsEmpty {
 			// Empty result: RowDescription + CommandComplete + ReadyForQuery
-			if err := p.result.SendRowDescription(clientConn, columns); err != nil {
+			if err := p.result.SendRowDescription(clientConn, table, columns, p.schemaCache); err != nil {
 				return err
 			}
 		} else if mock.ReturnsFile != "" {
@@ -861,7 +894,7 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 			payload, err := p.loader.Load(mock.ReturnsFile)
 			if err != nil {
 				logger.Error("PostgreSQL Proxy: Error loading payload: %v", err)
-				return p.result.SendEmptyResultSet(clientConn, columns)
+				return p.result.SendEmptyResultSet(clientConn, table, columns, p.schemaCache)
 			}
 
 			rows := p.extractRowsFromPayload(payload)
@@ -880,7 +913,7 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 				}
 			}
 
-			if err := p.result.SendRowDescription(clientConn, columns); err != nil {
+			if err := p.result.SendRowDescription(clientConn, table, columns, p.schemaCache); err != nil {
 				return err
 			}
 
@@ -890,7 +923,7 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 				}
 			}
 		} else {
-			if err := p.result.SendEmptyResultSet(clientConn, columns); err != nil {
+			if err := p.result.SendEmptyResultSet(clientConn, table, columns, p.schemaCache); err != nil {
 				return err
 			}
 		}
@@ -1006,9 +1039,10 @@ func (p *Proxy) sendErrorResponseWithCode(conn net.Conn, sqlState, message strin
 // Bind message; they control how each DataRow value is encoded (0=text, 1=binary).
 func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectStatement, actualQuery string, skipRowDescription bool, resultFormatCodes []int16) error {
 	// Determine columns from mock or use defaults
+	table := mockTableName(mock)
 	columns := []string{"id", "name", "email"}
-	if mock.Table != "" {
-		columns = p.inferColumnsForTable(mock.Table)
+	if table != "" {
+		columns = p.inferColumnsForTable(table)
 	}
 
 	var rows []map[string]interface{}
@@ -1097,7 +1131,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 		if len(rows) > 0 {
 			sampleRow = rows[0]
 		}
-		if err := p.result.SendRowDescriptionWithHints(conn, columns, sampleRow); err != nil {
+		if err := p.result.SendRowDescriptionWithHints(conn, table, columns, sampleRow, p.schemaCache); err != nil {
 			return fmt.Errorf("error sending RowDescription: %w", err)
 		}
 	} else {
@@ -1175,6 +1209,21 @@ func (p *Proxy) resolveRowCount(mock *types.ExpectStatement, defaultWrite int) i
 		}
 	}
 	return defaultWrite
+}
+
+// mockTableName returns the table a mock targets for schema lookups. mock.Table
+// is only populated by legacy single-table EXPECTs; ACCESSING_TABLES-based
+// (semantic) mocks leave it empty, so fall back to the first accessed table —
+// schemaCache lookups and column inference would otherwise silently miss every
+// semantic mock.
+func mockTableName(mock *types.ExpectStatement) string {
+	if mock.Table != "" {
+		return mock.Table
+	}
+	if len(mock.AccessingTables) > 0 {
+		return mock.AccessingTables[0]
+	}
+	return ""
 }
 
 // inferColumnsForTable infers column names for a table from cached schema or returns defaults

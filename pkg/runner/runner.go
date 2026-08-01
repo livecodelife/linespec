@@ -22,6 +22,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/go-connections/nat"
 	"github.com/livecodelife/linespec/v3/pkg/config"
 	"github.com/livecodelife/linespec/v3/pkg/docker"
@@ -915,7 +916,44 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 	}
 }
 
-func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
+// removeNetworkWithRetry retries removeFn with a short backoff, returning the
+// last error if every attempt fails. Docker can report a network as still
+// having active endpoints for a brief window right after its last container is
+// stopped/removed (endpoint detachment happens asynchronously in the daemon),
+// so a single immediate removal attempt is prone to a spurious failure that a
+// short retry resolves on its own. A "not found" error means there is nothing
+// to remove (e.g. the opportunistic pre-cleanup at the start of a fresh suite,
+// before any network has ever been created) and is treated as success rather
+// than retried or surfaced.
+func removeNetworkWithRetry(ctx context.Context, attempts int, delay time.Duration, removeFn func(context.Context) error) error {
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		lastErr = removeFn(ctx)
+		if lastErr == nil || errdefs.IsNotFound(lastErr) {
+			return nil
+		}
+		if attempt == attempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return lastErr
+		case <-time.After(delay):
+		}
+	}
+	return lastErr
+}
+
+// CleanupSharedInfrastructure tears down the suite's shared containers and
+// network. It returns the network removal error (after retrying) instead of
+// discarding it: a network left behind by a failed run has active endpoints
+// from containers that outlived their run, so a plain `docker network rm`
+// fails — and silently swallowing that error let the *next* run's CreateNetwork
+// fail with a confusing "network with name ... already exists", masking the
+// original problem. Callers that treat this as best-effort (e.g. opportunistic
+// cleanup before a fresh setup) may ignore the returned error, since the
+// underlying failure is always logged here regardless.
+func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) error {
 	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}))
 	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetDatabaseContainer(config.ContainerNameParams{}))
 
@@ -946,10 +984,16 @@ func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) {
 	}
 	stopWg.Wait()
 
-	_ = s.orch.RemoveNetwork(ctx, s.networkName)
+	err := removeNetworkWithRetry(ctx, 5, 500*time.Millisecond, func(c context.Context) error {
+		return s.orch.RemoveNetwork(c, s.networkName)
+	})
+	if err != nil {
+		logger.Error("Failed to remove shared network %q after retries: %v — run `docker network rm %s` manually, or the next run's setup will fail with \"network already exists\"", s.networkName, err, s.networkName)
+	}
 
 	// Note: We don't clean up tempDir here - it's needed for shared schema file
 	// The OS will automatically clean up /tmp directories
+	return err
 }
 
 func (s *TestSuite) RunTest(ctx context.Context, specPath string) error {
@@ -1316,6 +1360,20 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 				if db.Proxy != nil && *db.Proxy {
 					pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+					if pgSchema, err := r.suite.fetchPostgresSchema(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database); err != nil {
+						logger.Debug("Failed to fetch PostgreSQL schema for OID resolution (host=%s): %v", db.Host, err)
+					} else if len(pgSchema) > 0 {
+						if schemaData, merr := json.Marshal(pgSchema); merr != nil {
+							logger.Debug("Failed to marshal PostgreSQL schema (host=%s): %v", db.Host, merr)
+						} else {
+							schemaFileName := "pg-schema-" + spec.Name + ".json"
+							if werr := os.WriteFile(filepath.Join(r.tempDir, schemaFileName), schemaData, 0600); werr != nil {
+								logger.Debug("Failed to write PostgreSQL schema file (host=%s): %v", db.Host, werr)
+							} else {
+								pgProxyCmd = append(pgProxyCmd, "--schema-file", r.suite.containerNaming.GetRegistryMountPath()+"/"+schemaFileName)
+							}
+						}
+					}
 					if logger.IsDebug() {
 						pgProxyCmd = append(pgProxyCmd, "--debug")
 					}
@@ -1627,12 +1685,21 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if !cleanupHTTPProxy {
 				return
 			}
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			// StreamLogs (Follow: true) blocks until the container's log stream
+			// ends or its context expires; for a still-running proxy that means
+			// it blocks for the full timeout. Give it its own budget so it can
+			// never starve the StopAndRemoveContainer call below of context —
+			// sharing one context here left the container running (and attached
+			// to the shared network) whenever --debug was on, which is what
+			// eventually made CleanupSharedInfrastructure's network removal fail.
 			if logger.IsDebug() {
 				logger.Debug("Fetching HTTP proxy logs before cleanup")
-				_ = r.suite.orch.StreamLogs(cleanupCtx, httpProxyContainerName, os.Stdout, os.Stderr)
+				logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = r.suite.orch.StreamLogs(logCtx, httpProxyContainerName, os.Stdout, os.Stderr)
+				logCancel()
 			}
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, httpProxyContainerName)
 		}()
 		logger.Debug("HTTP proxy started with aliases: %v", httpProxyAliases)
@@ -1825,12 +1892,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if !cleanupGRPCProxy {
 				return
 			}
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			// See the matching comment on the HTTP proxy cleanup defer above:
+			// StreamLogs must not share a context with StopAndRemoveContainer, or
+			// it can consume the whole cleanup budget and leave the container
+			// (and its network endpoint) behind.
 			if logger.IsDebug() {
 				logger.Debug("Fetching gRPC proxy logs before cleanup")
-				_ = r.suite.orch.StreamLogs(cleanupCtx, grpcProxyContainerName, os.Stdout, os.Stderr)
+				logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = r.suite.orch.StreamLogs(logCtx, grpcProxyContainerName, os.Stdout, os.Stderr)
+				logCancel()
 			}
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, grpcProxyContainerName)
 		}()
 		grpcNatPort := nat.Port(fmt.Sprintf("%d/tcp", grpcPort))
@@ -1892,12 +1965,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if !cleanupRedisProxy {
 				return
 			}
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			// See the matching comment on the HTTP proxy cleanup defer above:
+			// StreamLogs must not share a context with StopAndRemoveContainer, or
+			// it can consume the whole cleanup budget and leave the container
+			// (and its network endpoint) behind.
 			if logger.IsDebug() {
 				logger.Debug("Fetching Redis proxy logs before cleanup")
-				_ = r.suite.orch.StreamLogs(cleanupCtx, redisProxyContainerName, os.Stdout, os.Stderr)
+				logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = r.suite.orch.StreamLogs(logCtx, redisProxyContainerName, os.Stdout, os.Stderr)
+				logCancel()
 			}
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 			_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, redisProxyContainerName)
 		}()
 		if inspectRedis, err := r.suite.orch.GetContainerInspect(ctx, redisProxyContainerName); err == nil && inspectRedis.NetworkSettings != nil {
@@ -2649,6 +2728,53 @@ func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string
 	}
 
 	return schemaCache, nil
+}
+
+// pgSchemaColumn mirrors postgresql.ColumnInfo's JSON shape (Field/Type) so the
+// schema file written here round-trips through postgresql.Proxy.LoadSchema.
+type pgSchemaColumn struct {
+	Field string `json:"Field"`
+	Type  string `json:"Type"`
+}
+
+// fetchPostgresSchema introspects a live PostgreSQL database for every table's
+// column names and types, keyed by table name, for the PostgreSQL proxy's
+// --schema-file so it can resolve real RowDescription OIDs instead of falling
+// back to name-based heuristics. Unlike the shared MySQL schema (fetched once
+// in SetupSharedInfrastructure), PostgreSQL databases are started per-service
+// inside RunSpec, so this is called there once the container is ready.
+func (s *TestSuite) fetchPostgresSchema(ctx context.Context, host, port, user, password, database string) (map[string][]pgSchemaColumn, error) {
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, database)
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database for schema introspection: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	discoverer := schema.NewAutoDiscoverer(db, "postgresql", nil)
+	tables, err := discoverer.DiscoverTables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover tables: %w", err)
+	}
+
+	result := make(map[string][]pgSchemaColumn, len(tables))
+	for _, table := range tables {
+		cols, err := discoverer.GetTableColumns(table)
+		if err != nil {
+			logger.Debug("Failed to fetch PostgreSQL columns for table %s: %v", table, err)
+			continue
+		}
+		pcols := make([]pgSchemaColumn, len(cols))
+		for i, c := range cols {
+			pcols[i] = pgSchemaColumn{Field: c.Name, Type: c.Type}
+		}
+		result[table] = pcols
+	}
+	return result, nil
 }
 
 // expBackoff returns the next retry delay using exponential backoff, capped at max.

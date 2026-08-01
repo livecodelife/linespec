@@ -23,6 +23,8 @@ affected_scope:
   - pkg/config/database_port_default_test.go
   - pkg/docker/orchestrator.go
   - pkg/runner/network_cleanup_test.go
+  - pkg/registry/registry_test.go
+  - pkg/proxy/postgresql/result_test.go
 type: bug
 extends: prov-2026-001
 superseded_by: ''
