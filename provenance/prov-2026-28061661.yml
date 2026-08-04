@@ -1,0 +1,86 @@
+id: prov-2026-28061661
+title: Semantic expectation clauses (VERIFY_*, and READ/WRITE) are parsed but never asserted — specs pass when deliberately wrong
+status: draft
+created_at: "2026-08-04"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >-
+  Fix the semantic EXPECT clause family reported against LineSpec v3.16.0 in an
+  Express 5 + PostgreSQL 17 app using databases: list form with proxy: true: a
+  block of the shape `EXPECT READ:POSTGRESQL users` / `ACCESSING_TABLES [users]`
+  / `VERIFY_OPERATION SELECT` reads as three assertions, but only
+  ACCESSING_TABLES can actually fail a spec. Root cause (confirmed by code
+  reading, not just black-box probing): pkg/registry/registry.go's
+  matchesSemanticConstraints correctly reads VerifyOperation/VerifyWhere/
+  VerifyWhereColumns/VerifyWrittenValues off the matched ExpectStatement and
+  FindMockByTables/PeekMockByTables correctly reject a candidate mock when a
+  declared VERIFY_* clause doesn't hold — but both pkg/proxy/postgresql/proxy.go
+  and pkg/proxy/mysql/proxy.go's matchMock() silently fall back to the legacy
+  FindMock/PeekMock (table-key + channel-vs-SQL-verb fuzzy match) whenever the
+  semantic path returns not-found, and that legacy path has no knowledge of the
+  VERIFY_* fields, so it re-matches the same mock and records it as hit anyway —
+  the spec then reports "met" next to a requirement the app got wrong. Separately,
+  matchesSemanticConstraints never checks mock.Channel (the READ/WRITE direction
+  declared on the EXPECT line) against the actual operation at all, on either the
+  semantic or legacy path, so direction is never enforced even without the
+  fallback bypass. The legacy standalone `VERIFY <field> <op> <value>` clause is
+  unaffected — it is checked separately, after mock selection, in each proxy's
+  sendMockResponse via verify.VerifySQL, which is the existing pattern the fix
+  should extend to VERIFY_OPERATION/VERIFY_WHERE/VERIFY_WHERE_COLUMNS/
+  VERIFY_WRITTEN_VALUES/direction so a violation surfaces as a real "not met"
+  failure instead of a silently-discarded semantic-match rejection.
+constraints:
+  - VERIFY_OPERATION fails the spec when the ExpectStatement's declared
+    operation (SELECT/INSERT/UPDATE/DELETE) does not match the operation of the
+    query actually matched to that mock, in both the PostgreSQL and MySQL
+    proxies.
+  - VERIFY_WHERE and VERIFY_WHERE_COLUMNS fail the spec when the declared
+    WHERE predicate/columns are not present (or a declared value does not
+    equal the wire-resolved actual value) in the query actually matched to
+    that mock, in both the PostgreSQL and MySQL proxies.
+  - VERIFY_WRITTEN_VALUES fails the spec when a declared written column/value
+    pair does not match the actual INSERT/UPDATE values of the query actually
+    matched to that mock, in both the PostgreSQL and MySQL proxies.
+  - The READ/WRITE direction keyword on an EXPECT line (mock.Channel) fails the
+    spec when the app performs the opposite kind of operation against the
+    declared table(s) (e.g. an EXPECT READ:POSTGRESQL matched to a table that
+    was only ever written), in both the PostgreSQL and MySQL proxies.
+  - A mock whose ACCESSING_TABLES matches the accessed table(s) but whose
+    VERIFY_* clause(s) or direction do not hold must not be silently re-matched
+    and satisfied via the legacy USING_SQL/channel-verb fallback path — a
+    semantic-match rejection must not be discarded in favor of a fallback match
+    on the same underlying query.
+  - Failure messages for the newly-enforced clauses follow the existing legacy
+    VERIFY failure style (state the clause, the expected value, and the actual
+    query/value observed) so spec authors can diagnose without re-running with
+    -d, matching the precedent set by the working legacy VERIFY clause.
+  - ACCESSING_TABLES enforcement, the legacy standalone VERIFY clause, and all
+    currently-passing specs (unit and examples/*-linespecs integration suites)
+    continue to behave unchanged — no regression to matching that is already
+    correct today.
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+  - pkg/registry/semantic_constraint_enforcement_test.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/mysql/proxy.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/semantic_constraint_enforcement_test.go
+    run_command: go test ./pkg/registry/... -run TestIssue159 -v
+  - path: pkg/registry/registry_test.go
+    run_command: go test ./pkg/registry/... -v
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - mysql
+  - registry
+  - verify
+  - semantic-matching
+  - issue-159
