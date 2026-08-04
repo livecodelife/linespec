@@ -881,6 +881,23 @@ func runProxyCore(pType, addr, upstream, dbName, kafkaHost, schemaDataB64, schem
 	case "postgresql":
 		pgProxy = postgresql.NewProxy(addr, upstream, reg)
 		pgProxy.SetResolver(resolver)
+		// Load schema from file if provided via --schema-file flag, mirroring the
+		// MySQL case above. Populates schemaCache so RowDescription messages carry
+		// real column OIDs instead of falling back to name-based heuristics.
+		if schemaFile != "" {
+			if err := pgProxy.LoadSchema(schemaFile); err != nil {
+				logger.Error("Failed to load schema from --schema-file: %v", err)
+				// Don't exit - schema is optional
+			}
+		} else if schemaDataB64 != "" {
+			schemaBytes, err := base64.StdEncoding.DecodeString(schemaDataB64)
+			if err != nil {
+				logger.Debug("Failed to decode --schema-data: %v", err)
+			} else if err := pgProxy.LoadSchemaFromBytes(schemaBytes); err != nil {
+				logger.Error("Failed to load schema from --schema-data: %v", err)
+				// Don't exit - schema is optional
+			}
+		}
 		proxyErr = pgProxy.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)

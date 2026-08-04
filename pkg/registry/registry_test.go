@@ -617,6 +617,107 @@ func TestMockRegistry_GetHits_GRPC(t *testing.T) {
 	}
 }
 
+// TestMockRegistry_GetHits_WriteSQLDistinguishesByQuery reproduces the async
+// JOB/EVENT "matched but never satisfied" bug: two USING_SQL WRITE mocks on the
+// same table (a common CALL N sequence of INSERTs matched over the PostgreSQL
+// simple-query path) used to collide onto the same "<Channel>-<Table>" hit key,
+// because mockHitKey only special-cased ReadMySQL/ReadPostgreSQL, not the write
+// channels. A hit on one mock would then be indistinguishable from a hit on the
+// other when the host reconstructs hit counts from the proxy sidecar's /verify
+// response, so the async poll loop (which relies on VerifyAll considering every
+// declared mock) could see an unrelated mock's hit "satisfy" the wrong EXPECT.
+func TestMockRegistry_GetHits_WriteSQLDistinguishesByQuery(t *testing.T) {
+	containerSide := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "report_job",
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.WritePostgreSQL,
+				Table:   "reports",
+				SQL:     "INSERT INTO reports (user_id) VALUES ($1)",
+			},
+			{
+				Channel: types.WritePostgreSQL,
+				Table:   "reports",
+				SQL:     "INSERT INTO reports (org_id) VALUES ($1)",
+			},
+		},
+	}
+	containerSide.Register(spec)
+
+	if _, found := containerSide.FindMock("reports", "INSERT INTO reports (user_id) VALUES ($1)"); !found {
+		t.Fatal("expected first mock to match")
+	}
+
+	hits := containerSide.GetHits()
+	if len(hits) != 1 {
+		t.Fatalf("expected exactly one distinct hit key, got %d: %v", len(hits), hits)
+	}
+	for key, count := range hits {
+		if count != 1 {
+			t.Errorf("expected hit count 1 for key %q, got %d", key, count)
+		}
+	}
+
+	// The host reconstructs its own registry from the same spec and merges in
+	// the sidecar-reported hits by key. Only the mock that was actually matched
+	// must end up satisfied — the other must remain unsatisfied (count 0), not
+	// silently satisfied by key collision.
+	hostSide := NewMockRegistry()
+	hostSide.Register(spec)
+	hostSide.SetHits(hits)
+
+	if err := hostSide.VerifyAll(); err == nil {
+		t.Fatal("expected VerifyAll to fail: the second INSERT mock was never hit")
+	}
+
+	if _, found := containerSide.FindMock("reports", "INSERT INTO reports (org_id) VALUES ($1)"); !found {
+		t.Fatal("expected second mock to match")
+	}
+	hostSide.SetHits(containerSide.GetHits())
+	if err := hostSide.VerifyAll(); err != nil {
+		t.Errorf("expected VerifyAll to pass once both mocks are hit, got: %v", err)
+	}
+}
+
+// TestMockRegistry_SetHits_IsMonotonicNotCumulative reproduces a second facet of
+// the same bug: the async poll loop in runTestPhase calls collectHits (which
+// calls SetHits) on every 500ms tick, and GetHits returns the container's
+// cumulative hit count each time. If SetHits added the reported count instead
+// of taking the max, a single real hit would be recounted on every poll,
+// inflating the host's hit count far past what actually happened.
+func TestMockRegistry_SetHits_IsMonotonicNotCumulative(t *testing.T) {
+	containerSide := NewMockRegistry()
+	spec := &types.TestSpec{
+		Name: "poll_test",
+		Expects: []types.ExpectStatement{
+			{Channel: types.WritePostgreSQL, Table: "reports", SQL: "INSERT INTO reports (id) VALUES (1)"},
+		},
+	}
+	containerSide.Register(spec)
+	if _, found := containerSide.FindMock("reports", "INSERT INTO reports (id) VALUES (1)"); !found {
+		t.Fatal("expected mock to match")
+	}
+	// GetHits returns the container's cumulative hit count (1, from the single
+	// match above), which stays the same on every subsequent /verify poll.
+	hostHits := containerSide.GetHits()
+
+	hostSide := NewMockRegistry()
+	hostSide.Register(spec)
+	// Simulate the async poll loop calling collectHits/SetHits repeatedly with
+	// that same cumulative snapshot from the container.
+	for i := 0; i < 5; i++ {
+		hostSide.SetHits(hostHits)
+	}
+
+	hits := hostSide.GetHits()
+	for key, count := range hits {
+		if count != 1 {
+			t.Errorf("expected hit count to stay at 1 across repeated polls, got %d for key %q", count, key)
+		}
+	}
+}
+
 func TestMockRegistry_GetHits_Redis(t *testing.T) {
 	reg := NewMockRegistry()
 

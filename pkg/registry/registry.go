@@ -19,6 +19,7 @@ type MockRegistry struct {
 	mocks        map[string][]*types.ExpectStatement // Map table name or topic to list of mocks
 	orderedMocks []*types.ExpectStatement            // All mocks in registration order (for deterministic fallback)
 	hits         map[*types.ExpectStatement]int      // Track how many times each mock was hit
+	hitKeys      map[*types.ExpectStatement]string   // mockHitKey(mock) snapshotted at hit time — see recordHit
 	seeds        map[string][][]byte                 // Kafka seed messages: topic -> ordered list of raw payloads
 	redisSeeds   map[string][][]byte                 // Redis job seeds: queue key -> ordered list of raw payloads
 	passthroughs []string                            // Descriptions of requests that bypassed the mock layer
@@ -32,6 +33,7 @@ func NewMockRegistry() *MockRegistry {
 		mocks:        make(map[string][]*types.ExpectStatement),
 		orderedMocks: make([]*types.ExpectStatement, 0),
 		hits:         make(map[*types.ExpectStatement]int),
+		hitKeys:      make(map[*types.ExpectStatement]string),
 		seeds:        make(map[string][][]byte),
 		redisSeeds:   make(map[string][][]byte),
 		passthroughs: make([]string, 0),
@@ -115,6 +117,7 @@ func (r *MockRegistry) ResetHits() {
 	r.Lock()
 	defer r.Unlock()
 	r.hits = make(map[*types.ExpectStatement]int)
+	r.hitKeys = make(map[*types.ExpectStatement]string)
 }
 
 // ClearState resets hits, passthroughs, and verifyErrors without touching mocks.
@@ -123,8 +126,23 @@ func (r *MockRegistry) ClearState() {
 	r.Lock()
 	defer r.Unlock()
 	r.hits = make(map[*types.ExpectStatement]int)
+	r.hitKeys = make(map[*types.ExpectStatement]string)
 	r.passthroughs = make([]string, 0)
 	r.verifyErrors = make([]string, 0)
+}
+
+// recordHit increments a mock's hit count and, on its first hit, snapshots
+// mockHitKey(mock) as it stands right now. Proxies (e.g. the MySQL proxy) may
+// mutate a matched mock's SQL field afterward for their own bookkeeping — that
+// mutation only touches the container's local copy, never the host's, so
+// computing the key lazily in GetHits (after such a mutation) would diverge
+// from the host's key for the same logical mock. Snapshotting here, before
+// callers regain control, keeps the two in sync.
+func (r *MockRegistry) recordHit(mock *types.ExpectStatement) {
+	r.hits[mock]++
+	if _, ok := r.hitKeys[mock]; !ok {
+		r.hitKeys[mock] = mockHitKey(mock)
+	}
 }
 
 // LoadFromBytes replaces the registry contents from JSON bytes (same format as SaveToFile).
@@ -458,7 +476,7 @@ func (r *MockRegistry) FindMockByTables(
 		chosen = topCandidates[0]
 	}
 
-	r.hits[chosen]++
+	r.recordHit(chosen)
 	return chosen, true
 }
 
@@ -546,7 +564,7 @@ func (r *MockRegistry) CheckNegativeMocksByTables(
 			continue
 		}
 		if matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
-			r.hits[mock]++
+			r.recordHit(mock)
 		}
 	}
 }
@@ -653,11 +671,11 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 					continue
 				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 					return mock, true
 				}
 				if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 					return mock, true
 				}
 			}
@@ -675,11 +693,11 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 				continue
 			}
 			if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 			if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 		}
@@ -698,29 +716,29 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 			continue
 		}
 		if mock.Channel == types.HTTP || mock.Channel == types.Event {
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 		if query != "" {
 			q := strings.TrimSpace(strings.ToUpper(query))
 			if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 			if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 			if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
-				r.hits[mock]++
+				r.recordHit(mock)
 				return mock, true
 			}
 		} else {
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -746,7 +764,7 @@ func (r *MockRegistry) FindHTTPMock(url string, method string) (*types.ExpectSta
 			continue
 		}
 		if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -781,7 +799,7 @@ func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[stri
 			if !bodyMatch(mock.WithFile, mock.BaseDir) {
 				continue
 			}
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -812,7 +830,7 @@ func (r *MockRegistry) FindKafkaMockWithBody(topic string, bodyMatch func(withFi
 			if !bodyMatch(mock.WithFile, mock.BaseDir) {
 				continue
 			}
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -875,12 +893,12 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 			if query != "" && mock.SQL != "" {
 				// Explicit exact-match SQL constraint.
 				if r.matchSQL(mock.SQL, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				}
 			} else if query != "" && mock.SQLContains != "" {
 				// Substring SQL constraint.
 				if r.matchSQLContains(mock.SQLContains, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				}
 			} else if query != "" {
 				// No SQL constraint on the mock: match on channel type.
@@ -892,15 +910,15 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 				if strings.HasPrefix(q, "SELECT") &&
 					(mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) &&
 					strings.Contains(q, keyUpper) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				} else if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) &&
 					(mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) &&
 					strings.Contains(q, keyUpper) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				} else if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
-					r.hits[mock]++
+					r.recordHit(mock)
 				} else if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
-					r.hits[mock]++
+					r.recordHit(mock)
 				}
 			} else {
 				// Empty query: only fire for non-SQL channel types (e.g. Kafka events).
@@ -908,7 +926,7 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 				if mock.Channel != types.ReadMySQL && mock.Channel != types.ReadPostgreSQL &&
 					mock.Channel != types.WriteMySQL && mock.Channel != types.WritePostgreSQL &&
 					mock.Channel != types.ReadMongoDB && mock.Channel != types.WriteMongoDB {
-					r.hits[mock]++
+					r.recordHit(mock)
 				}
 			}
 		}
@@ -922,9 +940,9 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 					continue
 				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				} else if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
-					r.hits[mock]++
+					r.recordHit(mock)
 				}
 			}
 		}
@@ -944,7 +962,7 @@ func (r *MockRegistry) CheckNegativeHTTPMocks(url string, method string) {
 				continue
 			}
 			if mock.Channel == types.HTTP && (mock.Method == "" || mock.Method == method) {
-				r.hits[mock]++
+				r.recordHit(mock)
 			}
 		}
 	}
@@ -969,7 +987,7 @@ func (r *MockRegistry) FindGRPCMock(service, method string) (*types.ExpectStatem
 			continue
 		}
 		if mock.Channel == types.GRPC {
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -1000,7 +1018,7 @@ func (r *MockRegistry) FindGRPCMockWithBody(service, method string, bodyMatch fu
 			if !bodyMatch(mock.WithFile, mock.BaseDir) {
 				continue
 			}
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -1019,7 +1037,7 @@ func (r *MockRegistry) CheckNegativeGRPCMocks(service, method string) {
 				continue
 			}
 			if mock.Channel == types.GRPC {
-				r.hits[mock]++
+				r.recordHit(mock)
 			}
 		}
 	}
@@ -1044,7 +1062,7 @@ func (r *MockRegistry) FindRedisMock(command, key string) (*types.ExpectStatemen
 			continue
 		}
 		if mock.Channel == types.ReadRedis || mock.Channel == types.WriteRedis {
-			r.hits[mock]++
+			r.recordHit(mock)
 			return mock, true
 		}
 	}
@@ -1063,7 +1081,7 @@ func (r *MockRegistry) CheckNegativeRedisMocks(command, key string) {
 				continue
 			}
 			if mock.Channel == types.ReadRedis || mock.Channel == types.WriteRedis {
-				r.hits[mock]++
+				r.recordHit(mock)
 			}
 		}
 	}
@@ -1170,7 +1188,10 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 }
 
 // mockHitKey returns the stable string key used to exchange hit counts between
-// the runner and proxy sidecar containers. It must be identical in GetHits and SetHits.
+// the runner and proxy sidecar containers. It must be identical in GetHits and
+// SetHits — which in turn means a proxy must never mutate a matched mock's SQL
+// (or any other field folded into this key) after the fact, since the host's
+// copy of that mock is parsed once from the spec and never sees live traffic.
 func mockHitKey(mock *types.ExpectStatement) string {
 	// Semantic SQL mocks: key by channel + table set + verify clauses + call N
 	if len(mock.AccessingTables) > 0 {
@@ -1188,12 +1209,17 @@ func mockHitKey(mock *types.ExpectStatement) string {
 	switch mock.Channel {
 	case types.HTTP:
 		return fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
-	case types.ReadMySQL, types.ReadPostgreSQL:
+	case types.ReadMySQL, types.ReadPostgreSQL, types.WriteMySQL, types.WritePostgreSQL:
+		// WriteMySQL/WritePostgreSQL used to fall through to the generic
+		// Channel+Table default below, which drops both the SQL text and CallN —
+		// two USING_SQL WRITE mocks on the same table (a common CALL N sequence
+		// of INSERTs, or two differently-worded EXPECTs) collided onto the same
+		// key, so a hit on one silently satisfied the other on the host side.
 		sqlKey := mock.SQL
 		if sqlKey == "" && mock.SQLContains != "" {
 			sqlKey = "~" + mock.SQLContains
 		}
-		return fmt.Sprintf("%s-%s-%s", mock.Channel, mock.Table, sqlKey)
+		return fmt.Sprintf("%s-%s-%s-%d", mock.Channel, mock.Table, sqlKey, mock.CallN)
 	case types.GRPC:
 		return fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
 	case types.ReadRedis, types.WriteRedis:
@@ -1208,18 +1234,28 @@ func (r *MockRegistry) GetHits() map[string]int {
 	defer r.RUnlock()
 	res := make(map[string]int)
 	for mock, count := range r.hits {
-		res[mockHitKey(mock)] = count
+		key, ok := r.hitKeys[mock]
+		if !ok {
+			key = mockHitKey(mock)
+		}
+		res[key] = count
 	}
 	return res
 }
 
+// SetHits merges hit counts reported by a proxy sidecar into the host-side
+// registry. hostHits values are cumulative totals from the container (per
+// GetHits), so this takes the max rather than adding — the async poll loop in
+// runTestPhase calls collectHits repeatedly (every 500ms, plus once more after
+// the loop breaks), and adding the same cumulative total on every poll would
+// inflate counts by a multiple of the true hit count on every call.
 func (r *MockRegistry) SetHits(hostHits map[string]int) {
 	r.Lock()
 	defer r.Unlock()
 	for _, mocks := range r.mocks {
 		for _, mock := range mocks {
-			if count, ok := hostHits[mockHitKey(mock)]; ok {
-				r.hits[mock] += count
+			if count, ok := hostHits[mockHitKey(mock)]; ok && count > r.hits[mock] {
+				r.hits[mock] = count
 			}
 		}
 	}

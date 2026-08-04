@@ -120,19 +120,25 @@ func applyDefaults(config *LineSpecConfig) {
 			switch db.Type {
 			case "mysql":
 				db.Image = "mysql:8.4"
-				if db.Port == 0 {
-					db.Port = 3306
-				}
 			case "postgresql":
 				db.Image = "postgres:16-alpine"
-				if db.Port == 0 {
-					db.Port = 5432
-				}
 			case "mongodb":
 				db.Image = "mongo:7"
-				if db.Port == 0 {
-					db.Port = 27017
-				}
+			}
+		}
+		// Port defaults per db.Type whenever unset — independent of whether Image
+		// was also explicitly set. This used to be nested inside the `db.Image ==
+		// ""` branch above, so an explicit image with no port left db.Port at its
+		// zero value, which Docker later rejects as "invalid port specification:
+		// 0/tcp" instead of defaulting to the type's standard port.
+		if db.Port == 0 {
+			switch db.Type {
+			case "mysql":
+				db.Port = 3306
+			case "postgresql":
+				db.Port = 5432
+			case "mongodb":
+				db.Port = 27017
 			}
 		}
 		// Host defaults: single unnamed database keeps "db" for backward compat;

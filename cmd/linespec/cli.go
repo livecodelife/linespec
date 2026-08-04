@@ -97,8 +97,8 @@ func newProxyCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dbName, "db-name", "", "Database name (required for mysql proxy)")
 	cmd.Flags().StringVar(&host, "host", "", "Advertised host (kafka proxy)")
-	cmd.Flags().StringVar(&schemaData, "schema-data", "", "Base64-encoded schema (mysql proxy)")
-	cmd.Flags().StringVar(&schemaFile, "schema-file", "", "Path to schema file (mysql proxy)")
+	cmd.Flags().StringVar(&schemaData, "schema-data", "", "Base64-encoded schema (mysql/postgresql proxy)")
+	cmd.Flags().StringVar(&schemaFile, "schema-file", "", "Path to schema file (mysql/postgresql proxy)")
 	cmd.Flags().StringVar(&sidecarPort, "sidecar-port", "8081", "Verification sidecar HTTP port")
 	cmd.Flags().StringVar(&grpcDescriptorSet, "grpc-descriptor-set", "", "Path to gRPC descriptor set (grpc proxy)")
 	return cmd

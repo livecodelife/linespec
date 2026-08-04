@@ -17,10 +17,12 @@ func NewResultHandler() *ResultHandler {
 	return &ResultHandler{}
 }
 
-// SendEmptyResultSet sends an empty result set
-func (r *ResultHandler) SendEmptyResultSet(conn net.Conn, columns []string) error {
+// SendEmptyResultSet sends an empty result set. table and schemaCache are used
+// to resolve real column OIDs from introspected schema; pass "" / nil to fall
+// back to the name-based heuristic in oidForColumn.
+func (r *ResultHandler) SendEmptyResultSet(conn net.Conn, table string, columns []string, schemaCache map[string][]ColumnInfo) error {
 	// Send RowDescription
-	if err := r.SendRowDescription(conn, columns); err != nil {
+	if err := r.SendRowDescription(conn, table, columns, schemaCache); err != nil {
 		return fmt.Errorf("error sending row description: %w", err)
 	}
 
@@ -50,8 +52,10 @@ func (r *ResultHandler) SendCommandComplete(conn net.Conn, tag string) error {
 	return nil
 }
 
-// SendRowDescription sends RowDescription message
-func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) error {
+// SendRowDescription sends RowDescription message. table and schemaCache, when
+// non-empty, are consulted first to resolve real column OIDs from introspected
+// schema; columns not found there fall back to the oidForColumn heuristic.
+func (r *ResultHandler) SendRowDescription(conn net.Conn, table string, columns []string, schemaCache map[string][]ColumnInfo) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
 	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size
@@ -80,12 +84,13 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 		// Column number
 		payload = append(payload, 0, 0)
 
-		// Type OID — use name-based heuristics so asyncpg picks the right
-		// native codec (int for id/_id, datetime for _at/time, str for rest).
-		// asyncpg consults the OID to choose binary vs text format in its Bind
-		// request, so matching the actual schema column types here lets asyncpg
-		// return proper Python types (int, datetime) instead of plain strings.
-		oid, typeSize := oidForColumn(col)
+		// Type OID — prefer the real introspected schema type when available;
+		// otherwise fall back to name-based heuristics so asyncpg picks the
+		// right native codec (int for id/_id, datetime for _at/time, str for
+		// rest). asyncpg consults the OID to choose binary vs text format in
+		// its Bind request, so matching the actual schema column types here
+		// lets asyncpg return proper Python types instead of plain strings.
+		oid, typeSize := columnOID(table, col, schemaCache)
 		typeOIDBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(typeOIDBuf, oid)
 		payload = append(payload, typeOIDBuf...)
@@ -109,24 +114,37 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, columns []string) erro
 	return err
 }
 
-// oidForColumnWithValueHint is like oidForColumn but checks the actual value
-// first to detect UUID-formatted strings that would otherwise be misidentified
-// as INT4. This is needed because id columns are commonly UUID in practice, and
-// typed clients (tokio-postgres, psycopg3) check the declared OID against the
-// requested Go/Rust type before decoding — a mismatch causes a type error.
-func oidForColumnWithValueHint(col string, val interface{}) (uint32, int) {
-	if s, ok := val.(string); ok && isUUIDString(s) {
-		return 2950, 16 // UUID
+// columnOID resolves a column's PostgreSQL type OID and wire size. It prefers
+// the introspected schemaCache (real column type from information_schema),
+// then a UUID-shaped sample value (id columns are commonly UUID in practice,
+// and typed clients like tokio-postgres/psycopg3 reject a declared/actual type
+// mismatch), and finally the column-name heuristic in oidForColumn. schemaCache
+// and/or val may be nil/empty; table == "" always skips the schema lookup.
+func columnOID(table, col string, schemaCache map[string][]ColumnInfo, val ...interface{}) (uint32, int) {
+	if table != "" {
+		for _, c := range schemaCache[table] {
+			if strings.EqualFold(c.Field, col) {
+				if oid, size, ok := pgOIDForInformationSchemaType(c.Type); ok {
+					return oid, size
+				}
+				break
+			}
+		}
+	}
+	if len(val) > 0 {
+		if s, ok := val[0].(string); ok && isUUIDString(s) {
+			return 2950, 16 // UUID
+		}
 	}
 	return oidForColumn(col)
 }
 
 // SendRowDescriptionWithHints sends a RowDescription, using the provided sample
 // row to refine per-column OID inference. Falls back to SendRowDescription when
-// sampleRow is nil.
-func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, columns []string, sampleRow map[string]interface{}) error {
-	if sampleRow == nil {
-		return r.SendRowDescription(conn, columns)
+// sampleRow is nil and no schema is cached for table.
+func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, table string, columns []string, sampleRow map[string]interface{}, schemaCache map[string][]ColumnInfo) error {
+	if sampleRow == nil && len(schemaCache[table]) == 0 {
+		return r.SendRowDescription(conn, table, columns, schemaCache)
 	}
 
 	fieldCount := uint16(len(columns))
@@ -142,7 +160,7 @@ func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, columns []str
 		payload = append(payload, 0, 0, 0, 0) // table OID
 		payload = append(payload, 0, 0)        // column number
 
-		oid, typeSize := oidForColumnWithValueHint(col, sampleRow[col])
+		oid, typeSize := columnOID(table, col, schemaCache, sampleRow[col])
 		typeOIDBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(typeOIDBuf, oid)
 		payload = append(payload, typeOIDBuf...)
@@ -188,6 +206,53 @@ func oidForColumn(col string) (uint32, int) {
 	}
 	// Everything else: TEXT
 	return 25, -1 // TEXT (variable length → -1)
+}
+
+// pgInformationSchemaTypeOIDs maps information_schema.columns.data_type values
+// (as returned by a live PostgreSQL introspection query) to their built-in type
+// OID and wire size. Keys are lowercase to match Postgres's own lowercase
+// data_type output. Parameterized types (e.g. "character varying(255)",
+// "numeric(10,2)") are matched on their base name by pgOIDForInformationSchemaType.
+var pgInformationSchemaTypeOIDs = map[string]struct {
+	oid  uint32
+	size int
+}{
+	"smallint":                    {21, 2},
+	"integer":                     {23, 4},
+	"bigint":                      {20, 8},
+	"numeric":                     {1700, -1},
+	"decimal":                     {1700, -1},
+	"real":                        {700, 4},
+	"double precision":            {701, 8},
+	"boolean":                     {16, 1},
+	"text":                        {25, -1},
+	"character varying":           {1043, -1},
+	"character":                   {1042, -1},
+	"uuid":                        {2950, 16},
+	"date":                        {1082, 4},
+	"time without time zone":      {1083, 8},
+	"time with time zone":         {1266, 12},
+	"timestamp without time zone": {1114, 8},
+	"timestamp with time zone":    {1184, 8},
+	"json":                        {114, -1},
+	"jsonb":                       {3802, -1},
+	"bytea":                       {17, -1},
+}
+
+// pgOIDForInformationSchemaType maps a raw information_schema.columns.data_type
+// string to its OID/size, stripping any "(...)" length/precision modifier
+// (e.g. "character varying(255)" -> "character varying"). ok is false for
+// types not in the table, so the caller can fall back to a heuristic.
+func pgOIDForInformationSchemaType(dataType string) (oid uint32, size int, ok bool) {
+	base := strings.ToLower(strings.TrimSpace(dataType))
+	if idx := strings.IndexByte(base, '('); idx != -1 {
+		base = strings.TrimSpace(base[:idx])
+	}
+	t, found := pgInformationSchemaTypeOIDs[base]
+	if !found {
+		return 0, 0, false
+	}
+	return t.oid, t.size, true
 }
 
 // SendDataRow sends a single DataRow message using name-based heuristics to
