@@ -1,6 +1,6 @@
 id: prov-2026-a0bac0d9
 title: 'PostgreSQL: matched expectations never marked satisfied (async/JOB), and mocked result sets sent with OID 0'
-status: open
+status: implemented
 created_at: '2026-07-31'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: 'Fix two PostgreSQL proxy defects reported against LineSpec v3.16.0 in a Rails + Sidekiq (RECEIVE JOB / async) integration test suite with prepared_statements: false (simple-query protocol) and an EXPECT that supplies RETURNS. (1) An interaction matched via the PostgreSQL simple-query (''Q'') path is logged as mocked, but the async verification loop never reports "all expected interactions satisfied" and the spec times out with "context deadline exceeded" even though the triggered job actually succeeded. A related log format-string bug at proxy.go:807 applies %s to a uint8 message-type byte, producing the diagnostic-hostile %!s(uint8=81) instead of the readable ''Q'' or numeric 81. (2) When the matching EXPECT supplies RETURNS, the mocked RowDescription is sent with OID 0 (or an unreliable name-based heuristic fallback) for every column because the PostgreSQL proxy''s schemaCache field is declared but never populated on any code path — unlike the MySQL proxy, which has real --schema-file plumbing (runner.go -> main_stable.go -> mysql.Proxy.LoadSchema) that PostgreSQL never received. The client cannot decode the response and the job fails deep inside application code. Both are suspected by the reporter to share a root cause (the schema cache never being populated for PostgreSQL), but code inspection did not find a single shared defect — fix each precisely, and use the schema-cache wiring gap to explain (2) and, if substantiated during implementation, also (1). Also fix two smaller correctness issues raised in the same report: a missing database.port default when database.image is set explicitly (produces a confusing "invalid port specification: 0/tcp" Docker error instead of defaulting to 5432/3306/27017 per db.Type), and a leaked linespec-shared-net Docker network after a failed run (CleanupSharedInfrastructure silently discards the RemoveNetwork error) that masks the original failure on the next run with "network with name linespec-shared-net already exists".'
@@ -28,7 +28,7 @@ affected_scope:
 type: bug
 extends: prov-2026-001
 superseded_by: ''
-sealed_at_sha: ''
+sealed_at_sha: 1efc170ae4581683a0eddaeaea60cc0b355319e4
 associated_specs:
   - path: examples/asynq-worker/linespecs/process_report_job.linespec
     run_command: linespec test {{path}}
