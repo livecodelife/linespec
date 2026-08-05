@@ -940,12 +940,16 @@ func (p *Proxy) extractQueryOperation(query string) string {
 	return ""
 }
 
+// MySQL (and the Rails mysql2 adapter in particular) always backtick-quotes
+// identifiers, e.g. `users`.`token` = '...' or INSERT INTO `users` (`name`, ...).
+// These patterns tolerate an optional backtick on either side of the
+// identifier so real wire queries — not just hand-written unquoted SQL — match.
 var (
-	mysqlReWhereCondition = regexp.MustCompile(`(?i)\b(\w+)\s*=\s*('[^']*'|\d+(?:\.\d+)?|\?)`)
-	mysqlReInsertCols     = regexp.MustCompile(`(?i)INSERT\s+(?:INTO\s+)?\w+\s*\(([^)]+)\)`)
+	mysqlReWhereCondition = regexp.MustCompile("(?i)`?\\b(\\w+)\\b`?\\s*=\\s*('[^']*'|\\d+(?:\\.\\d+)?|\\?)")
+	mysqlReInsertCols     = regexp.MustCompile("(?i)INSERT\\s+(?:INTO\\s+)?`?\\w+`?\\s*\\(([^)]+)\\)")
 	mysqlReInsertVals     = regexp.MustCompile(`(?i)\)\s*VALUES?\s*\(([^)]+)\)`)
 	mysqlReUpdateSet      = regexp.MustCompile(`(?i)SET\s+(.+?)(?:\s+WHERE\s+|\s*$)`)
-	mysqlReSetItem        = regexp.MustCompile(`(?i)(\w+)\s*=\s*('[^']*'|\d+(?:\.\d+)?|\?)`)
+	mysqlReSetItem        = regexp.MustCompile("(?i)`?(\\w+)`?\\s*=\\s*('[^']*'|\\d+(?:\\.\\d+)?|\\?)")
 )
 
 // extractWhereInfo extracts WHERE clause column names and resolved values.
@@ -994,6 +998,7 @@ func (p *Proxy) extractWrittenValuesFromSQL(query, operation string) map[string]
 		cols := splitCommaTrimmedMySQL(colM[1])
 		vals := splitCommaTrimmedMySQL(valM[1])
 		for i, col := range cols {
+			col = strings.Trim(col, "`")
 			if i < len(vals) {
 				v := strings.Trim(vals[i], "'")
 				if v == "?" {
