@@ -348,17 +348,59 @@ func semanticSpecificity(mock *types.ExpectStatement) int {
 	return score
 }
 
-// matchesSemanticConstraints reports whether all declared VERIFY_ clauses on mock
-// pass for the provided query information. An empty constraint always passes.
+// channelDirection reports the READ/WRITE direction implied by an EXPECT
+// channel, or "" for channels with no read/write distinction (HTTP, EVENT, ...).
+func channelDirection(channel types.ExpectChannel) string {
+	switch channel {
+	case types.ReadMySQL, types.ReadPostgreSQL, types.ReadMongoDB, types.ReadRedis:
+		return "READ"
+	case types.WriteMySQL, types.WritePostgreSQL, types.WriteMongoDB, types.WriteRedis:
+		return "WRITE"
+	default:
+		return ""
+	}
+}
+
+// operationDirection reports the READ/WRITE direction of a SQL operation verb
+// (SELECT/INSERT/UPDATE/DELETE), or "" if it cannot be classified.
+func operationDirection(operation string) string {
+	switch strings.ToUpper(operation) {
+	case "SELECT":
+		return "READ"
+	case "INSERT", "UPDATE", "DELETE":
+		return "WRITE"
+	default:
+		return ""
+	}
+}
+
+// channelLabel formats a channel constant (e.g. "WRITE_POSTGRESQL") in the
+// "WRITE:POSTGRESQL" style used by existing legacy VERIFY failure messages.
+func channelLabel(channel types.ExpectChannel) string {
+	return strings.Replace(string(channel), "_", ":", 1)
+}
+
+// matchesSemanticConstraints reports whether all declared VERIFY_ clauses on mock,
+// plus the READ/WRITE direction implied by mock.Channel, pass for the provided
+// query information. An empty constraint always passes. When a constraint fails,
+// reason describes the clause, the expected value, and the actual value observed,
+// following the style of the legacy VERIFY failure messages (pkg/verify), so a
+// semantic-match rejection can be surfaced as a real "not met" failure instead of
+// being silently discarded.
 func matchesSemanticConstraints(
 	mock *types.ExpectStatement,
 	operation string,
 	whereColumns []string,
 	whereValues map[string]string,
 	writtenValues map[string]string,
-) bool {
+) (bool, string) {
+	if want := channelDirection(mock.Channel); want != "" {
+		if got := operationDirection(operation); got != "" && got != want {
+			return false, fmt.Sprintf("%s direction declared on EXPECT line, but the matched query performed %s (operation=%s)", want, got, operation)
+		}
+	}
 	if mock.VerifyOperation != "" && !strings.EqualFold(mock.VerifyOperation, operation) {
-		return false
+		return false, fmt.Sprintf("VERIFY_OPERATION expected %s, but got: %s", mock.VerifyOperation, operation)
 	}
 	if len(mock.VerifyWhereColumns) > 0 {
 		colSet := make(map[string]struct{}, len(whereColumns))
@@ -367,7 +409,7 @@ func matchesSemanticConstraints(
 		}
 		for _, required := range mock.VerifyWhereColumns {
 			if _, ok := colSet[strings.ToLower(required)]; !ok {
-				return false
+				return false, fmt.Sprintf("VERIFY_WHERE_COLUMNS expected column %q in the WHERE clause, but it was not present (WHERE columns seen: %s)", required, strings.Join(whereColumns, ", "))
 			}
 		}
 	}
@@ -376,11 +418,15 @@ func matchesSemanticConstraints(
 			colKey := strings.ToLower(col)
 			if strings.EqualFold(expectedVal, "PRESENT") {
 				if _, ok := whereValues[colKey]; !ok {
-					return false
+					return false, fmt.Sprintf("VERIFY_WHERE expected column %q to be present in the WHERE clause, but it was not", col)
 				}
 			} else {
-				if actualVal, ok := whereValues[colKey]; !ok || actualVal != expectedVal {
-					return false
+				actualVal, ok := whereValues[colKey]
+				if !ok {
+					return false, fmt.Sprintf("VERIFY_WHERE expected %s=%s, but column %q was not present in the WHERE clause", col, expectedVal, col)
+				}
+				if actualVal != expectedVal {
+					return false, fmt.Sprintf("VERIFY_WHERE expected %s=%s, but got: %s=%s", col, expectedVal, col, actualVal)
 				}
 			}
 		}
@@ -390,16 +436,20 @@ func matchesSemanticConstraints(
 			colKey := strings.ToLower(col)
 			if strings.EqualFold(expectedVal, "PRESENT") {
 				if _, ok := writtenValues[colKey]; !ok {
-					return false
+					return false, fmt.Sprintf("VERIFY_WRITTEN_VALUES expected column %q to be present, but it was not written", col)
 				}
 			} else {
-				if actualVal, ok := writtenValues[colKey]; !ok || actualVal != expectedVal {
-					return false
+				actualVal, ok := writtenValues[colKey]
+				if !ok {
+					return false, fmt.Sprintf("VERIFY_WRITTEN_VALUES expected %s=%s, but column %q was not written", col, expectedVal, col)
+				}
+				if actualVal != expectedVal {
+					return false, fmt.Sprintf("VERIFY_WRITTEN_VALUES expected %s=%s, but got: %s=%s", col, expectedVal, col, actualVal)
 				}
 			}
 		}
 	}
-	return true
+	return true, ""
 }
 
 // FindMockByTables finds the best-matching mock for a SQL query using the semantic
@@ -427,22 +477,34 @@ func (r *MockRegistry) FindMockByTables(
 		return nil, false
 	}
 
-	// Collect candidates that pass all constraints and have 0 hits
+	// Collect candidates that pass all constraints and have 0 hits. A mock
+	// rejected solely on its VERIFY_*/direction constraints is remembered so
+	// that, if no candidate ultimately matches, the rejection is surfaced as a
+	// real VERIFY failure rather than silently falling through to the legacy
+	// USING_SQL/channel-verb matcher (which knows nothing about these clauses).
 	type candidate struct {
 		mock        *types.ExpectStatement
 		specificity int
 	}
 	var candidates []candidate
+	var rejectReason string
 	for _, mock := range mocks {
 		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
 			continue
 		}
-		if !matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+		ok, reason := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues)
+		if !ok {
+			if rejectReason == "" {
+				rejectReason = fmt.Sprintf("%s [%s]: %s", channelLabel(mock.Channel), strings.Join(mock.AccessingTables, ","), reason)
+			}
 			continue
 		}
 		candidates = append(candidates, candidate{mock, semanticSpecificity(mock)})
 	}
 	if len(candidates) == 0 {
+		if rejectReason != "" {
+			r.verifyErrors = append(r.verifyErrors, rejectReason)
+		}
 		return nil, false
 	}
 
@@ -506,7 +568,7 @@ func (r *MockRegistry) PeekMockByTables(
 		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
 			continue
 		}
-		if !matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+		if ok, _ := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues); !ok {
 			continue
 		}
 		candidates = append(candidates, candidate{mock, semanticSpecificity(mock)})
@@ -563,7 +625,7 @@ func (r *MockRegistry) CheckNegativeMocksByTables(
 		if !mock.Negative || len(mock.AccessingTables) == 0 {
 			continue
 		}
-		if matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues) {
+		if ok, _ := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues); ok {
 			r.recordHit(mock)
 		}
 	}
@@ -581,7 +643,7 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
-				if mock.Negative {
+				if mock.Negative || len(mock.AccessingTables) > 0 {
 					continue
 				}
 				if r.hits[mock] != 0 {
@@ -598,10 +660,12 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 		return nil, false
 	}
 
-	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS)
+	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS). Mocks
+	// declaring ACCESSING_TABLES are matched exclusively via FindMockByTables —
+	// re-matching them here would bypass their VERIFY_*/direction constraints.
 	if query != "" {
 		for _, mock := range mocks {
-			if mock.Negative {
+			if mock.Negative || len(mock.AccessingTables) > 0 {
 				continue
 			}
 			if r.hits[mock] > 0 {
@@ -618,7 +682,7 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
-		if mock.Negative {
+		if mock.Negative || len(mock.AccessingTables) > 0 {
 			continue
 		}
 		if r.hits[mock] > 0 {
@@ -664,7 +728,7 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
-				if mock.Negative {
+				if mock.Negative || len(mock.AccessingTables) > 0 {
 					continue
 				}
 				if r.hits[mock] != 0 {
@@ -683,10 +747,12 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 		return nil, false
 	}
 
-	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS)
+	// 1. SQL-constrained match (USING_SQL exact or USING_SQL_CONTAINS). Mocks
+	// declaring ACCESSING_TABLES are matched exclusively via FindMockByTables —
+	// re-matching them here would bypass their VERIFY_*/direction constraints.
 	if query != "" {
 		for _, mock := range mocks {
-			if mock.Negative {
+			if mock.Negative || len(mock.AccessingTables) > 0 {
 				continue
 			}
 			if r.hits[mock] > 0 {
@@ -705,7 +771,7 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
-		if mock.Negative {
+		if mock.Negative || len(mock.AccessingTables) > 0 {
 			continue
 		}
 		if r.hits[mock] > 0 {
