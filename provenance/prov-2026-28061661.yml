@@ -1,6 +1,6 @@
 id: prov-2026-28061661
 title: Semantic expectation clauses (VERIFY_*, and READ/WRITE) are parsed but never asserted — specs pass when deliberately wrong
-status: open
+status: implemented
 created_at: '2026-08-04'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: 'Fix the semantic EXPECT clause family reported against LineSpec v3.16.0 in an Express 5 + PostgreSQL 17 app using databases: list form with proxy: true: a block of the shape `EXPECT READ:POSTGRESQL users` / `ACCESSING_TABLES [users]` / `VERIFY_OPERATION SELECT` reads as three assertions, but only ACCESSING_TABLES can actually fail a spec. Root cause (confirmed by code reading, not just black-box probing): pkg/registry/registry.go''s matchesSemanticConstraints correctly reads VerifyOperation/VerifyWhere/ VerifyWhereColumns/VerifyWrittenValues off the matched ExpectStatement and FindMockByTables/PeekMockByTables correctly reject a candidate mock when a declared VERIFY_* clause doesn''t hold — but both pkg/proxy/postgresql/proxy.go and pkg/proxy/mysql/proxy.go''s matchMock() silently fall back to the legacy FindMock/PeekMock (table-key + channel-vs-SQL-verb fuzzy match) whenever the semantic path returns not-found, and that legacy path has no knowledge of the VERIFY_* fields, so it re-matches the same mock and records it as hit anyway — the spec then reports "met" next to a requirement the app got wrong. Separately, matchesSemanticConstraints never checks mock.Channel (the READ/WRITE direction declared on the EXPECT line) against the actual operation at all, on either the semantic or legacy path, so direction is never enforced even without the fallback bypass. The legacy standalone `VERIFY <field> <op> <value>` clause is unaffected — it is checked separately, after mock selection, in each proxy''s sendMockResponse via verify.VerifySQL, which is the existing pattern the fix should extend to VERIFY_OPERATION/VERIFY_WHERE/VERIFY_WHERE_COLUMNS/ VERIFY_WRITTEN_VALUES/direction so a violation surfaces as a real "not met" failure instead of a silently-discarded semantic-match rejection.'
@@ -21,7 +21,7 @@ affected_scope:
 type: bug
 extends: prov-2026-001
 superseded_by: ''
-sealed_at_sha: ''
+sealed_at_sha: 00921c0632afae337580553b6defe83083cb8c48
 associated_specs:
   - path: pkg/registry/semantic_constraint_enforcement_test.go
     run_command: go test ./pkg/registry/... -run TestIssue159 -v
