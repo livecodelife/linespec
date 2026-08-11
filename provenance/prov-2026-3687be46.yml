@@ -1,0 +1,45 @@
+id: prov-2026-3687be46
+title: .linespec/hash_manifest.json conflicts on every rebase, and no merge strategy resolves it safely
+status: draft
+created_at: "2026-08-11"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: 'Fix .linespec/hash_manifest.json (pkg/provenance/hasher.go) reported against GitHub issue #163: independent branches that each seal one record touch the same sorted `records` map plus the two aggregate hashes (`full_graph_hash`, `active_subset_hash`), so the file text-conflicts on essentially every rebase in a repo with concurrent provenance PRs, and no client-side merge strategy resolves it safely. `merge=union` produces invalid JSON (duplicate keys, broken sort). A merge driver that shells out to `provenance compile` silently drops the other side''s record, because git invokes merge drivers before writing the incoming branch''s record YAML files into the worktree, so `compile` regenerates from only one side''s records and exits 0 anyway (verified end-to-end in the issue). A driver that merges the JSON directly can rebuild `full_graph_hash` (sha256 over the sorted id+hash concatenation per computeGraphHash) but not `active_subset_hash`, since isActiveRecord needs each record''s `status` and the manifest does not carry it. Compounding this: validateImmutability (pkg/provenance/linter.go) treats a record with no manifest entry as "pre-dates the manifest, nothing to check" unconditionally, so a hash a bad merge silently dropped is indistinguishable from a pre-manifest record — lint and check both pass with a record missing from the manifest, silently disabling its immutability check. Separately, NewCommandsWithEmbedder (pkg/provenance/commands.go) always builds the Hasher from repoRoot via NewHasher(repoRoot), never from the resolved provenance config''s own directory, so `compile -c packages/foo/.linespec.yml` writes to the same `<repoRoot>/.linespec/hash_manifest.json` as a root-level compile and clobbers it with only that package''s records instead of getting a manifest of its own.'
+constraints:
+  - Two branches that each seal a different record (each adding one entry to the manifest's records map and recomputing the two aggregate hashes) must be able to rebase/merge onto a common base without a text conflict in the hash-manifest artifact — the steady-state case described in the issue (one package, 265 records, several concurrent provenance PRs) must not conflict.
+  - The resolution mechanism must never silently drop a sealed record's hash the way the compile-as-merge-driver approach does today; if git invokes any merge/resolution step before all branches' record YAML files are present in the worktree, that step must not treat a record it cannot see as absent from the graph.
+  - Any aggregate/summary hash that is kept (e.g. a full-graph or active-subset hash) must be one both sides of a merge can reproduce or verify without a hand-merge step, or must be moved to be computed at verify/compile time instead of stored and merged.
+  - linespec provenance lint and linespec provenance check must report an error (not pass silently) when an implemented record has no entry in an otherwise non-empty hash manifest, so a hash a bad merge dropped becomes a CI-visible failure instead of a silently disabled immutability check. A manifest that does not exist at all (pre-manifest repos) must continue to be treated as "nothing to check yet."
+  - Existing sealed-record immutability detection (the PROV-IMM content-hash-mismatch check) must continue to work unchanged for every record that does have a manifest entry — no regression to tamper detection.
+  - The manifest path used by seal/compile/verify must be derived from the resolved provenance config actually in effect (respecting `-c <path>/.linespec.yml`), not unconditionally from repoRoot, so compiling one package's config in a multi-package repo does not overwrite another package's (or the root's) manifest with a partial record set.
+  - "`linespec provenance compile` on an up-to-date manifest remains a no-op (existing idempotent short-circuit in CompileManifest) for single-package repos with no config-path override."
+affected_scope:
+  - pkg/provenance/hasher.go
+  - pkg/provenance/hasher_test.go
+  - pkg/provenance/hash_manifest_conflict_test.go
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/cli.go
+  - PROVENANCE_RECORDS.md
+  - .gitattributes
+forbidden_scope: []
+type: bug
+extends: prov-2026-37bea46b
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/hash_manifest_conflict_test.go
+    run_command: go test ./pkg/provenance/... -run TestIssue163 -v
+  - path: pkg/provenance/hasher_test.go
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - hash-manifest
+  - merge-conflict
+  - provenance-integrity
+  - multi-package
+  - issue-163
