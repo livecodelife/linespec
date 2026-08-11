@@ -1306,7 +1306,16 @@ func TestHasher_TamperDetected(t *testing.T) {
 	}
 }
 
-func TestHasher_GraphHashes(t *testing.T) {
+// TestHasher_SealDoesNotRewriteOtherEntries pins the merge-safety property
+// the manifest format depends on (issue #163): sealing one record must never
+// rewrite another record's line in the manifest, whatever that other
+// record's status is. The old format recomputed and stored a full-graph hash
+// and an active-subset hash on every seal — both derived from every known
+// record, active or not — so every seal rewrote those two lines regardless
+// of which record was actually sealed. Two branches sealing different
+// records therefore always touched the same lines and conflicted on
+// essentially every rebase.
+func TestHasher_SealDoesNotRewriteOtherEntries(t *testing.T) {
 	tmp := t.TempDir()
 	linespecDir := filepath.Join(tmp, ".linespec")
 	if err := os.MkdirAll(linespecDir, 0755); err != nil {
@@ -1315,11 +1324,18 @@ func TestHasher_GraphHashes(t *testing.T) {
 
 	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
 
-	active := makeImplementedRecord("prov-2026-active01")
 	deprecated := makeImplementedRecord("prov-2026-depr01")
 	deprecated.Status = StatusDeprecated
-	all := []*Record{active, deprecated}
+	if err := h.SealRecord(deprecated, []*Record{deprecated}); err != nil {
+		t.Fatalf("SealRecord deprecated: %v", err)
+	}
+	before, err := os.ReadFile(h.manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	active := makeImplementedRecord("prov-2026-active01")
+	all := []*Record{active, deprecated}
 	if err := h.SealRecord(active, all); err != nil {
 		t.Fatalf("SealRecord active: %v", err)
 	}
@@ -1328,15 +1344,23 @@ func TestHasher_GraphHashes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest: %v", err)
 	}
+	if len(m.Records) != 2 {
+		t.Fatalf("expected both entries present, got %+v", m.Records)
+	}
 
-	if m.FullGraphHash == "" {
-		t.Error("FullGraphHash should not be empty")
+	// The deprecated record's own line must be byte-identical to what
+	// sealing it alone produced — sealing "active" afterwards must not have
+	// touched it.
+	lines := strings.Split(strings.TrimRight(string(before), "\n"), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected exactly 1 line after first seal, got %d", len(lines))
 	}
-	if m.ActiveSubsetHash == "" {
-		t.Error("ActiveSubsetHash should not be empty")
+	after, err := os.ReadFile(h.manifestPath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if m.FullGraphHash == m.ActiveSubsetHash {
-		t.Error("FullGraphHash and ActiveSubsetHash should differ when inactive records exist")
+	if !strings.Contains(string(after), lines[0]) {
+		t.Errorf("sealing a second record rewrote the first record's line: before %q, after %q", lines[0], after)
 	}
 }
 
@@ -1354,14 +1378,23 @@ func TestHasher_ManifestAtomicWrite(t *testing.T) {
 		t.Fatalf("SealRecord: %v", err)
 	}
 
-	// Ensure the manifest is valid JSON after writing.
+	// Ensure every line of the manifest is independently valid JSON after
+	// writing (the manifest is one compact JSON object per line, not a
+	// single JSON document — see writeManifest).
 	data, err := os.ReadFile(h.manifestPath)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var m hashManifest
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("manifest is not valid JSON: %v", err)
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		var entry manifestLine
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("manifest line %q is not valid JSON: %v", line, err)
+		}
+	}
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
 	}
 	if m.Records["prov-2026-atomic01"] == "" {
 		t.Error("expected record hash in manifest")
@@ -1384,13 +1417,19 @@ func TestValidateImmutability_NoManifest(t *testing.T) {
 	}
 }
 
-func TestValidateImmutability_NoEntryInManifest(t *testing.T) {
+// TestValidateImmutability_NoEntryInNonEmptyManifest reproduces the other
+// half of issue #163: a record missing from an otherwise non-empty manifest
+// used to be treated as "pre-dates the hash manifest, nothing to check" —
+// indistinguishable from a hash a bad rebase/merge silently dropped. Once the
+// manifest has sealed at least one record, a missing entry for an implemented
+// record must be a lint error instead of silently passing.
+func TestValidateImmutability_NoEntryInNonEmptyManifest(t *testing.T) {
 	tmp := t.TempDir()
 	linespecDir := filepath.Join(tmp, ".linespec")
 	if err := os.MkdirAll(linespecDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	// Manifest exists but has no entry for this record.
+	// Manifest exists and is non-empty, but has no entry for this record.
 	h := &Hasher{manifestPath: filepath.Join(linespecDir, "hash_manifest.json")}
 	other := makeImplementedRecord("prov-2026-other01")
 	if err := h.SealRecord(other, []*Record{other}); err != nil {
@@ -1405,9 +1444,39 @@ func TestValidateImmutability_NoEntryInManifest(t *testing.T) {
 	result := &LintResult{}
 	linter.validateImmutability(record, result)
 
-	// Record pre-dates the manifest — no issues emitted.
+	if result.ErrorCount != 1 {
+		t.Errorf("expected 1 PROV-IMM error for a record missing from a non-empty manifest, got %d errors %d warnings", result.ErrorCount, result.WarningCount)
+	}
+	if len(result.Issues) > 0 && !strings.Contains(result.Issues[0].Message, "PROV-IMM") {
+		t.Errorf("expected PROV-IMM in error message, got: %s", result.Issues[0].Message)
+	}
+}
+
+// TestValidateImmutability_EmptyManifestFile covers the genuine bootstrap
+// case the check above must not regress: a manifest file that exists on disk
+// but has sealed zero records yet (e.g. just created) is still treated as
+// "nothing to check", exactly like a manifest that does not exist at all.
+func TestValidateImmutability_EmptyManifestFile(t *testing.T) {
+	tmp := t.TempDir()
+	linespecDir := filepath.Join(tmp, ".linespec")
+	if err := os.MkdirAll(linespecDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(linespecDir, "hash_manifest.json")
+	if err := os.WriteFile(manifestPath, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmp, nil)
+	linter := NewLinter(loader, "strict")
+	linter.Hasher = &Hasher{manifestPath: manifestPath}
+
+	record := makeImplementedRecord("prov-2026-noentry2")
+	result := &LintResult{}
+	linter.validateImmutability(record, result)
+
 	if result.WarningCount != 0 || result.ErrorCount != 0 {
-		t.Errorf("expected no issues for record not in manifest, got %d warnings %d errors", result.WarningCount, result.ErrorCount)
+		t.Errorf("expected no issues for an empty manifest file, got %d warnings %d errors", result.WarningCount, result.ErrorCount)
 	}
 }
 

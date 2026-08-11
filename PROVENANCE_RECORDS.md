@@ -626,7 +626,7 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force
 - `--force` - Skip LineSpec existence check
 - `-c, --config path` - Use custom config
 
-**Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`. The manifest is created automatically on first use. The full-graph hash and active-subset hash in the manifest are also recomputed at this time. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
+**Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`, next to the resolved config's `provenance.dir` (see [Hash Manifest](#hash-manifest-linespechash_manifestjson) below for how the path is chosen). The manifest is created automatically on first use. Sealing a record only ever writes that one record's line in the manifest — no other record's entry, and no aggregate hash, is touched. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
 
 ### Compile
 
@@ -643,7 +643,9 @@ linespec provenance compile -c /path/to/.linespec.yml
 **Options:**
 - `-c, --config path` - Use custom config
 
-**Idempotent:** If every record's hash already matches the stored manifest, no file is written and the command exits 0. Running `compile` when the manifest is missing or stale writes the full manifest covering every record and recomputes `FullGraphHash` and `ActiveSubsetHash`.
+**Idempotent:** If every record's hash already matches the stored manifest, no file is written and the command exits 0. Running `compile` when the manifest is missing or stale writes the full manifest covering every record.
+
+**Manifest path follows the config, not the repo root:** the manifest is written next to the resolved config's `provenance.dir` — for the default single-package layout that's `<repo root>/.linespec/hash_manifest.json`, same as before. Running `compile -c packages/foo/.linespec.yml` in a multi-package repo writes `packages/foo/.linespec/hash_manifest.json` instead, so a package-scoped compile can never clobber the root manifest (or another package's) with a partial record set.
 
 **When to use:** After accidentally deleting or corrupting `.linespec/hash_manifest.json`, after a failed `complete` operation left the manifest incomplete, or as a recovery step when `linespec provenance lint` reports unexpected **PROV-IMM** errors on records you haven't edited.
 
@@ -1369,33 +1371,26 @@ The workflow triggers on pushes to main that modify provenance records and autom
 
 ### Hash Manifest (`.linespec/hash_manifest.json`)
 
-When a record is completed, `linespec provenance complete` seals a **SHA-256 content hash** of the record into `.linespec/hash_manifest.json`. This file is created automatically on first use and is committed alongside the completion commit.
+When a record is completed, `linespec provenance complete` seals a **SHA-256 content hash** of the record into `.linespec/hash_manifest.json`, next to the resolved provenance config's `dir` — the repo root for a root-level config, or `<path>` for a config resolved via `-c <path>/.linespec.yml`, so a package-scoped compile/complete never clobbers a different package's (or the root's) manifest. This file is created automatically on first use and is committed alongside the completion commit.
 
-**Structure:**
+**Structure:** one compact JSON object per record, one per line, sorted by record ID — not a single JSON document:
 
-```json
-{
-  "records": {
-    "prov-2026-a1b2c3d4": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "prov-2026-deadbeef": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9820"
-  },
-  "full_graph_hash": "abc123...",
-  "active_subset_hash": "def456..."
-}
+```
+{"id":"prov-2026-a1b2c3d4","hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+{"id":"prov-2026-deadbeef","hash":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9820"}
 ```
 
-- **`records`** — Map of record ID to SHA-256 hex digest. The hash is computed over `yaml.Marshal` of the record with `FilePath` cleared, making it deterministic and path-independent.
-- **`full_graph_hash`** — SHA-256 of the sorted concatenation of all per-record hashes (all statuses).
-- **`active_subset_hash`** — Same, but only over records not in `superseded` or `deprecated` status.
-
-Both graph hashes are recomputed on every `complete` invocation.
+Each hash is computed over `yaml.Marshal` of the record with `FilePath` cleared, making it deterministic and path-independent. Sealing a record (`complete`) only ever writes that one record's line; no other record's entry is touched, and there is no stored aggregate/summary hash — an earlier revision stored a full-graph hash and an active-subset hash alongside the per-record map and recomputed both on every seal, which meant two branches sealing *different* records always rewrote the same two lines and text-conflicted on essentially every rebase (issue #163). Because each line is now a fully self-contained JSON object with no separators shared between lines, an insertion never requires editing a neighboring line, and `.gitattributes` sets `merge=union` on the manifest path as a safe fallback for the rare case where two branches' new records sort into the same gap — union-merging independent JSON lines can never produce invalid JSON, unlike the old format.
 
 **Immutability enforcement:**
 
-`linespec provenance lint` includes a **PROV-IMM** check that computes the current hash of each implemented record and compares it against the manifest. A mismatch is reported as an error. This check:
+`linespec provenance lint` includes a **PROV-IMM** check that computes the current hash of each implemented record and compares it against the manifest. This check:
 - Requires no git access — fully runnable in any CI environment or git hook
-- Is silent for records that predate the hash system (no manifest entry)
-- Is silent if `.linespec/hash_manifest.json` does not exist (graceful bootstrap)
+- Is silent if `.linespec/hash_manifest.json` does not exist, or exists but has sealed zero records yet (graceful bootstrap)
+- Reports an error for an implemented record with no entry in an otherwise **non-empty** manifest — once any record has been sealed, every implemented record is expected to have one, so a missing entry means a bad rebase/merge silently dropped it, not that the record predates the hash system
+- Reports an error when a record's current content hash does not match its stored hash (tampering after sealing)
+
+Run `linespec provenance compile` to recover a manifest with missing or stale entries — it recomputes every record's hash from scratch and rewrites the file if anything differs.
 
 ### What is `sealed_at_sha`?
 
