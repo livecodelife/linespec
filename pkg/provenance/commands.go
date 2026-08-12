@@ -114,9 +114,17 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 	// Best-effort and only rewrites when stale, so the already-fresh case is cheap.
 	refreshScopeIndexCache(repoRoot, loaderDirs(config.Dir, sharedDirs), loader.Records)
 
-	// Create linter with hash-based integrity checker
+	// Create linter with hash-based integrity checker. The manifest is scoped
+	// to the directory containing the resolved provenance config (the parent
+	// of config.Dir), not unconditionally to repoRoot — otherwise `compile -c
+	// packages/foo/.linespec.yml` would write to the same
+	// <repoRoot>/.linespec/hash_manifest.json as a root-level compile and
+	// clobber it with only that package's records (issue #163). For the
+	// default single-package layout (config.Dir == "<repoRoot>/provenance")
+	// this resolves to repoRoot exactly as before, so compile stays a no-op
+	// when the manifest is already up to date.
 	linter := NewLinter(loader, config.Enforcement)
-	linter.Hasher = NewHasher(repoRoot)
+	linter.Hasher = NewHasher(filepath.Dir(config.Dir))
 	linter.ExcludePaths = config.ExcludePaths
 
 	// Create git helper

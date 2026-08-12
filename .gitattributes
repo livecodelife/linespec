@@ -1,0 +1,16 @@
+# .linespec/hash_manifest.json is one compact JSON object per record per
+# line, sorted by record ID (see pkg/provenance/hasher.go). Concurrent seals
+# on independent branches almost always insert at different lines and merge
+# cleanly with git's default 3-way merge; when two branches' new records
+# happen to sort into the very same gap, git has no way to know which line
+# should come first and reports a conflict. `merge=union` (a built-in git
+# merge driver, no extra setup required) resolves that residual case safely
+# by keeping every added line from both sides — safe here specifically
+# because each line is a fully self-contained JSON object with no shared
+# punctuation (no trailing commas, no wrapping array/object), so a union
+# merge can never produce invalid JSON. See provenance/prov-2026-3687be46.yml
+# (issue #163) for the conflict this replaced.
+# **/ so nested package manifests (a config resolved via -c
+# <path>/.linespec.yml gets its own manifest under <path>/.linespec/) are
+# covered too, not just a root-level one.
+**/.linespec/hash_manifest.json merge=union

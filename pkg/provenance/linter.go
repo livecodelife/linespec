@@ -1007,7 +1007,30 @@ func (l *Linter) validateImmutability(record *Record, result *LintResult) {
 	}
 
 	if !ok {
-		// Record pre-dates the hash manifest — no hash to check yet. Not an error.
+		// A record with no manifest entry is ambiguous on its own: it may
+		// genuinely predate the hash-sealing feature, or its entry may have
+		// been silently dropped by a bad rebase/merge of the manifest
+		// (issue #163). Once the manifest has sealed at least one record,
+		// every implemented record is expected to have an entry, so a
+		// missing one is treated as significant rather than silently passed.
+		nonEmpty, err := l.Hasher.ManifestNonEmpty()
+		if err != nil {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "integrity",
+				Message:  fmt.Sprintf("Could not verify content hash: %v", err),
+				Severity: SeverityWarning,
+			})
+			return
+		}
+		if nonEmpty {
+			result.Add(Issue{
+				RecordID: record.ID,
+				Field:    "integrity",
+				Message:  "PROV-IMM: implemented record has no entry in a non-empty hash manifest — a bad rebase/merge may have dropped it; run `linespec provenance compile` to verify and restore missing entries",
+				Severity: SeverityError,
+			})
+		}
 		return
 	}
 
