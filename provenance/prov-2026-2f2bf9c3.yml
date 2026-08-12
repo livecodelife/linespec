@@ -123,6 +123,7 @@ affected_scope:
   - pkg/provenance/linter.go
   - pkg/provenance/commands.go
   - pkg/provenance/fswrite.go
+  - pkg/provenance/scope_path_cwd_test.go
   - cmd/linespec/cli.go
   - cmd/linespec/main_stable.go
   - PROVENANCE_RECORDS.md
