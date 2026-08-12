@@ -137,17 +137,245 @@
     box-sizing: border-box;
 }
 
+/* ========================================
+   Content typography (pandoc-rendered pages)
+
+   provenance.html, linespec.html and cli.html are rendered from Markdown by
+   pandoc, which emits plain semantic HTML -- bare <h2>, <table>, <code>, <ul>,
+   <hr> -- and applies none of the wrapper classes the older rules further down
+   this file target (.docs-section, .docs-table, .docs-header). Those rules now
+   only match the hand-authored chrome pages, so everything below is scoped to
+   .docs-article and styles the elements pandoc actually emits.
+
+   Keep these selectors element-based. Depending on classes the renderer does
+   not apply is exactly how the content pages lost their styling before.
+   ======================================== */
+
 .docs-article {
-    max-width: 100%;
+    /* Cap the measure: .docs-content is full-width, so without this prose runs
+       the entire width of the display. Wide enough for 3-column tables and
+       long CLI lines, narrow enough to stay readable. */
+    max-width: 860px;
 }
+
+/* --- Headings -------------------------------------------------------------
+   Both source docs put a `---` immediately before every section heading, so
+   the <hr> is the section separator and headings deliberately carry no border
+   of their own. The generated CLI reference has no rules, hence the margin-top
+   rhythm here; it is zeroed when an <hr> already provided the separation. */
+
+.docs-article h1,
+.docs-article h2,
+.docs-article h3,
+.docs-article h4,
+.docs-article h5,
+.docs-article h6 {
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    color: var(--color-text);
+    /* Clear the fixed 64px navbar when jumping to a sidebar anchor. */
+    scroll-margin-top: 80px;
+}
+
+.docs-article h1 {
+    font-size: 2rem;
+    margin-top: var(--spacing-2xl);
+    margin-bottom: var(--spacing-md);
+}
+
+/* The first h1 is the page title. In LINESPEC.md the remaining h1s are section
+   headings, which is why only this one gets the larger treatment. */
+.docs-article > h1:first-of-type {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-top: 0;
+}
+
+.docs-article h2 {
+    font-size: 1.625rem;
+    margin-top: var(--spacing-xl);
+    margin-bottom: var(--spacing-sm);
+}
+
+.docs-article h3 {
+    font-size: 1.25rem;
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-xs);
+}
+
+.docs-article h4 {
+    font-size: 1.0625rem;
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+}
+
+.docs-article h5,
+.docs-article h6 {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+}
+
+/* An <hr> already supplied the separating space. */
+.docs-article hr + h1,
+.docs-article hr + h2,
+.docs-article hr + h3 {
+    margin-top: 0;
+}
+
+/* --- Body text ------------------------------------------------------------ */
 
 .docs-article p {
     display: block;
     width: 100%;
     max-width: 100%;
+    margin-bottom: var(--spacing-md);
+    line-height: 1.7;
     word-break: normal;
     overflow-wrap: normal;
     white-space: normal;
+}
+
+.docs-article strong {
+    font-weight: 600;
+    color: var(--color-primary-light);
+}
+
+.docs-article a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.docs-article a:hover {
+    /* --color-accent is near-black against --color-bg; the light variant is
+       the readable one on a dark surface. */
+    color: var(--color-accent-light);
+}
+
+.docs-article img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* --- Lists ---------------------------------------------------------------- */
+
+.docs-article ul,
+.docs-article ol {
+    margin-bottom: var(--spacing-md);
+    padding-left: var(--spacing-md);
+}
+
+.docs-article li {
+    margin-bottom: 0.5rem;
+    line-height: 1.7;
+}
+
+/* Nested lists tuck under their parent rather than opening a new block. */
+.docs-article li > ul,
+.docs-article li > ol {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Loose list items wrap their content in <p>; keep them from double-spacing. */
+.docs-article li > p {
+    margin-bottom: 0.5rem;
+}
+
+.docs-article li > :last-child {
+    margin-bottom: 0;
+}
+
+/* --- Inline code ----------------------------------------------------------
+   Matched via :not(pre) > code so fenced blocks are left entirely to the
+   existing .code-block rules -- a blanket `.docs-article code` would outrank
+   `.code-block code` on specificity and clobber its padding and font size.
+
+   Sized in em so it tracks whatever it sits inside (headings, table cells).
+   The old .docs-section code rule set display:block as a code-block hack;
+   that is what made inline code render as a full-width band, so it is
+   deliberately not carried over here. */
+
+.docs-article :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    color: var(--color-accent-light);
+    background: rgba(71, 89, 27, 0.15);
+    border: 0.5px solid rgba(71, 89, 27, 0.3);
+    border-radius: 0.25rem;
+    padding: 0.15em 0.4em;
+    /* Some inline spans are full 90-character commands; let them wrap rather
+       than push the article into horizontal overflow. */
+    overflow-wrap: break-word;
+}
+
+/* --- Tables --------------------------------------------------------------- */
+
+.docs-article table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-md) 0 var(--spacing-lg);
+    font-size: 0.9375rem;
+}
+
+.docs-article thead {
+    background: var(--color-bg-card);
+    border-bottom: 2px solid var(--color-border);
+}
+
+.docs-article th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.docs-article td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+    line-height: 1.6;
+}
+
+.docs-article tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Cells hold identifiers rather than prose; nudge the mono size down. No table
+   in the corpus contains a fenced block, so a plain descendant match is safe. */
+.docs-article th code,
+.docs-article td code {
+    font-size: 0.8125rem;
+}
+
+/* --- Blockquotes ---------------------------------------------------------- */
+
+.docs-article blockquote {
+    margin: var(--spacing-md) 0 var(--spacing-lg);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(71, 89, 27, 0.1);
+    border-left: 3px solid var(--color-accent);
+    border-radius: 0 0.5rem 0.5rem 0;
+    color: var(--color-text-muted);
+}
+
+.docs-article blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+/* --- Rules ----------------------------------------------------------------
+   The default <hr> renders as an inset ridge, which reads as a scratch on the
+   dark theme. These are section separators, so give them room. */
+
+.docs-article hr {
+    height: 1px;
+    border: 0;
+    background: var(--color-border);
+    margin: var(--spacing-xl) 0 var(--spacing-lg);
 }
 
 /* Docs Header */
@@ -736,11 +964,65 @@
     .docs-cards {
         grid-template-columns: 1fr;
     }
-    
+
     .structure-grid {
         grid-template-columns: 1fr;
     }
-    
+
+    /* Pandoc-rendered content: scale the heading rhythm down and let wide
+       tables scroll inside themselves instead of stretching the page. */
+    .docs-article > h1:first-of-type {
+        font-size: 1.875rem;
+    }
+
+    .docs-article h1 {
+        font-size: 1.625rem;
+        margin-top: var(--spacing-xl);
+    }
+
+    .docs-article h2 {
+        font-size: 1.375rem;
+    }
+
+    .docs-article h3 {
+        font-size: 1.125rem;
+    }
+
+    .docs-article table {
+        display: block;
+        overflow-x: auto;
+        font-size: 0.8125rem;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent) var(--color-surface-base);
+    }
+
+    .docs-article th,
+    .docs-article td {
+        padding: 0.5rem;
+        /* Overflow scrolls the table; without this the cells just wrap and the
+           columns collapse to unreadable widths. */
+        white-space: nowrap;
+    }
+
+    .docs-article th code,
+    .docs-article td code {
+        white-space: nowrap;
+    }
+
+    .docs-article table::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .docs-article table::-webkit-scrollbar-track {
+        background: var(--color-surface-base);
+        border-radius: 3px;
+    }
+
+    .docs-article table::-webkit-scrollbar-thumb {
+        background: var(--color-accent);
+        border-radius: 3px;
+    }
+
     .docs-table {
         font-size: 0.8125rem;
     }
