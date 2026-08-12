@@ -1,0 +1,79 @@
+id: prov-2026-f05161eb
+title: Restore docs content styling for pandoc-rendered HTML
+status: draft
+created_at: "2026-08-12"
+author: calebcowen@gmail.com
+intent: >
+  Restore the intended visual design of the linespec.dev content pages, which
+  has been silently broken since the site moved to a from-source pandoc render.
+
+  docs/assets/css/docs.css was authored under prov-2026-054aadca for
+  hand-written HTML in which every content element sat inside a wrapper class:
+  .docs-section, .docs-table, .docs-header. prov-2026-a7b20513 replaced those
+  hand-written pages with pandoc output rendered from LINESPEC.md /
+  PROVENANCE_RECORDS.md / the generated CLI reference. Pandoc emits plain
+  semantic HTML and applies none of those wrapper classes, so the content rules
+  in docs.css no longer match anything on the rendered pages.
+
+  The result is that almost all body content falls back to browser defaults:
+  headings have no size or spacing rhythm (.docs-section h2/h3/h4 never
+  matches), 596 inline <code> spans on provenance.html render as plain body
+  text (.docs-section code never matches), 18 tables across the content pages
+  render as unstyled browser-default tables (.docs-table never matches), lists
+  get default bullets and no spacing, and <hr> (31 on linespec.html) draws the
+  default inset ridge line against the dark theme. Fenced code blocks are the
+  only body element still styled correctly, because site-filter.lua explicitly
+  rebuilds the .code-block markup the CSS expects. Separately, .docs-content
+  sets no max-width, so prose runs the full width of the display.
+
+  prov-2026-a7b20513 carried the constraint "the existing visual design must be
+  preserved"; this record repairs the regression that constraint was meant to
+  prevent. The fix is a content-typography layer scoped to .docs-article that
+  styles the bare elements pandoc actually emits, reusing the existing design
+  tokens and reproducing the treatment the .docs-section / .docs-table rules
+  were written to express. This is a repair, not a redesign: the target is the
+  look the stylesheet already intends, not a new one.
+
+constraints:
+  - CSS-only change; scripts/build-docs.sh, docs/templates/content.html and
+    docs/templates/site-filter.lua are not modified
+  - Styling is expressed against the bare semantic elements pandoc emits,
+    scoped under .docs-article, so it cannot drift from the render again if
+    the Markdown adds new constructs
+  - Existing design tokens are reused (--color-*, --spacing-*, --font-mono);
+    no new palette is introduced and the landing page keeps its current look
+  - The obsolete wrapper-class rules (.docs-section, .docs-table,
+    .docs-header, .docs-lead) are left in place and untouched; docs.html and
+    index.html are hand-authored templates that may still rely on them
+  - Inline <code> must render inline; the old .docs-section code rule set
+    display:block as a code-block hack and must not be copied
+  - Tables scroll horizontally rather than overflowing the layout on narrow
+    viewports, matching the existing .docs-table responsive behaviour
+  - Rendered docs/*.html and docs/llms*.txt remain gitignored build artifacts
+    and are never hand-edited
+
+affected_scope:
+  - docs/assets/css/docs.css
+
+forbidden_scope:
+  - scripts/build-docs.sh
+  - docs/templates/site-filter.lua
+  - docs/templates/content.html
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a7b20513
+  - prov-2026-054aadca
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: docs/assets/css/docs.css
+    run_command: bash scripts/build-docs.sh
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - github-pages
+  - css
+  - regression
