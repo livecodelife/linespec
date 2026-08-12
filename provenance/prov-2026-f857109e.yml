@@ -1,0 +1,63 @@
+id: prov-2026-f857109e
+title: Inline-code specificity and hr-as-section-separator in the docs typography layer
+status: draft
+created_at: "2026-08-12"
+author: calebcowen@gmail.com
+intent: >
+  Two decisions made while implementing the .docs-article typography layer under
+  prov-2026-f05161eb. Both changed the design away from a direct port of the old
+  wrapper-class rules, so they are recorded rather than inferred from the CSS.
+
+  1. Inline code is matched with `.docs-article :not(pre) > code`, not a blanket
+  `.docs-article code`. Fenced blocks are wrapped by site-filter.lua into
+  .code-block markup whose `code` element is styled by `.code-block code`
+  (specificity 0,1,1). A blanket `.docs-article code` also scores (0,1,1) but
+  appears earlier in the file, while the obvious remedy of adding a
+  `.docs-article pre code` reset scores (0,1,2) and *outranks* .code-block code
+  entirely -- silently replacing its 0.8125rem font size and its
+  `padding: 0 var(--spacing-sm)` with the inline values. Rather than fight
+  specificity, the inline rule is written so it cannot match a fenced block in
+  the first place. Verified against the rendered pages: 536/288/1 inline matches
+  and 60/83/126 fenced matches across provenance/linespec/cli, zero overlap, and
+  every fenced <code> sits inside a .code-block ancestor.
+
+  2. Headings carry no border-bottom, departing from the old `.docs-section h2`
+  rule. Reading the sources showed that PROVENANCE_RECORDS.md and LINESPEC.md
+  both place a `---` immediately before every section heading -- 15 of 15 <hr>
+  elements in provenance.html and 28 of 31 in linespec.html are directly
+  followed by a heading. The <hr> is therefore already the section separator,
+  and a heading border would draw a second rule a few pixels below the first.
+  The <hr> is styled as the separator instead, and heading margin-top is zeroed
+  via `hr + h1, hr + h2, hr + h3` so the pair does not double its spacing. The
+  generated CLI reference has no <hr> at all, which is why headings retain their
+  own margin-top rhythm for that page.
+
+  Also recorded: inline code deliberately does not set `white-space: nowrap`.
+  The corpus contains inline spans up to 96 characters (a full
+  `linespec provenance deprecate ...` invocation), which would push the article
+  into horizontal overflow; `overflow-wrap: break-word` is used instead.
+
+constraints:
+  - Inline-code styling must never match a descendant of <pre>; fenced-block
+    presentation stays owned by the .code-block rules
+  - Heading separation relies on the <hr> the Markdown already emits; do not
+    add heading borders without first removing those rules from the sources
+
+affected_scope:
+  - docs/assets/css/docs.css
+
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f05161eb
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-5ff0f002
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - css
+  - imprint
