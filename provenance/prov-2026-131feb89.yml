@@ -1,0 +1,86 @@
+id: prov-2026-131feb89
+title: release 3.17.0
+status: draft
+created_at: "2026-08-12"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Cut release v3.17.0 following the repo's established release process (see
+  the v3.16.0 precedent, prov-2026-ab7e9d87): bump VERSION and doc version
+  pins, promote the CHANGELOG's [Unreleased] section to a dated [3.17.0]
+  entry summarizing the work merged since v3.16.0 (145e2de), rebuild the
+  hash manifest, then tag and push so the GoReleaser workflow
+  (.github/workflows/release.yml) builds and publishes the binaries.
+
+  Work merged since v3.16.0 that this release will cover (all status:
+  implemented as of drafting this record):
+    - Fixed: discover: framework-detected path no longer skips non-route
+      directories, so far fewer blueprints than expected are generated
+      (prov-2026-3486daec, #147).
+    - Added: configurable write-access-restriction toggle
+      (write_restriction in .linespec.yml, default-true) gating both the
+      Reconcile call sites and relockClosedScope (prov-2026-c1515def,
+      prov-2026-93bcd5b8).
+    - Fixed: write access restriction now only restricts directories
+      actually governed by the config file, instead of over-restricting
+      (prov-2026-bde50f4d, #150).
+    - Fixed: PostgreSQL proxy — matched expectations were never marked
+      satisfied for async/JOB channels, and mocked result sets were sent
+      with OID 0 (prov-2026-a0bac0d9, #158).
+    - Fixed: semantic expectation clauses (VERIFY_*, READ/WRITE) are now
+      actually asserted instead of being parsed and silently ignored, so
+      specs no longer pass when deliberately wrong (prov-2026-28061661,
+      #162).
+    - Docs: expanded Quick Start with init, install-hooks, and Claude Code
+      install commands (prov-2026-f011d231).
+
+  prov-2026-3687be46 (#163, hash_manifest.json rebase conflicts) is still
+  status: open, not implemented, and is therefore excluded from this
+  release's scope and changelog entry.
+constraints:
+  - |
+    Promote CHANGELOG.md's [Unreleased] section (currently empty) to
+    [3.17.0] - 2026-08-12, sourced from the implemented records listed in
+    intent above, and add a fresh empty [Unreleased] section above it.
+  - ./scripts/bump-version.sh 3.17.0 handles VERSION and the doc version
+    pins (README.md, LINESPEC.md, PROVENANCE_RECORDS.md); CHANGELOG.md is
+    intentionally excluded from that script and must be edited by hand.
+  - Run linespec provenance compile to rebuild .linespec/hash_manifest.json
+    after the doc/version edits land.
+  - prov-2026-3687be46 (#163) is open, not implemented — do not include it
+    in the [3.17.0] changelog entry or wait on it; it ships in a later
+    release.
+  - docs/*.html and docs/llms*.txt are gitignored build artifacts rebuilt
+    by the Pages workflow on push to main; they are not part of the
+    release commit.
+  - The release tag (v3.17.0) and the GoReleaser run it triggers
+    (.github/workflows/release.yml) are git/CI operations, not file
+    changes, and fall outside affected_scope.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: bug
+supersedes: ""
+extends: prov-2026-ab7e9d87
+superseded_by: ""
+related:
+  - prov-2026-3486daec
+  - prov-2026-c1515def
+  - prov-2026-93bcd5b8
+  - prov-2026-bde50f4d
+  - prov-2026-a0bac0d9
+  - prov-2026-28061661
+  - prov-2026-f011d231
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - release
