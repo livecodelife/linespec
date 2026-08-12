@@ -1,0 +1,48 @@
+id: prov-2026-28d81382
+title: Reconstruct 3.17.0 CHANGELOG entry from seven completed records
+status: draft
+created_at: "2026-08-12"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+implements: prov-2026-0cc0b3cc
+intent: |
+  Record how the [3.17.0] CHANGELOG.md entry was reconstructed, since
+  [Unreleased] was empty at release time and the entry had to be assembled
+  after the fact from the seven records' own intent/constraints text rather
+  than from incrementally-maintained changelog fragments.
+constraints:
+  - |
+    Each bullet cites its governing record link(s) and, where the record's
+    intent text names a GitHub issue number, that issue number — matching the
+    existing CHANGELOG.md convention (e.g. "(#166)") rather than introducing a
+    new citation style.
+  - |
+    prov-2026-93bcd5b8 (the write_restriction imprint) is folded into the same
+    bullet as its parent blueprint prov-2026-c1515def rather than getting its
+    own entry — imprints document implementation decisions for readers of the
+    provenance graph, not user-facing behavior, so a changelog reader only
+    needs the one bullet per shipped behavior change.
+  - |
+    No new prose describes functionality beyond what each record's own intent
+    and constraints already establish — per the blueprint's constraint that
+    this release adds no doc content beyond version pins and the changelog.
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-3687be46
+  - prov-2026-28061661
+  - prov-2026-a0bac0d9
+  - prov-2026-c1515def
+  - prov-2026-93bcd5b8
+  - prov-2026-f011d231
+  - prov-2026-3486daec
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - release
