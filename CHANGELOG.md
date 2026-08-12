@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.17.0] - 2026-08-12
+
+### Added
+
+- **`write_restriction` config to fully disable the write-permission projection** ([prov-2026-c1515def](./provenance/prov-2026-c1515def.yml), [prov-2026-93bcd5b8](./provenance/prov-2026-93bcd5b8.yml)) — a new `provenance.write_restriction: false` key in `.linespec.yml` turns off the filesystem write-permission enforcement entirely, for teams that are not ready for that level of restriction. Defaults to `true` (restriction enabled), so existing configs are unaffected (#150).
+- **Quick Start expanded with `init`, `install-hooks`, and Claude Code install commands** ([prov-2026-f011d231](./provenance/prov-2026-f011d231.yml)) — the docs-site Quick Start now walks from zero to a governed, agent-ready repo (`linespec init`, `provenance install-hooks`, `provenance install-skills`, `provenance install-plugin`) instead of jumping straight to `create`/`lint`/`graph`.
+
+### Fixed
+
+- **`.linespec/hash_manifest.json` no longer conflicts on every rebase** ([prov-2026-3687be46](./provenance/prov-2026-3687be46.yml)) — the stored `full_graph_hash`/`active_subset_hash` aggregates that text-conflicted on nearly every concurrent provenance PR are now recomputed at verify/compile time instead of merged by hand; `lint`/`check` now hard-error when an implemented record is missing from an otherwise non-empty manifest, and the manifest path is derived from the resolved provenance config (respecting `-c <path>/.linespec.yml`) instead of always writing to the repo root (#166).
+- **Semantic `EXPECT` clauses (`VERIFY_*`, `READ`/`WRITE`) are now actually asserted** ([prov-2026-28061661](./provenance/prov-2026-28061661.yml)) — `VERIFY_OPERATION`, `VERIFY_WHERE`, `VERIFY_WHERE_COLUMNS`, `VERIFY_WRITTEN_VALUES`, and the `READ`/`WRITE` direction keyword now fail the spec when violated, in both the PostgreSQL and MySQL proxies. Previously a semantic-match rejection silently fell back to the legacy table/verb matcher and the spec reported "met" regardless (#159).
+- **PostgreSQL: async/`JOB` expectations now marked satisfied, and mocked result sets carry real column OIDs** ([prov-2026-a0bac0d9](./provenance/prov-2026-a0bac0d9.yml)) — an `EXPECT` matched via the simple-query (`Q`) protocol path is now recorded as a hit so async `RECEIVE JOB`/`EVENT` specs complete instead of timing out; the PostgreSQL proxy gained schema-loading wiring (mirroring the existing MySQL `--schema-file` path) so a mocked `RowDescription` with `RETURNS` no longer sends OID 0 for every column. Also fixes a missing `database.port` default when `database.image` is set explicitly, and a leaked `linespec-shared-net` Docker network after a failed run (#158).
+- **`discover`'s framework-detected path no longer skips non-route directories** ([prov-2026-3486daec](./provenance/prov-2026-3486daec.yml)) — once a framework (chi, rails, sinatra) is detected, the framework-agnostic supplemental pass now still runs for directories with no route registrations, so services, repositories, models, and utilities get blueprint coverage instead of only route-bearing files (#147).
+
 ## [3.16.0] - 2026-07-20
 
 ### Added
