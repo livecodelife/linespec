@@ -1,6 +1,6 @@
 id: prov-2026-f857109e
 title: Inline-code specificity and hr-as-section-separator in the docs typography layer
-status: draft
+status: implemented
 created_at: "2026-08-12"
 author: calebcowen@gmail.com
 intent: >
@@ -53,7 +53,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-5ff0f002
-sealed_at_sha: ""
+sealed_at_sha: f2de3a0a3e2022fbdbc15e1fedee10dead5aa6e0
 associated_specs: []
 associated_traces: []
 monitors: []
