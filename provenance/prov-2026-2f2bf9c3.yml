@@ -1,0 +1,149 @@
+id: prov-2026-2f2bf9c3
+title: Scope paths resolve relative to cwd but provenance.dir resolves relative to the config, so linting from inside a package reports phantom failures
+status: draft
+created_at: "2026-08-12"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Record-internal paths (affected_scope, forbidden_scope, associated_specs) are
+  interpreted inconsistently with provenance.dir. `dir` is resolved relative to
+  the directory holding the `.linespec.yml` that declares it (loadProvenanceConfigFromFile,
+  cmd/linespec/main_stable.go: `cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)`,
+  then made absolute against the "repoRoot" passed into
+  provenance.NewCommandsWithEmbedder). Record-internal paths are not resolved
+  against that same base at all — pkg/provenance/linter.go calls os.Stat,
+  filepath.Glob, and filepath.Walk(".") directly on the raw stored path
+  (validateExactPath, validateGlobPattern, validateRegexPattern,
+  checkDeadRecords/patternHasMatches, validateAssociatedSpecs), which the OS
+  resolves against the process's current working directory. Our own records
+  store repo-root-relative paths (e.g. "pkg/provenance/linter.go"), matching
+  what auto_affected_scope writes, so linting from the repo root happens to be
+  correct by coincidence — cwd == repo root. Linting (or opening) from inside a
+  subdirectory is not: a stored path like "pkg_a/app/a.rb" resolves via the OS
+  as cwd-relative, so from inside pkg_a it becomes pkg_a/pkg_a/app/a.rb, a path
+  that does not exist. The record is found (dir resolved correctly) but every
+  scope/spec path inside it then reports as missing.
+
+  This isn't confined to lint output. The same double-join affects an actual
+  filesystem side effect: pkg/provenance/commands.go passes `c.RepoRoot` (which
+  is `os.Getwd()` at CLI startup — see cmd/linespec/cli.go provSetup, despite
+  the misleading name) into fswrite.go's MaterializeScope/materializeTargets,
+  which do `filepath.Join(repoRoot, rel)` on each affected_scope path. Run from
+  inside a package with write_restriction: true, `open` unlocks the wrong
+  parent directory for a declared-but-not-yet-existing path. commands.go's
+  Complete also os.Stat()s each associated_specs path directly (the "Proof
+  artifact does not exist" check), hitting the same cwd-relative resolution.
+
+  Two of the linter's misresolved messages are actively misleading rather than
+  merely noisy: "Dead record: all governed files have been deleted. Consider
+  deprecating this record" (checkDeadRecords) reports a live record as dead
+  purely because of invocation directory, and following its advice deprecates
+  a record that governs files that still exist. "Scope path does not exist
+  yet — declared for creation; opening unlocks its parent directory" pairs
+  with the MaterializeScope bug above to unlock the wrong directory under
+  write_restriction: true.
+
+  Fix: resolve every record-internal path (affected_scope, forbidden_scope,
+  associated_specs) against the same base, consistently, regardless of the
+  invoking process's cwd. Per the issue's own analysis, resolving against
+  provenance.dir's own base (the directory holding the declaring .linespec.yml)
+  is a breaking change for repos — including this one — whose records store
+  paths relative to the git repository root rather than the config file's
+  directory. The no-migration alternative is to resolve record-internal paths
+  against the git repository root instead of cwd. That is the base this fix
+  must use: it makes every affected command's result invocation-independent
+  without invalidating any existing record in this repo or others that already
+  follow the auto_affected_scope convention.
+
+  Related: issue #163 (already fixed, prov-2026-3687be46) was the inverse
+  problem for the hash manifest — a path that ignored `-c` and always landed at
+  <repoRoot>/.linespec/ regardless of the resolved config. Same underlying
+  question of what a path in this tool is relative to, opposite symptom.
+constraints:
+  - |
+    linespec provenance lint (and any other command that validates or matches
+    affected_scope, forbidden_scope, or associated_specs paths against the
+    filesystem — including open's scope-existence check, checkDeadRecords, and
+    complete's associated-specs existence check) MUST produce identical results
+    for the same config + records regardless of the directory the command is
+    invoked from. Reproduce the issue's repro (a record with
+    affected_scope/associated_specs paths stored relative to the repo root,
+    linted once from the repo root and once from a subdirectory with the
+    equivalent -c/config resolution) and assert both invocations report the
+    same pass/warning/error counts and the same per-path status.
+  - |
+    The resolution base for record-internal paths MUST be the git repository
+    root, not the current working directory and not provenance.dir's own base
+    directory — the latter would be a breaking change for this repo and any
+    other repo whose records store repo-root-relative paths (the
+    auto_affected_scope-written convention documented in PROVENANCE_RECORDS.md).
+    Every one of this repo's existing records MUST continue to validate
+    identically after the fix (no mass-migration of existing affected_scope /
+    associated_specs values).
+  - |
+    The fix MUST cover every call site that resolves a record-internal path
+    against the filesystem via the process cwd, not just the lint command's
+    exact-path check: pkg/provenance/linter.go's validateExactPath,
+    validateGlobPattern, validateRegexPattern, checkDeadRecords /
+    patternHasMatches, and validateAssociatedSpecs; and
+    pkg/provenance/commands.go's associated-specs existence check inside
+    Complete. A partial fix that corrects lint's headline message but leaves
+    checkDeadRecords or Complete's spec check cwd-relative does not close the
+    issue.
+  - |
+    pkg/provenance/fswrite.go's MaterializeScope / materializeTargets take a
+    repoRoot parameter and already do `filepath.Join(repoRoot, rel)` correctly
+    in isolation — the bug is that pkg/provenance/commands.go and
+    cmd/linespec/cli.go currently thread the process's cwd
+    (os.Getwd(), confusingly named "repoRoot") into that parameter instead of
+    the actual git repository root. The fix MUST supply the true git repo root
+    here too, so `open`/`next` invoked from inside a subdirectory under
+    write_restriction: true unlock the correct parent directory for a
+    declared-but-not-yet-existing affected_scope path, not a doubled path like
+    pkg_a/pkg_a/app/.
+  - |
+    The multi-pack pre-commit/commit-msg git hooks (git.go, which already pass
+    `-c <nearest config>` and always run from the repo root because git invokes
+    hooks there) MUST continue to behave exactly as before — this bug does not
+    reach them, and the fix must not change hook-invoked enforcement behavior.
+  - |
+    PROVENANCE_RECORDS.md's `dir` documentation (Configuration section, near
+    the `dir` config option table/description) MUST state, next to `dir`, what
+    base record-internal paths (affected_scope, forbidden_scope,
+    associated_specs) resolve against — since today the two behaving
+    differently is undocumented and unguessable, per the issue.
+  - |
+    make test must pass, and a regression test MUST demonstrate the
+    cwd-independence property directly: construct a temp repo with a nested
+    package directory (its own .linespec.yml + provenance dir) whose record
+    stores affected_scope/associated_specs paths relative to the repo root,
+    then assert that linting (or whichever entry point the implementation
+    centralizes on) produces the same result whether invoked with cwd at the
+    repo root or cwd inside the nested package directory.
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/fswrite.go
+  - cmd/linespec/cli.go
+  - cmd/linespec/main_stable.go
+  - PROVENANCE_RECORDS.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-8d2f5f2a
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-b4006eda
+  - prov-2026-bde50f4d
+  - prov-2026-3687be46
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/scope_path_cwd_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - config
+  - provenance
+  - multi-pack
+  - path-resolution
