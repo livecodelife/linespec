@@ -1,6 +1,6 @@
 id: prov-2026-dab5d51e
 title: 'CheckCommit: judge historical commits by the record''s status at that commit, not its current status'
-status: draft
+status: open
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
