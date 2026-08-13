@@ -370,38 +370,82 @@ func runBuild() {
 		os.Exit(1)
 	}
 
+	// The Docker image runs Linux. On non-Linux hosts the host binary is the
+	// wrong format (Mach-O on macOS, PE on Windows) for the Alpine container,
+	// so a Linux binary has to be produced some other way. cmd/linespec pulls
+	// in go-tree-sitter (via pkg/discover), a cgo package, so that binary must
+	// be built with cgo enabled — the grammar packages' cgo files (which
+	// define the `Node` type) are excluded by the build constraints when cgo
+	// is disabled, and the remaining pure-Go files fail with "undefined:
+	// Node". A host-side `go build GOOS=linux CGO_ENABLED=0` cross-compile
+	// cannot produce a working binary at all now that tree-sitter is in the
+	// dependency graph (prov-2026-b9339a5a), and replicating a Linux C
+	// toolchain on the host isn't worth it when Dockerfile.linespec already
+	// builds the Linux binary correctly (CGO_ENABLED=1, build-base installed)
+	// inside its golang:1.23-alpine builder stage. So build the image
+	// directly from source instead of staging a cross-compiled binary.
+	if runtime.GOOS != "linux" {
+		if err := buildFromSourceCheckout(execPath); err != nil {
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Host is already Linux: the executable is a native (non-cross-compiled)
+	// build, so it can be packaged as-is.
+	if err := buildFromHostBinary(execPath); err != nil {
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+}
+
+// buildFromSourceCheckout builds linespec:latest via `docker build -f
+// Dockerfile.linespec`, locating the linespec source root by walking up from
+// the current working directory and then from the executable's directory. If
+// neither is inside a linespec checkout, it fails with an actionable message
+// instead of attempting a doomed CGO_ENABLED=0 cross-compile.
+func buildFromSourceCheckout(execPath string) error {
+	srcRoot := findLinespecSourceRoot(execPath)
+	if srcRoot == "" {
+		return fmt.Errorf(
+			"cannot build linespec:latest outside a linespec source checkout: "+
+				"cross-compiling the Linux binary requires cgo (go-tree-sitter) "+
+				"enabled, which needs a Linux C toolchain unavailable when "+
+				"cross-compiling from %s.\nRun `linespec build` from within the "+
+				"linespec source directory instead",
+			runtime.GOOS,
+		)
+	}
+
+	dockerfilePath := filepath.Join(srcRoot, "Dockerfile.linespec")
+	if _, err := os.Stat(dockerfilePath); err != nil {
+		return fmt.Errorf("Dockerfile.linespec not found at %s: %w", dockerfilePath, err)
+	}
+
+	logger.Info("Building linespec:latest from source (%s)...", srcRoot)
+	if err := runDockerBuild("-f", dockerfilePath, "-t", "linespec:latest", srcRoot); err != nil {
+		return fmt.Errorf("docker build failed: %w\nMake sure Docker is running and try again: linespec build", err)
+	}
+	logger.Info("Successfully built linespec:latest")
+	return nil
+}
+
+// buildFromHostBinary packages the given executable — a native Linux build,
+// not cross-compiled — into a minimal Alpine image.
+func buildFromHostBinary(execPath string) error {
 	tmpDir, err := os.MkdirTemp("", "linespec-build-*")
 	if err != nil {
-		logger.Error("Failed to create temp directory: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// The Docker image runs Linux. On non-Linux hosts the host binary is the
-	// wrong format (Mach-O on macOS, PE on Windows) and will fail with
-	// "exec format error" inside the Alpine container. Cross-compile a Linux
-	// binary before building the image.
-	linuxBinaryPath := execPath
-	if runtime.GOOS != "linux" {
-		compiled, err := crossCompileLinuxBinary(execPath, tmpDir)
-		if err != nil {
-			logger.Error("Failed to build a Linux binary for the Docker image: %v", err)
-			logger.Error("Ensure `go` is in PATH and one of the following is true:")
-			logger.Error("  • Run `linespec build` from within the linespec source directory")
-			logger.Error("  • Or install via: go install github.com/livecodelife/linespec/v3/cmd/linespec@VERSION")
-			os.Exit(1)
-		}
-		linuxBinaryPath = compiled
-	}
-
-	data, err := os.ReadFile(linuxBinaryPath)
+	data, err := os.ReadFile(execPath)
 	if err != nil {
-		logger.Error("Failed to read linespec binary: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to read linespec binary: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "linespec"), data, 0755); err != nil {
-		logger.Error("Failed to stage linespec binary: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to stage linespec binary: %w", err)
 	}
 
 	dockerfile := "FROM alpine:latest\n" +
@@ -410,12 +454,22 @@ func runBuild() {
 		"COPY linespec /app/linespec\n" +
 		"ENTRYPOINT [\"/app/linespec\"]\n"
 	if err := os.WriteFile(filepath.Join(tmpDir, "Dockerfile"), []byte(dockerfile), 0644); err != nil {
-		logger.Error("Failed to write Dockerfile: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
 	logger.Info("Building linespec:latest Docker image...")
-	cmd := exec.Command("docker", "build", "-t", "linespec:latest", tmpDir)
+	if err := runDockerBuild("-t", "linespec:latest", tmpDir); err != nil {
+		return fmt.Errorf("docker build failed: %w\nMake sure Docker is running and try again: linespec build", err)
+	}
+	logger.Info("Successfully built linespec:latest")
+	return nil
+}
+
+// runDockerBuild runs `docker build` with the given arguments, applying the
+// same BuildKit/socket workarounds regardless of which build path (source
+// checkout or host binary) is producing the image.
+func runDockerBuild(args ...string) error {
+	cmd := exec.Command("docker", append([]string{"build"}, args...)...)
 	// Disable BuildKit so docker build doesn't try to write to ~/.docker/buildx/activity/,
 	// which fails in restricted environments such as Homebrew post_install on macOS.
 	dockerEnv := append(os.Environ(), "DOCKER_BUILDKIT=0")
@@ -441,47 +495,21 @@ func runBuild() {
 	cmd.Env = dockerEnv
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		logger.Error("Docker build failed: %v", err)
-		logger.Error("Make sure Docker is running and try again: linespec build")
-		os.Exit(1)
-	}
-	logger.Info("Successfully built linespec:latest")
+	return cmd.Run()
 }
 
-// crossCompileLinuxBinary produces a linux/GOARCH binary at outPath.
-// It tries two strategies in order:
-//  1. Find the linespec source root (go.mod) by walking up from CWD or the
-//     executable directory, then run `go build GOOS=linux`.
-//  2. Run `go install github.com/livecodelife/linespec/v3/cmd/linespec@VERSION`
-//     with GOOS=linux, using the version embedded in the current binary.
-func crossCompileLinuxBinary(execPath, tmpDir string) (string, error) {
-	goarch := runtime.GOARCH
-	outPath := filepath.Join(tmpDir, "linespec-linux")
+// findLinespecSourceRoot locates the linespec source root (the directory
+// containing its go.mod) by walking up from the current working directory,
+// then from the executable's directory. Returns "" if neither is inside a
+// linespec checkout.
+func findLinespecSourceRoot(execPath string) string {
 	const modulePrefix = "module github.com/livecodelife/linespec/v3"
-
-	// Strategy 1a: walk up from the current working directory.
 	if cwd, err := os.Getwd(); err == nil {
 		if srcRoot := findGoModRoot(cwd, modulePrefix); srcRoot != "" {
-			logger.Info("Cross-compiling Linux/%s binary from source: %s", goarch, srcRoot)
-			if err := goBuildForLinux(srcRoot, "./cmd/linespec", outPath, goarch); err == nil {
-				return outPath, nil
-			}
+			return srcRoot
 		}
 	}
-
-	// Strategy 1b: walk up from the executable's directory.
-	if srcRoot := findGoModRoot(filepath.Dir(execPath), modulePrefix); srcRoot != "" {
-		logger.Info("Cross-compiling Linux/%s binary from source: %s", goarch, srcRoot)
-		if err := goBuildForLinux(srcRoot, "./cmd/linespec", outPath, goarch); err == nil {
-			return outPath, nil
-		}
-	}
-
-	// Strategy 2: go install from the module proxy using the embedded version.
-	moduleVersion := embeddedModuleVersion()
-	logger.Info("Cross-compiling Linux/%s binary via go install @%s", goarch, moduleVersion)
-	return outPath, goInstallForLinux("github.com/livecodelife/linespec/v3/cmd/linespec", moduleVersion, outPath, goarch)
+	return findGoModRoot(filepath.Dir(execPath), modulePrefix)
 }
 
 // findGoModRoot walks up from startDir looking for a go.mod file that contains
@@ -502,71 +530,6 @@ func findGoModRoot(startDir, modulePrefix string) string {
 		dir = parent
 	}
 	return ""
-}
-
-// goBuildForLinux runs `go build` with GOOS=linux from srcRoot and writes the
-// binary to outPath.
-func goBuildForLinux(srcRoot, pkg, outPath, goarch string) error {
-	cmd := exec.Command("go", "build", "-o", outPath, "-ldflags", "-s -w", pkg)
-	cmd.Dir = srcRoot
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0")
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-// goInstallForLinux runs `go install MOD@VERSION` with GOOS=linux and moves
-// the result to outPath.
-func goInstallForLinux(modulePath, version, outPath, goarch string) error {
-	// go install refuses to install cross-compiled binaries when GOBIN is set.
-	// Use a temp GOPATH instead; cross-compiled output lands in
-	// $GOPATH/bin/linux_<GOARCH>/ rather than $GOPATH/bin/.
-	tmpGopath, err := os.MkdirTemp("", "linespec-gopath-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpGopath)
-
-	// Strip any existing GOBIN or GOPATH so they don't interfere.
-	env := os.Environ()
-	filtered := make([]string, 0, len(env))
-	for _, e := range env {
-		if !strings.HasPrefix(e, "GOBIN=") && !strings.HasPrefix(e, "GOPATH=") {
-			filtered = append(filtered, e)
-		}
-	}
-	filtered = append(filtered, "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0", "GOPATH="+tmpGopath)
-
-	cmd := exec.Command("go", "install", modulePath+"@"+version)
-	cmd.Env = filtered
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	// Cross-compiled binaries land in $GOPATH/bin/<GOOS>_<GOARCH>/.
-	installed := filepath.Join(tmpGopath, "bin", "linux_"+goarch, "linespec")
-	return os.Rename(installed, outPath)
-}
-
-// embeddedModuleVersion returns a module version suitable for `go install`.
-// It reads the version from the current binary's build info, stripping any
-// +dirty or local-only suffixes that the module proxy would reject.
-func embeddedModuleVersion() string {
-	info, ok := debugpkg.ReadBuildInfo()
-	if !ok {
-		return "latest"
-	}
-	v := info.Main.Version
-	if v == "" || v == "(devel)" {
-		return "latest"
-	}
-	// Strip +dirty or other local suffixes.
-	if idx := strings.Index(v, "+"); idx >= 0 {
-		v = v[:idx]
-	}
-	if v == "" {
-		return "latest"
-	}
-	return v
 }
 
 // runImportCore imports a published manifest's provenance layer. The

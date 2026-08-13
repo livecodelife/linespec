@@ -72,6 +72,12 @@ associated_specs:
   - path: Dockerfile.linespec
     type: docker
     run_command: docker build -f {{path}} -t linespec:verify .
+  - path: cmd/linespec/build_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run 'TestBuildDoesNotHardcodeCGODisabled|TestFindLinespecSourceRoot' -v
+  - path: cmd/linespec/build_integration_test.go
+    type: go_test
+    run_command: go test -tags integration ./cmd/linespec/... -run TestDockerfileLinespecBuildsWithCGOAndRealVersion -v
 associated_traces: []
 monitors: []
 tags:
