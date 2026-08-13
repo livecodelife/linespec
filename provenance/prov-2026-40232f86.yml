@@ -1,6 +1,6 @@
 id: prov-2026-40232f86
 title: Fix check's implemented-record guard ordering, draft completion, and imprint-creation scope
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -64,7 +64,7 @@ supersedes: ""
 superseded_by: ""
 implements: prov-2026-f65bb92d
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 49190b9b59ab3eac19e75417bcce409f761ef8fc
 associated_specs:
   - path: pkg/provenance/git_test.go
     type: go_test
