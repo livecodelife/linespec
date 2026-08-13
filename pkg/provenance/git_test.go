@@ -584,3 +584,495 @@ func TestCheckCommit_HashManifestExempt(t *testing.T) {
 		t.Errorf("Expected no violations for hash manifest in completion commit, got %d: %v", len(violations), violations)
 	}
 }
+
+// imprintYAML returns a minimal imprint record YAML string that implements parentID.
+func imprintYAML(id, status, parentID string) string {
+	return fmt.Sprintf(`id: %s
+title: Test imprint %s
+status: %s
+created_at: "2026-01-01"
+author: test@example.com
+intent: ""
+constraints: []
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: %s
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
+`, id, id, status, parentID)
+}
+
+// TestCheckStaged_HashManifestExempt_ImplementedRecord verifies that staging the hash
+// manifest alongside a record's own open->implemented completion transition (the
+// exact shape `linespec provenance complete` produces) never triggers a violation.
+// This reproduces cause 1 from prov-2026-f65bb92d: the manifest exemption was
+// unreachable once the governing record's on-disk status read as implemented.
+func TestCheckStaged_HashManifestExempt_ImplementedRecord(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-a1000001"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open record ["+recID+"]")
+
+	// Simulate `linespec provenance complete`: rewrite the record to implemented
+	// and stage the hash manifest alongside it, without committing yet.
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "implemented", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record implemented: %v", err)
+	}
+	manifestDir := filepath.Join(tmpDir, ".linespec")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	manifestRelPath := ".linespec/hash_manifest.json"
+	manifestPath := filepath.Join(tmpDir, manifestRelPath)
+	if err := os.WriteFile(manifestPath, []byte(`{"records":{},"full_graph_hash":"abc","active_subset_hash":"def"}`), 0644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath, manifestRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if rec, ok := loader.GetRecord(recID); !ok || rec.Status != StatusImplemented {
+		t.Fatalf("expected loader to read record as implemented, got %+v", rec)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Complete provenance record ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations completing an implemented record with the manifest staged, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckStaged_HashManifestExempt_ManifestOnlyChange isolates cause 1 for the
+// CheckStaged path specifically: the record is already implemented as of HEAD (its
+// own completion transition is not part of this staged change at all), and the only
+// staged file is the hash manifest. Before the fix, CheckStaged's implemented-record
+// guard scans all staged files for a completion transition, finds none (since the
+// record file isn't staged here), and rejects the whole record — including the
+// exempt manifest.
+func TestCheckStaged_HashManifestExempt_ManifestOnlyChange(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-a1000003"
+
+	// setupSupersessionRepo commits the record as implemented at HEAD.
+	tmpDir, provDir, _ := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	manifestDir := filepath.Join(tmpDir, ".linespec")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	manifestRelPath := ".linespec/hash_manifest.json"
+	manifestPath := filepath.Join(tmpDir, manifestRelPath)
+	if err := os.WriteFile(manifestPath, []byte(`{"records":{},"full_graph_hash":"abc","active_subset_hash":"def"}`), 0644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+	gitExec(t, tmpDir, "add", manifestRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Sync hash manifest ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for a manifest-only change against an already-implemented record, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckCommit_HashManifestExempt_ImplementedRecord is the CheckCommit analogue of
+// TestCheckStaged_HashManifestExempt_ImplementedRecord, verifying the same completion
+// shape does not report a violation once committed to history.
+func TestCheckCommit_HashManifestExempt_ImplementedRecord(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-a1000002"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open record ["+recID+"]")
+
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "implemented", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record implemented: %v", err)
+	}
+	manifestDir := filepath.Join(tmpDir, ".linespec")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	manifestRelPath := ".linespec/hash_manifest.json"
+	manifestPath := filepath.Join(tmpDir, manifestRelPath)
+	if err := os.WriteFile(manifestPath, []byte(`{"records":{},"full_graph_hash":"abc","active_subset_hash":"def"}`), 0644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath, manifestRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Complete provenance record ["+recID+"]")
+
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	violations, err := checker.CheckCommit(commitSHA)
+	if err != nil {
+		t.Fatalf("CheckCommit returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for a completion commit of an implemented record with the manifest, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckStaged_DraftToImplementedCompletion verifies that `complete` sealing a
+// record directly from draft to implemented (skipping open) is recognized as a
+// completion transition, matching cause 2 from prov-2026-f65bb92d.
+func TestCheckStaged_DraftToImplementedCompletion(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-dc100001"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "draft", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile record draft: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "draft record ["+recID+"]")
+
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "implemented", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile record implemented: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Complete provenance record ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for a draft -> implemented completion, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckCommit_DraftToImplementedCompletion is the CheckCommit analogue of
+// TestCheckStaged_DraftToImplementedCompletion.
+func TestCheckCommit_DraftToImplementedCompletion(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-dc100002"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "draft", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile record draft: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "draft record ["+recID+"]")
+
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "implemented", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile record implemented: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Complete provenance record ["+recID+"]")
+
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	violations, err := checker.CheckCommit(commitSHA)
+	if err != nil {
+		t.Fatalf("CheckCommit returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for a historical draft -> implemented completion commit, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckStaged_ImprintCreationAllowed verifies that creating an imprint's YAML
+// (implements: <blueprintID>) in a commit tagged with the blueprint's ID is allowed
+// even though the imprint's own path is not in the blueprint's affected_scope. This
+// is cause 3 from prov-2026-f65bb92d and the documented CLAUDE.md imprint workflow.
+func TestCheckStaged_ImprintCreationAllowed(t *testing.T) {
+	clearGitEnvForTest(t)
+	const blueprintID = "prov-2026-b1000001"
+	const imprintID = "prov-2026-1a000001"
+
+	tmpDir, provDir, bpRelPath := setupSupersessionRepo(t, blueprintID)
+	defer os.RemoveAll(tmpDir)
+
+	bpPath := filepath.Join(tmpDir, bpRelPath)
+	if err := os.WriteFile(bpPath, []byte(makeProvRecord(blueprintID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile blueprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", bpRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open blueprint ["+blueprintID+"]")
+
+	imprintRelPath := "provenance/" + imprintID + ".yml"
+	imprintPath := filepath.Join(tmpDir, imprintRelPath)
+	if err := os.WriteFile(imprintPath, []byte(imprintYAML(imprintID, "open", blueprintID)), 0644); err != nil {
+		t.Fatalf("WriteFile imprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", imprintRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Create imprint ["+blueprintID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations creating an imprint that implements the tagged blueprint, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckCommit_ImprintCreationAllowed is the CheckCommit analogue of
+// TestCheckStaged_ImprintCreationAllowed, verifying a historical imprint-creation
+// commit does not report a violation.
+func TestCheckCommit_ImprintCreationAllowed(t *testing.T) {
+	clearGitEnvForTest(t)
+	const blueprintID = "prov-2026-b1000002"
+	const imprintID = "prov-2026-1a000002"
+
+	tmpDir, provDir, bpRelPath := setupSupersessionRepo(t, blueprintID)
+	defer os.RemoveAll(tmpDir)
+
+	bpPath := filepath.Join(tmpDir, bpRelPath)
+	if err := os.WriteFile(bpPath, []byte(makeProvRecord(blueprintID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile blueprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", bpRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open blueprint ["+blueprintID+"]")
+
+	imprintRelPath := "provenance/" + imprintID + ".yml"
+	imprintPath := filepath.Join(tmpDir, imprintRelPath)
+	if err := os.WriteFile(imprintPath, []byte(imprintYAML(imprintID, "open", blueprintID)), 0644); err != nil {
+		t.Fatalf("WriteFile imprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", imprintRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Create imprint ["+blueprintID+"]")
+
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	violations, err := checker.CheckCommit(commitSHA)
+	if err != nil {
+		t.Fatalf("CheckCommit returned error: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Errorf("Expected no violations for a historical imprint-creation commit, got %d: %v", len(violations), violations)
+	}
+}
+
+// TestCheckStaged_UnrelatedRecordFileStillViolates verifies the implements exemption
+// is keyed strictly on the implements relationship: a record file that implements a
+// *different* record than the one tagging the commit must still be reported as a
+// scope violation, per constraint 3 of prov-2026-f65bb92d.
+func TestCheckStaged_UnrelatedRecordFileStillViolates(t *testing.T) {
+	clearGitEnvForTest(t)
+	const blueprintID = "prov-2026-b1000003"
+	const otherBlueprintID = "prov-2026-b1000004"
+	const imprintID = "prov-2026-1a000003"
+
+	tmpDir, provDir, bpRelPath := setupSupersessionRepo(t, blueprintID)
+	defer os.RemoveAll(tmpDir)
+
+	bpPath := filepath.Join(tmpDir, bpRelPath)
+	if err := os.WriteFile(bpPath, []byte(makeProvRecord(blueprintID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile blueprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", bpRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open blueprint ["+blueprintID+"]")
+
+	// This imprint implements a *different* blueprint, not the one tagging the commit.
+	imprintRelPath := "provenance/" + imprintID + ".yml"
+	imprintPath := filepath.Join(tmpDir, imprintRelPath)
+	if err := os.WriteFile(imprintPath, []byte(imprintYAML(imprintID, "open", otherBlueprintID)), 0644); err != nil {
+		t.Fatalf("WriteFile imprint: %v", err)
+	}
+	gitExec(t, tmpDir, "add", imprintRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Create unrelated imprint ["+blueprintID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) == 0 {
+		t.Error("Expected a violation for a record file that implements an unrelated record")
+	}
+}
+
+// TestCheckStaged_ImplementedRecordNonTransitionEditRejected is regression coverage
+// for constraint 4 of prov-2026-f65bb92d: editing an already-implemented record's
+// content, outside of a genuine completion transition, must still be reported.
+func TestCheckStaged_ImplementedRecordNonTransitionEditRejected(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-ed100001"
+
+	// setupSupersessionRepo commits the record as implemented at HEAD.
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	edited := strings.Replace(
+		makeProvRecord(recID, "implemented", `""`, `""`, nil),
+		"Test record "+recID, "Modified title", 1,
+	)
+	if err := os.WriteFile(recPath, []byte(edited), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Edit implemented record ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) == 0 {
+		t.Error("Expected a violation editing an already-implemented record outside a completion transition")
+	}
+}
+
+// TestCheckStaged_OutOfScopeSourceFileRejected is regression coverage for constraint 4
+// of prov-2026-f65bb92d: a source file outside the tagged record's affected_scope
+// must still be reported as a violation.
+func TestCheckStaged_OutOfScopeSourceFileRejected(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-0a500001"
+
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	recPath := filepath.Join(tmpDir, recRelPath)
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, []string{"pkg/impl.go"})), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "open record ["+recID+"]")
+
+	otherPath := filepath.Join(tmpDir, "pkg", "other.go")
+	if err := os.MkdirAll(filepath.Dir(otherPath), 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(otherPath, []byte("package pkg\n"), 0644); err != nil {
+		t.Fatalf("WriteFile other.go: %v", err)
+	}
+	gitExec(t, tmpDir, "add", "pkg/other.go")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("Touch out of scope file ["+recID+"]\n"), 0644); err != nil {
+		t.Fatalf("WriteFile msgFile: %v", err)
+	}
+
+	violations, err := checker.CheckStaged(msgFile, false)
+	if err != nil {
+		t.Fatalf("CheckStaged returned error: %v", err)
+	}
+	if len(violations) == 0 {
+		t.Error("Expected a violation for a file outside affected_scope")
+	}
+}
