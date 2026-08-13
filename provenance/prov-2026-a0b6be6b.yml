@@ -1,0 +1,71 @@
+id: prov-2026-a0b6be6b
+title: Remove the tracked linespec-beta binary and gitignore it alongside linespec
+status: draft
+created_at: "2026-08-13"
+author: calebcowen@gmail.com
+intent: |
+  linespec-beta is a 22MB statically-linked Linux x86-64 ELF binary committed
+  into the repo root, last rebuilt 2026-04-30 (e998292). Nothing consumes it:
+
+    - Dockerfile.linespec builds from source (`COPY . .` + `go build`) in a
+      golang:1.23-alpine builder stage; it never copies the committed binary.
+    - .goreleaser.yml builds its own linespec-beta artifact from source for
+      the backward-compatible Homebrew formula.
+    - The Makefile's build-beta target only *produces* this path; nothing
+      reads it.
+
+  It is a leftover from a retired practice of rebuilding and committing the
+  binary on release (prov-2026-5c6ea0f5, prov-2026-c9e62857,
+  prov-2026-8ae0dd5d). Since v2.0.0 the beta binary has been byte-identical in
+  purpose to the stable one, and since the Cobra collapse there is not even a
+  `beta` build tag left to distinguish them, so a committed copy has no
+  remaining reason to exist.
+
+  It is also stale in a way that actively misleads: it predates the Cobra CLI
+  rewrite, so `./linespec-beta` still presents the old hand-rolled
+  `linespec <command>` interface and reports a version that no longer
+  corresponds to anything released.
+
+  Root cause of it being tracked at all: .gitignore ignores `/linespec` but has
+  no matching `/linespec-beta` entry, so the sibling build artifact was never
+  ignored and got committed. Fixing the ignore rule alongside the deletion is
+  what stops it coming back the next time someone runs `make build-beta`.
+
+  Removing it from HEAD does not shrink the existing git history; the goal is
+  to stop the churn and remove the misleading artifact, not to rewrite history.
+constraints:
+  - |
+    Delete the tracked linespec-beta file and add `/linespec-beta` to
+    .gitignore next to the existing `/linespec` entry, so `make build-beta`
+    output is ignored the same way `make build` output already is.
+  - |
+    No change to the Makefile build-beta / install-beta targets or to
+    .goreleaser.yml — the beta formula and its from-source artifact stay
+    exactly as they are. This removes only the committed binary.
+  - |
+    `make build`, `make build-beta`, and `docker build -f Dockerfile.linespec .`
+    must all still succeed after the removal, confirming nothing consumed the
+    committed file.
+  - |
+    `git status` must be clean after running `make build-beta`, proving the new
+    ignore rule covers the regenerated artifact.
+affected_scope:
+  - linespec-beta
+  - .gitignore
+forbidden_scope: []
+type: bug
+extends: prov-2026-012
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-5c6ea0f5
+  - prov-2026-c9e62857
+  - prov-2026-8ae0dd5d
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - cleanup
+  - build-artifacts
+  - gitignore
