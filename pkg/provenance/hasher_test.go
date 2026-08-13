@@ -43,8 +43,187 @@ func TestCompileManifest_MissingManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest after compile: %v", err)
 	}
-	if len(m.Records) != 2 {
-		t.Fatalf("expected 2 records in manifest, got %d", len(m.Records))
+	// Only the implemented record is sealed — the open record must never
+	// receive a manifest entry (prov-2026-105f014e).
+	if len(m.Records) != 1 {
+		t.Fatalf("expected 1 record in manifest, got %d: %+v", len(m.Records), m.Records)
+	}
+	if _, ok := m.Records["prov-2026-aaa00001"]; !ok {
+		t.Errorf("expected implemented record to be sealed, got %+v", m.Records)
+	}
+	if _, ok := m.Records["prov-2026-aaa00002"]; ok {
+		t.Errorf("open record must not be sealed into the manifest, got %+v", m.Records)
+	}
+}
+
+// TestCompileManifest_ExcludesDraftAndOpen reproduces the core bug report:
+// compile must never seal draft or open records, because they are still being
+// edited by definition and any hash sealed for them is guaranteed to go
+// stale. It must also actively remove a pre-existing spurious entry for such
+// a record — e.g. left over from a prior buggy compile — rather than merely
+// refusing to add new ones.
+func TestCompileManifest_ExcludesDraftAndOpen(t *testing.T) {
+	dir := t.TempDir()
+	h := NewHasher(dir)
+
+	implemented := makeTestRecord("prov-2026-sealed001", "implemented")
+	draft := makeTestRecord("prov-2026-draft0001", "draft")
+	open := makeTestRecord("prov-2026-open00001", "open")
+	records := []*Record{implemented, draft, open}
+
+	// Simulate damage from the pre-fix wholesale-replace behavior: the
+	// manifest already carries spurious entries for the draft and open
+	// records, sealed against their current (soon-to-be-stale) content.
+	seedHash, err := HashRecord(draft)
+	if err != nil {
+		t.Fatalf("HashRecord draft: %v", err)
+	}
+	openHash, err := HashRecord(open)
+	if err != nil {
+		t.Fatalf("HashRecord open: %v", err)
+	}
+	if err := h.writeManifest(&hashManifest{Records: map[string]string{
+		"prov-2026-draft0001": seedHash,
+		"prov-2026-open00001": openHash,
+	}}); err != nil {
+		t.Fatalf("seed manifest: %v", err)
+	}
+
+	changed, err := h.CompileManifest(records)
+	if err != nil {
+		t.Fatalf("CompileManifest: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected changed=true: spurious draft/open entries must be removed")
+	}
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	if _, ok := m.Records["prov-2026-draft0001"]; ok {
+		t.Errorf("draft record must not have a manifest entry, got %+v", m.Records)
+	}
+	if _, ok := m.Records["prov-2026-open00001"]; ok {
+		t.Errorf("open record must not have a manifest entry, got %+v", m.Records)
+	}
+	if _, ok := m.Records["prov-2026-sealed001"]; !ok {
+		t.Errorf("implemented record should still be sealed, got %+v", m.Records)
+	}
+	if len(m.Records) != 1 {
+		t.Fatalf("expected only the implemented record in manifest, got %+v", m.Records)
+	}
+
+	// A second compile must now be a true no-op.
+	changed, err = h.CompileManifest(records)
+	if err != nil {
+		t.Fatalf("second CompileManifest: %v", err)
+	}
+	if changed {
+		t.Fatal("expected changed=false: manifest should already be clean")
+	}
+}
+
+// TestCompileManifest_ExcludesRemoteRecords reproduces the shared_repos half
+// of the bug report: a record resolved from a shared-repo cache (FilePath
+// outside the Hasher's root) must never be sealed into this repo's manifest,
+// even though its status is implemented — the manifest describes records
+// this config owns, and a remote record's hash is the remote repo's
+// responsibility.
+func TestCompileManifest_ExcludesRemoteRecords(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "repo")
+	h := NewHasher(root)
+
+	local := makeTestRecord("prov-2026-local0001", "implemented")
+	local.FilePath = filepath.Join(root, "provenance", "prov-2026-local0001.yml")
+
+	remote := makeTestRecord("prov-2026-remote0001", "implemented")
+	// Simulates ~/.linespec/cache/<hash>/provenance/... — a sibling tree
+	// outside root, exactly like a real shared_repos cache directory.
+	remote.FilePath = filepath.Join(base, "shared-cache", "provenance", "prov-2026-remote0001.yml")
+
+	records := []*Record{local, remote}
+
+	changed, err := h.CompileManifest(records)
+	if err != nil {
+		t.Fatalf("CompileManifest: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected changed=true on first compile")
+	}
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	if _, ok := m.Records["prov-2026-remote0001"]; ok {
+		t.Errorf("remote (shared_repos) record must not be sealed into this repo's manifest, got %+v", m.Records)
+	}
+	if _, ok := m.Records["prov-2026-local0001"]; !ok {
+		t.Errorf("local record should be sealed, got %+v", m.Records)
+	}
+
+	// A pre-existing spurious entry for the remote record (e.g. from a prior
+	// buggy compile) must be actively removed, not just left un-refreshed.
+	if err := h.writeManifest(&hashManifest{Records: map[string]string{
+		"prov-2026-local0001":  m.Records["prov-2026-local0001"],
+		"prov-2026-remote0001": "ae327780deadbeef",
+	}}); err != nil {
+		t.Fatalf("seed manifest with spurious remote entry: %v", err)
+	}
+	changed, err = h.CompileManifest(records)
+	if err != nil {
+		t.Fatalf("CompileManifest after seeding spurious remote entry: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected changed=true: spurious remote entry must be removed")
+	}
+	m, err = h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	if _, ok := m.Records["prov-2026-remote0001"]; ok {
+		t.Errorf("spurious remote entry should have been removed, got %+v", m.Records)
+	}
+}
+
+// TestCompileManifest_PreservesUnloadedEntries covers the package-scoped-run
+// case from the bug report: a manifest entry for a record that simply is not
+// part of the current invocation's loaded records (e.g. a `-c` scoped compile
+// that only loads one package's records) must be left alone, not dropped.
+// CompileManifest must merge into the existing manifest rather than replacing
+// it wholesale.
+func TestCompileManifest_PreservesUnloadedEntries(t *testing.T) {
+	dir := t.TempDir()
+	h := NewHasher(dir)
+
+	full := makeTestRecord("prov-2026-full00001", "implemented")
+	if _, err := h.CompileManifest([]*Record{full}); err != nil {
+		t.Fatalf("initial full compile: %v", err)
+	}
+
+	// A second, narrower invocation only loads a different record — the
+	// first record's entry is absent from `records` purely because this run
+	// didn't load it, not because it stopped being sealed.
+	other := makeTestRecord("prov-2026-other0001", "implemented")
+	changed, err := h.CompileManifest([]*Record{other})
+	if err != nil {
+		t.Fatalf("scoped compile: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected changed=true: new record needs an entry")
+	}
+
+	m, err := h.LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	if _, ok := m.Records["prov-2026-full00001"]; !ok {
+		t.Errorf("entry for a record absent from this invocation's load must be preserved, got %+v", m.Records)
+	}
+	if _, ok := m.Records["prov-2026-other0001"]; !ok {
+		t.Errorf("expected new record to be sealed, got %+v", m.Records)
 	}
 }
 
