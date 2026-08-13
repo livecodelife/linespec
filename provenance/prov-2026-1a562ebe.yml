@@ -1,0 +1,44 @@
+id: prov-2026-1a562ebe
+title: CompileManifest stores Hasher.root instead of taking a localDir param, to avoid widening affected_scope into commands.go
+status: deprecated
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  prov-2026-105f014e's affected_scope is limited to pkg/provenance/hasher.go,
+  pkg/provenance/hasher_test.go, and PROVENANCE_RECORDS.md. Fixing
+  CompileManifest to distinguish local vs. shared_repos-resolved records
+  naively requires knowing the local provenance directory at call time, and
+  the only caller (Commands.Compile in commands.go) is outside that scope —
+  `check --staged` confirmed this by rejecting a commands.go edit as a
+  forbidden-scope violation.
+
+  Resolution: Hasher already receives `root` (the directory its manifest is
+  scoped to — repo root for a root-level config, or a package dir for a
+  `-c`-scoped one) via NewHasher. Storing it on the struct and having
+  CompileManifest use h.root together with the existing isRemoteFilePath
+  helper (already used by isRemoteRecord in linter.go/commands.go) reuses that
+  existing plumbing instead of adding a parameter, so the exported
+  CompileManifest signature is unchanged and commands.go needs no edit at all.
+  Verified: a local record's FilePath (root/provenance/*.yml) has root as a
+  prefix; a shared_repos cache path (~/.linespec/cache/<hash>/provenance/*.yml)
+  never does, so the existing prefix check classifies both correctly with no
+  new parameter.
+implements: prov-2026-105f014e
+constraints: []
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/hasher_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - hash-manifest
+  - scope
