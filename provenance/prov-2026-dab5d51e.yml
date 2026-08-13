@@ -1,6 +1,6 @@
 id: prov-2026-dab5d51e
 title: 'CheckCommit: judge historical commits by the record''s status at that commit, not its current status'
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -76,7 +76,7 @@ superseded_by: ""
 implements: prov-2026-f65bb92d
 related:
   - prov-2026-40232f86
-sealed_at_sha: ""
+sealed_at_sha: 8cc220e73d6cdf835d4e18f7f55125f27db15b9c
 associated_specs:
   - path: pkg/provenance/git_test.go
     type: go_test
