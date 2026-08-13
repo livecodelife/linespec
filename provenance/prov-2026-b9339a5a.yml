@@ -59,6 +59,8 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - Dockerfile.linespec
+  - cmd/linespec/build_test.go
+  - cmd/linespec/build_integration_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-a6456485

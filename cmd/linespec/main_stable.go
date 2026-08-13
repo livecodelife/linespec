@@ -420,7 +420,7 @@ func buildFromSourceCheckout(execPath string) error {
 
 	dockerfilePath := filepath.Join(srcRoot, "Dockerfile.linespec")
 	if _, err := os.Stat(dockerfilePath); err != nil {
-		return fmt.Errorf("Dockerfile.linespec not found at %s: %w", dockerfilePath, err)
+		return fmt.Errorf("dockerfile.linespec not found at %s: %w", dockerfilePath, err)
 	}
 
 	logger.Info("Building linespec:latest from source (%s)...", srcRoot)
