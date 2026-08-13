@@ -20,9 +20,10 @@ constraints:
 affected_scope:
   - linespec-beta
   - .gitignore
+  - provenance/prov-2026-850f03a4.yml
 forbidden_scope: []
-type: imprint
-implements: prov-2026-a0b6be6b
+type: blueprint
+implements: ""
 supersedes: ""
 superseded_by: ""
 related: []
