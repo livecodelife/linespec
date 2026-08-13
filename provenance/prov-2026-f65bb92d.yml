@@ -1,6 +1,6 @@
 id: prov-2026-f65bb92d
 title: provenance check reports false violations on linespec's own completion commits and on imprint-creation commits
-status: draft
+status: open
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
