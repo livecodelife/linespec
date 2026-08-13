@@ -1,0 +1,50 @@
+id: prov-2026-5769faf4
+title: CompileManifest merges into the existing manifest and actively deletes spurious draft/open/remote entries rather than just skipping them
+status: deprecated
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Two design choices in the CompileManifest rewrite, beyond the basic
+  implemented/superseded/deprecated status filter:
+
+  1. Merge into the loaded manifest map (start from a copy of m.Records, then
+     add/delete per record) instead of building a fresh map from `records` and
+     assigning wholesale. This satisfies the record's constraint that an
+     entry for a record not loaded in a partial/package-scoped run must
+     survive — a fresh-map approach has no way to distinguish "not loaded" from
+     "no longer eligible" since both simply produce no entry for that ID.
+     TestCompileManifest_PreservesUnloadedEntries pins this: compiling with
+     only one of two previously-sealed records loaded must keep both entries.
+
+  2. For every record that *is* loaded but is draft/open/remote, actively
+     `delete(merged, r.ID)` rather than merely not adding it. A record that
+     was sealed by an older, buggy binary (or is mid-transition) can already
+     have a spurious manifest entry; if compile only ever added entries and
+     never removed them, running the fixed compile against real repo state
+     would silently leave that stale entry in place forever — no different
+     from the original bug's "sweep it in and never clean it up" failure
+     mode, just on the other side. Verified against this repo's actual
+     manifest: it contained 13 legitimate entries for shared_repos-resolved
+     records (e.g. prov-2026-e8fb1e96, the one named in the bug report) that
+     the fixed `compile` removes on first run and leaves removed on every
+     run after (confirmed idempotent by diffing the manifest across two
+     consecutive `compile` invocations).
+implements: prov-2026-105f014e
+constraints: []
+affected_scope: []
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/hasher_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - hash-manifest
+  - idempotency
