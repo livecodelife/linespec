@@ -1,0 +1,53 @@
+id: prov-2026-3111394d
+title: Exclude .docs-lead from the .docs-article p max-width rule
+status: draft
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  While verifying prov-2026-f05161eb's already-implemented .docs-article
+  typography layer, found that `.docs-article p` (specificity 0,1,1, added
+  under this record) unconditionally sets `max-width: 100%`, which beats
+  `.docs-lead`'s own `max-width: 700px` (specificity 0,1,0) on any element
+  that carries both -- regardless of source order, since specificity (not
+  order) decides when the two differ.
+
+  docs/templates/docs.html nests exactly one such element:
+  `article.docs-article > header.docs-header > p.docs-lead`, the hub page's
+  intro paragraph. Before this record's typography layer existed, that
+  paragraph's width was governed solely by `.docs-lead`'s 700px cap. After
+  it, `.docs-article p` silently won, stretching the paragraph to the
+  article's 860px measure -- a regression of exactly the kind the blueprint's
+  own constraint ("docs.html ... may still rely on [.docs-lead]") was meant
+  to rule out. No automated check caught it because the only associated spec
+  is a build-succeeds check, not a style assertion.
+
+  Fixed by scoping the selector to `.docs-article p:not(.docs-lead)` rather
+  than editing `.docs-lead` itself, which stays untouched per the blueprint's
+  constraint. Verified: with the exclusion, no rule in docs.css sets
+  max-width on that paragraph via a higher-specificity selector, so
+  `.docs-lead`'s 700px cap applies uncontested, matching its pre-regression
+  behavior.
+constraints:
+  - The .docs-lead rule itself is not modified, per prov-2026-f05161eb's
+    constraint that the old wrapper-class rules stay untouched
+  - The exclusion is scoped as narrowly as the conflict requires (:not(.docs-lead)
+    on the max-width-setting selector only), not a blanket carve-out
+affected_scope:
+  - docs/assets/css/docs.css
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f05161eb
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: docs/assets/css/docs.css
+    run_command: bash scripts/build-docs.sh # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - documentation
+  - css
+  - imprint
