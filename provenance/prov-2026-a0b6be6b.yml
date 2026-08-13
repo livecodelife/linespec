@@ -1,6 +1,6 @@
 id: prov-2026-a0b6be6b
 title: Remove the tracked linespec-beta binary and gitignore it alongside linespec
-status: draft
+status: open
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
@@ -62,7 +62,10 @@ related:
   - prov-2026-c9e62857
   - prov-2026-8ae0dd5d
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: .gitignore
+    type: config
+    run_command: sh -c 'grep -q "^/linespec-beta$" {{path}} && test ! -e linespec-beta'
 associated_traces: []
 monitors: []
 tags:
