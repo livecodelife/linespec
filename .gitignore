@@ -19,6 +19,7 @@ go.work
 
 # Binary output
 /linespec
+/linespec-beta
 /main
 
 # IDE
