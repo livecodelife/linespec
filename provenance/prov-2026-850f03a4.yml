@@ -1,0 +1,38 @@
+id: prov-2026-850f03a4
+title: Delete tracked linespec-beta binary and add /linespec-beta gitignore entry
+status: deprecated
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Removed the tracked 22MB linespec-beta ELF binary from the index with
+  `git rm --cached` and added `/linespec-beta` to .gitignore next to the
+  existing `/linespec` entry.
+
+  Verified the record's constraints hold: `make build`, `make build-beta`,
+  and `docker build -f Dockerfile.linespec .` all still succeed after the
+  removal (nothing in the build/Docker pipeline consumed the committed
+  file). After running `make build-beta`, `git status --porcelain --ignored`
+  shows the regenerated `linespec-beta` artifact as `!!` (ignored) rather
+  than `??` (untracked), confirming the new gitignore rule covers it.
+constraints:
+  - No changes to Makefile build-beta/install-beta targets or .goreleaser.yml.
+  - Only the tracked linespec-beta file and .gitignore were touched.
+affected_scope:
+  - linespec-beta
+  - .gitignore
+forbidden_scope: []
+type: imprint
+implements: prov-2026-a0b6be6b
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: .gitignore
+    type: config
+    run_command: make build-beta # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - cleanup
+  - build-artifacts
