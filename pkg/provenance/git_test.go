@@ -1076,3 +1076,123 @@ func TestCheckStaged_OutOfScopeSourceFileRejected(t *testing.T) {
 		t.Error("Expected a violation for a file outside affected_scope")
 	}
 }
+
+// TestCheckCommit_ImplementedRecordNonTransitionEditRejected is the CheckCommit
+// analogue of TestCheckStaged_ImplementedRecordNonTransitionEditRejected: a later,
+// separate commit editing an already-implemented record's content (not the sealing
+// commit itself) must still be reported, even though CheckCommit now judges each
+// commit by the record's status immediately *before* it rather than the record's
+// current/final status.
+func TestCheckCommit_ImplementedRecordNonTransitionEditRejected(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-ed100002"
+
+	// setupSupersessionRepo commits the record as implemented at HEAD (c1).
+	tmpDir, provDir, recRelPath := setupSupersessionRepo(t, recID)
+	defer os.RemoveAll(tmpDir)
+
+	// c2: edit the already-implemented record's title, still status implemented -
+	// not a completion transition, and the record was already implemented at c1.
+	recPath := filepath.Join(tmpDir, recRelPath)
+	edited := strings.Replace(
+		makeProvRecord(recID, "implemented", `""`, `""`, nil),
+		"Test record "+recID, "Modified title", 1,
+	)
+	if err := os.WriteFile(recPath, []byte(edited), 0644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Edit implemented record ["+recID+"]")
+
+	commitSHA := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	violations, err := checker.CheckCommit(commitSHA)
+	if err != nil {
+		t.Fatalf("CheckCommit returned error: %v", err)
+	}
+	if len(violations) == 0 {
+		t.Error("Expected a violation for a historical commit editing an already-implemented record")
+	}
+}
+
+// TestCheckCommit_PreSealLifecycleCommitsAllowed reproduces the workflow this
+// blueprint documents: an imprint is created (draft), opened, and later completed
+// as three separate standalone commits, all tagged with the imprint's own ID. Once
+// the imprint is implemented, auditing its *earlier* lifecycle commits (draft
+// creation, open transition) with CheckCommit must not report them as violations —
+// judging them by record.Status (the record's current/final status) rather than by
+// what was true about the record at the time was itself a false-positive source,
+// surfaced by writing this exact fix using the documented provenance workflow.
+func TestCheckCommit_PreSealLifecycleCommitsAllowed(t *testing.T) {
+	clearGitEnvForTest(t)
+	const recID = "prov-2026-b5100001"
+
+	tmpDir, err := os.MkdirTemp("", "pre-seal-lifecycle-test")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gitExec(t, tmpDir, "init")
+	gitExec(t, tmpDir, "config", "user.email", "test@example.com")
+	gitExec(t, tmpDir, "config", "user.name", "Test User")
+	gitExec(t, tmpDir, "config", "commit.gpgsign", "false")
+
+	provDir := filepath.Join(tmpDir, "provenance")
+	if err := os.MkdirAll(provDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	recRelPath := "provenance/" + recID + ".yml"
+	recPath := filepath.Join(tmpDir, recRelPath)
+
+	// c1: draft creation.
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "draft", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile draft: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Draft record ["+recID+"]")
+	draftCommit := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	// c2: open transition.
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "open", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile open: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Open provenance record ["+recID+"]")
+	openCommit := gitOutput(t, tmpDir, "rev-parse", "HEAD")
+
+	// c3: completion.
+	if err := os.WriteFile(recPath, []byte(makeProvRecord(recID, "implemented", `""`, `""`, nil)), 0644); err != nil {
+		t.Fatalf("WriteFile implemented: %v", err)
+	}
+	gitExec(t, tmpDir, "add", recRelPath)
+	gitExec(t, tmpDir, "commit", "-m", "Complete provenance record ["+recID+"]")
+
+	loader := NewLoader(provDir, nil)
+	if err := loader.LoadAll(); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	// The loader now reads the record's final, implemented status.
+	if rec, ok := loader.GetRecord(recID); !ok || rec.Status != StatusImplemented {
+		t.Fatalf("expected loader to read record as implemented, got %+v", rec)
+	}
+
+	checker := NewCommitChecker(NewGit(tmpDir), loader)
+
+	for _, sha := range []string{draftCommit, openCommit} {
+		violations, err := checker.CheckCommit(sha)
+		if err != nil {
+			t.Fatalf("CheckCommit(%s) returned error: %v", sha, err)
+		}
+		if len(violations) != 0 {
+			t.Errorf("Expected no violations auditing pre-seal commit %s of a now-implemented record, got %d: %v", sha, len(violations), violations)
+		}
+	}
+}
