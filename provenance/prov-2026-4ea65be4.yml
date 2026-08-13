@@ -84,7 +84,7 @@ affected_scope:
   - pkg/runner/runner.go
   - cmd/linespec/main_stable.go
   - LINESPEC.md
-  - examples/multi-db-linespecs
+  - examples/multi-db-linespecs/**
 forbidden_scope: []
 type: bug
 extends: prov-2026-001
