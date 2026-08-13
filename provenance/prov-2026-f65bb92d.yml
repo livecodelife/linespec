@@ -1,0 +1,102 @@
+id: prov-2026-f65bb92d
+title: provenance check reports false violations on linespec's own completion commits and on imprint-creation commits
+status: draft
+created_at: "2026-08-13"
+author: calebcowen@gmail.com
+intent: |
+  `linespec provenance check` reports forbidden-scope violations against
+  commits that linespec itself generated via the documented workflow, so a
+  repo following CLAUDE.md to the letter cannot get a clean `check` on its own
+  recent history. Reproduced on this repo at 127c796 (HEAD, 2 violations) and
+  54eb101 (HEAD~1, 1 violation); confirmed present in v3.15.0 and the
+  pre-Cobra build too, so this is long-standing and not a v3.17.0 regression.
+
+  Three independent causes, all in CheckCommit (pkg/provenance/git.go):
+
+  1. The hash-manifest exemption is unreachable for implemented records.
+     CheckCommit iterates records, then files. The implemented-record guard
+     (git.go:400) runs first: for a file where isRecordFile() is false it
+     leaves isCompletion false, appends a violation, and `continue`s. The
+     `if isHashManifest(file) { continue }` exemption added by
+     prov-2026-8bb2286c sits at git.go:474, *after* that guard, so it never
+     runs for an implemented record. Because every completion commit stages
+     .linespec/hash_manifest.json alongside the record, every completion
+     commit reports a violation for the manifest.
+
+  2. A draft -> implemented completion is not recognized as a completion.
+     isCompletionTransitionBetween (git.go:808) returns
+     `beforeRecord.Status == StatusOpen && afterRecord.Status ==
+     StatusImplemented`, i.e. it only accepts open -> implemented. But
+     `complete` itself will seal a record straight from draft: prov-2026-f857109e
+     is `status: draft` in HEAD^ and `status: implemented` in HEAD, sealed by
+     linespec's own auto-commit ("Complete provenance record [...]", written by
+     commit_on_status_change). So `complete` and `check` disagree about which
+     transitions are legal, and the record's own YAML is flagged as an
+     illegal edit to an implemented record.
+
+  3. Creating an imprint's YAML is out of scope for the blueprint it
+     implements. 54eb101 creates provenance/prov-2026-f857109e.yml (an imprint
+     with `implements: prov-2026-f05161eb`) under a commit tagged
+     [prov-2026-f05161eb]. That path is not in the blueprint's affected_scope,
+     so it is reported as forbidden. This is the standard documented workflow
+     — CLAUDE.md step 4 says to create imprints as you work — so it must not
+     require widening the blueprint's affected_scope with the imprint's own
+     record path.
+
+  Causes 1 and 2 together produce exactly the 2 violations seen on HEAD (one
+  per staged file); cause 3 produces the 1 violation on HEAD~1.
+
+  The same three cases must be fixed in CheckStaged as well as CheckCommit —
+  CheckStaged carries a parallel copy of the implemented-record guard
+  (git.go:606) and its own isHashManifest exemption (git.go:668) — otherwise
+  the pre-commit path and the historical-audit path stay inconsistent.
+constraints:
+  - |
+    The hash-manifest exemption must be evaluated before the implemented-record
+    guard in both CheckCommit and CheckStaged, so that
+    .linespec/hash_manifest.json is never reported as a scope violation
+    regardless of the governing record's status. The manifest is system-managed
+    and is already exempt by intent (prov-2026-8bb2286c); this only fixes the
+    ordering that made the exemption unreachable.
+  - |
+    isCompletionTransitionBetween must treat both open -> implemented and
+    draft -> implemented as a completion transition, matching what `complete`
+    actually permits. Any other before/after status pair must continue to
+    return false, so a genuine edit to an already-implemented record is still
+    caught.
+  - |
+    A commit tagged with record X must be allowed to add or modify the YAML of
+    a record whose `implements` field equals X, without that path appearing in
+    X's affected_scope. The allowance is keyed on the `implements` relationship
+    only; an unrelated record's YAML must still be reported as a violation.
+  - |
+    No weakening of the core immutability guarantee: a commit that edits an
+    implemented record's non-transition content, or that touches a source file
+    outside the tagged record's affected_scope, must still be reported exactly
+    as it is today. Add regression coverage that asserts these still fail.
+  - |
+    After the fix, `./linespec provenance check --commit HEAD` and
+    `--commit HEAD~1` both report no violations on this repo, and
+    `./linespec provenance check --range v3.17.0..HEAD` is clean.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-8bb2286c
+  - prov-2026-3687be46
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - check
+  - git-hooks
+  - false-positive
