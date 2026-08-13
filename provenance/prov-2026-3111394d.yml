@@ -1,6 +1,6 @@
 id: prov-2026-3111394d
 title: Exclude .docs-lead from the .docs-article p max-width rule
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -40,7 +40,7 @@ implements: prov-2026-f05161eb
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 321787975887c45e9fe73db825f9d7fe1b041e33
 associated_specs:
   - type: code
     path: docs/assets/css/docs.css
