@@ -62,6 +62,29 @@ intent: |
   normalised on both sides before comparison. Only booleans: a looser rule would
   start quietly accepting values that genuinely differ.
 
+  ## A reused container kept a severed connection
+
+  The four above make each spec pass on its own. Run as a suite they still
+  failed from the second spec onward, every one returning 500 before touching
+  the database.
+
+  Reloading a proxy registry closes every active connection, deliberately and
+  for a good reason: a statement the proxy answered locally was never prepared
+  upstream, so it has to stop existing when the mocks that justified it do. But
+  a container reused across specs survives that reset holding a pooled
+  connection to a socket that is already closed, and a pool hands it out to
+  whatever asks next - which, with nothing in between, is the test. The service
+  then errors on its first interaction, and the failure reads as the service's
+  rather than as the harness's.
+
+  Preparation now waits for the service to report healthy again after the
+  reload, which gives the pool one request to discard the dead connection where
+  no expectation is watching. One request is enough, and it is what a readiness
+  endpoint is for: a health check that verifies its database recovers here,
+  while a liveness check that touches nothing does not - a reason to point
+  health_endpoint at readiness for a database-backed service rather than a
+  defect in the wait.
+
   ## What is deliberately not fixed here
 
   A Rails service still has to write its queries in the shape a contract names -
@@ -91,12 +114,21 @@ constraints:
     Only booleans are normalised in value comparison. Every other value compares
     exactly.
   - >-
+    A registry reload still closes active connections. Preparation waits for
+    health afterwards rather than skipping the reset, because the reset is what
+    stops a mock-only prepared statement outliving the mocks that created it.
+  - >-
+    Failing to come back healthy is not fatal in preparation. The test that
+    follows reports it with the interaction and the response body, which is more
+    use than a timeout before the test runs.
+  - >-
     Equivalent handling belongs in the MySQL proxy where the query type is
     relevant to both protocols, per [[prov-2026-005]]. This record changes the
     PostgreSQL side only and does not close that obligation.
 affected_scope:
   - pkg/proxy/postgresql/proxy.go
   - pkg/registry/registry.go
+  - pkg/runner/runner.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""

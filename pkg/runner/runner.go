@@ -718,7 +718,54 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 			}
 		}
 	}
+
+	// Let the service notice that its connections were severed, before the
+	// test's own request is the thing that notices.
+	//
+	// Reloading a proxy registry closes every active connection, deliberately:
+	// a statement the proxy answered locally was never prepared upstream, so it
+	// has to stop existing when the mocks that justified it do. A reused
+	// container survives that reset holding a pooled connection to a socket
+	// that is already closed, and a pool hands it out to whatever asks next -
+	// which, with nothing in between, is the test. The failure then looks like
+	// the service erroring on its first interaction.
+	//
+	// One health request is enough, and this is what a readiness endpoint is
+	// for: a service that checks its database before reporting healthy discards
+	// the dead connection here, where no expectation is watching. A liveness
+	// endpoint that touches nothing will not, which is a reason to point
+	// health_endpoint at readiness rather than a defect in this wait.
+	r.waitForReusedService(ctx, pc, serviceConfig)
 	return nil
+}
+
+// waitForReusedService polls the health endpoint until the service answers
+// again after a registry reload severed its connections.
+//
+// A failure to come back is not fatal here. The test that follows is a better
+// place to report it, with the interaction that failed and the response body,
+// than a timeout in preparation would be.
+func (r *testRunner) waitForReusedService(ctx context.Context, pc *persistentServiceContainers, serviceConfig *config.LineSpecConfig) {
+	if pc.appHostPort == "" || serviceConfig.Service.HealthEndpoint == "" {
+		return
+	}
+	healthURL := fmt.Sprintf("http://localhost:%s%s", pc.appHostPort, serviceConfig.Service.HealthEndpoint)
+
+	const attempts = 20
+	for i := 0; i < attempts; i++ {
+		if r.suite.isContainerHealthy(healthURL) {
+			if i > 0 {
+				logger.Debug("Service healthy again after %d attempt(s) following connection reset", i+1)
+			}
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	logger.Debug("Service did not report healthy after the connection reset; running the test anyway")
 }
 
 // isContainerHealthy returns true if the app container responds to its health endpoint.
