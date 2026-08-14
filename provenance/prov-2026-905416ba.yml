@@ -1,0 +1,117 @@
+id: prov-2026-905416ba
+title: An ORM's SQL is intercepted on the same terms as a driver's
+status: open
+created_at: "2026-08-14"
+author: calebcowen@gmail.com
+intent: |
+  Four gaps in the PostgreSQL proxy's semantic matching, all found by pointing an
+  existing suite at a Rails service instead of a Go one, and all with the same
+  shape: the matcher understood the SQL a hand-written driver emits and not the
+  SQL an ORM emits. A suite that passed against lib/pq failed all six specs
+  against ActiveRecord without either implementation being wrong.
+
+  The four are independent, but they are one record because they share a cause
+  and because fixing any one of them alone leaves the suite red.
+
+  ## Introspection queries reached the mock registry
+
+  ActiveRecord asks a table for its columns before it will build a row, and that
+  query names the table as a string literal: WHERE a.attrelid =
+  '"todos"'::regclass. Table extraction is a substring search over the tables a
+  spec registered, so the query counted as touching todos, was offered to the
+  first todos expectation, and failed it on direction - the expectation wanted a
+  write and introspection is a read. Failing to match is enough to fail the
+  expectation, because a rejection is recorded so it can be surfaced rather than
+  silently swallowed.
+
+  [[prov-2026-005]] already says what should happen: infrastructure queries pass
+  through and never reach mock matching, evaluated before any matching attempt.
+  The rule existed; the PostgreSQL catalog queries were not on the list. They are
+  now, decided by FROM/JOIN targets rather than by looking for catalog names
+  anywhere - a query joining a real table to a catalog is still an application
+  query, and a query with no FROM at all is never treated as infrastructure, so
+  nothing can make a write invisible.
+
+  ## Quoted identifiers were invisible
+
+  Every semantic extractor - WHERE columns, INSERT columns, SET items - was built
+  from a bare-word pattern. ActiveRecord quotes everything it emits: INSERT INTO
+  "todos" ("title", ...), WHERE "todos"."id" = $1. None of it matched, so every
+  VERIFY_WHERE and VERIFY_WRITTEN_VALUES on a Rails service failed reporting that
+  the column "was not present" - which reads as an implementation that never
+  wrote the column rather than as a matcher that could not see it.
+
+  Whether a client quotes its identifiers is a property of the client, not of the
+  statement, so the extractors now read one identifier grammar covering both and
+  strip the quotes before a name reaches a comparison.
+
+  ## A star select built a row of the wrong width
+
+  SELECT "todos".* was read as a column list of one column named "*", so the
+  mocked DataRow carried a single field against a RowDescription with as many
+  fields as the table has, and the client rejected the response outright:
+  PG::UnableToSend: unexpected field count in "D" message. A star names no
+  columns - the shape comes from the payload - so the extractor now says so by
+  returning nothing rather than by returning a column that does not exist.
+
+  ## Booleans compared by spelling
+
+  PostgreSQL's text format writes booleans as t and f. A spec asserting
+  completed: true was comparing against "t" and failing on a difference of
+  spelling. A spec should say what a person would say, so boolean values are
+  normalised on both sides before comparison. Only booleans: a looser rule would
+  start quietly accepting values that genuinely differ.
+
+  ## What is deliberately not fixed here
+
+  A Rails service still has to write its queries in the shape a contract names -
+  read after write, one statement per interaction. That is not a proxy concern
+  and this record does not paper over it. What it fixes is the class of failure
+  where the implementation was already correct and the matcher could not see it.
+constraints:
+  - >-
+    Catalog pass-through is decided by FROM/JOIN targets, never by finding a
+    catalog name anywhere in the text. A query joining a real table to a catalog
+    is an application query.
+  - >-
+    A query with no FROM is never treated as infrastructure. Nothing in this
+    record may make a write invisible to an expectation.
+  - >-
+    Pass-through is evaluated before the mock registry is consulted at all,
+    which is what [[prov-2026-005]] requires: reaching the registry is enough to
+    fail an expectation even when nothing matches.
+  - >-
+    One identifier grammar covers quoted and bare names, and quotes are stripped
+    before a name reaches a comparison, so a spec names a column the way a person
+    would.
+  - >-
+    A star select yields no column names. The row shape comes from the payload,
+    and a column literally named "*" must never be synthesised.
+  - >-
+    Only booleans are normalised in value comparison. Every other value compares
+    exactly.
+  - >-
+    Equivalent handling belongs in the MySQL proxy where the query type is
+    relevant to both protocols, per [[prov-2026-005]]. This record changes the
+    PostgreSQL side only and does not close that obligation.
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/registry/registry.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-005
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/proxy_extract_table_test.go
+    run_command: go test -count=1 ./$(dirname {{path}})
+  - path: pkg/registry/registry.go
+    run_command: go test -count=1 ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - proxy
+  - orm
