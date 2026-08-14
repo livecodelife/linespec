@@ -2,7 +2,7 @@ package dsl
 
 import "testing"
 
-// TestIssue185_VerifyBeforeReturnsOrderIndependent is a placeholder for the
+// TestVerifyBeforeReturnsOrderIndependent is a placeholder for the
 // regression coverage tracked by prov-2026-4ea65be4 (GitHub issue #185).
 //
 // parseExpect (pkg/dsl/parser.go) checks trailing EXPECT clauses in a fixed
@@ -16,6 +16,6 @@ import "testing"
 //
 // This test currently just documents the expected contract; it will be
 // fleshed out into a real regression during implementation of the fix.
-func TestIssue185_VerifyBeforeReturnsOrderIndependent(t *testing.T) {
+func TestVerifyBeforeReturnsOrderIndependent(t *testing.T) {
 	t.Skip("placeholder proof artifact for prov-2026-4ea65be4 (issue #185); fleshed out during implementation")
 }

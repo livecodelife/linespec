@@ -76,8 +76,8 @@ affected_scope:
   - pkg/registry/registry.go
   - pkg/registry/registry_test.go
   - pkg/registry/semantic_constraint_enforcement_test.go
-  - pkg/registry/issue185_multi_database_call_scoping_test.go
-  - pkg/dsl/issue185_verify_before_returns_test.go
+  - pkg/registry/multi_database_call_scoping_test.go
+  - pkg/dsl/verify_before_returns_order_test.go
   - pkg/proxy/postgresql/proxy.go
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/mongodb/interceptor.go
@@ -93,12 +93,12 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/registry/issue185_multi_database_call_scoping_test.go
+  - path: pkg/registry/multi_database_call_scoping_test.go
     type: go_test
-    run_command: go test ./pkg/registry/... -run TestIssue185 -v
-  - path: pkg/dsl/issue185_verify_before_returns_test.go
+    run_command: go test ./pkg/registry/... -run TestMultiDatabaseCallScoping -v
+  - path: pkg/dsl/verify_before_returns_order_test.go
     type: go_test
-    run_command: go test ./pkg/dsl/... -run TestIssue185 -v
+    run_command: go test ./pkg/dsl/... -run TestVerifyBeforeReturnsOrderIndependent -v
   - path: pkg/registry/registry_test.go
     type: go_test
     run_command: make test # {{path}}

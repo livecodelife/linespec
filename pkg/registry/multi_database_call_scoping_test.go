@@ -2,8 +2,8 @@ package registry
 
 import "testing"
 
-// TestIssue185_MultiDatabaseCallScoping is a placeholder for the regression
-// coverage tracked by prov-2026-4ea65be4 (GitHub issue #185).
+// TestMultiDatabaseCallScoping is a placeholder for the regression coverage
+// tracked by prov-2026-4ea65be4 (GitHub issue #185).
 //
 // When two proxied databases (e.g. two PostgreSQL databases declared in the
 // `databases:` list form) expose a table with the same name, EXPECT
@@ -16,6 +16,6 @@ import "testing"
 //
 // This test currently just documents the expected contract; it will be
 // fleshed out into a real regression during implementation of the fix.
-func TestIssue185_MultiDatabaseCallScoping(t *testing.T) {
+func TestMultiDatabaseCallScoping(t *testing.T) {
 	t.Skip("placeholder proof artifact for prov-2026-4ea65be4 (issue #185); fleshed out during implementation")
 }
