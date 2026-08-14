@@ -348,6 +348,37 @@ func semanticSpecificity(mock *types.ExpectStatement) int {
 	return score
 }
 
+// sqlValueEquals compares a value a spec declared against the value observed on
+// the wire.
+//
+// PostgreSQL's text format writes booleans as t and f, so a spec asserting
+// completed: true is comparing against "t" and fails on a difference of
+// spelling rather than of value. A spec should say what a person would say.
+//
+// Only booleans are normalised. Everything else compares exactly, because a
+// looser rule would start quietly accepting values that genuinely differ.
+func sqlValueEquals(expected, actual string) bool {
+	if expected == actual {
+		return true
+	}
+	e, eok := normalizeSQLBool(expected)
+	a, aok := normalizeSQLBool(actual)
+	return eok && aok && e == a
+}
+
+// normalizeSQLBool reports the boolean a token denotes, and whether it denotes
+// one at all. It accepts the spellings the wire protocols use alongside the
+// ones a person writes.
+func normalizeSQLBool(v string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "t", "true":
+		return true, true
+	case "f", "false":
+		return false, true
+	}
+	return false, false
+}
+
 // channelDirection reports the READ/WRITE direction implied by an EXPECT
 // channel, or "" for channels with no read/write distinction (HTTP, EVENT, ...).
 func channelDirection(channel types.ExpectChannel) string {
@@ -425,7 +456,7 @@ func matchesSemanticConstraints(
 				if !ok {
 					return false, fmt.Sprintf("VERIFY_WHERE expected %s=%s, but column %q was not present in the WHERE clause", col, expectedVal, col)
 				}
-				if actualVal != expectedVal {
+				if !sqlValueEquals(expectedVal, actualVal) {
 					return false, fmt.Sprintf("VERIFY_WHERE expected %s=%s, but got: %s=%s", col, expectedVal, col, actualVal)
 				}
 			}
@@ -443,7 +474,7 @@ func matchesSemanticConstraints(
 				if !ok {
 					return false, fmt.Sprintf("VERIFY_WRITTEN_VALUES expected %s=%s, but column %q was not written", col, expectedVal, col)
 				}
-				if actualVal != expectedVal {
+				if !sqlValueEquals(expectedVal, actualVal) {
 					return false, fmt.Sprintf("VERIFY_WRITTEN_VALUES expected %s=%s, but got: %s=%s", col, expectedVal, col, actualVal)
 				}
 			}

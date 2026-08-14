@@ -800,7 +800,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 					return
 				}
 			} else {
-				p.logDebug("  -> Forwarding simple query\n")
+				p.logDebug("  -> Forwarding simple query: %s\n", query)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 					p.logDebug("  -> Error forwarding Query: %v\n", err)
 					return
@@ -1548,6 +1548,43 @@ func (p *Proxy) extractParseInfo(payload []byte) (stmtName, query string, paramO
 
 // --- Semantic SQL matching helpers ---
 
+// fromJoinTargetRE captures the relation named by a FROM or JOIN clause.
+var fromJoinTargetRE = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(?:ONLY\s+)?("[^"]+"|[A-Za-z_][\w$.]*)`)
+
+// isCatalogQuery reports whether a query reads only PostgreSQL's own catalogs.
+//
+// Drivers and ORMs introspect constantly - a connection's type map, a table's
+// columns, its primary key - and those queries name the application's tables as
+// string literals: ActiveRecord asks for a column list WHERE a.attrelid =
+// '"todos"'::regclass. Table extraction is a substring search over the tables a
+// spec registered, so without this guard that query counts as touching todos,
+// is matched against the first todos expectation, and fails it on direction -
+// the expectation wanted a write and introspection is a read.
+//
+// Deciding by FROM/JOIN targets rather than by looking for catalog names
+// anywhere is what makes it safe. A query joining a real table to a catalog is
+// still an application query, and a query mentioning pg_ in a literal is still
+// whatever its FROM says it is.
+//
+// A query with no FROM at all - SELECT 1, an INSERT, SET, SHOW - is not a
+// catalog query. Nothing here may make a write invisible.
+func isCatalogQuery(query string) bool {
+	matches := fromJoinTargetRE.FindAllStringSubmatch(query, -1)
+	if len(matches) == 0 {
+		return false
+	}
+	for _, m := range matches {
+		name := strings.ToLower(strings.Trim(m[1], `"`))
+		if strings.HasPrefix(name, "pg_") ||
+			strings.HasPrefix(name, "pg_catalog.") ||
+			strings.HasPrefix(name, "information_schema.") {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // extractAllTables returns all registered table names that appear as word-boundary
 // matches in the query, covering FROM, JOIN, INTO, UPDATE, and CTE references.
 func (p *Proxy) extractAllTables(query string) []string {
@@ -1611,14 +1648,35 @@ func (p *Proxy) extractBindParams(payload []byte) []string {
 	return params
 }
 
+// sqlIdent matches one SQL identifier, quoted or bare.
+//
+// Every semantic extractor below is built from it rather than from a bare-word
+// pattern, because whether a client quotes its identifiers is a property of the
+// client and not of the statement. ActiveRecord quotes everything it emits -
+// INSERT INTO "todos" ("title", ...), WHERE "todos"."id" = $1 - while lib/pq
+// writes the same statements bare, and a matcher that only reads one of those
+// silently sees no columns in the other. Silently, because an extractor that
+// finds nothing is indistinguishable from a statement that touched nothing.
+const sqlIdent = `(?:"[^"]+"|[a-z_][a-z0-9_]*)`
+
+// unquoteIdent strips the quotes a client may have put around an identifier, so
+// that a spec naming a column writes it the way a person would.
+func unquoteIdent(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) >= 2 && name[0] == '"' && name[len(name)-1] == '"' {
+		return name[1 : len(name)-1]
+	}
+	return name
+}
+
 // reWhereCondition matches "col = $N", "table.col = $N", "col = 'literal'", "col = number"
 // following WHERE, AND, or OR.
 var reWhereCondition = regexp.MustCompile(
-	`(?i)(?:WHERE|AND|OR)\s+((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
+	`(?i)(?:WHERE|AND|OR)\s+((?:` + sqlIdent + `\.)?` + sqlIdent + `)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
 )
 
 // reInsertCols matches the column list in "INSERT INTO table (col1, col2, ...)"
-var reInsertCols = regexp.MustCompile(`(?i)INSERT\s+INTO\s+[a-z_][a-z0-9_]*\s*\(([^)]+)\)`)
+var reInsertCols = regexp.MustCompile(`(?i)INSERT\s+INTO\s+` + sqlIdent + `\s*\(([^)]+)\)`)
 
 // reInsertVals matches the value list in "VALUES (val1, val2, ...)"
 var reInsertVals = regexp.MustCompile(`(?i)\bVALUES\s*\(([^)]+)\)`)
@@ -1628,7 +1686,7 @@ var reUpdateSet = regexp.MustCompile(`(?i)\bSET\s+(.+?)(?:\s+WHERE\b|$)`)
 
 // reSetItem matches "col = $N", "col = 'literal'", or "col = number" in a SET clause
 var reSetItem = regexp.MustCompile(
-	`(?i)((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
+	`(?i)((?:` + sqlIdent + `\.)?` + sqlIdent + `)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
 )
 
 // extractWhereInfo returns column names and resolved column-value pairs from the
@@ -1643,6 +1701,7 @@ func extractWhereInfo(query string, bindParams []string) (columns []string, valu
 		if dot := strings.LastIndex(raw, "."); dot >= 0 {
 			col = raw[dot+1:]
 		}
+		col = unquoteIdent(col)
 		if _, ok := seen[col]; !ok {
 			seen[col] = struct{}{}
 			columns = append(columns, col)
@@ -1675,13 +1734,13 @@ func extractWrittenValuesFromSQL(query, operation string, bindParams []string) m
 		vals := splitCommaTrimmed(vm[1])
 		for i, col := range cols {
 			if i >= len(vals) { break }
-			result[strings.ToLower(col)] = resolveValue(vals[i], bindParams)
+			result[unquoteIdent(strings.ToLower(col))] = resolveValue(vals[i], bindParams)
 		}
 	case "UPDATE":
 		sm := reUpdateSet.FindStringSubmatch(query)
 		if sm == nil { return result }
 		for _, item := range reSetItem.FindAllStringSubmatch(sm[1], -1) {
-			col := strings.ToLower(item[1])
+			col := unquoteIdent(strings.ToLower(item[1]))
 			result[col] = resolveValueFromCaptures(item[2], item[3], item[4], bindParams)
 		}
 	}
@@ -1754,6 +1813,14 @@ func (p *Proxy) matchMock(
 	byTables func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool),
 	byKey func(key, query string) (*types.ExpectStatement, bool),
 ) (*types.ExpectStatement, bool) {
+	// Pass-through, evaluated before the registry is consulted at all: an
+	// introspection query must never reach mock matching, because reaching it
+	// is enough to fail an expectation even when nothing matches
+	// (prov-2026-005).
+	if isCatalogQuery(query) {
+		p.logDebug("  -> Pass-through (catalog introspection), not offered to the mock registry\n")
+		return nil, false
+	}
 	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
 	if len(tables) > 0 {
 		if mock, found := byTables(tables, op, whereCols, whereVals, writtenVals); found {
@@ -1776,6 +1843,9 @@ func (p *Proxy) peekMock(query string, bindParams []string) (*types.ExpectStatem
 
 // checkNegativeMocksForQuery fires both semantic and legacy negative expectation checks.
 func (p *Proxy) checkNegativeMocksForQuery(query string, bindParams []string) {
+	if isCatalogQuery(query) {
+		return
+	}
 	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
 	if len(tables) > 0 {
 		p.registry.CheckNegativeMocksByTables(tables, op, whereCols, whereVals, writtenVals)
@@ -2056,6 +2126,22 @@ func (p *Proxy) extractSelectColumns(sql string) []string {
 		}
 	}
 
+	// A star selects whatever the row happens to have, so it names no columns
+	// at all: returning it as a column called "*" would build a one-field
+	// DataRow against a RowDescription with as many fields as the table has,
+	// and the client rejects that with "unexpected field count". Returning nil
+	// leaves the caller with the columns the payload itself declares, which is
+	// the only place the shape can come from.
+	//
+	// Both spellings land here. "todos".* has already had its qualifier
+	// stripped by the qualified-name handling above, so it is a bare * by now.
+	for _, col := range columnNames {
+		if col == "*" {
+			p.logDebug("  -> Star select: taking columns from the payload instead\n")
+			return nil
+		}
+	}
+
 	p.logDebug("  -> Extracted columns: %v\n", columnNames)
 	return columnNames
 }
@@ -2083,6 +2169,13 @@ func splitColumns(columnsPart string) []string {
 			columnNames = append(columnNames, col)
 		}
 	}
+	// RETURNING * names no columns either; the payload declares the shape.
+	for _, col := range columnNames {
+		if col == "*" {
+			return nil
+		}
+	}
+
 	return columnNames
 }
 
