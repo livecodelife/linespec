@@ -843,6 +843,9 @@ func runProxyCore(pType, addr, upstream, dbName, kafkaHost, schemaDataB64, schem
 		proxyErr = p.Start(ctx)
 	case "postgresql":
 		pgProxy = postgresql.NewProxy(addr, upstream, reg)
+		if dbName != "" {
+			pgProxy.SetDatabaseName(dbName)
+		}
 		pgProxy.SetResolver(resolver)
 		// Load schema from file if provided via --schema-file flag, mirroring the
 		// MySQL case above. Populates schemaCache so RowDescription messages carry

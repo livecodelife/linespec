@@ -117,7 +117,7 @@ func (p *Interceptor) handleConn(ctx context.Context, clientConn net.Conn) {
 
 		mock, cmdUpper, collection, database := p.matchMock(body)
 		if mock != nil {
-			p.registry.CheckNegativeMocks(collection, cmdUpper)
+			p.registry.CheckNegativeMocks(collection, cmdUpper, database)
 			resp, err := p.buildResponse(mock, hdr.requestID, database, collection)
 			if err != nil {
 				logger.Error("MongoDB proxy: build response for [%s.%s]: %v", collection, cmdUpper, err)
@@ -133,7 +133,7 @@ func (p *Interceptor) handleConn(ctx context.Context, clientConn net.Conn) {
 		} else {
 			// No mock — record passthrough and forward to upstream.
 			p.registry.RecordPassthrough(fmt.Sprintf("%s.%s", collection, cmdUpper))
-			p.registry.CheckNegativeMocks(collection, cmdUpper)
+			p.registry.CheckNegativeMocks(collection, cmdUpper, database)
 			if err := writeRaw(upstream, hdr, body); err != nil {
 				break
 			}
@@ -208,7 +208,7 @@ func (p *Interceptor) matchMock(body []byte) (*types.ExpectStatement, string, st
 	}
 
 	cmdUpper := strings.ToUpper(command)
-	mock, found := p.registry.FindMock(collection, cmdUpper)
+	mock, found := p.registry.FindMock(collection, cmdUpper, database)
 	if found {
 		return mock, cmdUpper, collection, database
 	}

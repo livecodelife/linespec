@@ -1359,7 +1359,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				dbHostPortsMap[db.Host] = "localhost:" + postgresHostPort
 
 				if db.Proxy != nil && *db.Proxy {
-					pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json"}
+					pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", db.Database}
 					if pgSchema, err := r.suite.fetchPostgresSchema(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database); err != nil {
 						logger.Debug("Failed to fetch PostgreSQL schema for OID resolution (host=%s): %v", db.Host, err)
 					} else if len(pgSchema) > 0 {

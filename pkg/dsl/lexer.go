@@ -35,6 +35,9 @@ const (
 	TokenVerifyWhereColumns TokenType = "VERIFY_WHERE_COLUMNS"
 	TokenVerifyWhere        TokenType = "VERIFY_WHERE"
 	TokenVerifyWrittenValues TokenType = "VERIFY_WRITTEN_VALUES"
+	// TokenDatabase — DATABASE <name> on an EXPECT, disambiguating which
+	// `databases:` list entry (by its `name:` field) the EXPECT targets.
+	TokenDatabase TokenType = "DATABASE"
 )
 
 type Token struct {
@@ -186,6 +189,12 @@ func LexFile(filePath string) ([]Token, error) {
 			inner = strings.TrimPrefix(inner, "[")
 			inner = strings.TrimSuffix(inner, "]")
 			tokens = append(tokens, Token{Type: TokenAccessingTables, Literal: inner, Line: lineNum})
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(trimmedLine), "DATABASE ") {
+			val := strings.TrimSpace(trimmedLine[len("DATABASE "):])
+			tokens = append(tokens, Token{Type: TokenDatabase, Literal: val, Line: lineNum})
 			continue
 		}
 

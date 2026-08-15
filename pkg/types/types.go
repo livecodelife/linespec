@@ -42,6 +42,7 @@ type ExpectStatement struct {
 	SQLContains   string // For DB (USING_SQL_CONTAINS) — normalized substring match (deprecated: use ACCESSING_TABLES)
 	// Semantic SQL matching (replaces USING_SQL / USING_SQL_CONTAINS)
 	AccessingTables    []string          // ACCESSING_TABLES — exact set of tables referenced in the query
+	Database           string            // DATABASE — logical database name (the `name:` field from a `databases:` list entry) this EXPECT targets. Disambiguates a table name that exists in more than one proxied database; empty means "match against any database's proxy" (legacy/single-database behavior).
 	VerifyOperation    string            // VERIFY_OPERATION — SELECT, INSERT, UPDATE, DELETE
 	VerifyWhereColumns []string          // VERIFY_WHERE_COLUMNS — column names that must appear in WHERE clause
 	VerifyWhere        map[string]string // VERIFY_WHERE — column-value pairs in WHERE clause (wire-resolved)
