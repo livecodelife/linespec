@@ -1,0 +1,63 @@
+id: prov-2026-e85fd661
+title: Wire logical database identity into postgresql/mysql proxies
+status: open
+created_at: "2026-08-15"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  The PostgreSQL proxy constructed its base.DatabaseProxyConfig with the
+  literal "postgres" and never read it back anywhere — the field was dead.
+  Changed the default to a zero-value config (mirroring the MySQL proxy's
+  "must be set via SetDatabaseName before Start" pattern) and added
+  Proxy.SetDatabaseName so runProxyCore (cmd/linespec/main_stable.go) can
+  populate it from the existing --db-name flag, which the runner now passes
+  for PostgreSQL too (pkg/runner/runner.go: pgProxyCmd gains "--db-name",
+  db.Database). The MySQL proxy already received --db-name and called
+  SetDatabaseName, but only used it for wire-protocol column metadata; wired
+  the same value into findMock/peekMock/checkNegativeMocksForQuery via
+  closures so it participates in registry DATABASE-clause scoping too. Chose
+  db.Database (the `database:` field of the databases: list entry — the
+  actual database/schema name) as the identity for both proxy types, rather
+  than db.Name (the entry's `name:` alias), for symmetry with the MySQL
+  --db-name value the fix reuses; LINESPEC.md documents this explicitly so
+  DATABASE clause values match what's actually wired through. The MongoDB
+  interceptor needed no new wiring — it already parses the database name
+  per-message from the wire protocol's $db field — so it was changed only to
+  forward that value into FindMock/CheckNegativeMocks.
+
+  Debugging note: verifying this end-to-end against
+  examples/multi-db-linespecs initially showed a spurious "[WRITE_MYSQL] on
+  [orders//] was never called" failure. Root cause was environmental, not a
+  code defect: the proxy sidecar containers run a separately built Docker
+  image (linespec:latest per Dockerfile.linespec), which was stale from
+  before this change, so the host (rebuilt from current source) and the
+  container (old image) computed different mockHitKey formats for the same
+  mock and the hit-count merge silently failed to match. Rebuilding
+  linespec:latest from current source resolved it; this is a local-testing
+  gotcha (CI always builds fresh), not something the fix needs to guard
+  against in code.
+constraints:
+  - A PostgreSQL proxy started with no --db-name must behave exactly as
+    before (no database identity known — matches any EXPECT, scoped or not).
+  - The MySQL column-metadata behavior driven by dbConfig.GetDatabaseName()
+    (schema responses) must be unaffected by also reading it for registry
+    match scoping.
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/base/database_proxy_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - postgresql
+  - mysql
+  - multi-database
+  - issue-185
