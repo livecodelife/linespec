@@ -1,6 +1,6 @@
 id: prov-2026-1f879f10
 title: Add DATABASE clause and scope registry matching by database identity
-status: open
+status: implemented
 created_at: "2026-08-15"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -43,7 +43,7 @@ implements: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a01fa1dfe5c7f312de6aa18a620a0edec839c62e
 associated_specs:
   - path: pkg/registry/multi_database_call_scoping_test.go
     type: go_test
