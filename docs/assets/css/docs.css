@@ -228,7 +228,10 @@
 
 /* --- Body text ------------------------------------------------------------ */
 
-.docs-article p {
+/* :not(.docs-lead) so this element rule -- specificity (0,1,1) -- can't beat
+   .docs-lead's own (0,1,0) max-width:700px on the docs.html hub page, where
+   that hand-authored intro paragraph happens to sit inside .docs-article. */
+.docs-article p:not(.docs-lead) {
     display: block;
     width: 100%;
     max-width: 100%;
