@@ -1,39 +1,36 @@
 id: prov-2026-850f03a4
-title: Delete tracked linespec-beta binary and add /linespec-beta gitignore entry
+title: "[erroneous, superseded in practice] Delete tracked linespec-beta binary and add /linespec-beta gitignore entry"
 status: deprecated
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
-  Removed the tracked 22MB linespec-beta ELF binary from the index with
-  `git rm --cached` and added `/linespec-beta` to .gitignore next to the
-  existing `/linespec` entry.
+  Created in error as an attempt to log an imprint for the linespec-beta
+  binary removal, originally with `implements: prov-2026-a0b6be6b` — an
+  illegal imprint-implements-bug relationship, since imprints may only
+  implement blueprint-type records. This record never performed the
+  binary removal or gitignore edit it describes: that work was done
+  directly under prov-2026-a0b6be6b (commit c685bca, "Remove tracked
+  linespec-beta binary and gitignore it [prov-2026-a0b6be6b]").
 
-  Verified the record's constraints hold: `make build`, `make build-beta`,
-  and `docker build -f Dockerfile.linespec .` all still succeed after the
-  removal (nothing in the build/Docker pipeline consumed the committed
-  file). After running `make build-beta`, `git status --porcelain --ignored`
-  shows the regenerated `linespec-beta` artifact as `!!` (ignored) rather
-  than `??` (untracked), confirming the new gitignore rule covers it.
-constraints:
-  - No changes to Makefile build-beta/install-beta targets or .goreleaser.yml.
-  - Only the tracked linespec-beta file and .gitignore were touched.
+  Deprecated rather than left dangling in draft, then reclassified from
+  `imprint` to a standalone `blueprint` with no `implements` value to
+  satisfy schema validation without fabricating a parent relationship.
+  This record governs nothing and is retained only as the historical
+  trail of the mistake; see prov-2026-a0b6be6b for the real change.
+constraints: []
 affected_scope:
-  - linespec-beta
-  - .gitignore
   - provenance/prov-2026-850f03a4.yml
 forbidden_scope: []
 type: blueprint
 implements: ""
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-a0b6be6b
 sealed_at_sha: ""
-associated_specs:
-  - path: .gitignore
-    type: config
-    run_command: make build-beta # {{path}}
+associated_specs: []
 associated_traces: []
 monitors: []
 tags:
-  - cleanup
-  - build-artifacts
+  - erroneous-record
+  - duplicate
