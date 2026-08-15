@@ -1,6 +1,6 @@
 id: prov-2026-5dbd0ace
 title: Make EXPECT trailing-clause parsing order-independent
-status: open
+status: implemented
 created_at: "2026-08-15"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -27,7 +27,7 @@ implements: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 025cdc911cfb94615c3e4d7039a282f90aa3ab07
 associated_specs:
   - path: pkg/dsl/verify_before_returns_order_test.go
     type: go_test
