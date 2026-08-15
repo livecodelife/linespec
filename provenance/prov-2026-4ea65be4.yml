@@ -1,6 +1,6 @@
 id: prov-2026-4ea65be4
 title: Expectations are never satisfied when one table is served by two proxied databases
-status: draft
+status: open
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
