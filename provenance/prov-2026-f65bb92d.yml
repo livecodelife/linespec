@@ -1,6 +1,6 @@
 id: prov-2026-f65bb92d
 title: provenance check reports false violations on linespec's own completion commits and on imprint-creation commits
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
@@ -88,7 +88,7 @@ superseded_by: ""
 related:
   - prov-2026-8bb2286c
   - prov-2026-3687be46
-sealed_at_sha: ""
+sealed_at_sha: 1d127b3df0949859ee60120a1746e0cbca987cdc
 associated_specs:
   - path: pkg/provenance/git_test.go
     type: go_test
