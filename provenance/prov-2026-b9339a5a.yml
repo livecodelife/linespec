@@ -1,6 +1,6 @@
 id: prov-2026-b9339a5a
 title: "linespec build cross-compiles the Linux binary with CGO_ENABLED=0, so it fails with 'undefined: Node' since go-tree-sitter landed"
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
@@ -69,7 +69,7 @@ superseded_by: ""
 related:
   - prov-2026-010bb9ec
   - prov-2026-ac156eb7
-sealed_at_sha: ""
+sealed_at_sha: 2f35f2551af87a2ce2bc0154902937262b1a4648
 associated_specs:
   - path: Dockerfile.linespec
     type: docker
