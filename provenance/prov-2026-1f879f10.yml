@@ -1,0 +1,57 @@
+id: prov-2026-1f879f10
+title: Add DATABASE clause and scope registry matching by database identity
+status: open
+created_at: "2026-08-15"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Added types.ExpectStatement.Database, populated via a new `DATABASE <name>`
+  EXPECT clause (DSL: TokenDatabase in lexer.go, parsed inside the
+  order-independent trailing-clause loop in parser.go). Chose to keep the
+  registry's map key (getExpectKey/tableSetKey) unchanged rather than folding
+  Database into it — doing so would have required every existing single- and
+  multi-database spec to keep working with an unprefixed key, which is
+  exactly what "no DATABASE clause" already means. Instead,
+  MockRegistry.FindMockByTables/PeekMockByTables/CheckNegativeMocksByTables
+  gained a leading `database string` parameter (the calling proxy's own
+  identity) and a new mockMatchesDatabase(mock, database) filter: a mock with
+  no DATABASE clause matches any proxy (preserving every existing spec
+  unchanged), a proxy with no known identity matches any mock, and only when
+  both sides declare an identity must they agree. FindMock/PeekMock/
+  CheckNegativeMocks (the legacy non-ACCESSING_TABLES path, shared with the
+  Kafka interceptor) gained the same filter via an optional trailing
+  `database ...string` parameter so existing non-DB callers compile and
+  behave unchanged without passing anything. mockHitKey folds mock.Database
+  into its semantic and WRITE_MYSQL/WRITE_POSTGRESQL formats so that two
+  otherwise-identical EXPECTs (same channel/table/CallN) declared for
+  different databases via DATABASE never collide when a container's hit
+  counts are merged back into the host registry.
+constraints:
+  - An EXPECT with no DATABASE clause must continue to match a query from
+    any proxy, scoped or not (backward compatibility for single-database and
+    non-colliding multi-database specs, e.g. examples/multi-db-linespecs).
+  - Two EXPECTs on the same table declared for different DATABASE values
+    must never satisfy or consume each other's CALL N ordering or hit count,
+    even when every other matchable field (channel, table, VERIFY_
+    constraints, CALL N) is identical.
+  - Existing callers of FindMock/PeekMock/CheckNegativeMocks that have no
+    database identity (the Kafka interceptor) must compile and behave
+    unchanged.
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/multi_database_call_scoping_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - registry
+  - multi-database
+  - dsl-parser
+  - issue-185
