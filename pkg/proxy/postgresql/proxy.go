@@ -116,7 +116,7 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 		loader:       dsl.NewPayloadLoader(""),
 		startup:      NewStartupHandler(),
 		result:       NewResultHandler(),
-		dbConfig:     base.NewDatabaseProxyConfig("postgres"),
+		dbConfig:     &base.DatabaseProxyConfig{}, // Logical database identity; set via SetDatabaseName for DATABASE-scoped EXPECT matching
 		schemaCache:  make(map[string][]ColumnInfo),
 	}
 }
@@ -125,6 +125,18 @@ func NewProxy(addr, upstreamAddr string, reg *registry.MockRegistry) *Proxy {
 // ${VAR} tokens in RETURNS payload files are resolved at runtime.
 func (p *Proxy) SetResolver(resolver *interpolate.Resolver) {
 	p.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
+}
+
+// SetDatabaseName sets this proxy's logical database identity — the
+// `database:` field of the `databases:` list entry it was started for. It is threaded
+// into registry match calls (see findMock/peekMock/checkNegativeMocksForQuery)
+// so that an EXPECT's DATABASE clause can scope it to this specific proxied
+// database, disambiguating a table name that also exists in another proxied
+// database. Without this, every PostgreSQL proxy sidecar reported the same
+// hardcoded "postgres" identity (effectively none), so a query against one
+// proxied database could match an EXPECT written for another.
+func (p *Proxy) SetDatabaseName(name string) {
+	p.dbConfig.SetDatabaseName(name)
 }
 
 // LoadSchema reads table schema (keyed by table name, produced by the runner
@@ -1766,21 +1778,38 @@ func (p *Proxy) matchMock(
 // findMock tries semantic matching (ACCESSING_TABLES) first, then falls back to
 // legacy USING_SQL matching. Pass nil bindParams for simple queries with inlined values.
 func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
-	return p.matchMock(query, bindParams, p.registry.FindMockByTables, p.registry.FindMock)
+	db := p.dbConfig.GetDatabaseName()
+	return p.matchMock(query, bindParams,
+		func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool) {
+			return p.registry.FindMockByTables(db, tables, operation, whereColumns, whereValues, writtenValues)
+		},
+		func(key, query string) (*types.ExpectStatement, bool) {
+			return p.registry.FindMock(key, query, db)
+		},
+	)
 }
 
 // peekMock is like findMock but does not increment hit counts.
 func (p *Proxy) peekMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
-	return p.matchMock(query, bindParams, p.registry.PeekMockByTables, p.registry.PeekMock)
+	db := p.dbConfig.GetDatabaseName()
+	return p.matchMock(query, bindParams,
+		func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool) {
+			return p.registry.PeekMockByTables(db, tables, operation, whereColumns, whereValues, writtenValues)
+		},
+		func(key, query string) (*types.ExpectStatement, bool) {
+			return p.registry.PeekMock(key, query, db)
+		},
+	)
 }
 
 // checkNegativeMocksForQuery fires both semantic and legacy negative expectation checks.
 func (p *Proxy) checkNegativeMocksForQuery(query string, bindParams []string) {
+	db := p.dbConfig.GetDatabaseName()
 	tables, op, whereCols, whereVals, writtenVals := p.extractSemanticInfo(query, bindParams)
 	if len(tables) > 0 {
-		p.registry.CheckNegativeMocksByTables(tables, op, whereCols, whereVals, writtenVals)
+		p.registry.CheckNegativeMocksByTables(db, tables, op, whereCols, whereVals, writtenVals)
 	}
-	p.registry.CheckNegativeMocks(p.extractTable(query), query)
+	p.registry.CheckNegativeMocks(p.extractTable(query), query, db)
 }
 
 // extractBindInfo extracts portal name and statement name from a Bind message

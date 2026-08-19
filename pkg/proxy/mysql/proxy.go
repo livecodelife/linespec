@@ -1054,25 +1054,42 @@ func (p *Proxy) matchMock(
 
 // findMock tries semantic matching first, then falls back to legacy table-based matching.
 func (p *Proxy) findMock(query string) (*types.ExpectStatement, bool) {
-	return p.matchMock(query, p.registry.FindMockByTables, p.registry.FindMock)
+	db := p.dbConfig.GetDatabaseName()
+	return p.matchMock(query,
+		func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool) {
+			return p.registry.FindMockByTables(db, tables, operation, whereColumns, whereValues, writtenValues)
+		},
+		func(key, query string) (*types.ExpectStatement, bool) {
+			return p.registry.FindMock(key, query, db)
+		},
+	)
 }
 
 // peekMock is like findMock but does not increment hit counts.
 func (p *Proxy) peekMock(query string) (*types.ExpectStatement, bool) {
-	return p.matchMock(query, p.registry.PeekMockByTables, p.registry.PeekMock)
+	db := p.dbConfig.GetDatabaseName()
+	return p.matchMock(query,
+		func(tables []string, operation string, whereColumns []string, whereValues, writtenValues map[string]string) (*types.ExpectStatement, bool) {
+			return p.registry.PeekMockByTables(db, tables, operation, whereColumns, whereValues, writtenValues)
+		},
+		func(key, query string) (*types.ExpectStatement, bool) {
+			return p.registry.PeekMock(key, query, db)
+		},
+	)
 }
 
 // checkNegativeMocksForQuery checks both semantic and legacy negative expectations.
 func (p *Proxy) checkNegativeMocksForQuery(query string) {
+	db := p.dbConfig.GetDatabaseName()
 	tables := p.extractAllTables(query)
 	if len(tables) > 0 {
 		op := p.extractQueryOperation(query)
 		whereCols, whereVals := p.extractWhereInfo(query)
 		written := p.extractWrittenValuesFromSQL(query, op)
-		p.registry.CheckNegativeMocksByTables(tables, op, whereCols, whereVals, written)
+		p.registry.CheckNegativeMocksByTables(db, tables, op, whereCols, whereVals, written)
 	}
 	tableName := p.extractTable(query)
-	p.registry.CheckNegativeMocks(tableName, query)
+	p.registry.CheckNegativeMocks(tableName, query, db)
 }
 
 // ── End semantic SQL matching helpers ─────────────────────────────────────────

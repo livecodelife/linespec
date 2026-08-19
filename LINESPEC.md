@@ -450,6 +450,63 @@ RETURNS {{orders_with_user.yaml}}
 
 ---
 
+#### Disambiguating Multiple Proxied Databases
+
+When a service is configured with the `databases:` list form (see the
+`databases:` multi-database form in the
+[Configuration Reference](#configuration-reference-linespecyml)) and two entries
+happen to expose a table with the same name (e.g. two PostgreSQL databases
+that both have an `orders` table), an EXPECT for that table name is
+ambiguous — the proxy sidecar for each database independently reads the
+same registry, and without a way to tell them apart, a query against one
+database could match an EXPECT written for the other.
+
+`DATABASE <name>` on an EXPECT resolves this by pinning it to the target
+entry's configured `database:` name (the value of the `database:` field on
+that `databases:` list entry — not its `name:` alias):
+
+```
+databases:
+  - name: district
+    type: postgresql
+    database: district_db
+    ...
+  - name: master
+    type: postgresql
+    database: master_db
+    ...
+```
+
+```
+# Only matches queries proxied through the "district_db" database
+EXPECT WRITE:POSTGRESQL
+DATABASE district_db
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION UPDATE
+CALL 1
+WITH {{district_order_update.yaml}}
+
+# Only matches queries proxied through the "master_db" database, even
+# though it targets the same table name and the same CALL N
+EXPECT WRITE:POSTGRESQL
+DATABASE master_db
+ACCESSING_TABLES [orders]
+VERIFY_OPERATION UPDATE
+CALL 1
+WITH {{master_order_update.yaml}}
+```
+
+`DATABASE` is optional and only needed when a table name collides across
+two or more proxied databases — the common single-database case, and
+multi-database services whose tables don't collide (e.g.
+`examples/multi-db-linespecs`, which pairs a MySQL `orders` table with a
+MongoDB `order_events` collection), never need it. An EXPECT with no
+`DATABASE` clause continues to match queries from any proxied database, as
+before. `DATABASE` works with both semantic (`ACCESSING_TABLES`) and legacy
+(`USING_SQL`/plain table name) matching.
+
+---
+
 #### Legacy Text Matching (Deprecated)
 
 `USING_SQL` and `USING_SQL_CONTAINS` are still parsed and functional but deprecated in favour of semantic matching.

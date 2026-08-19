@@ -452,16 +452,35 @@ func matchesSemanticConstraints(
 	return true, ""
 }
 
+// mockMatchesDatabase reports whether mock is visible to a proxy identifying
+// itself as database. An EXPECT with no DATABASE clause (mock.Database == "")
+// is legacy/unscoped and matches any proxy, preserving existing single-database
+// and non-colliding multi-database specs unchanged. A proxy that does not know
+// its own database identity (database == "") likewise matches any EXPECT. Only
+// when both sides declare an identity must they agree — this is what stops a
+// query against one proxied database from consuming (or being evaluated
+// against) an EXPECT written for another database's stream of the same table
+// name (or same table name, since AccessingTables mocks are keyed by table
+// alone; without this check the two databases' EXPECTs share the same
+// registry bucket and are otherwise indistinguishable).
+func mockMatchesDatabase(mock *types.ExpectStatement, database string) bool {
+	return mock.Database == "" || database == "" || mock.Database == database
+}
+
 // FindMockByTables finds the best-matching mock for a SQL query using the semantic
 // matching system (ACCESSING_TABLES + VERIFY_ clauses). Returns nil, false if no
 // semantic mock matches; callers should then fall back to FindMock for legacy mocks.
+// database identifies which `databases:` list entry the calling proxy serves (see
+// mockMatchesDatabase); pass "" if the proxy has no such identity configured.
 //
 // Matching algorithm:
-//  1. Candidate set: mocks where AccessingTables exactly equals tables (sorted) and 0 hits
+//  1. Candidate set: mocks where AccessingTables exactly equals tables (sorted),
+//     the EXPECT's DATABASE (if any) matches the caller's database, and 0 hits
 //  2. Filter: all declared VERIFY_ constraints must pass (AND logic)
 //  3. Score by specificity (number of declared VERIFY_ clauses)
 //  4. Tiebreak: prefer CALL N ordering (lowest N with 0 hits); then declaration order
 func (r *MockRegistry) FindMockByTables(
+	database string,
 	tables []string,
 	operation string,
 	whereColumns []string,
@@ -489,7 +508,7 @@ func (r *MockRegistry) FindMockByTables(
 	var candidates []candidate
 	var rejectReason string
 	for _, mock := range mocks {
-		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
+		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 || !mockMatchesDatabase(mock, database) {
 			continue
 		}
 		ok, reason := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues)
@@ -544,6 +563,7 @@ func (r *MockRegistry) FindMockByTables(
 
 // PeekMockByTables is like FindMockByTables but does not increment hit counts.
 func (r *MockRegistry) PeekMockByTables(
+	database string,
 	tables []string,
 	operation string,
 	whereColumns []string,
@@ -565,7 +585,7 @@ func (r *MockRegistry) PeekMockByTables(
 	}
 	var candidates []candidate
 	for _, mock := range mocks {
-		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 {
+		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 || !mockMatchesDatabase(mock, database) {
 			continue
 		}
 		if ok, _ := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues); !ok {
@@ -607,6 +627,7 @@ func (r *MockRegistry) PeekMockByTables(
 
 // CheckNegativeMocksByTables checks semantic negative expectations against an incoming query.
 func (r *MockRegistry) CheckNegativeMocksByTables(
+	database string,
 	tables []string,
 	operation string,
 	whereColumns []string,
@@ -622,7 +643,7 @@ func (r *MockRegistry) CheckNegativeMocksByTables(
 		return
 	}
 	for _, mock := range mocks {
-		if !mock.Negative || len(mock.AccessingTables) == 0 {
+		if !mock.Negative || len(mock.AccessingTables) == 0 || !mockMatchesDatabase(mock, database) {
 			continue
 		}
 		if ok, _ := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues); ok {
@@ -631,8 +652,11 @@ func (r *MockRegistry) CheckNegativeMocksByTables(
 	}
 }
 
-// PeekMock checks if a mock exists without incrementing hit count (used for testing intercept)
-func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatement, bool) {
+// PeekMock checks if a mock exists without incrementing hit count (used for testing intercept).
+// database optionally identifies which `databases:` list entry the calling proxy serves
+// (see mockMatchesDatabase); omit it, or pass "", when the proxy has no such identity.
+func (r *MockRegistry) PeekMock(key string, query string, database ...string) (*types.ExpectStatement, bool) {
+	db := firstOrEmpty(database)
 	r.RLock()
 	defer r.RUnlock()
 
@@ -643,7 +667,7 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
-				if mock.Negative || len(mock.AccessingTables) > 0 {
+				if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 					continue
 				}
 				if r.hits[mock] != 0 {
@@ -665,7 +689,7 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 	// re-matching them here would bypass their VERIFY_*/direction constraints.
 	if query != "" {
 		for _, mock := range mocks {
-			if mock.Negative || len(mock.AccessingTables) > 0 {
+			if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 				continue
 			}
 			if r.hits[mock] > 0 {
@@ -682,7 +706,7 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
-		if mock.Negative || len(mock.AccessingTables) > 0 {
+		if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 			continue
 		}
 		if r.hits[mock] > 0 {
@@ -717,7 +741,23 @@ func (r *MockRegistry) PeekMock(key string, query string) (*types.ExpectStatemen
 	return nil, false
 }
 
-func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatement, bool) {
+// firstOrEmpty returns the first element of an optional variadic string
+// argument, or "" if none was supplied. Used by registry lookups that accept
+// an optional database identity without breaking existing call sites.
+func firstOrEmpty(vals []string) string {
+	if len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
+
+// FindMock is the legacy (non-ACCESSING_TABLES) mock lookup, keyed by table/topic
+// name and optionally constrained by USING_SQL/USING_SQL_CONTAINS. database optionally
+// identifies which `databases:` list entry the calling proxy serves (see
+// mockMatchesDatabase); omit it, or pass "", when the proxy has no such identity —
+// existing non-DB callers (e.g. the Kafka interceptor) are unaffected.
+func (r *MockRegistry) FindMock(key string, query string, database ...string) (*types.ExpectStatement, bool) {
+	db := firstOrEmpty(database)
 	r.Lock()
 	defer r.Unlock()
 
@@ -728,7 +768,7 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
-				if mock.Negative || len(mock.AccessingTables) > 0 {
+				if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 					continue
 				}
 				if r.hits[mock] != 0 {
@@ -752,7 +792,7 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 	// re-matching them here would bypass their VERIFY_*/direction constraints.
 	if query != "" {
 		for _, mock := range mocks {
-			if mock.Negative || len(mock.AccessingTables) > 0 {
+			if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 				continue
 			}
 			if r.hits[mock] > 0 {
@@ -771,7 +811,7 @@ func (r *MockRegistry) FindMock(key string, query string) (*types.ExpectStatemen
 
 	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
-		if mock.Negative || len(mock.AccessingTables) > 0 {
+		if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
 			continue
 		}
 		if r.hits[mock] > 0 {
@@ -946,14 +986,18 @@ func (r *MockRegistry) VerifyAll() error {
 
 // CheckNegativeMocks checks incoming DB/Kafka requests against negative expectations
 // and increments their hit counters if matched. Called by proxies alongside FindMock
-// so that EXPECT_NOT violations are detected at verification time.
-func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
+// so that EXPECT_NOT violations are detected at verification time. database optionally
+// identifies which `databases:` list entry the calling proxy serves (see
+// mockMatchesDatabase); omit it, or pass "", when the proxy has no such identity —
+// existing non-DB callers (e.g. the Kafka interceptor) are unaffected.
+func (r *MockRegistry) CheckNegativeMocks(key string, query string, database ...string) {
+	db := firstOrEmpty(database)
 	r.Lock()
 	defer r.Unlock()
 
 	if mocks, ok := r.mocks[key]; ok {
 		for _, mock := range mocks {
-			if !mock.Negative {
+			if !mock.Negative || !mockMatchesDatabase(mock, db) {
 				continue
 			}
 			if query != "" && mock.SQL != "" {
@@ -1002,7 +1046,7 @@ func (r *MockRegistry) CheckNegativeMocks(key string, query string) {
 	if query != "" {
 		if _, ok := r.mocks[key]; !ok {
 			for _, mock := range r.orderedMocks {
-				if !mock.Negative {
+				if !mock.Negative || !mockMatchesDatabase(mock, db) {
 					continue
 				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
@@ -1259,13 +1303,19 @@ func (r *MockRegistry) LoadFromFile(path string) error {
 // (or any other field folded into this key) after the fact, since the host's
 // copy of that mock is parsed once from the spec and never sees live traffic.
 func mockHitKey(mock *types.ExpectStatement) string {
-	// Semantic SQL mocks: key by channel + table set + verify clauses + call N
+	// Semantic SQL mocks: key by channel + database + table set + verify clauses + call N.
+	// mock.Database is folded in so two EXPECTs that are otherwise identical (same
+	// channel, table set, VERIFY_ clauses, and CALL N) but declared for different
+	// proxied databases via DATABASE never collide onto the same hit-tracking key —
+	// without it, a hit recorded by one database's proxy process would be reported
+	// back to the host as satisfying the other database's EXPECT too.
 	if len(mock.AccessingTables) > 0 {
 		cols := make([]string, len(mock.VerifyWhereColumns))
 		copy(cols, mock.VerifyWhereColumns)
 		sort.Strings(cols)
-		return fmt.Sprintf("%s-SEMANTIC-%s-%s-%s-%d",
+		return fmt.Sprintf("%s-SEMANTIC-%s-%s-%s-%s-%d",
 			mock.Channel,
+			mock.Database,
 			tableSetKey(mock.AccessingTables),
 			mock.VerifyOperation,
 			strings.Join(cols, ","),
@@ -1281,11 +1331,12 @@ func mockHitKey(mock *types.ExpectStatement) string {
 		// two USING_SQL WRITE mocks on the same table (a common CALL N sequence
 		// of INSERTs, or two differently-worded EXPECTs) collided onto the same
 		// key, so a hit on one silently satisfied the other on the host side.
+		// mock.Database is folded in for the same reason as the semantic case above.
 		sqlKey := mock.SQL
 		if sqlKey == "" && mock.SQLContains != "" {
 			sqlKey = "~" + mock.SQLContains
 		}
-		return fmt.Sprintf("%s-%s-%s-%d", mock.Channel, mock.Table, sqlKey, mock.CallN)
+		return fmt.Sprintf("%s-%s-%s-%s-%d", mock.Channel, mock.Database, mock.Table, sqlKey, mock.CallN)
 	case types.GRPC:
 		return fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
 	case types.ReadRedis, types.WriteRedis:

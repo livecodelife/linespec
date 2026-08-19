@@ -322,100 +322,86 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		expect.RPCMethod = p.resolve(expect.RPCMethod)
 	}
 
-	// Handle HEADERS for HTTP expectations
-	if p.peek().Type == TokenHeaders {
-		headersToken := p.consume()
-		expect.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
-	}
-
-	// Semantic SQL matching directives (new)
-	if p.peek().Type == TokenAccessingTables {
-		t := p.consume()
-		expect.AccessingTables = parseCommaSeparatedList(t.Literal)
-	}
-
-	if p.peek().Type == TokenVerifyOperation {
-		expect.VerifyOperation = p.consume().Literal
-	}
-
-	if p.peek().Type == TokenVerifyWhereColumns {
-		t := p.consume()
-		expect.VerifyWhereColumns = parseCommaSeparatedList(t.Literal)
-	}
-
-	if p.peek().Type == TokenVerifyWhere {
-		t := p.consume()
-		expect.VerifyWhere = p.resolveKVBlock(parseKVBlock(t.Literal))
-	}
-
-	if p.peek().Type == TokenVerifyWrittenValues {
-		t := p.consume()
-		expect.VerifyWrittenValues = p.resolveKVBlock(parseKVBlock(t.Literal))
-	}
-
-	// Legacy SQL matching (deprecated)
-	if p.peek().Type == TokenUsingSql {
-		p.consume() // TokenUsingSql
-		sqlToken, err := p.expect(TokenSqlBlock)
-		if err != nil {
-			return nil, err
+	// Trailing EXPECT clauses (HEADERS, ACCESSING_TABLES, VERIFY_*, USING_SQL[_CONTAINS],
+	// NO_TRANSACTION, WITH, RETURNS, RESPONSE_HEADERS, legacy VERIFY) may appear in any
+	// order in the source. A fixed if-chain would only recognize each clause type once,
+	// at its expected position — a clause appearing out of its expected slot (e.g. a
+	// legacy VERIFY before RETURNS) would be left unconsumed by the checks after it,
+	// orphaning tokens for the caller and producing misleading downstream errors (e.g.
+	// "RESPOND block is required" when RESPOND is present but preceded by stray tokens).
+	// Looping on peek() until no clause type matches makes recognition order-independent.
+	for {
+		switch p.peek().Type {
+		case TokenHeaders:
+			headersToken := p.consume()
+			expect.Headers = p.resolveHeaders(parseHeaders(headersToken.Literal))
+		case TokenAccessingTables:
+			t := p.consume()
+			expect.AccessingTables = parseCommaSeparatedList(t.Literal)
+		case TokenDatabase:
+			expect.Database = p.consume().Literal
+		case TokenVerifyOperation:
+			expect.VerifyOperation = p.consume().Literal
+		case TokenVerifyWhereColumns:
+			t := p.consume()
+			expect.VerifyWhereColumns = parseCommaSeparatedList(t.Literal)
+		case TokenVerifyWhere:
+			t := p.consume()
+			expect.VerifyWhere = p.resolveKVBlock(parseKVBlock(t.Literal))
+		case TokenVerifyWrittenValues:
+			t := p.consume()
+			expect.VerifyWrittenValues = p.resolveKVBlock(parseKVBlock(t.Literal))
+		case TokenUsingSql:
+			p.consume() // TokenUsingSql
+			sqlToken, err := p.expect(TokenSqlBlock)
+			if err != nil {
+				return nil, err
+			}
+			expect.SQL = p.resolve(sqlToken.Literal)
+		case TokenUsingSqlContains:
+			p.consume() // TokenUsingSqlContains
+			sqlToken, err := p.expect(TokenSqlBlock)
+			if err != nil {
+				return nil, err
+			}
+			expect.SQLContains = p.resolve(sqlToken.Literal)
+		case TokenNoTransaction:
+			p.consume()
+			expect.NoTransaction = true
+		case TokenWith:
+			expect.WithFile = p.consume().Literal
+		case TokenReturns:
+			returnsToken := p.consume()
+			literal := returnsToken.Literal
+			upper := strings.ToUpper(literal)
+			if upper == "EMPTY" {
+				expect.ReturnsEmpty = true
+			} else if upper == "ERROR" {
+				expect.ReturnsError = true
+			} else if strings.HasPrefix(upper, "ERROR ") {
+				expect.ReturnsError = true
+				expect.ReturnsErrorCode = strings.TrimSpace(literal[6:])
+			} else if m := regexp.MustCompile(`(?i)^HTTP:(\d+)$`).FindStringSubmatch(literal); m != nil {
+				expect.ReturnsHTTPStatus, _ = strconv.Atoi(m[1])
+			} else if m := reReturnsPayload.FindStringSubmatch(literal); m != nil {
+				expect.ReturnsFile = m[1]
+			} else {
+				expect.ReturnsFile = literal
+			}
+		case TokenResponseHeaders:
+			headersToken := p.consume()
+			expect.ResponseHeaders = p.resolveHeaders(parseHeaders(headersToken.Literal))
+		case TokenVerify:
+			verifyToken := p.consume()
+			rule, err := parseVerifyRule(verifyToken.Literal, verifyToken.Line)
+			if err != nil {
+				return nil, err
+			}
+			expect.Verify = append(expect.Verify, *rule)
+		default:
+			return expect, nil
 		}
-		expect.SQL = p.resolve(sqlToken.Literal)
 	}
-
-	if p.peek().Type == TokenUsingSqlContains {
-		p.consume() // TokenUsingSqlContains
-		sqlToken, err := p.expect(TokenSqlBlock)
-		if err != nil {
-			return nil, err
-		}
-		expect.SQLContains = p.resolve(sqlToken.Literal)
-	}
-
-	if p.peek().Type == TokenNoTransaction {
-		p.consume()
-		expect.NoTransaction = true
-	}
-
-	if p.peek().Type == TokenWith {
-		expect.WithFile = p.consume().Literal
-	}
-
-	if p.peek().Type == TokenReturns {
-		returnsToken := p.consume()
-		literal := returnsToken.Literal
-		upper := strings.ToUpper(literal)
-		if upper == "EMPTY" {
-			expect.ReturnsEmpty = true
-		} else if upper == "ERROR" {
-			expect.ReturnsError = true
-		} else if strings.HasPrefix(upper, "ERROR ") {
-			expect.ReturnsError = true
-			expect.ReturnsErrorCode = strings.TrimSpace(literal[6:])
-		} else if m := regexp.MustCompile(`(?i)^HTTP:(\d+)$`).FindStringSubmatch(literal); m != nil {
-			expect.ReturnsHTTPStatus, _ = strconv.Atoi(m[1])
-		} else if m := reReturnsPayload.FindStringSubmatch(literal); m != nil {
-			expect.ReturnsFile = m[1]
-		} else {
-			expect.ReturnsFile = literal
-		}
-	}
-
-	if p.peek().Type == TokenResponseHeaders {
-		headersToken := p.consume()
-		expect.ResponseHeaders = p.resolveHeaders(parseHeaders(headersToken.Literal))
-	}
-
-	for p.peek().Type == TokenVerify {
-		verifyToken := p.consume()
-		rule, err := parseVerifyRule(verifyToken.Literal, verifyToken.Line)
-		if err != nil {
-			return nil, err
-		}
-		expect.Verify = append(expect.Verify, *rule)
-	}
-
-	return expect, nil
 }
 
 func (p *Parser) parseExpectNot() (*types.ExpectStatement, error) {

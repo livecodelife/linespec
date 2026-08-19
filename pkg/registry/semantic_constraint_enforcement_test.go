@@ -40,7 +40,7 @@ func TestIssue159_VerifyOperationMismatch_MustFailVerification(t *testing.T) {
 
 	// Mirrors proxy.matchMock: try the semantic path first, then the legacy
 	// fallback if it doesn't find a match.
-	if _, ok := reg.FindMockByTables([]string{"applications"}, "INSERT", nil, nil, nil); ok {
+	if _, ok := reg.FindMockByTables("", []string{"applications"}, "INSERT", nil, nil, nil); ok {
 		t.Fatal("FindMockByTables unexpectedly matched an INSERT against a mock declaring VERIFY_OPERATION UPDATE")
 	}
 	reg.FindMock("applications", query)
@@ -67,7 +67,7 @@ func TestIssue159_ReadWriteDirectionMismatch_MustFailVerification(t *testing.T) 
 
 	query := "insert into applications (household_size, email) values ($1, $2)"
 
-	if _, ok := reg.FindMockByTables([]string{"applications"}, "INSERT", nil, nil, nil); ok {
+	if _, ok := reg.FindMockByTables("", []string{"applications"}, "INSERT", nil, nil, nil); ok {
 		t.Fatal("bug (issue #159): a READ mock matched an INSERT (write) — " +
 			"matchesSemanticConstraints never checks mock.Channel against the actual operation direction")
 	}
@@ -95,7 +95,7 @@ func TestIssue159_VerifyWhereColumnsMismatch_MustFailVerification(t *testing.T) 
 	})
 
 	// The app selects by id, never by email — VERIFY_WHERE_COLUMNS should reject the match.
-	if _, ok := reg.FindMockByTables([]string{"users"}, "SELECT", []string{"id"}, nil, nil); ok {
+	if _, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", []string{"id"}, nil, nil); ok {
 		t.Fatal("FindMockByTables unexpectedly matched a SELECT WHERE id=? against a mock declaring VERIFY_WHERE_COLUMNS [email]")
 	}
 	reg.FindMock("users", "select * from users where id = $1")
@@ -122,7 +122,7 @@ func TestIssue159_VerifyWhereValueMismatch_MustFailVerification(t *testing.T) {
 	})
 
 	whereValues := map[string]string{"status": "inactive"}
-	if _, ok := reg.FindMockByTables([]string{"users"}, "SELECT", []string{"status"}, whereValues, nil); ok {
+	if _, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", []string{"status"}, whereValues, nil); ok {
 		t.Fatal("FindMockByTables unexpectedly matched status=inactive against a mock declaring VERIFY_WHERE status=active")
 	}
 	reg.FindMock("users", "select * from users where status = $1")
@@ -149,7 +149,7 @@ func TestIssue159_VerifyWrittenValuesMismatch_MustFailVerification(t *testing.T)
 	})
 
 	written := map[string]string{"status": "pending"}
-	if _, ok := reg.FindMockByTables([]string{"applications"}, "INSERT", nil, nil, written); ok {
+	if _, ok := reg.FindMockByTables("", []string{"applications"}, "INSERT", nil, nil, written); ok {
 		t.Fatal("FindMockByTables unexpectedly matched status=pending against a mock declaring VERIFY_WRITTEN_VALUES status=approved")
 	}
 	reg.FindMock("applications", "insert into applications (status) values ($1)")
@@ -178,7 +178,7 @@ func TestIssue159_FailureMessageNamesClauseAndValues(t *testing.T) {
 		},
 	})
 
-	reg.FindMockByTables([]string{"applications"}, "INSERT", nil, nil, nil)
+	reg.FindMockByTables("", []string{"applications"}, "INSERT", nil, nil, nil)
 	reg.FindMock("applications", "insert into applications (email) values ($1)")
 
 	err := reg.VerifyAll()

@@ -1,0 +1,39 @@
+id: prov-2026-5dbd0ace
+title: Make EXPECT trailing-clause parsing order-independent
+status: implemented
+created_at: "2026-08-15"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  parseExpect (pkg/dsl/parser.go) checked trailing EXPECT clauses (HEADERS,
+  ACCESSING_TABLES, VERIFY_*, USING_SQL[_CONTAINS], NO_TRANSACTION, WITH,
+  RETURNS, RESPONSE_HEADERS, legacy VERIFY) as a fixed if-chain, each clause
+  type recognized only once at its expected position. A legacy VERIFY line
+  appearing before RETURNS left the RETURNS check unable to fire (peek()
+  still saw TokenVerify), orphaning the RETURNS token and causing the parser
+  to misreport "RESPOND block is required" even when RESPOND was present.
+  Replaced the if-chain with a loop over a switch on peek().Type that keeps
+  consuming clauses until none match, so any clause can appear in any order
+  and multiple clause types can interleave freely.
+constraints:
+  - No behavioral change for specs where clauses already appear in the
+    previously-required order — only recognition order changes.
+  - All clause-specific parsing logic (SQL block consumption, header
+    parsing, RETURNS payload/EMPTY/ERROR/HTTP-status branches) is preserved
+    verbatim inside the loop.
+affected_scope: []
+forbidden_scope: []
+type: imprint
+implements: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 025cdc911cfb94615c3e4d7039a282f90aa3ab07
+associated_specs:
+  - path: pkg/dsl/verify_before_returns_order_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - dsl-parser
+  - issue-185

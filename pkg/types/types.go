@@ -33,36 +33,37 @@ type VerifyRule struct {
 
 // ExpectStatement defines an external dependency expectation
 type ExpectStatement struct {
-	Channel       ExpectChannel
-	Method        string // For HTTP
-	URL           string // For HTTP
-	Table         string // For DB
-	Topic         string // For Kafka
-	SQL           string // For DB (USING_SQL) — exact normalized match (deprecated: use ACCESSING_TABLES)
-	SQLContains   string // For DB (USING_SQL_CONTAINS) — normalized substring match (deprecated: use ACCESSING_TABLES)
+	Channel     ExpectChannel
+	Method      string // For HTTP
+	URL         string // For HTTP
+	Table       string // For DB
+	Topic       string // For Kafka
+	SQL         string // For DB (USING_SQL) — exact normalized match (deprecated: use ACCESSING_TABLES)
+	SQLContains string // For DB (USING_SQL_CONTAINS) — normalized substring match (deprecated: use ACCESSING_TABLES)
 	// Semantic SQL matching (replaces USING_SQL / USING_SQL_CONTAINS)
-	AccessingTables    []string          // ACCESSING_TABLES — exact set of tables referenced in the query
-	VerifyOperation    string            // VERIFY_OPERATION — SELECT, INSERT, UPDATE, DELETE
-	VerifyWhereColumns []string          // VERIFY_WHERE_COLUMNS — column names that must appear in WHERE clause
-	VerifyWhere        map[string]string // VERIFY_WHERE — column-value pairs in WHERE clause (wire-resolved)
+	AccessingTables     []string          // ACCESSING_TABLES — exact set of tables referenced in the query
+	Database            string            // DATABASE — logical database name (the `database:` field from a `databases:` list entry) this EXPECT targets. Disambiguates a table name that exists in more than one proxied database; empty means "match against any database's proxy" (legacy/single-database behavior).
+	VerifyOperation     string            // VERIFY_OPERATION — SELECT, INSERT, UPDATE, DELETE
+	VerifyWhereColumns  []string          // VERIFY_WHERE_COLUMNS — column names that must appear in WHERE clause
+	VerifyWhere         map[string]string // VERIFY_WHERE — column-value pairs in WHERE clause (wire-resolved)
 	VerifyWrittenValues map[string]string // VERIFY_WRITTEN_VALUES — column-value pairs for INSERT/UPDATE
-	CallN              int               // CALL N — sequential ordering tiebreaker (0 = unset)
-	WithFile         string // For Request Payload
-	ReturnsFile      string // For Response Payload
-	ReturnsEmpty     bool   // For DB (RETURNS EMPTY)
-	ReturnsError     bool   // For RETURNS ERROR (simulate connection/network failure)
-	ReturnsErrorCode string // For RETURNS ERROR <code> (e.g. "cycle_detected")
-	ReturnsHTTPStatus int  // For RETURNS HTTP:NNN (return non-200 HTTP status from dependency)
-	NoTransaction    bool   // For WRITE:MYSQL
-	Verify        []VerifyRule
-	Negative        bool              // If true, this should NOT be called
-	BaseDir         string            // To resolve payload files
-	Headers         map[string]string // For HTTP request header matching
-	ResponseHeaders map[string]string // For HTTP response headers (overrides inferred Content-Type)
-	Service         string            // For gRPC: fully-qualified service (e.g., "users.UserService")
-	RPCMethod       string            // For gRPC: method name (e.g., "GetUser")
-	Command         string            // For Redis: command (GET, SET, HGET, etc.)
-	RedisKey        string            // For Redis: key pattern
+	CallN               int               // CALL N — sequential ordering tiebreaker (0 = unset)
+	WithFile            string            // For Request Payload
+	ReturnsFile         string            // For Response Payload
+	ReturnsEmpty        bool              // For DB (RETURNS EMPTY)
+	ReturnsError        bool              // For RETURNS ERROR (simulate connection/network failure)
+	ReturnsErrorCode    string            // For RETURNS ERROR <code> (e.g. "cycle_detected")
+	ReturnsHTTPStatus   int               // For RETURNS HTTP:NNN (return non-200 HTTP status from dependency)
+	NoTransaction       bool              // For WRITE:MYSQL
+	Verify              []VerifyRule
+	Negative            bool              // If true, this should NOT be called
+	BaseDir             string            // To resolve payload files
+	Headers             map[string]string // For HTTP request header matching
+	ResponseHeaders     map[string]string // For HTTP response headers (overrides inferred Content-Type)
+	Service             string            // For gRPC: fully-qualified service (e.g., "users.UserService")
+	RPCMethod           string            // For gRPC: method name (e.g., "GetUser")
+	Command             string            // For Redis: command (GET, SET, HGET, etc.)
+	RedisKey            string            // For Redis: key pattern
 }
 
 // ReceiveStatement defines the trigger request

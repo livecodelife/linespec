@@ -548,10 +548,10 @@ func TestMockRegistry_FindRedisMock(t *testing.T) {
 		Name: "redis_ops",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:      types.ReadRedis,
-				Command:      "GET",
-				RedisKey:     "user:123",
-				ReturnsFile:  "payloads/user.json",
+				Channel:     types.ReadRedis,
+				Command:     "GET",
+				RedisKey:    "user:123",
+				ReturnsFile: "payloads/user.json",
 			},
 			{
 				Channel:  types.WriteRedis,
@@ -750,7 +750,7 @@ func TestSemanticRegistry_BasicAccessingTables(t *testing.T) {
 		Name: "semantic_basic",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:        types.ReadMySQL,
+				Channel:         types.ReadMySQL,
 				AccessingTables: []string{"users"},
 			},
 		},
@@ -758,7 +758,7 @@ func TestSemanticRegistry_BasicAccessingTables(t *testing.T) {
 	reg.Register(spec)
 
 	// Should match a SELECT on users
-	mock, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	mock, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected FindMockByTables to find a mock")
 	}
@@ -767,7 +767,7 @@ func TestSemanticRegistry_BasicAccessingTables(t *testing.T) {
 	}
 
 	// Second call should not match (already consumed)
-	_, ok = reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	_, ok = reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if ok {
 		t.Error("Expected no mock on second call (already consumed)")
 	}
@@ -793,7 +793,7 @@ func TestSemanticRegistry_VerifyOperationFilter(t *testing.T) {
 	reg.Register(spec)
 
 	// SELECT should match the first mock
-	mock, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	mock, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected SELECT mock to match")
 	}
@@ -802,7 +802,7 @@ func TestSemanticRegistry_VerifyOperationFilter(t *testing.T) {
 	}
 
 	// INSERT should match the second mock
-	mock, ok = reg.FindMockByTables([]string{"users"}, "INSERT", nil, nil, nil)
+	mock, ok = reg.FindMockByTables("", []string{"users"}, "INSERT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected INSERT mock to match")
 	}
@@ -831,7 +831,7 @@ func TestSemanticRegistry_VerifyWhereDisambiguation(t *testing.T) {
 	reg.Register(spec)
 
 	// Auth query: WHERE token = '...' → matches first mock
-	mock, ok := reg.FindMockByTables(
+	mock, ok := reg.FindMockByTables("",
 		[]string{"users"}, "SELECT",
 		[]string{"token"}, map[string]string{"token": "abc123"},
 		nil,
@@ -844,7 +844,7 @@ func TestSemanticRegistry_VerifyWhereDisambiguation(t *testing.T) {
 	}
 
 	// Get-by-id query: WHERE id = 42 → matches second mock
-	mock, ok = reg.FindMockByTables(
+	mock, ok = reg.FindMockByTables("",
 		[]string{"users"}, "SELECT",
 		[]string{"id"}, map[string]string{"id": "42"},
 		nil,
@@ -873,7 +873,7 @@ func TestSemanticRegistry_VerifyWrittenValues(t *testing.T) {
 	reg.Register(spec)
 
 	// Should match when written values match
-	_, ok := reg.FindMockByTables(
+	_, ok := reg.FindMockByTables("",
 		[]string{"users"}, "INSERT",
 		nil, nil,
 		map[string]string{"email": "john@example.com", "name": "John Doe"},
@@ -906,7 +906,7 @@ func TestSemanticRegistry_CallNOrdering(t *testing.T) {
 	reg.Register(spec)
 
 	// First call should consume CALL 1
-	mock1, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	mock1, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected first mock (CALL 1)")
 	}
@@ -915,7 +915,7 @@ func TestSemanticRegistry_CallNOrdering(t *testing.T) {
 	}
 
 	// Second call should consume CALL 2
-	mock2, ok := reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	mock2, ok := reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected second mock (CALL 2)")
 	}
@@ -927,7 +927,7 @@ func TestSemanticRegistry_CallNOrdering(t *testing.T) {
 	}
 
 	// Third call should find nothing
-	_, ok = reg.FindMockByTables([]string{"users"}, "SELECT", nil, nil, nil)
+	_, ok = reg.FindMockByTables("", []string{"users"}, "SELECT", nil, nil, nil)
 	if ok {
 		t.Error("Expected no mock on third call")
 	}
@@ -954,7 +954,7 @@ func TestSemanticRegistry_SpecificityWins(t *testing.T) {
 	reg.Register(spec)
 
 	// Should prefer the more specific mock (VerifyOperation=SELECT)
-	mock, ok := reg.FindMockByTables([]string{"orders"}, "SELECT", nil, nil, nil)
+	mock, ok := reg.FindMockByTables("", []string{"orders"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected mock to match")
 	}
@@ -978,7 +978,7 @@ func TestSemanticRegistry_JoinTwoTables(t *testing.T) {
 	reg.Register(spec)
 
 	// Both tables must match (exact set)
-	_, ok := reg.FindMockByTables([]string{"orders", "users"}, "SELECT", nil, nil, nil)
+	_, ok := reg.FindMockByTables("", []string{"orders", "users"}, "SELECT", nil, nil, nil)
 	if !ok {
 		t.Fatal("Expected JOIN mock to match")
 	}
@@ -986,7 +986,7 @@ func TestSemanticRegistry_JoinTwoTables(t *testing.T) {
 	// Single-table queries should NOT match the two-table mock
 	reg2 := NewMockRegistry()
 	reg2.Register(spec)
-	_, ok2 := reg2.FindMockByTables([]string{"orders"}, "SELECT", nil, nil, nil)
+	_, ok2 := reg2.FindMockByTables("", []string{"orders"}, "SELECT", nil, nil, nil)
 	if ok2 {
 		t.Error("Single-table query should not match two-table ACCESSING_TABLES mock")
 	}
@@ -1006,7 +1006,7 @@ func TestSemanticRegistry_ExactTableSetRequired(t *testing.T) {
 	reg.Register(spec)
 
 	// Query touching users AND orders should NOT match the users-only mock
-	_, ok := reg.FindMockByTables([]string{"users", "orders"}, "SELECT", nil, nil, nil)
+	_, ok := reg.FindMockByTables("", []string{"users", "orders"}, "SELECT", nil, nil, nil)
 	if ok {
 		t.Error("Multi-table query should not match single-table ACCESSING_TABLES mock")
 	}
