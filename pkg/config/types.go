@@ -1,8 +1,12 @@
 package config
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SchemaDiscoveryConfig defines schema discovery settings
@@ -328,6 +332,55 @@ type EmbeddingConfig struct {
 	APIKey              string  `yaml:"api_key"`              // Can be "${ENV_VAR_NAME}" or literal
 	SimilarityThreshold float64 `yaml:"similarity_threshold"` // default: 0.50
 	IndexOnComplete     bool    `yaml:"index_on_complete"`    // default: true
+	// BaseURL overrides the request endpoint for provider: openai, used verbatim
+	// (path included, e.g. "http://localhost:1234/v1") so OpenAI-compatible
+	// servers (LM Studio, Ollama, vLLM, LiteLLM, text-embeddings-inference) are
+	// reachable. Unset preserves the default https://api.openai.com/v1 endpoint.
+	// Not used by provider: voyage.
+	BaseURL string `yaml:"base_url,omitempty"`
+}
+
+// embeddingConfigKnownFields lists the yaml keys EmbeddingConfig understands.
+// Kept in sync with the struct's yaml tags by embeddingConfigFields below.
+var embeddingConfigKnownFields = map[string]bool{
+	"provider":             true,
+	"index_model":          true,
+	"query_model":          true,
+	"api_key":              true,
+	"similarity_threshold": true,
+	"index_on_complete":    true,
+	"base_url":             true,
+}
+
+// UnmarshalYAML rejects unrecognized keys under provenance.embedding (e.g. a
+// typo, or a field that doesn't apply to the configured provider) instead of
+// silently accepting and ignoring them, which otherwise leaves a user with no
+// feedback that a misspelled field did nothing.
+func (e *EmbeddingConfig) UnmarshalYAML(node *yaml.Node) error {
+	type embeddingConfigAlias EmbeddingConfig
+	var alias embeddingConfigAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+
+	var raw map[string]yaml.Node
+	if err := node.Decode(&raw); err != nil {
+		return err
+	}
+
+	var unknown []string
+	for key := range raw {
+		if !embeddingConfigKnownFields[key] {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return fmt.Errorf("unknown field(s) under provenance.embedding: %s", strings.Join(unknown, ", "))
+	}
+
+	*e = EmbeddingConfig(alias)
+	return nil
 }
 
 // SharedRepoConfig defines a named remote repository for cross-repo provenance resolution

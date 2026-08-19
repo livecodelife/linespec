@@ -34,6 +34,7 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/discover/stubs"
 	"github.com/livecodelife/linespec/v3/pkg/discover/symbols"
 	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/embeddings"
 	"github.com/livecodelife/linespec/v3/pkg/initcmd"
 	"github.com/livecodelife/linespec/v3/pkg/interpolate"
 	"github.com/livecodelife/linespec/v3/pkg/logger"
@@ -980,11 +981,21 @@ func findAllLinespecConfigs(root string) []string {
 	return configs
 }
 
-// reloadConfigIfNeeded reloads the config and commands if a custom config file is specified
+// reloadConfigIfNeeded reloads the config and commands if a custom config file is specified.
+// It rebuilds the embedder from the reloaded config's provenance.embedding block, mirroring
+// provSetup(), so `-c/--config` actually takes effect for embedding-backed subcommands
+// (index, search) instead of always reporting "Embedding API not configured"
+// (prov-2026-57aff9e1).
 func reloadConfigIfNeeded(cfg **provenance.ProvenanceConfig, cmds **provenance.Commands, configFile string, repoRoot string) error {
 	if configFile != "" {
 		*cfg = loadProvenanceConfigFromFile(configFile)
-		newCmds, err := provenance.NewCommands(*cfg, repoRoot, os.Stdout, true)
+
+		var embedder *embeddings.Client
+		if (*cfg).Embedding != nil {
+			embedder, _ = embeddings.NewClient(*(*cfg).Embedding)
+		}
+
+		newCmds, err := provenance.NewCommandsWithEmbedder(*cfg, repoRoot, os.Stdout, true, embedder)
 		if err != nil {
 			return fmt.Errorf("failed to initialize provenance with custom config: %w", err)
 		}

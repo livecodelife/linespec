@@ -1137,6 +1137,17 @@ provenance:
     index_on_complete: true         # Auto-index on complete
 ```
 
+**OpenAI-compatible server (LM Studio, Ollama, vLLM, LiteLLM, text-embeddings-inference):**
+```yaml
+provenance:
+  embedding:
+    provider: openai                 # Same wire format as OpenAI
+    base_url: http://localhost:1234/v1   # Your server's endpoint, path included
+    index_model: your-local-model
+    query_model: your-local-model
+    api_key: not-needed-locally     # Still required; send any non-empty value your server accepts
+```
+
 **Configuration Options:**
 
 | Option | Type | Default | Description |
@@ -1145,8 +1156,11 @@ provenance:
 | `index_model` | string | Provider-specific | Model for document indexing |
 | `query_model` | string | Provider-specific | Model for query embeddings |
 | `api_key` | string | - | API key (use `${ENV_VAR}` format) |
+| `base_url` | string | `https://api.openai.com/v1` | `openai` provider only. Request endpoint, used verbatim (path included) — point this at any OpenAI-compatible server. Ignored by `voyage`. |
 | `similarity_threshold` | float | `0.50` | Minimum similarity for results |
 | `index_on_complete` | bool | `true` | Auto-generate embeddings on complete |
+
+An unrecognized key under `embedding` (e.g. a typo, or a field that doesn't apply to the configured provider) is a config error, not a silent no-op — record loading fails with `unknown field(s) under provenance.embedding: <keys>`.
 
 **Voyage AI Models:**
 - `voyage-4-large` - High-quality model for document embeddings (input_type: "document")
