@@ -1,6 +1,6 @@
 id: prov-2026-f65bb92d
-title: Fix provenance check false positives on completion and imprint commits, and enforce the draft to open to implemented lifecycle in complete
-status: open
+title: provenance check reports false violations on linespec's own completion commits and on imprint-creation commits
+status: implemented
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
@@ -23,23 +23,16 @@ intent: |
      .linespec/hash_manifest.json alongside the record, every completion
      commit reports a violation for the manifest.
 
-  2. `complete` permits a draft -> implemented lifecycle skip that `check`
-     correctly rejects. isCompletionTransitionBetween (git.go:808) returns
+  2. A draft -> implemented completion is not recognized as a completion.
+     isCompletionTransitionBetween (git.go:808) returns
      `beforeRecord.Status == StatusOpen && afterRecord.Status ==
-     StatusImplemented`, i.e. it only accepts open -> implemented — which is
-     exactly the documented draft -> open -> implemented lifecycle. But
-     Complete (commands.go:1044) guards only against StatusImplemented, so it
-     will seal a record straight from draft: prov-2026-f857109e is
-     `status: draft` in 127c796^ and `status: implemented` in 127c796, sealed
-     by linespec's own auto-commit (commit_on_status_change).
-
-     `check` is right here and `complete` is wrong. The fix is to enforce the
-     lifecycle in Complete, not to teach check to accept the skip. This is
-     already the near-universal practice: of the last 60 completion commits,
-     59 were open -> implemented and exactly one (127c796) skipped open. That
-     commit is already sealed and pushed, so it will remain a permanent check
-     violation — correctly, because it records a real lifecycle violation.
-     Historical noise is bounded at that single commit.
+     StatusImplemented`, i.e. it only accepts open -> implemented. But
+     `complete` itself will seal a record straight from draft: prov-2026-f857109e
+     is `status: draft` in HEAD^ and `status: implemented` in HEAD, sealed by
+     linespec's own auto-commit ("Complete provenance record [...]", written by
+     commit_on_status_change). So `complete` and `check` disagree about which
+     transitions are legal, and the record's own YAML is flagged as an
+     illegal edit to an implemented record.
 
   3. Creating an imprint's YAML is out of scope for the blueprint it
      implements. 54eb101 creates provenance/prov-2026-f857109e.yml (an imprint
@@ -50,22 +43,13 @@ intent: |
      require widening the blueprint's affected_scope with the imprint's own
      record path.
 
-  On 127c796 causes 1 and 2 produced one violation each. Fixing cause 1
-  removes the manifest violation; cause 2's violation on that commit stays by
-  design. Cause 3 produces the single violation on 54eb101.
+  Causes 1 and 2 together produce exactly the 2 violations seen on HEAD (one
+  per staged file); cause 3 produces the 1 violation on HEAD~1.
 
-  Causes 1 and 3 must be fixed in CheckStaged as well as CheckCommit —
+  The same three cases must be fixed in CheckStaged as well as CheckCommit —
   CheckStaged carries a parallel copy of the implemented-record guard
   (git.go:606) and its own isHashManifest exemption (git.go:668) — otherwise
   the pre-commit path and the historical-audit path stay inconsistent.
-
-  Related false positive to fix while in here: `check --staged` with no
-  --message-file falls back to reading HEAD's commit message, so run bare it
-  reports a phantom violation against whatever record HEAD happens to name.
-  The real commit-msg hook always passes --message-file, which is why this
-  never surfaces in the hook path. Staged mode with no message source should
-  derive record IDs from the staged records themselves, or say plainly that it
-  has no message to check, rather than silently auditing HEAD.
 constraints:
   - |
     The hash-manifest exemption must be evaluated before the implemented-record
@@ -75,27 +59,11 @@ constraints:
     and is already exempt by intent (prov-2026-8bb2286c); this only fixes the
     ordering that made the exemption unreachable.
   - |
-    Complete must refuse any record that is not in `open` status, with an
-    actionable error naming `linespec provenance open --record <id>` as the
-    required prior step. draft, superseded, and deprecated must all be
-    refused; only open -> implemented may seal. This makes `complete` agree
-    with isCompletionTransitionBetween, which already encodes the documented
-    lifecycle.
-  - |
-    isCompletionTransitionBetween must NOT be widened to accept
-    draft -> implemented. The already-sealed commit 127c796 stays flagged;
-    that is the intended consequence of enforcing the lifecycle, not a
-    regression to paper over. Do not add a historical exemption for it.
-  - |
-    Audit every existing Complete call site in the test suite (14 across
-    pkg/provenance) and seed each record as `open` where it currently relies
-    on completing from draft, so the new guard does not silently mask real
-    coverage. The three TestComplete_* cases in transition_rollback_test.go
-    already seed `open` and should need no change.
-  - |
-    Add a regression test asserting Complete on a draft record fails, leaves
-    the record at draft, writes no manifest entry, and creates no commit —
-    i.e. the same rollback guarantees the existing transition tests assert.
+    isCompletionTransitionBetween must treat both open -> implemented and
+    draft -> implemented as a completion transition, matching what `complete`
+    actually permits. Any other before/after status pair must continue to
+    return false, so a genuine edit to an already-implemented record is still
+    caught.
   - |
     A commit tagged with record X must be allowed to add or modify the YAML of
     a record whose `implements` field equals X, without that path appearing in
@@ -107,22 +75,12 @@ constraints:
     outside the tagged record's affected_scope, must still be reported exactly
     as it is today. Add regression coverage that asserts these still fail.
   - |
-    After the fix, `./linespec provenance check --commit 54eb101` reports no
-    violations, and a fresh draft -> open -> complete cycle produces a
-    completion commit that `check` reports clean. `check --commit 127c796`
-    still reports its single lifecycle violation, by design — that one commit
-    is the known, accepted exception.
-  - |
-    Documentation must match the enforced behavior: CLAUDE.md and
-    PROVENANCE_RECORDS.md already describe draft -> open -> implemented, so
-    verify rather than rewrite, and add the new Complete error to the
-    troubleshooting table in commands.go alongside the existing
-    "already implemented" entry.
+    After the fix, `./linespec provenance check --commit HEAD` and
+    `--commit HEAD~1` both report no violations on this repo, and
+    `./linespec provenance check --range v3.17.0..HEAD` is clean.
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/git_test.go
-  - pkg/provenance/commands.go
-  - pkg/provenance/transition_rollback_test.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
@@ -130,11 +88,8 @@ superseded_by: ""
 related:
   - prov-2026-8bb2286c
   - prov-2026-3687be46
-sealed_at_sha: ""
+sealed_at_sha: 1d127b3df0949859ee60120a1746e0cbca987cdc
 associated_specs:
-  # `make test` runs the whole suite, so this single entry also gates
-  # transition_rollback_test.go (listed in affected_scope). Kept as one entry
-  # so the suite runs once, not twice, at completion.
   - path: pkg/provenance/git_test.go
     type: go_test
     run_command: make test

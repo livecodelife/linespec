@@ -388,72 +388,74 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 
 	for _, recordID := range recordIDs {
 		record, exists := c.Loader.GetRecord(recordID)
+		if !exists {
+			// Unknown record ID, skip scope check for this record
+			// (This allows new record creation to pass)
+			continue
+		}
+
+		// Determine whether this record was already implemented immediately
+		// before this commit (i.e. sealed by an earlier commit), by reading the
+		// record's own file as it stood at commit^. This is commit-relative,
+		// unlike record.Status (which reflects the Loader's current/final view of
+		// the record) — historical audit (CheckCommit/CheckRange) must judge a
+		// record's pre-seal lifecycle commits (draft creation, open transition,
+		// in-progress implementation work) by what was true about the record at
+		// the time, not by what it eventually became. Using record.Status here
+		// would flag every one of those commits as violations once the record is
+		// later implemented.
+		implementedBefore, err := c.wasRecordImplementedAtRef(commit+"^", record)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not determine prior record status: %v\n", err)
+			implementedBefore = true // fail closed: preserve the immutability guarantee
+		}
 
 		for _, file := range files {
-			if !exists {
-				// Unknown record ID, skip scope check for this record
-				// (This allows new record creation to pass)
+			// The hash manifest is system-managed and exempt from scope enforcement,
+			// regardless of the governing record's status. Must run before the
+			// implemented-record guard below, or every completion commit (which
+			// stages the manifest alongside the record) reports a false violation.
+			if isHashManifest(file) {
 				continue
 			}
 
-			// Check if the record is already implemented
-			// Implemented records are immutable - no new commits should reference them
-			if record.Status == StatusImplemented {
-				// Check if this is the completion transition (open → implemented)
-				// which is the only allowed operation on an implemented record's file
-				isCompletion := false
-				if isRecordFile(file, record) {
-					isComp, err := c.isCompletionTransitionForCommit(commit, file)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
-					} else if isComp {
-						isCompletion = true
-					}
-				}
-
-				if !isCompletion {
-					violations = append(violations, Violation{
-						RecordID: recordID,
-						File:     "",
-						Commit:   commit,
-						Message:  fmt.Sprintf("%s is already implemented - cannot commit with this ID. Create a new record or supersede this one.", recordID),
-					})
-					continue
-				}
+			// Allow a file belonging to a record whose `implements` field equals
+			// this record's ID (e.g. an imprint created while working under this
+			// blueprint), without requiring that path in this record's
+			// affected_scope. Must also run before the implemented-record guard,
+			// since the blueprint may already be implemented by the time the
+			// imprint's own completion commit lands.
+			if isImplements, err := c.isImplementsFileForCommit(commit, file, record.ID); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not check implements relationship: %v\n", err)
+			} else if isImplements {
+				continue
 			}
 
-			// Allow draft and open records to modify their own YAML file.
-			// Draft records are in active planning — fields (including affected_scope)
-			// may be freely adjusted before the record is opened for enforcement.
-			if (record.Status == StatusOpen || record.Status == StatusDraft) && isRecordFile(file, record) {
-				// Check if the record file itself is in forbidden_scope
+			// Implemented records are immutable - no further commits may touch
+			// them, aside from the exemptions already handled above.
+			if implementedBefore {
+				violations = append(violations, Violation{
+					RecordID: recordID,
+					File:     "",
+					Commit:   commit,
+					Message:  fmt.Sprintf("%s is already implemented - cannot commit with this ID. Create a new record or supersede this one.", recordID),
+				})
+				continue
+			}
+
+			// The record had not yet been sealed before this commit, so its own
+			// file may change freely here — draft creation, the open transition,
+			// in-progress edits, or the completion transition itself — subject
+			// only to forbidden_scope.
+			if isRecordFile(file, record) {
 				isForbidden, err := isFileForbiddenForRecord(file, record)
 				if err != nil {
 					return nil, err
 				}
 				if !isForbidden {
-					continue // Allowed - open record modifying its own file
+					continue // Allowed - record's own file, not yet sealed
 				}
 				// If forbidden, fall through to violation
-			}
-
-			// NEW: Allow completion transition (open → implemented) for the record's own file
-			// This handles the case where a historical commit completed a provenance record
-			if isRecordFile(file, record) {
-				isCompletionTransition, err := c.isCompletionTransitionForCommit(commit, file)
-				if err != nil {
-					// If we can't determine, fall through to normal scope check
-					fmt.Fprintf(os.Stderr, "Warning: could not check completion transition: %v\n", err)
-				} else if isCompletionTransition {
-					// This is a completion transition - check if file is not forbidden
-					isForbidden, err := isFileForbiddenForRecord(file, record)
-					if err != nil {
-						return nil, err
-					}
-					if !isForbidden {
-						continue // Allowed - completion transition of record's own file
-					}
-				}
 			}
 
 			// Allow supersession transition: old record being marked superseded by record.ID
@@ -468,11 +470,6 @@ func (c *CommitChecker) CheckCommit(commit string) ([]Violation, error) {
 						continue // Allowed - valid supersession transition of old record
 					}
 				}
-			}
-
-			// The hash manifest is system-managed and exempt from scope enforcement.
-			if isHashManifest(file) {
-				continue
 			}
 
 			// Check if file is in scope
@@ -580,13 +577,41 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 			continue
 		}
 
+		// Partition staged files: the hash manifest and files belonging to a
+		// record whose `implements` field equals this record's ID (e.g. an
+		// imprint created while working under this blueprint) are exempt from
+		// all scope enforcement. This must happen before the implemented-record
+		// guard below, or every completion commit (which stages the manifest
+		// alongside the record) and every imprint-creation commit reports a
+		// false violation.
+		var enforceableFiles []string
+		for _, file := range files {
+			if isHashManifest(file) {
+				continue
+			}
+			if isImplements, err := c.isImplementsFile(file, record.ID); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not check implements relationship: %v\n", err)
+			} else if isImplements {
+				continue
+			}
+			enforceableFiles = append(enforceableFiles, file)
+		}
+
+		if len(enforceableFiles) == 0 {
+			// Every staged file referencing this record is exempt (hash manifest
+			// and/or implements-linked records) - nothing left to enforce, and in
+			// particular no reason to demand a completion transition that isn't
+			// actually part of this commit.
+			continue
+		}
+
 		// Check if the record is already implemented
 		// Implemented records are immutable - no new commits should reference them
 		if record.Status == StatusImplemented {
 			// Check if this is the completion transition (open → implemented)
 			// which is the only allowed operation on an implemented record's file
 			isCompletion := false
-			for _, file := range files {
+			for _, file := range enforceableFiles {
 				if isRecordFile(file, record) {
 					isComp, err := c.isCompletionTransition(file)
 					if err != nil {
@@ -609,7 +634,7 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 			}
 		}
 
-		for _, file := range files {
+		for _, file := range enforceableFiles {
 			// Allow draft and open records to modify their own YAML file.
 			// Draft records are in active planning — fields (including affected_scope)
 			// may be freely adjusted before the record is opened for enforcement.
@@ -664,11 +689,6 @@ func (c *CommitChecker) CheckStaged(messageFile string, commitTagRequired bool) 
 				}
 			}
 
-			// The hash manifest is system-managed and exempt from scope enforcement.
-			if isHashManifest(file) {
-				continue
-			}
-
 			// Check if file is in scope
 			inScope, err := record.IsInScope(file)
 			if err != nil {
@@ -695,10 +715,84 @@ func (c *CommitChecker) isCompletionTransition(filePath string) (bool, error) {
 	return c.isCompletionTransitionBetween("HEAD", "", filePath)
 }
 
-// isCompletionTransitionForCommit checks if the file is transitioning from open to implemented
-// by comparing the parent commit with the current commit
-func (c *CommitChecker) isCompletionTransitionForCommit(commit, filePath string) (bool, error) {
-	return c.isCompletionTransitionBetween(commit+"^", commit, filePath)
+// wasRecordImplementedAtRef reports whether record's own YAML file already showed
+// status: implemented as of ref (typically "commit^", the parent of the commit
+// under audit). This is commit-relative, unlike record.Status (which reflects the
+// Loader's current/final view) — CheckCommit/CheckRange use it so a record's
+// pre-seal lifecycle commits are judged by what was true about the record at the
+// time, not by what it eventually became.
+func (c *CommitChecker) wasRecordImplementedAtRef(ref string, record *Record) (bool, error) {
+	// record.FilePath is absolute (set by the Loader); git show needs a path
+	// relative to the repo root.
+	relPath := record.FilePath
+	if c.Git.RepoRoot != "" {
+		if rel, err := filepath.Rel(c.Git.RepoRoot, record.FilePath); err == nil {
+			relPath = rel
+		}
+	}
+
+	cmd := exec.Command("git", "show", ref+":"+filepath.ToSlash(relPath))
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		// File did not exist yet at ref (e.g. this commit creates the record) -
+		// it cannot have been implemented.
+		return false, nil
+	}
+
+	var rec Record
+	if err := yaml.Unmarshal(output, &rec); err != nil {
+		return false, fmt.Errorf("failed to parse record at %s: %w", ref, err)
+	}
+
+	return rec.Status == StatusImplemented, nil
+}
+
+// isImplementsFile checks whether the staged version of filePath is a record
+// whose `implements` field equals recordID.
+func (c *CommitChecker) isImplementsFile(filePath, recordID string) (bool, error) {
+	return c.isImplementsFileBetween("", filePath, recordID)
+}
+
+// isImplementsFileForCommit checks whether filePath, as committed, is a record
+// whose `implements` field equals recordID.
+func (c *CommitChecker) isImplementsFileForCommit(commit, filePath, recordID string) (bool, error) {
+	return c.isImplementsFileBetween(commit, filePath, recordID)
+}
+
+// isImplementsFileBetween checks whether the record YAML at afterRef:filePath
+// has an `implements` field equal to recordID. Used to allow a commit tagged
+// with a blueprint's ID to create or edit the YAML of a record that implements
+// it (e.g. an imprint written while working on the blueprint), without
+// requiring that path in the blueprint's affected_scope. For staged
+// comparison, pass empty string as afterRef to use ":filepath" syntax.
+func (c *CommitChecker) isImplementsFileBetween(afterRef, filePath, recordID string) (bool, error) {
+	var afterRefSpec string
+	if afterRef == "" {
+		afterRefSpec = ":" + filePath
+	} else {
+		afterRefSpec = afterRef + ":" + filePath
+	}
+
+	cmd := exec.Command("git", "show", afterRefSpec)
+	if c.Git.RepoRoot != "" {
+		cmd.Dir = c.Git.RepoRoot
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		// File doesn't exist at afterRef (e.g. deleted) - not an implements file.
+		return false, nil
+	}
+
+	var candidate Record
+	if err := yaml.Unmarshal(output, &candidate); err != nil {
+		// Not parseable as a record - not an implements file.
+		return false, nil
+	}
+
+	return candidate.Implements != "" && candidate.Implements == recordID, nil
 }
 
 // isSupersessionTransition checks if the file is transitioning from open to superseded
@@ -805,8 +899,10 @@ func (c *CommitChecker) isCompletionTransitionBetween(beforeRef, afterRef, fileP
 	}
 
 	// Check if this is a completion transition:
-	// beforeRef has status: open AND afterRef has status: implemented
-	return beforeRecord.Status == StatusOpen && afterRecord.Status == StatusImplemented, nil
+	// beforeRef has status: open or draft (both of which `complete` accepts as a
+	// sealing source) AND afterRef has status: implemented
+	beforeIsSealable := beforeRecord.Status == StatusOpen || beforeRecord.Status == StatusDraft
+	return beforeIsSealable && afterRecord.Status == StatusImplemented, nil
 }
 
 // AutoPopulateScope populates affected_scope from git commits for a record

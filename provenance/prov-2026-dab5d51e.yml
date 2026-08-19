@@ -1,0 +1,89 @@
+id: prov-2026-dab5d51e
+title: 'CheckCommit: judge historical commits by the record''s status at that commit, not its current status'
+status: implemented
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  While validating prov-2026-f65bb92d's constraint 5 ("check --range
+  v3.17.0..HEAD is clean on this repo") against my own new commits from
+  prov-2026-40232f86 — a draft-creation commit, an open-transition commit, and
+  a completion commit, each a standalone commit tagged with the imprint's own
+  ID, exactly as CLAUDE.md's workflow prescribes — I found that
+  `linespec provenance check --commit <sha>` reported false violations on the
+  two *earlier* lifecycle commits (draft creation, open transition) once the
+  imprint became implemented.
+
+  Root cause: CheckCommit's immutable-record guard branched on
+  `record.Status == StatusImplemented`, where `record` comes from
+  `c.Loader.GetRecord(id)` — i.e. the record's CURRENT/final status, not its
+  status at the time of the commit under audit. Once a record reaches
+  `implemented`, every prior commit that ever referenced it (including its own
+  legitimate pre-seal draft/open transitions) was retroactively judged against
+  that final status and flagged, because only the single literal
+  open/draft->implemented completion commit was recognized as an exemption
+  (isCompletionTransitionForCommit). This is the same root defect class as
+  prov-2026-f65bb92d's causes 1-3 (checking commits against the wrong
+  reference point) but manifesting across a record's *entire* pre-seal history
+  rather than just the sealing commit itself, and it's a direct, reproducible
+  consequence of following the standalone create/open/complete commit workflow
+  that CLAUDE.md itself mandates - so it had to be fixed for constraint 5 to
+  hold in practice, not just for the two originally-reproduced commits.
+
+  Fix: replaced the current-status-based guard in CheckCommit with a
+  commit-relative one. New helper wasRecordImplementedAtRef(ref, record) reads
+  the record's own YAML file via `git show ref:path` and reports whether ITS
+  status at that ref was already "implemented". CheckCommit now computes
+  `implementedBefore := wasRecordImplementedAtRef(commit+"^", record)` once
+  per (record, commit) pair: if true, the record was already sealed before
+  this commit, so the strict immutability violation applies (matching
+  prov-2026-f65bb92d's constraint 4 exactly - a real post-seal edit is still
+  rejected, now verified by TestCheckCommit_ImplementedRecordNonTransitionEditRejected).
+  If false, the record hadn't been sealed yet as of this commit, so its own
+  file may change freely here (forbidden_scope still applies) covering draft
+  creation, the open transition, in-progress edits, and the completion
+  transition itself, all uniformly, without needing the separate
+  isCompletionTransitionForCommit special case at all (removed as now-dead
+  code). CheckStaged was not touched by this change: it only ever evaluates
+  the one commit about to be made, so the Loader's current status already IS
+  the correct "as of this commit" reference point there - the mismatch is
+  specific to historical audit (CheckCommit/CheckRange).
+
+  One implementation pitfall worth recording: my first version of
+  wasRecordImplementedAtRef called `git show ref:` + record.FilePath directly.
+  record.FilePath is set absolute by the Loader (commands.go joins config.Dir
+  with repoRoot), so `git show ref:/abs/path` silently fails (git requires a
+  repo-relative pathspec), making every record look like it "didn't exist yet"
+  and disabling the guard entirely - the opposite of fail-closed. Caught by a
+  regression test (TestCheckCommit_ImplementedRecordNonTransitionEditRejected)
+  failing unexpectedly after the refactor. Fixed by converting via
+  filepath.Rel(c.Git.RepoRoot, record.FilePath), the same pattern already used
+  in commands.go's AutoPopulateScope for the identical reason.
+constraints:
+  - |
+    Must not change CheckStaged's behavior - the current-status/Loader read is
+    correct there since it only ever evaluates the commit about to be made.
+  - |
+    A genuine post-seal edit (record already implemented before this specific
+    commit) must still be rejected by CheckCommit; verified by a dedicated
+    regression test rather than only by the pre-seal-allowed tests.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: prov-2026-f65bb92d
+related:
+  - prov-2026-40232f86
+sealed_at_sha: 8cc220e73d6cdf835d4e18f7f55125f27db15b9c
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test # pkg/provenance/git_test.go
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - check
+  - git-hooks

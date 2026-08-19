@@ -1,0 +1,77 @@
+id: prov-2026-40232f86
+title: Fix check's implemented-record guard ordering, draft completion, and imprint-creation scope
+status: implemented
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Implement the three fixes described in prov-2026-f65bb92d's intent, in
+  pkg/provenance/git.go's CheckCommit and CheckStaged.
+
+  CheckCommit already evaluated its per-file exemptions (hash manifest,
+  supersession, completion transition) inside a loop over one file at a time,
+  so moving the hash-manifest and new implements-relationship exemptions to
+  run before the `record.Status == StatusImplemented` guard was a direct
+  reorder: two `continue` checks added right after the `!exists` guard, and
+  the old trailing `isHashManifest` check removed as dead code.
+
+  CheckStaged was structured differently: it pre-scans *all* staged files
+  once to decide "is any staged file a completion transition of this record",
+  and if not, appends a single blanket violation and abandons the record
+  entirely — never reaching the per-file loop where the old hash-manifest
+  exemption lived. Reordering alone was not enough here; the pre-scan itself
+  needed to ignore exempt files. I introduced an `enforceableFiles` partition
+  (hash manifest and implements-linked files filtered out) computed before the
+  implemented-record guard, and the guard now scans only that filtered list
+  for a completion transition.
+
+  A second bug surfaced while testing that restructuring: if *every* staged
+  file for a record is exempt (e.g. a later commit re-syncs the hash manifest
+  against a record that was already implemented in an earlier commit, with no
+  record-file change in this commit at all), `enforceableFiles` is empty, the
+  completion-transition scan trivially finds nothing, and the guard still
+  rejects the record. Added an explicit early-continue when
+  `enforceableFiles` is empty, since there is nothing left to enforce.
+
+  isCompletionTransitionBetween's status check was widened from
+  `beforeRecord.Status == StatusOpen` to `open OR draft`, matching what
+  `Complete` (commands.go) actually permits — it only rejects when the record
+  is already implemented, so draft -> implemented is a legal seal.
+
+  The implements exemption is a new `isImplementsFileBetween` helper
+  (mirroring the existing isSupersessionTransitionBetween /
+  isCompletionTransitionBetween pattern: reads the file at a given ref via
+  `git show`, unmarshals it as a Record, compares a field). It checks
+  `candidate.Implements == recordID` on the after-state only — no need to
+  diff against a before-state the way completion/supersession transitions do,
+  since creating or editing an imprint's YAML under its blueprint's commit tag
+  is allowed unconditionally, not just as a one-time transition.
+constraints:
+  - |
+    Every fix must land in both CheckCommit and CheckStaged, since the two
+    functions enforce the same policy on two different code paths (historical
+    audit vs. pre-commit hook) and prov-2026-f65bb92d's intent explicitly
+    calls out keeping them consistent.
+  - |
+    No existing test in git_test.go may regress; the fix is additive/reordering
+    only, not a policy change beyond what prov-2026-f65bb92d's constraints
+    describe.
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: prov-2026-f65bb92d
+related: []
+sealed_at_sha: 49190b9b59ab3eac19e75417bcce409f761ef8fc
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test # pkg/provenance/git_test.go
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - check
+  - git-hooks
