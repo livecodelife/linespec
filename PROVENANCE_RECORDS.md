@@ -1160,7 +1160,7 @@ provenance:
 | `similarity_threshold` | float | `0.50` | Minimum similarity for results |
 | `index_on_complete` | bool | `true` | Auto-generate embeddings on complete |
 
-An unrecognized key under `embedding` (e.g. a typo, or a field that doesn't apply to the configured provider) is a config error, not a silent no-op — record loading fails with `unknown field(s) under provenance.embedding: <keys>`.
+An unrecognized key under `embedding` (e.g. a typo, or a field that doesn't apply to the configured provider) is a config error, not a silent no-op — loading `.linespec.yml` reports `unknown field(s) under provenance.embedding: <keys>` and the embedder is left unconfigured, rather than the typo being silently ignored.
 
 **Voyage AI Models:**
 - `voyage-4-large` - High-quality model for document embeddings (input_type: "document")
