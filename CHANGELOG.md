@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.18.0] - 2026-08-19
+
+### Fixed
+
+- **`provenance check` false forbidden-scope violations on linespec's own completion and imprint-creation commits** ([prov-2026-f65bb92d](./provenance/prov-2026-f65bb92d.yml), [prov-2026-dab5d51e](./provenance/prov-2026-dab5d51e.yml), [prov-2026-40232f86](./provenance/prov-2026-40232f86.yml)) — `CheckCommit` now judges a historical commit by the record's status *at that commit*, not its current status, and the implemented-record guard ordering, draft-completion handling, and imprint-creation scope checks were corrected (#183).
+- **`provenance compile` no longer seals draft, open, and shared-repo records** ([prov-2026-105f014e](./provenance/prov-2026-105f014e.yml)) — despite being documented as an idempotent recovery tool, `compile` was sealing records it should have left untouched; it now only recomputes the hash manifest (#180).
+- **`linespec build` cross-compiled Linux binary failed with `undefined: Node`** ([prov-2026-b9339a5a](./provenance/prov-2026-b9339a5a.yml)) — `CGO_ENABLED=0` broke `go-tree-sitter`'s cgo-dependent parsing during cross-compilation of the Docker image; the build now sets `CGO_ENABLED` correctly (#182).
+- **Removed the tracked 22MB `linespec-beta` binary** ([prov-2026-a0b6be6b](./provenance/prov-2026-a0b6be6b.yml)) — nothing consumed it, and the path is now gitignored (#181).
+- **`EXPECT` matching now works when two proxied databases both declare a table with the same name** ([prov-2026-4ea65be4](./provenance/prov-2026-4ea65be4.yml), [prov-2026-1f879f10](./provenance/prov-2026-1f879f10.yml), [prov-2026-5dbd0ace](./provenance/prov-2026-5dbd0ace.yml), [prov-2026-e85fd661](./provenance/prov-2026-e85fd661.yml)) — previously a same-named table on a second proxied database would never satisfy its `EXPECT`; a new `DATABASE` `EXPECT` clause disambiguates by logical database identity, trailing-clause parsing is now order-independent, and the PostgreSQL/MySQL proxies thread that identity through the registry (#186, #187).
+- **linespec.dev content-page styling restored** ([prov-2026-f05161eb](./provenance/prov-2026-f05161eb.yml), [prov-2026-f857109e](./provenance/prov-2026-f857109e.yml), [prov-2026-3111394d](./provenance/prov-2026-3111394d.yml)) — the docs typography layer silently broke when the site moved to a from-source pandoc render; inline-code specificity and `<hr>`-as-section-separator are fixed, and `.docs-lead` is excluded from the `.docs-article p` max-width rule (#184).
+- **OpenAI embedding provider now respects `-c`/`--config` and a configurable `base_url`** ([prov-2026-57aff9e1](./provenance/prov-2026-57aff9e1.yml), [prov-2026-684303c3](./provenance/prov-2026-684303c3.yml)) — previously the provider hardcoded `api.openai.com` and ignored `-c`/`--config`; added `EmbeddingConfig.BaseURL`, strict embedding-key validation (catching silent config loss from a key typo), and threaded `-c` through the embedder (#189).
+
 ## [3.17.0] - 2026-08-12
 
 ### Added
