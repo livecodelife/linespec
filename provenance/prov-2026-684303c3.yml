@@ -1,0 +1,74 @@
+id: prov-2026-684303c3
+title: openai base_url + strict embedding keys + -c embedder propagation
+status: draft
+created_at: "2026-08-19"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Implemented all three fixes from prov-2026-57aff9e1: (1) added
+  EmbeddingConfig.BaseURL (pkg/config/types.go) and made
+  Client.generateOpenAI (pkg/embeddings/client.go) resolve its endpoint via a
+  new openAIEmbeddingsEndpoint(baseURL) helper — "" defaults to
+  https://api.openai.com/v1, a set value is used verbatim (path included)
+  joined with "/embeddings". Both GenerateDocument and GenerateQuery already
+  shared generateOpenAI, so both pick up the fix without further changes. (2)
+  Rather than making the whole .linespec.yml loader (pkg/config/parser.go,
+  out of this record's affected_scope) reject unknown top-level keys — too
+  broad a blast radius for other unrelated config sections — gave
+  EmbeddingConfig its own UnmarshalYAML(node *yaml.Node) that decodes into
+  both the real struct (via an unexported alias type to dodge infinite
+  recursion) and a map[string]yaml.Node, then fails loudly if the map has any
+  key outside a small known-fields set. This scopes strict-key rejection to
+  exactly provenance.embedding, matches the constraint's "either... or"
+  wording by picking the reject-unknown-keys branch, and is picked up
+  identically by both existing yaml.Unmarshal call sites (parser.go's
+  LoadConfigFile and main_stable.go's loadProvenanceConfigFromFile) since
+  yaml.v3 dispatches to a field type's UnmarshalYAML automatically. (3) Fixed
+  reloadConfigIfNeeded (cmd/linespec/main_stable.go) to build an
+  *embeddings.Client from the reloaded cfg.Embedding and pass it into
+  provenance.NewCommandsWithEmbedder, mirroring what provSetup() already does
+  for the no -c path — previously it called the embedder-less
+  provenance.NewCommands, which is why every -c invocation of index/search
+  reported "Embedding API not configured" regardless of the custom config's
+  contents.
+constraints:
+  - |
+    Matches prov-2026-57aff9e1's constraints exactly: base_url is openai-only
+    and verbatim; unknown embedding keys are now a hard config error (not
+    silently accepted); -c/--config now builds the same embedder for
+    index/search that provSetup() builds for the default-config path; the
+    no -c path's behavior is unchanged (reloadConfigIfNeeded's new embedder
+    build only runs inside the existing `if configFile != ""` branch);
+    voyage's fixed endpoint was left untouched.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/embeddings/client.go
+  - pkg/embeddings/client_test.go
+  - pkg/embeddings/base_url_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/cli.go
+  - cmd/linespec/index_config_test.go
+  - PROVENANCE_RECORDS.md
+forbidden_scope: []
+type: imprint
+implements: prov-2026-57aff9e1
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/base_url_test.go
+    type: code
+    run_command: make test # {{path}}
+  - path: cmd/linespec/index_config_test.go
+    type: code
+    run_command: make test # {{path}}
+  - path: pkg/config/types.go
+    type: code
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - provenance-index
+  - config
+  - openai
