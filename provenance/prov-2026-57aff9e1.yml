@@ -1,0 +1,98 @@
+id: prov-2026-57aff9e1
+title: 'provenance index: openai provider hardcodes api.openai.com, and -c/--config is ignored'
+status: open
+created_at: "2026-08-19"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  `linespec provenance index` (and `search`, which shares the same code path)
+  cannot reach a self-hosted OpenAI-compatible embedding server, and the
+  `-c/--config` flag both subcommands advertise in `--help` is silently
+  ignored for embedding configuration. Reported while trying to index 31
+  provenance records against a local LM Studio server. Version:
+  LineSpec v3.17.0 (7f4766a16fa6774806b2c22ab5afccd61e9df1fa), Homebrew/macOS.
+
+  Two independent defects, both in `pkg/embeddings/client.go` /
+  `cmd/linespec/main_stable.go`:
+
+  1. `provider: openai` hardcodes the request endpoint to
+     `https://api.openai.com/v1/embeddings` in
+     `Client.generateOpenAI` (pkg/embeddings/client.go:224). LM Studio,
+     Ollama, vLLM, LiteLLM, and text-embeddings-inference all speak the same
+     `/v1/embeddings` wire format but are unreachable because there is no way
+     to point at a different host. `config.EmbeddingConfig`
+     (pkg/config/types.go:324) has no `base_url` field, and an unrecognized
+     `base_url` key under `provenance.embedding` in `.linespec.yml` is
+     silently dropped rather than rejected, so a user who guesses the field
+     name gets no feedback that it did nothing — the request just goes to
+     OpenAI and the user's own API key is rejected with OpenAI's own 401.
+
+  2. `-c/--config` is parsed into `IndexOptions.ConfigFile` /
+     `SearchOptions.ConfigFile` and does reach
+     `reloadConfigIfNeeded` (cmd/linespec/main_stable.go:984), which
+     correctly reloads `*cfg` from the custom file. But it then rebuilds
+     `*cmds` via `provenance.NewCommands(*cfg, repoRoot, os.Stdout, true)`
+     (main_stable.go:987), which passes `nil` for the embedder
+     (see `NewCommands` at pkg/provenance/commands.go:85-87), instead of
+     `NewCommandsWithEmbedder` built from `cfg.Embedding` the way
+     `provSetup()` (cmd/linespec/cli.go:173-188) does for the default config
+     path. Any subcommand that goes through `provCmds()` with a non-empty
+     `-c` therefore always reports "Embedding API not configured"
+     (`errEmbeddingNotConfigured`, checked at
+     pkg/provenance/commands.go:3002) regardless of what the custom config
+     contains — indistinguishable from a config-syntax mistake, since the
+     same block pasted into the repo's own `.linespec.yml` works.
+constraints:
+  - |
+    `provenance.embedding.provider: openai` must support an optional
+    `base_url` config field. When set, it is used verbatim as the request
+    endpoint (path included, e.g. `http://localhost:1234/v1`) for both
+    `GenerateDocument` and `GenerateQuery`. When unset, behavior is unchanged:
+    requests go to `https://api.openai.com/v1`.
+  - |
+    An unrecognized key under `provenance.embedding` (e.g. a typo, or a field
+    that doesn't apply to the configured provider) must not be silently
+    accepted and ignored — either the loader rejects unknown keys, or the
+    resolved config is surfaced somewhere the user can verify it took effect.
+  - |
+    `-c/--config` must be honored by every provenance subcommand whose
+    `--help` documents it, including `index` and `search`: when a custom
+    config file declares a valid `provenance.embedding` block, that block
+    must actually be used to build the embedder for that invocation, not just
+    to reload unrelated config state.
+  - |
+    Fixing the `-c` embedder gap must not change behavior for the no-`-c`
+    (default `.linespec.yml`) path, which already works correctly via
+    `provSetup()`.
+  - |
+    The `voyage` provider's fixed endpoint is out of scope — this record only
+    covers the `openai` provider's endpoint and the `-c` propagation bug.
+affected_scope:
+  - pkg/config/types.go
+  - pkg/embeddings/client.go
+  - pkg/embeddings/client_test.go
+  - cmd/linespec/main_stable.go
+  - cmd/linespec/cli.go
+  - PROVENANCE_RECORDS.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/base_url_test.go
+    type: go_test
+    run_command: go test ./pkg/embeddings/... -run 'TestOpenAIProviderHonorsBaseURL|TestOpenAIProviderDefaultsBaseURL' -v
+  - path: cmd/linespec/index_config_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run 'TestIndexHonorsConfigFlag|TestSearchHonorsConfigFlag' -v
+  - path: provenance/prov-2026-57aff9e1.yml
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - provenance-index
+  - config
+  - openai
