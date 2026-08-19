@@ -11,32 +11,32 @@ import (
 type TokenType string
 
 const (
-	TokenTest          TokenType = "TEST"
-	TokenReceive       TokenType = "RECEIVE"
-	TokenExpect        TokenType = "EXPECT"
-	TokenExpectNot     TokenType = "EXPECT_NOT"
-	TokenRespond       TokenType = "RESPOND"
-	TokenWith          TokenType = "WITH"
-	TokenReturns       TokenType = "RETURNS"
-	TokenVerify        TokenType = "VERIFY"
-	TokenNoise         TokenType = "NOISE"
-	TokenHeaders         TokenType = "HEADERS"
-	TokenResponseHeaders TokenType = "RESPONSE_HEADERS"
+	TokenTest             TokenType = "TEST"
+	TokenReceive          TokenType = "RECEIVE"
+	TokenExpect           TokenType = "EXPECT"
+	TokenExpectNot        TokenType = "EXPECT_NOT"
+	TokenRespond          TokenType = "RESPOND"
+	TokenWith             TokenType = "WITH"
+	TokenReturns          TokenType = "RETURNS"
+	TokenVerify           TokenType = "VERIFY"
+	TokenNoise            TokenType = "NOISE"
+	TokenHeaders          TokenType = "HEADERS"
+	TokenResponseHeaders  TokenType = "RESPONSE_HEADERS"
 	TokenUsingSql         TokenType = "USING_SQL"
 	TokenUsingSqlContains TokenType = "USING_SQL_CONTAINS"
 	TokenNoTransaction    TokenType = "NO_TRANSACTION"
 	TokenSqlBlock         TokenType = "SQL_BLOCK"
-	TokenTimeout       TokenType = "TIMEOUT"
-	TokenVars          TokenType = "VARS"
-	TokenEOF           TokenType = "EOF"
+	TokenTimeout          TokenType = "TIMEOUT"
+	TokenVars             TokenType = "VARS"
+	TokenEOF              TokenType = "EOF"
 	// Semantic SQL matching tokens
-	TokenAccessingTables    TokenType = "ACCESSING_TABLES"
-	TokenVerifyOperation    TokenType = "VERIFY_OPERATION"
-	TokenVerifyWhereColumns TokenType = "VERIFY_WHERE_COLUMNS"
-	TokenVerifyWhere        TokenType = "VERIFY_WHERE"
+	TokenAccessingTables     TokenType = "ACCESSING_TABLES"
+	TokenVerifyOperation     TokenType = "VERIFY_OPERATION"
+	TokenVerifyWhereColumns  TokenType = "VERIFY_WHERE_COLUMNS"
+	TokenVerifyWhere         TokenType = "VERIFY_WHERE"
 	TokenVerifyWrittenValues TokenType = "VERIFY_WRITTEN_VALUES"
 	// TokenDatabase — DATABASE <name> on an EXPECT, disambiguating which
-	// `databases:` list entry (by its `name:` field) the EXPECT targets.
+	// `databases:` list entry (by its `database:` field) the EXPECT targets.
 	TokenDatabase TokenType = "DATABASE"
 )
 

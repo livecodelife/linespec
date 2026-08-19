@@ -127,8 +127,8 @@ func (p *Proxy) SetResolver(resolver *interpolate.Resolver) {
 	p.loader = dsl.NewPayloadLoaderWithResolver("", resolver)
 }
 
-// SetDatabaseName sets this proxy's logical database identity — the `name:`
-// field of the `databases:` list entry it was started for. It is threaded
+// SetDatabaseName sets this proxy's logical database identity — the
+// `database:` field of the `databases:` list entry it was started for. It is threaded
 // into registry match calls (see findMock/peekMock/checkNegativeMocksForQuery)
 // so that an EXPECT's DATABASE clause can scope it to this specific proxied
 // database, disambiguating a table name that also exists in another proxied

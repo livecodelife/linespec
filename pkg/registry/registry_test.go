@@ -548,10 +548,10 @@ func TestMockRegistry_FindRedisMock(t *testing.T) {
 		Name: "redis_ops",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:      types.ReadRedis,
-				Command:      "GET",
-				RedisKey:     "user:123",
-				ReturnsFile:  "payloads/user.json",
+				Channel:     types.ReadRedis,
+				Command:     "GET",
+				RedisKey:    "user:123",
+				ReturnsFile: "payloads/user.json",
 			},
 			{
 				Channel:  types.WriteRedis,
@@ -750,7 +750,7 @@ func TestSemanticRegistry_BasicAccessingTables(t *testing.T) {
 		Name: "semantic_basic",
 		Expects: []types.ExpectStatement{
 			{
-				Channel:        types.ReadMySQL,
+				Channel:         types.ReadMySQL,
 				AccessingTables: []string{"users"},
 			},
 		},
@@ -831,7 +831,7 @@ func TestSemanticRegistry_VerifyWhereDisambiguation(t *testing.T) {
 	reg.Register(spec)
 
 	// Auth query: WHERE token = '...' → matches first mock
-	mock, ok := reg.FindMockByTables("", 
+	mock, ok := reg.FindMockByTables("",
 		[]string{"users"}, "SELECT",
 		[]string{"token"}, map[string]string{"token": "abc123"},
 		nil,
@@ -844,7 +844,7 @@ func TestSemanticRegistry_VerifyWhereDisambiguation(t *testing.T) {
 	}
 
 	// Get-by-id query: WHERE id = 42 → matches second mock
-	mock, ok = reg.FindMockByTables("", 
+	mock, ok = reg.FindMockByTables("",
 		[]string{"users"}, "SELECT",
 		[]string{"id"}, map[string]string{"id": "42"},
 		nil,
@@ -873,7 +873,7 @@ func TestSemanticRegistry_VerifyWrittenValues(t *testing.T) {
 	reg.Register(spec)
 
 	// Should match when written values match
-	_, ok := reg.FindMockByTables("", 
+	_, ok := reg.FindMockByTables("",
 		[]string{"users"}, "INSERT",
 		nil, nil,
 		map[string]string{"email": "john@example.com", "name": "John Doe"},
