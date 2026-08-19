@@ -204,6 +204,20 @@ type openaiResponse struct {
 	} `json:"usage"`
 }
 
+// defaultOpenAIBaseURL is the endpoint used when EmbeddingConfig.BaseURL is unset.
+const defaultOpenAIBaseURL = "https://api.openai.com/v1"
+
+// openAIEmbeddingsEndpoint resolves the request endpoint for the openai provider.
+// baseURL, when non-empty, is used verbatim (path included, e.g.
+// "http://localhost:1234/v1") so OpenAI-compatible servers (LM Studio, Ollama,
+// vLLM, LiteLLM, text-embeddings-inference) are reachable.
+func openAIEmbeddingsEndpoint(baseURL string) string {
+	if baseURL == "" {
+		baseURL = defaultOpenAIBaseURL
+	}
+	return strings.TrimSuffix(baseURL, "/") + "/embeddings"
+}
+
 // generateOpenAI generates embeddings using the OpenAI API (fallback support)
 func (c *Client) generateOpenAI(text string) ([]float32, error) {
 	model := c.config.IndexModel
@@ -221,7 +235,7 @@ func (c *Client) generateOpenAI(text string) ([]float32, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.openai.com/v1/embeddings", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", openAIEmbeddingsEndpoint(c.config.BaseURL), bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

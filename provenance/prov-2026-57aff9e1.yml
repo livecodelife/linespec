@@ -70,8 +70,10 @@ affected_scope:
   - pkg/config/types.go
   - pkg/embeddings/client.go
   - pkg/embeddings/client_test.go
+  - pkg/embeddings/base_url_test.go
   - cmd/linespec/main_stable.go
   - cmd/linespec/cli.go
+  - cmd/linespec/index_config_test.go
   - PROVENANCE_RECORDS.md
 forbidden_scope: []
 type: blueprint
