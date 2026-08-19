@@ -1,0 +1,52 @@
+id: prov-2026-14810b34
+title: Reconstruct v3.18.0 CHANGELOG entry from eight completed records
+status: implemented
+created_at: "2026-08-19"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Reconstructed the CHANGELOG.md [3.18.0] entry from the eight records (plus
+  imprints) named in prov-2026-eb1c8e81's intent, since [Unreleased] was
+  empty and the changelog for this release had to be assembled from
+  already-completed work rather than written alongside it. Grouped every
+  entry under "Fixed" (all eight records are bug fixes; there were no
+  Added/Changed items this cycle), each bullet linking its blueprint and
+  imprint record files and citing the PR number(s) from the intent/git log
+  (#183, #180, #182, #181, #186/#187, #184, #189). Deliberately omitted
+  prov-2026-850f03a4 per the blueprint's explicit constraint that it is a
+  deprecated, erroneous duplicate of prov-2026-a0b6be6b and must not be
+  cited. Ran ./scripts/bump-version.sh 3.18.0 (updates VERSION, README.md,
+  LINESPEC.md, PROVENANCE_RECORDS.md) and ./linespec provenance compile to
+  rebuild .linespec/hash_manifest.json, then verified with `make test` (all
+  packages pass) and `linespec provenance check --staged` (no forbidden
+  scope violations) before committing.
+constraints:
+  - |
+    Every changelog bullet must cite real, implemented provenance records
+    that exist in provenance/ — no fabricated record IDs or PR numbers.
+  - prov-2026-850f03a4 must not appear in the changelog (deprecated
+    duplicate, per prov-2026-eb1c8e81's constraint).
+  - No production code changes — this imprint covers documentation/release
+    artifacts only, matching the blueprint's "release/version bump only"
+    constraint.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: imprint
+implements: prov-2026-eb1c8e81
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: 4115b0cf564d3039c74753a5493f0b8e19160022
+associated_specs:
+  - path: CHANGELOG.md
+    type: code
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - release
