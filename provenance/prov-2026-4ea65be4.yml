@@ -1,0 +1,113 @@
+id: prov-2026-4ea65be4
+title: Expectations are never satisfied when one table is served by two proxied databases
+status: open
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Fix GitHub issue #185: when a service under test uses two proxied databases
+  (declared via the `databases:` list form in .linespec.yml) that both contain a
+  table with the same name, EXPECT expectations for that table are never matched
+  correctly — a `READ` expectation can bind to a query that is actually an
+  `UPDATE`, and the reported failure misattributes which declared expectation
+  saw which actual query.
+
+  Root cause: mocks are indexed purely by table name (MockRegistry.getExpectKey /
+  tableSetKey, pkg/registry/registry.go). types.ExpectStatement (pkg/types/types.go)
+  has no field identifying which named database (from the `databases:` list) an
+  EXPECT targets, and the DSL (pkg/dsl/parser.go, pkg/dsl/lexer.go) has no syntax
+  to declare one. Each proxied database runs as its own sidecar process/container
+  (pkg/runner/runner.go), but every sidecar is handed the same fully-serialized,
+  unfiltered registry (SaveToFileForContainer) containing every EXPECT statement
+  from every database — so a proxy for "district" can see and consume an EXPECT
+  written for "master", and vice versa. `CallN` (CALL N) is tracked as a single
+  per-table-name counter with no per-database dimension anywhere in
+  FindMockByTables/FindMock, and merged hits (SetHits/mockHitKey) don't carry a
+  database identity either, so results from two independent proxy processes can
+  conflate. The PostgreSQL proxy additionally never learns its own logical
+  database name at all (pkg/proxy/postgresql/proxy.go hardcodes dbConfig to
+  "postgres"); the MySQL proxy does receive a `--db-name` (SetDatabaseName), but
+  that value is only used for wire-protocol column metadata, never passed into
+  the registry match calls.
+
+  A second, smaller, separate bug found while working around the first: in
+  pkg/dsl/parser.go's parseExpect, trailing EXPECT clauses (VERIFY_*, RETURNS,
+  RESPONSE_HEADERS, legacy VERIFY) are checked in a fixed sequence ending with a
+  `for p.peek().Type == TokenVerify` loop placed after the RETURNS check. When a
+  legacy `VERIFY` line appears before `RETURNS` in the source, the RETURNS check
+  never fires (peek() still sees TokenVerify), so RETURNS is left unconsumed;
+  the trailing VERIFY loop then consumes only the VERIFY token and exits with
+  RETURNS still orphaned at the head of the remaining token stream. The parser
+  then fails to see the RESPOND block that follows and reports "RESPOND block is
+  required for HTTP-triggered tests" even though RESPOND is present and
+  unchanged — only the position of a VERIFY line moved.
+constraints:
+  - |
+    When two or more proxied databases are configured (via `databases:` list
+    form) and share a table name, an EXPECT's CALL N ordering must resolve
+    unambiguously to the specific database the spec author targeted — a query
+    against one database must never consume, or be evaluated against, an EXPECT
+    written for another database's stream of the same table name.
+  - |
+    Verification failure messages (direction mismatches, VERIFY failures) must
+    correctly attribute which declared EXPECT and which actual query/database
+    triggered them; the error must not name a rule or channel other than the one
+    that was actually being evaluated.
+  - |
+    Existing single-database specs, and existing multi-database specs where each
+    database's tables are uniquely named (e.g. examples/multi-db-linespecs, which
+    pairs MySQL "orders" tables with MongoDB "order_events" — no name collision),
+    must continue to pass unchanged.
+  - |
+    A legacy `VERIFY` clause on an EXPECT block must parse identically regardless
+    of whether it appears before or after RETURNS/VERIFY_OPERATION/other trailing
+    clauses in the source; ordering must never cause a subsequent RESPOND block to
+    be dropped or misreported as missing.
+  - |
+    `make test` and `make quality` must continue to pass with no regressions to
+    existing DB-matching behavior (semantic ACCESSING_TABLES matching, legacy
+    USING_SQL matching, CALL N tiebreaking within a single database).
+affected_scope:
+  - pkg/types/types.go
+  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/dsl/dsl_test.go
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+  - pkg/registry/semantic_constraint_enforcement_test.go
+  - pkg/registry/multi_database_call_scoping_test.go
+  - pkg/dsl/verify_before_returns_order_test.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/mongodb/interceptor.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_stable.go
+  - LINESPEC.md
+  - examples/multi-db-linespecs/**
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/multi_database_call_scoping_test.go
+    type: go_test
+    run_command: go test ./pkg/registry/... -run TestMultiDatabaseCallScoping -v
+  - path: pkg/dsl/verify_before_returns_order_test.go
+    type: go_test
+    run_command: go test ./pkg/dsl/... -run TestVerifyBeforeReturnsOrderIndependent -v
+  - path: pkg/registry/registry_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - registry
+  - multi-database
+  - postgresql
+  - call-n
+  - dsl-parser
+  - issue-185

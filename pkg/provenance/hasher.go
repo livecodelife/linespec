@@ -39,6 +39,11 @@ type manifestLine struct {
 // Hasher manages content hashing for provenance records and maintains the hash manifest.
 type Hasher struct {
 	manifestPath string
+	// root is the directory this Hasher (and its manifest) is scoped to — see
+	// NewHasher. CompileManifest uses it to recognize which loaded records are
+	// owned by this config, as opposed to records resolved from a
+	// shared_repos cache (which always live outside root).
+	root string
 }
 
 // NewHasher creates a Hasher whose manifest lives at <root>/.linespec/hash_manifest.json.
@@ -49,6 +54,7 @@ type Hasher struct {
 func NewHasher(root string) *Hasher {
 	return &Hasher{
 		manifestPath: filepath.Join(root, ".linespec", "hash_manifest.json"),
+		root:         root,
 	}
 }
 
@@ -211,39 +217,72 @@ func (h *Hasher) ManifestPath() string {
 	return h.manifestPath
 }
 
-// CompileManifest recomputes hashes for every record and writes the manifest only
-// when the result differs from what is already on disk. Returns true if the manifest
-// was written, false if it was already up to date.
-func (h *Hasher) CompileManifest(records []*Record) (bool, error) {
-	freshHashes := make(map[string]string, len(records))
-	for _, r := range records {
-		hash, err := HashRecord(r)
-		if err != nil {
-			return false, err
-		}
-		freshHashes[r.ID] = hash
-	}
+// isSealedStatus reports whether s is a lifecycle state that CompileManifest
+// (and SealRecord, via complete) is allowed to seal a manifest entry for.
+// Draft and open records are still being edited by definition, so a hash
+// sealed for them is guaranteed to go stale.
+func isSealedStatus(s Status) bool {
+	return s == StatusImplemented || s == StatusSuperseded || s == StatusDeprecated
+}
 
+// CompileManifest recomputes hashes for records that are legitimately sealed
+// (status implemented, superseded, or deprecated) and owned by this config
+// (FilePath under h.root, not resolved from a shared_repos cache), merging
+// the result into the existing on-disk manifest rather than replacing it
+// wholesale.
+//
+// A record from records that is draft/open or remote has any existing
+// manifest entry for its ID removed — that entry is spurious, since compile
+// must not assert immutability for a record this config does not own or that
+// is still being edited. Any manifest entry whose ID does not appear in
+// records at all (e.g. because this invocation only loaded a package-scoped
+// subset) is left untouched, so a partial run can never drop entries that a
+// fuller run would have kept.
+//
+// Returns true if the manifest was written, false if it was already up to
+// date — a compile against an already-clean manifest is a no-op.
+func (h *Hasher) CompileManifest(records []*Record) (bool, error) {
 	m, err := h.LoadManifest()
 	if err != nil {
 		return false, err
 	}
 
-	if len(m.Records) == len(freshHashes) {
-		allMatch := true
-		for id, hash := range freshHashes {
-			if stored, ok := m.Records[id]; !ok || stored != hash {
-				allMatch = false
-				break
+	merged := make(map[string]string, len(m.Records))
+	for id, hash := range m.Records {
+		merged[id] = hash
+	}
+
+	for _, r := range records {
+		if !isRemoteFilePath(r.FilePath, h.root) && isSealedStatus(r.Status) {
+			hash, err := HashRecord(r)
+			if err != nil {
+				return false, err
 			}
-		}
-		if allMatch {
-			return false, nil
+			merged[r.ID] = hash
+		} else {
+			delete(merged, r.ID)
 		}
 	}
 
-	m.Records = freshHashes
+	if mapsEqual(merged, m.Records) {
+		return false, nil
+	}
+
+	m.Records = merged
 	return true, h.writeManifest(m)
+}
+
+// mapsEqual reports whether a and b contain exactly the same keys and values.
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // writeManifest atomically writes the manifest to disk as one compact JSON

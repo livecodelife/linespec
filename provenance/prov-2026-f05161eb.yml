@@ -1,6 +1,6 @@
 id: prov-2026-f05161eb
 title: Restore docs content styling for pandoc-rendered HTML
-status: open
+status: implemented
 created_at: "2026-08-12"
 author: calebcowen@gmail.com
 intent: >
@@ -65,7 +65,7 @@ superseded_by: ""
 related:
   - prov-2026-a7b20513
   - prov-2026-054aadca
-sealed_at_sha: ""
+sealed_at_sha: bdd2ce693d0da77469e126c68d93ccf8a13cf774
 associated_specs:
   - type: code
     path: docs/assets/css/docs.css

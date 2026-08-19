@@ -643,7 +643,9 @@ linespec provenance compile -c /path/to/.linespec.yml
 **Options:**
 - `-c, --config path` - Use custom config
 
-**Idempotent:** If every record's hash already matches the stored manifest, no file is written and the command exits 0. Running `compile` when the manifest is missing or stale writes the full manifest covering every record.
+**Only sealed-lifecycle records are compiled:** `compile` recomputes hashes for exactly the records `complete` seals — status `implemented`, `superseded`, or `deprecated` — the same set `lint`'s **PROV-IMM** check verifies. Draft and open records are never given a manifest entry, because they are still being edited by definition and a hash sealed for them would immediately go stale; if the manifest already carries a spurious entry for one (e.g. left over from an older build), that entry is removed rather than refreshed. Records resolved from `shared_repos` are excluded the same way — the manifest describes only the records this config owns, and a remote record's hash is the remote repo's responsibility to seal.
+
+**Idempotent:** If every eligible record's hash already matches the stored manifest, no file is written and the command exits 0. Running `compile` when the manifest is missing or stale writes the manifest, merging into whatever is already on disk rather than replacing it wholesale — an entry for a record this invocation didn't load (e.g. a package-scoped `-c` run) is left untouched, so a partial run can never drop entries a fuller run would have kept.
 
 **Manifest path follows the config, not the repo root:** the manifest is written next to the resolved config's `provenance.dir` — for the default single-package layout that's `<repo root>/.linespec/hash_manifest.json`, same as before. Running `compile -c packages/foo/.linespec.yml` in a multi-package repo writes `packages/foo/.linespec/hash_manifest.json` instead, so a package-scoped compile can never clobber the root manifest (or another package's) with a partial record set.
 
@@ -1390,7 +1392,7 @@ Each hash is computed over `yaml.Marshal` of the record with `FilePath` cleared,
 - Reports an error for an implemented record with no entry in an otherwise **non-empty** manifest — once any record has been sealed, every implemented record is expected to have one, so a missing entry means a bad rebase/merge silently dropped it, not that the record predates the hash system
 - Reports an error when a record's current content hash does not match its stored hash (tampering after sealing)
 
-Run `linespec provenance compile` to recover a manifest with missing or stale entries — it recomputes every record's hash from scratch and rewrites the file if anything differs.
+Run `linespec provenance compile` to recover a manifest with missing or stale entries — it recomputes the hash of every implemented/superseded/deprecated record and merges any difference into the file (see [Compile](#compile) above).
 
 ### What is `sealed_at_sha`?
 

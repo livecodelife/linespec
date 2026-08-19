@@ -10,7 +10,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=1 go build -o linespec ./cmd/linespec
+# -X main.version mirrors the Makefile's LDFLAGS so the image reports the real
+# release instead of the ldflag-less default "vdev" (prov-2026-b9339a5a).
+RUN CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(cat VERSION)" -o linespec ./cmd/linespec
 
 FROM alpine:latest
 # libstdc++/libgcc back the cgo (go-tree-sitter) runtime dependencies.

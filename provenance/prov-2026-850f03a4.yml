@@ -1,0 +1,36 @@
+id: prov-2026-850f03a4
+title: "[erroneous, superseded in practice] Delete tracked linespec-beta binary and add /linespec-beta gitignore entry"
+status: deprecated
+created_at: "2026-08-13"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Created in error as an attempt to log an imprint for the linespec-beta
+  binary removal, originally with `implements: prov-2026-a0b6be6b` — an
+  illegal imprint-implements-bug relationship, since imprints may only
+  implement blueprint-type records. This record never performed the
+  binary removal or gitignore edit it describes: that work was done
+  directly under prov-2026-a0b6be6b (commit c685bca, "Remove tracked
+  linespec-beta binary and gitignore it [prov-2026-a0b6be6b]").
+
+  Deprecated rather than left dangling in draft, then reclassified from
+  `imprint` to a standalone `blueprint` with no `implements` value to
+  satisfy schema validation without fabricating a parent relationship.
+  This record governs nothing and is retained only as the historical
+  trail of the mistake; see prov-2026-a0b6be6b for the real change.
+constraints: []
+affected_scope:
+  - provenance/prov-2026-850f03a4.yml
+forbidden_scope: []
+type: blueprint
+implements: ""
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a0b6be6b
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - erroneous-record
+  - duplicate

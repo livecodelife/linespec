@@ -1,6 +1,6 @@
 id: prov-2026-b9339a5a
 title: "linespec build cross-compiles the Linux binary with CGO_ENABLED=0, so it fails with 'undefined: Node' since go-tree-sitter landed"
-status: open
+status: implemented
 created_at: "2026-08-13"
 author: calebcowen@gmail.com
 intent: |
@@ -59,6 +59,8 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - Dockerfile.linespec
+  - cmd/linespec/build_test.go
+  - cmd/linespec/build_integration_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-a6456485
@@ -67,11 +69,17 @@ superseded_by: ""
 related:
   - prov-2026-010bb9ec
   - prov-2026-ac156eb7
-sealed_at_sha: ""
+sealed_at_sha: 2f35f2551af87a2ce2bc0154902937262b1a4648
 associated_specs:
   - path: Dockerfile.linespec
     type: docker
     run_command: docker build -f {{path}} -t linespec:verify .
+  - path: cmd/linespec/build_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run 'TestBuildDoesNotHardcodeCGODisabled|TestFindLinespecSourceRoot' -v
+  - path: cmd/linespec/build_integration_test.go
+    type: go_test
+    run_command: go test -tags integration ./cmd/linespec/... -run TestDockerfileLinespecBuildsWithCGOAndRealVersion -v
 associated_traces: []
 monitors: []
 tags:
