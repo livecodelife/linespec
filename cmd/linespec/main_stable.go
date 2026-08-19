@@ -931,7 +931,17 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 	// Try to load from specified file if it exists
 	if data, err := os.ReadFile(filePath); err == nil {
 		var fullConfig config.LineSpecConfig
-		if err := yaml.Unmarshal(data, &fullConfig); err == nil && fullConfig.Provenance != nil {
+		unmarshalErr := yaml.Unmarshal(data, &fullConfig)
+		if unmarshalErr != nil {
+			// yaml.Unmarshal still populates fullConfig.Provenance with whatever
+			// decoded cleanly before the error (e.g. an unknown key rejected by
+			// EmbeddingConfig.UnmarshalYAML) — surface the error instead of
+			// silently discarding the whole provenance: section, which left
+			// unknown-key typos indistinguishable from "Embedding API not
+			// configured" (prov-2026-57aff9e1).
+			logger.Error("Failed to parse %s: %v", filePath, unmarshalErr)
+		}
+		if fullConfig.Provenance != nil {
 			// Get the directory containing the config file
 			configDir := filepath.Dir(filePath)
 
@@ -953,7 +963,11 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			cfg.ExcludePaths = fullConfig.Provenance.ExcludePaths
 			cfg.WriteRestriction = fullConfig.Provenance.WriteRestriction
 
-			if fullConfig.Provenance.Embedding != nil {
+			// Only trust Embedding when the unmarshal succeeded: on an unknown-key
+			// error, EmbeddingConfig.UnmarshalYAML leaves it a zero-value struct
+			// rather than nil, which would otherwise look "configured" with an
+			// empty provider.
+			if unmarshalErr == nil && fullConfig.Provenance.Embedding != nil {
 				cfg.Embedding = fullConfig.Provenance.Embedding
 			}
 		}
