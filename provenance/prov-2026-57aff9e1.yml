@@ -1,6 +1,6 @@
 id: prov-2026-57aff9e1
 title: 'provenance index: openai provider hardcodes api.openai.com, and -c/--config is ignored'
-status: open
+status: implemented
 created_at: "2026-08-19"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -80,7 +80,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: c5b4641677bf9b366f9e44e7e679332e9fc7705b
 associated_specs:
   - path: pkg/embeddings/base_url_test.go
     type: go_test
