@@ -1,0 +1,56 @@
+id: prov-2026-3113607c
+title: 'Deliberately revise prov-2026-f1241113''s main.version clause: the ldflag target moves, the guaranteed behaviour does not'
+status: draft
+created_at: "2026-08-19"
+author: calebcowen@gmail.com
+intent: |
+  prov-2026-f1241113 (Cobra migration, implemented) carries the constraint:
+  "The version command/flag must keep reading the main.version variable that
+  goreleaser injects via -ldflags \"-X main.version=...\" (and may surface
+  main.commit / main.date if present), so release builds still report the tag."
+
+  This record moves the injected variable to pkg/buildinfo.Version, so the
+  letter of that clause no longer holds. Recording it rather than letting it
+  pass silently, because a future reader diffing the two will otherwise think
+  the Cobra constraint was simply overlooked.
+
+  The clause states its own purpose — "so release builds still report the tag"
+  — and that guarantee is fully preserved. What changed is which symbol the -X
+  flag names; what did not change is that exactly one injected variable feeds
+  `--version`, that it comes from the release tag, and that an ldflag-less
+  build still falls back to Go build info. cmd/linespec/version_test.go's
+  precedence table passes unchanged, and resolveDisplayVersion still exists in
+  package main with its original signature specifically so that test keeps
+  covering the live path. Verified on both build paths that matter:
+  `make build && ./linespec --version` reports 3.18.0, and
+  `docker run --rm linespec:latest --version` reports 3.18.0 — the latter
+  matters because Dockerfile.linespec carries its own copy of the ldflag, and a
+  missed target there would have silently regressed the image to "vdev", the
+  exact symptom prov-2026-b9339a5a was filed for.
+
+  main.commit and main.date are untouched and still injected into package main;
+  only the version needed to be readable outside it.
+
+constraints: []
+affected_scope:
+  - pkg/buildinfo/buildinfo.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f57f1570
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-f1241113
+  - prov-2026-a4c289d2
+  - prov-2026-b9339a5a
+sealed_at_sha: ""
+associated_specs:
+  - path: cmd/linespec/version_test.go
+    type: go_test
+    run_command: make test
+associated_traces: []
+monitors: []
+tags:
+  - version
+  - constraint-revision
