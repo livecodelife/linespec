@@ -1,6 +1,6 @@
 id: prov-2026-30615ad3
 title: Local linespec:latest outranks the published image so source-checkout proxy changes are not silently ignored
-status: open
+status: implemented
 created_at: "2026-08-19"
 author: calebcowen@gmail.com
 intent: |
@@ -44,7 +44,7 @@ implements: prov-2026-f57f1570
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 018e4b656a6b8dc106f4efb5184904aaca7fd291
 associated_specs:
   - path: pkg/runner/proxy_image_test.go
     type: go_test
