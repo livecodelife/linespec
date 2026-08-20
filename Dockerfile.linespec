@@ -10,9 +10,11 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# -X main.version mirrors the Makefile's LDFLAGS so the image reports the real
-# release instead of the ldflag-less default "vdev" (prov-2026-b9339a5a).
-RUN CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(cat VERSION)" -o linespec ./cmd/linespec
+# The -X target mirrors the Makefile's LDFLAGS so the image reports the real
+# release instead of the ldflag-less default "vdev" (prov-2026-b9339a5a). It
+# points at pkg/buildinfo, the single home for the injected version
+# (prov-2026-f57f1570).
+RUN CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/livecodelife/linespec/v3/pkg/buildinfo.Version=$(cat VERSION)" -o linespec ./cmd/linespec
 
 FROM alpine:latest
 # libstdc++/libgcc back the cgo (go-tree-sitter) runtime dependencies.

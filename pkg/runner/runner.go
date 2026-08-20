@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/go-connections/nat"
+	"github.com/livecodelife/linespec/v3/pkg/buildinfo"
 	"github.com/livecodelife/linespec/v3/pkg/config"
 	"github.com/livecodelife/linespec/v3/pkg/docker"
 	"github.com/livecodelife/linespec/v3/pkg/dsl"
@@ -61,15 +62,15 @@ type persistentServiceContainers struct {
 }
 
 type TestSuite struct {
-	orch            *docker.DockerOrchestrator
-	networkName     string
-	dbHostPort      string
-	kafkaReady      bool
-	cwd             string
-	tempDir         string                            // Temp directory for shared files like schema cache
-	serviceConfigs  map[string]*config.LineSpecConfig // Discovered service configurations
-	containerNaming    *config.ContainerNaming           // Container naming configuration
-	sharedSchemaJSON []byte // Raw JSON schema written to per-test tempDir and passed to MySQL proxies via --schema-file
+	orch                 *docker.DockerOrchestrator
+	networkName          string
+	dbHostPort           string
+	kafkaReady           bool
+	cwd                  string
+	tempDir              string                            // Temp directory for shared files like schema cache
+	serviceConfigs       map[string]*config.LineSpecConfig // Discovered service configurations
+	containerNaming      *config.ContainerNaming           // Container naming configuration
+	sharedSchemaJSON     []byte                            // Raw JSON schema written to per-test tempDir and passed to MySQL proxies via --schema-file
 	persistentContainers map[string]*persistentServiceContainers
 	persistentMu         sync.Mutex
 }
@@ -1034,11 +1035,23 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	}
 	r.config = serviceConfig
 
-	// Resolve proxy image — configurable so teams can point at a private registry or
-	// a pinned version without rebuilding from source on every machine.
-	proxyImage := serviceConfig.Infrastructure.ProxyImage
-	if proxyImage == "" {
-		proxyImage = "linespec:latest"
+	// Resolve the proxy image and make sure it is on this machine before any
+	// sidecar tries to start. The image is published by release CI rather than
+	// built at install time, so the common path here is a pull on first use
+	// (prov-2026-f57f1570); see resolveProxyImage for the precedence.
+	proxyImage := resolveProxyImage(
+		serviceConfig.Infrastructure.ProxyImage,
+		buildinfo.Current(),
+		r.suite.orch.HasImage(ctx, LocalProxyImage),
+	)
+	if err := r.suite.orch.EnsureImage(ctx, proxyImage); err != nil {
+		return fmt.Errorf(
+			"could not obtain the protocol proxy image %q: %w\n"+
+				"Proxy sidecars cannot start without it. Check that Docker is running and "+
+				"that this machine can reach the registry, or point infrastructure.proxy_image "+
+				"in .linespec.yml at an image you already have",
+			proxyImage, err,
+		)
 	}
 
 	// Populate resolver with service environment variables
@@ -1251,12 +1264,12 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	var dbCleanupGuards []*bool
 
 	// Per-database state accumulated during the Databases loop.
-	dbProxies := make(map[string]string)    // db.Host → proxy container name
-	dbContainers := make(map[string]string) // db.Host → real DB container name
+	dbProxies := make(map[string]string)           // db.Host → proxy container name
+	dbContainers := make(map[string]string)        // db.Host → real DB container name
 	dbVerifyPortsByHost := make(map[string]string) // db.Host → verify sidecar port
 	dbHostPortsMap := make(map[string]string)      // db.Host → "localhost:port" of real DB
-	dbTypesMap := make(map[string]string)           // db.Host → "mysql"|"postgresql"|"mongodb"
-	var dbVerifyPortsList []string                  // ordered list for runTestPhase + proxy wait
+	dbTypesMap := make(map[string]string)          // db.Host → "mysql"|"postgresql"|"mongodb"
+	var dbVerifyPortsList []string                 // ordered list for runTestPhase + proxy wait
 
 	serviceDir := filepath.Base(serviceConfig.BaseDir)
 	if serviceConfig.Service.ServiceDir != "" {
@@ -1858,7 +1871,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		}
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: proxyImage,
-			Cmd: grpcProxyCmd,
+			Cmd:   grpcProxyCmd,
 			ExposedPorts: map[nat.Port]struct{}{
 				nat.Port(fmt.Sprintf("%d/tcp", grpcPort)): {},
 				nat.Port("8081/tcp"):                      {},
@@ -1911,10 +1924,10 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if p, ok := inspectGRPC.NetworkSettings.Ports[grpcNatPort]; ok && len(p) > 0 {
 				grpcHostPort = p[0].HostPort
 			}
-		if p, ok := inspectGRPC.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
-			grpcVerifyPort = p[0].HostPort
+			if p, ok := inspectGRPC.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+				grpcVerifyPort = p[0].HostPort
+			}
 		}
-	}
 	}
 
 	// Start Redis interceptor when infrastructure.redis is enabled.
@@ -2660,7 +2673,6 @@ type ColumnInfo struct {
 	Privileges string         `json:"Privileges"`
 	Comment    string         `json:"Comment"`
 }
-
 
 // fetchSchemaFromDatabase queries the real database for schema of specified tables
 func (s *TestSuite) fetchSchemaFromDatabase(ctx context.Context, tables []string, dbHost, dbPort, dbUser, dbPass, dbName string) (SchemaCache, error) {

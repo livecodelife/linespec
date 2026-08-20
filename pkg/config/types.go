@@ -294,7 +294,7 @@ type InfrastructureConfig struct {
 	Redis      bool   `yaml:"redis"`
 	GRPC       bool   `yaml:"grpc"`
 	ExternalDB bool   `yaml:"external_db"`  // Don't manage DB, service has its own
-	ProxyImage string `yaml:"proxy_image"`   // Docker image for protocol proxies (default: linespec:latest)
+	ProxyImage string `yaml:"proxy_image"`   // Docker image for protocol proxies (default: a locally built linespec:latest if present, else the published ghcr.io/livecodelife/linespec pinned to this binary's version)
 }
 
 // JobBackendConfig configures the backing store used to deliver jobs to the worker under test.

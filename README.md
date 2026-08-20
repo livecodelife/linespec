@@ -26,11 +26,9 @@ brew tap livecodelife/linespec
 brew install linespec
 ```
 
-The Homebrew formula automatically builds the `linespec:latest` Docker image after installation. If Docker was not running at install time, run it manually once Docker is started:
-
-```bash
-linespec build
-```
+No extra step is needed for LineSpec Testing. Protocol proxy sidecars run
+`ghcr.io/livecodelife/linespec`, pinned to your binary's version and pulled
+automatically the first time you run `linespec test`.
 
 ### Go Install
 
@@ -201,10 +199,7 @@ LineSpec Testing is a DSL-based integration testing framework for containerized 
 ### Commands
 
 ```bash
-# Build the linespec:latest Docker image (required for proxy sidecars)
-linespec build
-
-# Run integration tests
+# Run integration tests (the proxy image is pulled automatically on first use)
 linespec test <path-to-linespec-files>
 
 # Start protocol proxies
@@ -289,7 +284,7 @@ infrastructure:
   kafka: false
   grpc: false # Start a gRPC proxy sidecar
   redis: false # Start a Redis proxy sidecar
-  proxy_image: "linespec:latest" # Docker image for protocol proxies (default: linespec:latest)
+  proxy_image: "ghcr.io/livecodelife/linespec:3.18.0" # Override the proxy image (default: local linespec:latest if present, else the published image pinned to your version)
 
 # Protobuf descriptor set for gRPC binary protobuf mocks (optional)
 grpc_descriptor_set: proto/workflow.pb

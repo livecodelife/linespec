@@ -13,17 +13,25 @@ The goal of LineSpec is to:
 
 # Setup
 
-Before running `linespec test`, the `linespec:latest` Docker image must exist in your local Docker daemon. This image is used by all protocol proxy sidecars (PostgreSQL, MySQL, HTTP, Kafka, etc.).
+`linespec test` needs a proxy image — the one every protocol proxy sidecar runs
+(PostgreSQL, MySQL, HTTP, Kafka, etc.). You do not have to build or pull it
+yourself. LineSpec resolves it in this order and pulls it on first use:
 
-**Homebrew installs** build the image automatically during `brew install linespec`. If Docker was not running at install time, run:
+1. `infrastructure.proxy_image` from `.linespec.yml`, if you set one. Use this
+   for a private registry or to pin an image you mirror yourself.
+2. A local `linespec:latest`, if one exists. `linespec build` writes this tag
+   from a source checkout, so proxy changes you build locally take precedence
+   over the published image.
+3. `ghcr.io/livecodelife/linespec:<your linespec version>`, published by release
+   CI. This is the normal path, and it requires no setup beyond Docker running.
 
-```bash
-linespec build
-```
+This holds for every install method — Homebrew, `go install`, or a downloaded
+binary. `linespec build` is not part of installation; it exists only for testing
+unreleased proxy changes from a source checkout.
 
-**Go install / manual binary** installs must always run `linespec build` once after installation.
-
-If you see `Error response from daemon: No such image: linespec:latest`, run `linespec build` to fix it.
+If a pull fails, LineSpec reports the image reference it tried. Check that
+Docker is running and that the machine can reach `ghcr.io`, or set
+`infrastructure.proxy_image` to an image you already have.
 
 ---
 
@@ -1598,9 +1606,11 @@ infrastructure:
   grpc: false       # Start a gRPC proxy sidecar
   external_db: false  # true = don't manage the DB container; connect to host above
 
-  # Docker image used for protocol proxy sidecars.
-  # Default: linespec:latest
-  proxy_image: linespec:latest
+  # Docker image used for protocol proxy sidecars. Omit it to use the default
+  # resolution (local linespec:latest if present, else the published
+  # ghcr.io/livecodelife/linespec pinned to your linespec version). Set it to
+  # override both — e.g. a private registry mirror.
+  proxy_image: ghcr.io/livecodelife/linespec:3.18.0
 
 # ─────────────────────────────────────────────
 # Protobuf descriptor set (optional — gRPC)

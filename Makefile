@@ -5,7 +5,7 @@
 # from goreleaser's own -X ldflag; a plain `go install` falls back to the module
 # version embedded in build info (see resolveDisplayVersion).
 VERSION := $(shell cat VERSION)
-LDFLAGS := -s -w -X main.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/livecodelife/linespec/v3/pkg/buildinfo.Version=$(VERSION)
 
 # Run all unit tests (fast, no external dependencies)
 test:

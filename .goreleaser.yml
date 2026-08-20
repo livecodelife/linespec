@@ -32,7 +32,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+      - -s -w -X github.com/livecodelife/linespec/v3/pkg/buildinfo.Version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     ignore:
       - goos: windows
         goarch: arm64
@@ -61,7 +61,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+      - -s -w -X github.com/livecodelife/linespec/v3/pkg/buildinfo.Version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     ignore:
       - goos: windows
         goarch: arm64
@@ -174,12 +174,16 @@ brews:
       system "#{bin}/linespec", "provenance", "--help"
     install: |
       bin.install "linespec"
-    post_install: |
-      begin
-        system "#{bin}/linespec", "build"
-      rescue BuildError
-        opoo "Could not build linespec:latest Docker image. Docker may not be running. Run `linespec build` manually after starting Docker."
-      end
+    # No post_install hook. It used to run `linespec build` to produce the proxy
+    # image locally, which could not work from a Cellar install: on macOS the
+    # build needs a source checkout the formula does not have, and on Linux it
+    # staged a glibc-linked binary into an Alpine base, yielding an image that
+    # could not exec. The image is published by release CI instead and pulled on
+    # first use (prov-2026-f57f1570).
+    caveats: |
+      Protocol proxy sidecars run ghcr.io/livecodelife/linespec, pulled
+      automatically the first time you run `linespec test`. Set
+      infrastructure.proxy_image in .linespec.yml to use a different registry.
     # Only publish stable builds to the main formula
     ids:
       - linespec-stable

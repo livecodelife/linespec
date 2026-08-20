@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The protocol proxy image is now published to GHCR and pulled on demand, instead of being built at install time** ([prov-2026-f57f1570](./provenance/prov-2026-f57f1570.yml), [prov-2026-b41a7d5f](./provenance/prov-2026-b41a7d5f.yml), [prov-2026-30615ad3](./provenance/prov-2026-30615ad3.yml)) — release CI builds a multi-arch (`linux/amd64` + `linux/arm64`) image from `Dockerfile.linespec` and pushes it to `ghcr.io/livecodelife/linespec`, and `linespec test` pulls it automatically on first use. **Breaking for anyone who pinned `infrastructure.proxy_image: linespec:latest` explicitly**: that value is still honoured verbatim, but it now refers only to a locally built image, so pin the published reference (`ghcr.io/livecodelife/linespec:<version>`) instead unless you really do build locally. Leaving `proxy_image` unset needs no action.
+
+### Fixed
+
+- **Homebrew installs never produced a working `linespec:latest` image** ([prov-2026-f57f1570](./provenance/prov-2026-f57f1570.yml)) — the formula's `post_install` hook could not work on either platform, and both failure modes reached users. On macOS it always failed: `linespec build` needs a linespec source checkout, which a Cellar install does not have, and the formula misreported every occurrence as "Docker may not be running". On Linux it failed silently and worse — the hook staged the glibc-linked release binary into an Alpine (musl) base, producing an image whose binary could not exec, while `docker build` still exited 0. Neither was a 3.18.0 regression; the hook had been broken since `go-tree-sitter` entered the dependency graph. The hook is removed and the image is published from CI instead.
+- **`linespec build`'s off-checkout error no longer implies the command is a prerequisite** ([prov-2026-f57f1570](./provenance/prov-2026-f57f1570.yml)) — it now points at the published image and explains that `linespec build` exists only for testing unreleased proxy changes from a source checkout.
+
 ## [3.18.0] - 2026-08-19
 
 ### Fixed

@@ -51,12 +51,21 @@ func (d *DockerOrchestrator) PullImage(ctx context.Context, imageName string) er
 	return nil
 }
 
+// HasImage reports whether imageName is already present in the local Docker
+// image cache. A daemon-level failure is reported as "not present" — callers
+// use this to choose between images, and the subsequent pull or container
+// start surfaces the real daemon error with better context than this probe
+// could.
+func (d *DockerOrchestrator) HasImage(ctx context.Context, imageName string) bool {
+	_, _, err := d.cli.ImageInspectWithRaw(ctx, imageName)
+	return err == nil
+}
+
 // EnsureImage pulls imageName if it is not present in the local Docker image cache.
 // Call this explicitly for infrastructure images before starting their containers.
 // Do NOT call this for app/migration images — those must be built locally.
 func (d *DockerOrchestrator) EnsureImage(ctx context.Context, imageName string) error {
-	_, _, err := d.cli.ImageInspectWithRaw(ctx, imageName)
-	if err == nil {
+	if d.HasImage(ctx, imageName) {
 		return nil // already present
 	}
 	logger.Info("Image %s not found locally, pulling...", imageName)

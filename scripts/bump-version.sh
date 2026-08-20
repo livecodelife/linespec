@@ -46,7 +46,9 @@ for f in "${FILES[@]}"; do
     #   v<ver>          — prose, install commands, the "LineSpec v<ver>" title
     #   version-<ver>   — the shields.io badge (no leading "v")
     #   linespec_<ver>  — release artifact filenames (no leading "v")
-    perl -pi -e "s/v\Q$OLD\E/v$NEW/g; s/version-\Q$OLD\E/version-$NEW/g; s/linespec_\Q$OLD\E/linespec_$NEW/g" "$f"
+    #   linespec:<ver>  — published proxy image tags (no leading "v"; release CI
+    #                     strips it, so the docs must show the bare version)
+    perl -pi -e "s/v\Q$OLD\E/v$NEW/g; s/version-\Q$OLD\E/version-$NEW/g; s/linespec_\Q$OLD\E/linespec_$NEW/g; s/linespec:\Q$OLD\E/linespec:$NEW/g" "$f"
     echo "  updated $f"
   fi
 done

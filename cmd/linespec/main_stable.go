@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
+	"github.com/livecodelife/linespec/v3/pkg/buildinfo"
 	"github.com/livecodelife/linespec/v3/pkg/config"
 	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
 	"github.com/livecodelife/linespec/v3/pkg/discover/enrich"
@@ -52,13 +53,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// version is injected at build time via -X main.version (goreleaser and
-// `make build`). commit and date are likewise injected by goreleaser; they are
-// declared here so those -X ldflags are effective rather than silent no-ops.
+// commit and date are injected at build time by goreleaser; they are declared
+// here so those -X ldflags are effective rather than silent no-ops. The
+// version itself lives in pkg/buildinfo, not here: pkg/runner needs it too, to
+// pin the default proxy image to the release this binary was built from, and a
+// second injected variable could drift from this one (prov-2026-f57f1570).
 var (
-	version = "dev"
-	commit  = ""
-	date    = ""
+	commit = ""
+	date   = ""
 )
 
 // displayVersion is the version string rendered by `--version`. It is resolved
@@ -66,33 +68,14 @@ var (
 // binary's build info — so a plain `go install` (which applies no ldflags)
 // still reports the release it was built from instead of "dev".
 func displayVersion() string {
-	info, ok := debugpkg.ReadBuildInfo()
-	return resolveDisplayVersion(version, info, ok)
+	return buildinfo.Current()
 }
 
-// resolveDisplayVersion picks the best available version string. Preference:
-// an explicit ldflag value, then the build-info module version (with any
-// +dirty/local suffix stripped), then the raw ldflag, then "dev". The result is
-// returned without a leading "v" so the "LineSpec v{{.Version}}" template never
-// double-prints it (build info reports "v3.15.0" while the ldflag is bare).
-// Kept pure so it can be unit-tested without a real build info.
+// resolveDisplayVersion is a thin delegation to buildinfo.Resolve, kept in
+// package main so the version-precedence table in version_test.go continues to
+// exercise the path `--version` actually takes.
 func resolveDisplayVersion(ldflagVersion string, info *debugpkg.BuildInfo, infoOK bool) string {
-	if ldflagVersion != "" && ldflagVersion != "dev" {
-		return strings.TrimPrefix(ldflagVersion, "v")
-	}
-	if infoOK && info != nil {
-		v := info.Main.Version
-		if idx := strings.Index(v, "+"); idx >= 0 {
-			v = v[:idx]
-		}
-		if v != "" && v != "(devel)" {
-			return strings.TrimPrefix(v, "v")
-		}
-	}
-	if ldflagVersion != "" {
-		return strings.TrimPrefix(ldflagVersion, "v")
-	}
-	return "dev"
+	return buildinfo.Resolve(ldflagVersion, info, infoOK)
 }
 
 // buildMetadata returns the injected commit/date suffix for the version line,
@@ -413,9 +396,12 @@ func buildFromSourceCheckout(execPath string) error {
 			"cannot build linespec:latest outside a linespec source checkout: "+
 				"cross-compiling the Linux binary requires cgo (go-tree-sitter) "+
 				"enabled, which needs a Linux C toolchain unavailable when "+
-				"cross-compiling from %s.\nRun `linespec build` from within the "+
-				"linespec source directory instead",
-			runtime.GOOS,
+				"cross-compiling from %s.\n"+
+				"You probably do not need this command: proxy sidecars pull the "+
+				"published %s image automatically on first use. `linespec build` "+
+				"is only for testing unreleased proxy changes from a source "+
+				"checkout — run it from inside one",
+			runtime.GOOS, runner.PublishedProxyImageRepo,
 		)
 	}
 
