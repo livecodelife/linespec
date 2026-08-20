@@ -1,6 +1,6 @@
 id: prov-2026-f57f1570
 title: Publish the proxy image to GHCR instead of building it on install — Homebrew post_install cannot build linespec:latest on macOS and produces a broken image on Linux
-status: draft
+status: open
 created_at: "2026-08-19"
 author: calebcowen@gmail.com
 intent: |
@@ -81,9 +81,16 @@ constraints:
   - |
     The default proxy image MUST be pinned to the release version, not a
     floating :latest tag, so a given linespec binary always talks to the image
-    built from the same commit. Resolve the default from the same version
-    string the binary reports (main.version, set via ldflags), rather than
-    hardcoding a second copy of the version that can drift. The existing
+    built from the same commit. The version MUST have exactly one in-binary
+    source: `main.version` is currently private to package main and cannot be
+    read by pkg/runner, so move the injected value into a shared package
+    (pkg/buildinfo) and repoint every -X ldflag at it — Makefile:8,
+    .goreleaser.yml (both the linespec-stable and linespec-beta build ids), and
+    Dockerfile.linespec:15. Adding a second injected variable alongside
+    main.version is explicitly rejected: two ldflag targets can drift, which is
+    the failure this constraint exists to prevent. `linespec --version` MUST
+    keep reporting exactly what it reports today, and cmd/linespec/version_test.go
+    MUST continue to pass unchanged. The existing
     `infrastructure.proxy_image` override (prov-2026-557f393c,
     pkg/config/types.go:297) MUST keep taking precedence unchanged so teams on
     private registries and air-gapped CI are unaffected.
@@ -134,8 +141,12 @@ affected_scope:
   - .github/workflows/release.yml
   - .goreleaser.yml
   - Dockerfile.linespec
+  - Makefile
   - cmd/linespec/main_stable.go
+  - pkg/buildinfo/buildinfo.go
   - pkg/runner/runner.go
+  - pkg/runner/proxy_image.go
+  - pkg/runner/proxy_image_test.go
   - pkg/config/types.go
   - pkg/docker/orchestrator.go
   - README.md
@@ -151,7 +162,10 @@ related:
   - prov-2026-557f393c
   - prov-2026-336ba2a8
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/runner/proxy_image_test.go
+    type: go_test
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
