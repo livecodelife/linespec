@@ -1,0 +1,54 @@
+id: prov-2026-30615ad3
+title: Local linespec:latest outranks the published image so source-checkout proxy changes are not silently ignored
+status: draft
+created_at: "2026-08-19"
+author: calebcowen@gmail.com
+intent: |
+
+  The blueprint left the precedence between an explicit `proxy_image`, a
+  locally built linespec:latest, and the pinned published image as an open
+  decision. Settled as: explicit config > local image > pinned published.
+
+  Putting the local image second is the load-bearing part. The tempting
+  ordering — always prefer the pinned published image unless overridden — has a
+  bad failure mode for exactly the people most able to hit it: a developer
+  changing proxy code in a source checkout runs `linespec build`, reruns the
+  tests, and sees no change, because the published image for their version
+  silently won. That failure presents as "my proxy change did nothing", which
+  is far more expensive to debug than the alternative failure (a stale local
+  image being preferred), because nothing in the output names the image at all.
+  Preferring the local image inverts it: honouring linespec:latest is only ever
+  the result of someone deliberately running `linespec build`, so a stale local
+  image is a state the developer created and can clear.
+
+  Explicit `proxy_image` stays absolute, unchanged from
+  prov-2026-557f393c — private registries and air-gapped CI depend on it
+  winning outright, including over a local image that happens to be lying
+  around.
+
+  resolveProxyImage is pure, taking the local-image probe as a bool, so the
+  whole table is testable without a Docker daemon. One non-obvious case is
+  pinned: a version of "dev" (plain `go build`, no ldflags) maps to the
+  floating :latest tag rather than "ghcr.io/...:dev", a tag that will never
+  exist; TestProxyImageTagNeverRequestsDev guards it directly.
+
+constraints: []
+affected_scope:
+  - pkg/runner/proxy_image.go
+  - pkg/runner/proxy_image_test.go
+  - pkg/runner/runner.go
+  - pkg/docker/orchestrator.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f57f1570
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - docker
+  - precedence

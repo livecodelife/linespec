@@ -142,6 +142,7 @@ affected_scope:
   - .goreleaser.yml
   - Dockerfile.linespec
   - Makefile
+  - scripts/bump-version.sh
   - cmd/linespec/main_stable.go
   - pkg/buildinfo/buildinfo.go
   - pkg/runner/runner.go

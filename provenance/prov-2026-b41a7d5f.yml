@@ -1,0 +1,52 @@
+id: prov-2026-b41a7d5f
+title: Move the injected version into pkg/buildinfo rather than adding a second ldflag target
+status: draft
+created_at: "2026-08-19"
+author: calebcowen@gmail.com
+intent: |
+
+  The runner needs the binary's version to pin the default proxy image, but the
+  injected value lived in `main.version` — unreachable from pkg/runner, since
+  nothing can import package main.
+
+  Three options were on the table. Injecting a second variable (e.g.
+  pkg/runner.Version) alongside main.version was rejected outright: two -X
+  targets across four build systems (Makefile, both .goreleaser.yml build ids,
+  Dockerfile.linespec) is exactly the drift the blueprint's constraint forbids,
+  and the failure would be silent — a binary reporting 3.18.0 while asking the
+  registry for some other tag. Having the runner call debug.ReadBuildInfo()
+  itself was rejected too: it works for `go install` but not for the ldflag
+  path, where Main.Version is "(devel)" and the real version only exists in the
+  ldflag — so released binaries, the ones that matter here, would get it wrong.
+
+  Chose to move the injected variable into a new pkg/buildinfo and repoint all
+  four ldflags at it. The version-resolution logic moved with it as
+  buildinfo.Resolve, and main's resolveDisplayVersion became a one-line
+  delegation. Keeping that symbol with its original signature was deliberate:
+  cmd/linespec/version_test.go's eight-case precedence table then keeps passing
+  unchanged and keeps covering the path `--version` actually takes, so the move
+  is provably behaviour-preserving rather than merely believed to be. Verified
+  end to end: `make build && ./linespec --version` reports 3.18.0 through the
+  new target.
+
+constraints: []
+affected_scope:
+  - pkg/buildinfo/buildinfo.go
+  - cmd/linespec/main_stable.go
+  - Makefile
+  - .goreleaser.yml
+  - Dockerfile.linespec
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f57f1570
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - version
+  - build
+  - refactor
