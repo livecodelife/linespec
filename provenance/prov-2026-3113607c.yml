@@ -1,6 +1,6 @@
 id: prov-2026-3113607c
 title: 'Deliberately revise prov-2026-f1241113''s main.version clause: the ldflag target moves, the guaranteed behaviour does not'
-status: draft
+status: open
 created_at: "2026-08-19"
 author: calebcowen@gmail.com
 intent: |
