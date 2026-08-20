@@ -1,0 +1,162 @@
+id: prov-2026-f57f1570
+title: Publish the proxy image to GHCR instead of building it on install — Homebrew post_install cannot build linespec:latest on macOS and produces a broken image on Linux
+status: draft
+created_at: "2026-08-19"
+author: calebcowen@gmail.com
+intent: |
+  No Homebrew user has a working linespec:latest image. The proxy sidecars
+  require one (pkg/runner/runner.go:1041 defaults to it), so `linespec test`
+  against any project with a database dependency fails at container start with
+  "No such image: linespec:latest". prov-2026-0e5c82e4 addressed this by having
+  the GoReleaser-generated formula call `linespec build` from post_install.
+  That hook no longer works on either platform, and the two failure modes are
+  different:
+
+  macOS — always fails, loudly. runBuild (cmd/linespec/main_stable.go:362)
+  takes the non-Linux branch into buildFromSourceCheckout, which locates the
+  source tree via findLinespecSourceRoot: walk up from the process cwd, then up
+  from the resolved executable directory, looking for a go.mod declaring
+  `module github.com/livecodelife/linespec/v3`. Under `brew post_install`
+  neither base is inside a checkout — the executable lives in
+  /opt/homebrew/Cellar/linespec/<version>/bin, and Homebrew runs post_install
+  from its own working directory rather than the user's shell cwd. Confirmed
+  empirically on 3.17.0 -> 3.18.0: `brew upgrade linespec` invoked with the
+  shell sitting inside this checkout still failed, so the cwd probe cannot
+  rescue the case. The formula rescues BuildError and emits
+  "Could not build linespec:latest Docker image. Docker may not be running.",
+  which misdiagnoses every occurrence — Docker's state is irrelevant, the build
+  never reaches Docker.
+
+  Linux — silently produces an image that cannot execute. runBuild takes
+  buildFromHostBinary, which copies the installed binary into a generated
+  `FROM alpine:latest` + ca-certificates image. The released Linux binary is
+  cgo-enabled and glibc-linked; `file` on the v3.18.0 linux_amd64 artifact
+  reports "dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2".
+  Alpine is musl and ships no such interpreter, so the binary fails to exec
+  inside the container. Contrast Dockerfile.linespec, which compiles inside
+  golang:1.23-alpine with build-base and ships libstdc++ in its runtime stage —
+  the generated Dockerfile does neither. `docker build` still exits 0, so
+  post_install reports success and the breakage only surfaces later as a proxy
+  sidecar that dies on startup.
+
+  This is not a 3.18.0 regression. The pre-3.18.0 implementation cross-compiled
+  with CGO_ENABLED=0 and broke the moment go-tree-sitter entered the dependency
+  graph via pkg/discover — that is prov-2026-b9339a5a. That record fixed the
+  local story (build from a source checkout, via Dockerfile.linespec) and
+  replaced the "undefined: Node" wall with an actionable message, but nothing
+  restored the Homebrew path: the new message tells Cellar-installed users to
+  run `linespec build` from the linespec source directory, which is not
+  something a binary-install user has. README.md's "run it manually once Docker
+  is started" guidance fails for the same reason.
+
+  The root problem is that building a Linux container image is being asked of
+  the client at install time. It needs a Linux C toolchain (cgo/tree-sitter),
+  a running Docker daemon, and — on macOS — a source checkout that a Homebrew
+  install by definition does not have. Publish the image from CI instead, where
+  all three already hold and Dockerfile.linespec already builds it correctly.
+  Release CI tags and pushes a multi-arch (linux/amd64 + linux/arm64) image to
+  ghcr.io/livecodelife/linespec, the runner defaults to a version-pinned
+  reference and pulls it on demand, and the formula stops trying to build
+  anything. `linespec build` stays for source checkouts and local development
+  against unreleased changes; it is no longer on the install path.
+constraints:
+  - |
+    A fresh `brew install linespec` on macOS (arm64 and Intel) and on Linux
+    MUST leave the user able to run `linespec test` against a project with a
+    database dependency without any manual image step, with Docker running but
+    no linespec source checkout present anywhere on the machine. This is the
+    acceptance test for the whole record — reproduce it against the published
+    tap, not against a local build.
+  - |
+    The published image MUST be multi-arch, covering linux/amd64 and
+    linux/arm64, and MUST be built from Dockerfile.linespec so the in-image
+    binary is compiled under CGO_ENABLED=1 against musl inside the
+    golang:1.23-alpine builder stage. Staging a host-built or
+    GoReleaser-produced binary into an Alpine base MUST NOT be reintroduced on
+    any path: that is exactly the glibc-interpreter breakage described above.
+    Verify by running `linespec --version` inside the pulled image on both
+    architectures and asserting it reports the real release version rather than
+    failing to exec — cmd/linespec/build_integration_test.go already asserts
+    the ldflag-stamped version and is the model for this check.
+  - |
+    The default proxy image MUST be pinned to the release version, not a
+    floating :latest tag, so a given linespec binary always talks to the image
+    built from the same commit. Resolve the default from the same version
+    string the binary reports (main.version, set via ldflags), rather than
+    hardcoding a second copy of the version that can drift. The existing
+    `infrastructure.proxy_image` override (prov-2026-557f393c,
+    pkg/config/types.go:297) MUST keep taking precedence unchanged so teams on
+    private registries and air-gapped CI are unaffected.
+  - |
+    A locally built linespec:latest MUST still be honoured for source-checkout
+    development, so a developer testing unreleased proxy changes is not
+    silently served a stale published image. Decide and document the precedence
+    between an explicit proxy_image, a locally present image, and the pinned
+    published default — and cover that precedence with a test, since getting it
+    backwards means local proxy changes appear to have no effect.
+  - |
+    The image pull MUST fail with an actionable message naming the image
+    reference and the proxy_image override when the registry is unreachable,
+    the image is missing, or the daemon is not running. pkg/docker/orchestrator.go:45
+    already calls ImagePull; the failure path is what needs to carry the
+    diagnosis. The current "No such image: linespec:latest" raw daemon error
+    is the anti-pattern being replaced.
+  - |
+    The GoReleaser brew template MUST stop emitting a post_install hook that
+    runs `linespec build`. Leaving it in place, even as a best-effort attempt,
+    preserves the misleading "Docker may not be running" warning on every macOS
+    install and the broken-image outcome on Linux.
+  - |
+    The image publish MUST run on a Linux runner with a Docker daemon, not on
+    the existing macos-latest release job (.github/workflows/release.yml:46),
+    which has no daemon and cannot drive buildx. Sequence it so a release that
+    ships binaries but fails to publish the image is not left half-done — a
+    binary whose pinned default image does not exist in the registry is worse
+    than the status quo, because the failure moves from install time to every
+    subsequent test run.
+  - |
+    `linespec build` MUST continue to work from a source checkout exactly as
+    prov-2026-b9339a5a left it, and its off-checkout error message MUST be
+    updated to stop implying that building is a prerequisite for normal use —
+    it should point at the published image instead. cmd/linespec/build_test.go
+    and cmd/linespec/build_integration_test.go MUST continue to pass.
+  - |
+    make test must pass, and the four examples/*-linespecs suites must pass,
+    since this changes which image every proxy sidecar runs.
+  - |
+    README.md (the install section that currently promises the formula builds
+    the image automatically, and the `linespec build` step) and LINESPEC.md
+    (the prerequisite section stating the image must exist locally before
+    `linespec test`, and the proxy_image reference) MUST be updated to describe
+    the pull-based flow. Both are pandoc sources for the published site — edit
+    the Markdown only, never the generated docs/*.html.
+affected_scope:
+  - .github/workflows/release.yml
+  - .goreleaser.yml
+  - Dockerfile.linespec
+  - cmd/linespec/main_stable.go
+  - pkg/runner/runner.go
+  - pkg/config/types.go
+  - pkg/docker/orchestrator.go
+  - README.md
+  - LINESPEC.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-0e5c82e4
+  - prov-2026-b9339a5a
+  - prov-2026-557f393c
+  - prov-2026-336ba2a8
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - docker
+  - homebrew
+  - release
+  - proxy
+  - install
