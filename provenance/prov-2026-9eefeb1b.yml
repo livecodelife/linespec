@@ -1,0 +1,59 @@
+id: prov-2026-9eefeb1b
+title: Self-describing header for embeddings.bin width detection
+status: implemented
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Implements prov-2026-0f3c349b. embeddings.bin has no header today, so
+  Store.ReadAll can't know how many float32s constitute one record without
+  being told externally. Rather than adding a required config field, the
+  store now writes an 8-byte header (4-byte magic "LSE1" + little-endian
+  uint32 width) before the records whenever it has at least one record; a
+  store left with zero records (all deleted) is written back as a 0-byte
+  file, so it has no established width to preserve, matching the record's
+  constraint that only a store with records has a width worth keeping.
+
+  Backward compatibility: a pre-existing embeddings.bin has no header at
+  all (the old code always requested and stored 2048-dim Voyage vectors).
+  Detection is by peeking the first 4 bytes: if they equal the magic, it's
+  a new-format file and the width follows; otherwise it's a headerless
+  legacy file and the width is assumed to be 2048 (the only width the old
+  hardcoded implementation could ever have written). Collision risk is
+  negligible — a legacy file's first 4 bytes are the little-endian uint32
+  length of a record ID string (tens, not the ~830M value "LSE1" decodes
+  to), so a legacy file can never be misread as having a header.
+
+  Store.Write establishes the width from the first vector it's ever given
+  (via establishedDimension(), which peeks the file without decoding
+  records) when no width is established yet, and otherwise validates the
+  incoming vector against the established width exactly as before. This
+  keeps the dimension-mismatch error behavior unchanged while removing the
+  need for any caller (commands.go) to supply the width up front.
+constraints:
+  - The header write and the legacy-detection peek must not change
+    Store.ReadAll's return value for callers that already treat s.dim as
+    fixed (SetDimension) — the header is transparently skipped when
+    present.
+  - A store.Write or store.Find against an established width must still
+    return a "dimension mismatch" error on mismatch, unchanged from before
+    this record.
+affected_scope:
+  - pkg/embeddings/store.go
+  - pkg/embeddings/store_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: prov-2026-0f3c349b
+related:
+  - prov-2026-0f3c349b
+sealed_at_sha: fa2bbc2a7a13442977c5075971061bce9b720726
+associated_specs:
+  - path: pkg/embeddings/store_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - storage-format

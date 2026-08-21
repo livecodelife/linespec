@@ -1172,6 +1172,16 @@ provenance:
     api_key: not-needed-locally     # Still required; send any non-empty value your server accepts
 ```
 
+The local embedding store doesn't assume a fixed vector width: the first vector
+ever written to `.linespec/embeddings.bin` establishes the width for that store,
+whatever your model actually produces (768 for `nomic-embed-text-v1.5`, 1024 for
+`Qwen3-Embedding-0.6B`/`bge-large`, 384 for `all-MiniLM-L6-v2`, or anything else),
+and that width is persisted in the file so later `index`/`search`/`audit`/`complete`
+runs read it back automatically. Mixing widths in one index is not supported —
+if you switch `provider`, `index_model`, or embedding server to one with a
+different output width, delete `.linespec/embeddings.bin` and re-run `linespec
+provenance index` to rebuild it at the new width.
+
 **Configuration Options:**
 
 | Option | Type | Default | Description |

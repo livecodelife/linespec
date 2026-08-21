@@ -1269,7 +1269,6 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to generate embedding for %s: %v\n", record.ID, err)
 		} else {
 			store := embeddings.NewStore(c.RepoRoot)
-			store.SetDimension(c.Embedder.Dimension())
 			err := store.Write(embeddings.RecordEmbedding{
 				RecordID: record.ID,
 				Vector:   vector,
@@ -2979,7 +2978,6 @@ func (c *Commands) Search(opts SearchOptions) error {
 
 	// Search the store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(queryVector, opts.Limit)
 	if err != nil {
@@ -3073,7 +3071,6 @@ func (c *Commands) Audit(opts AuditOptions) error {
 
 	// Search for similar records
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(descVector, 5)
 	if err != nil {
@@ -3166,7 +3163,6 @@ func (c *Commands) Index(opts IndexOptions) error {
 
 	// Initialize embedding store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	// Get all implemented records
 	var toIndex []*Record
@@ -3239,9 +3235,13 @@ func (c *Commands) Index(opts IndexOptions) error {
 		successCount++
 	}
 
+	glyph := "✓"
+	if successCount == 0 && failCount > 0 {
+		glyph = "✗"
+	}
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
-	fmt.Fprintf(os.Stdout, "✓ Indexing complete: %d succeeded, %d failed\n", successCount, failCount)
+	fmt.Fprintf(os.Stdout, "%s Indexing complete: %d succeeded, %d failed\n", glyph, successCount, failCount)
 	fmt.Fprintln(os.Stdout, "")
 
 	if failCount > 0 {

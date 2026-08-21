@@ -133,50 +133,6 @@ func TestClientIsConfigured(t *testing.T) {
 	}
 }
 
-func TestClientDimension(t *testing.T) {
-	tests := []struct {
-		name     string
-		client   *Client
-		expected int
-	}{
-		{
-			name:     "nil client",
-			client:   nil,
-			expected: 2048, // default
-		},
-		{
-			name: "voyage-4-large index model",
-			client: &Client{
-				config: config.EmbeddingConfig{IndexModel: "voyage-4-large"},
-			},
-			expected: 2048,
-		},
-		{
-			name: "voyage-4-lite query model",
-			client: &Client{
-				config: config.EmbeddingConfig{QueryModel: "voyage-4-lite"},
-			},
-			expected: 2048,
-		},
-		{
-			name: "default",
-			client: &Client{
-				config: config.EmbeddingConfig{},
-			},
-			expected: 2048,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.client.Dimension()
-			if result != tt.expected {
-				t.Errorf("Dimension() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestClientSimilarityThreshold(t *testing.T) {
 	tests := []struct {
 		name     string

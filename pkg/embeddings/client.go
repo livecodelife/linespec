@@ -14,9 +14,8 @@ import (
 
 // Client generates embeddings via a configured API
 type Client struct {
-	config     config.EmbeddingConfig
-	apiKey     string
-	defaultDim int
+	config config.EmbeddingConfig
+	apiKey string
 }
 
 // NewClient creates a new embedding client from configuration
@@ -42,9 +41,8 @@ func NewClient(cfg config.EmbeddingConfig) (*Client, error) {
 	}
 
 	return &Client{
-		config:     cfg,
-		apiKey:     apiKey,
-		defaultDim: 2048, // Default for voyage-4-large and voyage-4-lite at 2048 dims
+		config: cfg,
+		apiKey: apiKey,
 	}, nil
 }
 
@@ -85,14 +83,6 @@ func (c *Client) GenerateQuery(text string) ([]float32, error) {
 	default:
 		return nil, fmt.Errorf("unsupported embedding provider: %s", c.config.Provider)
 	}
-}
-
-// Dimension returns the embedding dimension (2048 for both voyage-4-large and voyage-4-lite)
-func (c *Client) Dimension() int {
-	if c == nil {
-		return 2048 // default dimension for both models at 2048 dims
-	}
-	return 2048
 }
 
 // SimilarityThreshold returns the configured similarity threshold
