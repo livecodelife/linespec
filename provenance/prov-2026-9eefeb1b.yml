@@ -1,6 +1,6 @@
 id: prov-2026-9eefeb1b
 title: Self-describing header for embeddings.bin width detection
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -47,7 +47,7 @@ superseded_by: ""
 implements: prov-2026-0f3c349b
 related:
   - prov-2026-0f3c349b
-sealed_at_sha: ""
+sealed_at_sha: fa2bbc2a7a13442977c5075971061bce9b720726
 associated_specs:
   - path: pkg/embeddings/store_test.go
     type: go_test
