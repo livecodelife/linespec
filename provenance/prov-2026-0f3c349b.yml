@@ -1,0 +1,114 @@
+id: prov-2026-0f3c349b
+title: 'provenance index: stored vector width is hardcoded to 2048, so base_url still can''t reach most local embedders'
+status: open
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Follow-up to #189/prov-2026-57aff9e1 (base_url support for OpenAI-compatible
+  embedding servers). The transport now reaches local embedders, but
+  `linespec provenance index` still rejects every result at the storage
+  layer: `pkg/embeddings/client.go`'s `Client.Dimension()` hardcodes 2048
+  (voyage-4-large/voyage-4-lite's width) regardless of provider or model, and
+  `pkg/embeddings/store.go`'s `Store` is handed that value via `SetDimension`
+  before any vector has ever been written. Every `openai`-provider local
+  model (nomic-embed-text-v1.5 at 768, Qwen3-Embedding-0.6B at 1024,
+  all-MiniLM-L6-v2 at 384, bge-large at 1024, Qwen3-Embedding-4B at 2560,
+  Qwen3-Embedding-8B/e5-mistral-7b at 4096) fails every `store.Write`/
+  `store.Find` call with "vector dimension mismatch: got <N>, expected 2048",
+  so `base_url` is reachable but not yet usable for anything but a server
+  that happens to emit exactly 2048-dimensional vectors.
+
+  Replace the hardcoded 2048 assumption with a width derived from the actual
+  embedding vectors flowing through the store, persisted so it survives
+  across process invocations (index, search, audit, complete all open a
+  fresh `Store` per command). At every current call site
+  (`pkg/provenance/commands.go`: `Complete`, `Index`, `Search`, `Audit`) the
+  real vector is already in hand before `store.SetDimension(c.Embedder.Dimension())`
+  is called, so `Client.Dimension()`'s hardcoded return value is redundant
+  with — and currently contradicts — the vector that's about to be
+  written/queried. The store's on-disk format
+  (`.linespec/embeddings.bin`) has no header and no per-record vector-length
+  field; `Store.dim` is the only thing that lets `ReadAll` know how many
+  float32s to decode per record, so the persisted width must live in the
+  file itself (or equivalent self-describing metadata) rather than being
+  re-derived by an external caller on every run.
+
+  Also fix the adjacent minor issue reported in the same ticket: `linespec
+  provenance index`'s summary line prints "✓ Indexing complete: 0 succeeded,
+  N failed" — a checkmark on a run that stored nothing. The command already
+  returns a non-nil error when `failCount > 0` (which `cmd/linespec/cli.go`
+  turns into `os.Exit(1)`), so only the glyph is wrong, not the exit code;
+  use "✗" instead of "✓" when `successCount == 0 && failCount > 0`.
+constraints:
+  - The expected vector width must never be a hardcoded constant in
+    `pkg/embeddings/client.go` or `pkg/embeddings/store.go`. It must be
+    derived from an actual embedding vector (the first one written to a
+    given store) and must not assume any particular provider or model.
+  - The chosen width must be persisted as part of `.linespec/embeddings.bin`
+    (or equivalent on-disk metadata next to it) so that a fresh `Store`
+    opened in a later process (a later `index` run, `search`, `audit`, or
+    `complete`) reads the same width back without needing the caller to
+    supply it, and so `Store.ReadAll` can always determine how many
+    float32s constitute one record without an externally-supplied `dim`.
+  - A `store.Write` or `store.Find` call whose vector length does not match
+    the store's established width MUST still fail with a clear dimension
+    mismatch error, exactly as today. Silently truncating, padding, or
+    re-indexing at a new width is out of scope — mixing widths in one index
+    is corruption, and the fix must not paper over that.
+  - An empty/nonexistent `.linespec/embeddings.bin` has no established width
+    yet; the first successful `store.Write` against it establishes the
+    width for that store going forward (whatever the actual vector's length
+    is), without requiring any new required config field.
+  - Existing `.linespec/embeddings.bin` files written under the old
+    implicit-2048 assumption must keep working for stores that are in fact
+    2048-wide (i.e. existing Voyage-backed indexes must not need a manual
+    rebuild). A store containing zero records has no established width to
+    preserve.
+  - "`pkg/embeddings/client.go`'s `Client.Dimension()` method (or its
+    remaining callers in `pkg/provenance/commands.go`) must not be the
+    mechanism that determines what width is accepted at storage time. Any
+    remaining use of `Dimension()` must not reintroduce a hardcoded
+    provider-specific constant as the source of truth for what the store
+    accepts."
+  - "`linespec provenance index`'s summary line must print \"✗\" (not \"✓\")
+    when `successCount == 0 && failCount > 0`. The existing non-zero exit
+    behavior (`failCount > 0` returning an error, which `cmd/linespec/cli.go`
+    turns into `os.Exit(1)`) must be preserved, not reworked."
+  - No change may alter the existing behavior for the `voyage` provider,
+    which continues to request and receive 2048-dimensional vectors from
+    voyage-4-large/voyage-4-lite.
+affected_scope:
+  - pkg/embeddings/store.go
+  - pkg/embeddings/client.go
+  - pkg/embeddings/store_test.go
+  - pkg/embeddings/client_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/index_config_test.go
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-57aff9e1
+  - prov-2026-684303c3
+  - prov-2026-7136e8c4
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/store_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: pkg/embeddings/client_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: cmd/linespec/index_config_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - semantic-search
+  - bugfix
+  - local-embedders
