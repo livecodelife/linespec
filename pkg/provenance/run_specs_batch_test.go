@@ -99,7 +99,7 @@ func TestRunRecordSpecs_BatchesConsecutiveSameRunnerEntries(t *testing.T) {
 	cmds := &Commands{}
 	var ran, failed bool
 	captureStdout(t, func() {
-		ran, failed = cmds.runRecordSpecs(record, nil)
+		ran, failed, _ = cmds.runRecordSpecs(record, nil)
 	})
 
 	if !ran {
@@ -248,7 +248,7 @@ func TestRunRecordSpecs_BatchFailureLocalizesPerPath(t *testing.T) {
 	cmds := &Commands{}
 	var failed bool
 	stdout := captureStdout(t, func() {
-		_, failed = cmds.runRecordSpecs(record, nil)
+		_, failed, _ = cmds.runRecordSpecs(record, nil)
 	})
 
 	if !failed {
@@ -318,7 +318,7 @@ func TestRunRecordSpecs_BatchOnlyFailureIsNotMasked(t *testing.T) {
 	cmds := &Commands{}
 	var ran, failed bool
 	stdout := captureStdout(t, func() {
-		ran, failed = cmds.runRecordSpecs(record, nil)
+		ran, failed, _ = cmds.runRecordSpecs(record, nil)
 	})
 
 	if !ran {
@@ -359,7 +359,7 @@ func TestRunRecordSpecs_SeenDedupKeyIndependentOfBatching(t *testing.T) {
 	seen := map[string]bool{}
 
 	captureStdout(t, func() {
-		ran, failed := cmds.runRecordSpecs(recordA, seen)
+		ran, failed, _ := cmds.runRecordSpecs(recordA, seen)
 		if !ran || failed {
 			t.Errorf("record A: ran=%v failed=%v, want ran=true failed=false", ran, failed)
 		}
@@ -374,7 +374,7 @@ func TestRunRecordSpecs_SeenDedupKeyIndependentOfBatching(t *testing.T) {
 	}
 
 	stdoutB := captureStdout(t, func() {
-		ran, failed := cmds.runRecordSpecs(recordB, seen)
+		ran, failed, _ := cmds.runRecordSpecs(recordB, seen)
 		if !ran {
 			t.Error("record B: expected ran=true even though its only spec was already verified")
 		}
