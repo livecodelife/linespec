@@ -3175,13 +3175,14 @@ func (c *Commands) Index(opts IndexOptions) error {
 		if !opts.Force {
 			exists, err := store.Exists(record.ID)
 			if err != nil {
-				// If the store file doesn't exist yet, treat as not indexed
+				// If the store file doesn't exist yet, treat as not indexed. Any
+				// other error (e.g. a corrupt/desynced store) must not silently
+				// drop the record from toIndex — that's what let a wedged store
+				// masquerade as "fully indexed": surface it and retry instead.
 				if !os.IsNotExist(err) {
-					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v\n", record.ID, err)
-					continue
+					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v — will retry indexing\n", record.ID, err)
 				}
-			}
-			if exists {
+			} else if exists {
 				continue
 			}
 		}
