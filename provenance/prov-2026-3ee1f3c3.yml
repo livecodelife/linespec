@@ -1,9 +1,9 @@
 id: prov-2026-3ee1f3c3
 title: run-specs invokes the runner once per spec entry, paying a full framework boot each time (1.7x on a 3-spec record)
-status: draft
-created_at: "2026-08-12"
+status: open
+created_at: '2026-08-12'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
-intent: |
+intent: |-
   Fix reported against GitHub issue #177: `linespec provenance run-specs`
   (RunSpecs -> runRecordSpecs -> buildSpecCommand in pkg/provenance/commands.go)
   invokes the runner once per associated_specs entry, so a record with N specs
@@ -35,65 +35,26 @@ intent: |
   check in completeRecord/runComplete use runRecordSpecs, so both benefit) —
   it does not need to merge specs across different records.
 constraints:
-  - Consecutive associated_specs entries in one record whose effective command
-    is identical (same auto-run type with no run_command, or the same
-    run_command string with no `{{path}}` placeholder) MUST be executed as one
-    process with all their paths appended, not one process per entry.
-  - Entries are grouped only when adjacent in associated_specs order; a
-    same-command entry separated from another by a different-command entry
-    MUST NOT be pulled into that other group's invocation (no reordering of
-    execution, so any real command-order dependency in a record's own list is
-    preserved).
-  - Any associated_specs entry whose run_command contains the literal
-    `{{path}}` placeholder MUST remain a standalone, one-invocation-per-entry
-    execution exactly as today (per-path substitution has no multi-path form),
-    and MUST NOT be merged with neighboring entries even if their un-
-    substituted run_command text matches.
-  - A record with a single spec, or with no two consecutive specs sharing an
-    effective command, MUST produce the exact same shell command(s) as before
-    this change — buildSpecCommand's existing per-type and per-run_command
-    output (verified by TestBuildSpecCommand_KnownTypes and
-    TestBuildSpecCommand_RunCommand in run_specs_test.go) MUST NOT regress.
-  - Per-entry ✓/✗ reporting in run-specs output MUST be preserved at the same
-    granularity as today (one line per associated_specs path) even when
-    multiple paths ran as one batched process — either by attributing each
-    runner's own per-file pass/fail results back to the originating paths, or
-    by re-running a failed group's paths individually to localize the
-    failure, so a batched failure is not reported as an undifferentiated
-    failure across every path in the group.
-  - A failure anywhere in a batched invocation MUST still cause runRecordSpecs
-    to report `failed = true` for the record, exactly as a single failing spec
-    does today — grouping must not let one entry's failure be masked by
-    others in the same batch appearing to pass at the record level.
-  - The `seen` de-duplication map used by the completion-time overlap-teeth
-    loop (commands.go, the `seen[cmdStr]` check that keeps a shared proof like
-    `make test` from re-running once per touched record) MUST continue to
-    avoid re-executing a spec path already verified earlier in the same
-    completion, even though the command string a path is keyed under can now
-    depend on which other paths happened to batch with it.
-  - No change to the RunSpecsOptions/RunSpecs public signature or the
-    `run-specs` CLI flags (cmd/linespec/cli.go) is required or in scope — this
-    is an internal execution-strategy change under buildSpecCommand /
-    runRecordSpecs, not a new command surface.
-  - Must not require Docker or the actual rspec/pytest/jest/bundle toolchains
-    to be installed to verify correctness — the grouping/command-construction
-    logic must be unit-testable in Go (as buildSpecCommand already is), with
-    execution-path tests (if any) driven by fake shell commands rather than
-    real external test runners.
+  - Consecutive associated_specs entries in one record whose effective command is identical (same auto-run type with no run_command, or the same run_command string with no `{{path}}` placeholder) MUST be executed as one process with all their paths appended, not one process per entry.
+  - Entries are grouped only when adjacent in associated_specs order; a same-command entry separated from another by a different-command entry MUST NOT be pulled into that other group's invocation (no reordering of execution, so any real command-order dependency in a record's own list is preserved).
+  - Any associated_specs entry whose run_command contains the literal `{{path}}` placeholder MUST remain a standalone, one-invocation-per-entry execution exactly as today (per-path substitution has no multi-path form), and MUST NOT be merged with neighboring entries even if their un- substituted run_command text matches.
+  - A record with a single spec, or with no two consecutive specs sharing an effective command, MUST produce the exact same shell command(s) as before this change — buildSpecCommand's existing per-type and per-run_command output (verified by TestBuildSpecCommand_KnownTypes and TestBuildSpecCommand_RunCommand in run_specs_test.go) MUST NOT regress.
+  - Per-entry ✓/✗ reporting in run-specs output MUST be preserved at the same granularity as today (one line per associated_specs path) even when multiple paths ran as one batched process — either by attributing each runner's own per-file pass/fail results back to the originating paths, or by re-running a failed group's paths individually to localize the failure, so a batched failure is not reported as an undifferentiated failure across every path in the group.
+  - A failure anywhere in a batched invocation MUST still cause runRecordSpecs to report `failed = true` for the record, exactly as a single failing spec does today — grouping must not let one entry's failure be masked by others in the same batch appearing to pass at the record level.
+  - The `seen` de-duplication map used by the completion-time overlap-teeth loop (commands.go, the `seen[cmdStr]` check that keeps a shared proof like `make test` from re-running once per touched record) MUST continue to avoid re-executing a spec path already verified earlier in the same completion, even though the command string a path is keyed under can now depend on which other paths happened to batch with it.
+  - No change to the RunSpecsOptions/RunSpecs public signature or the `run-specs` CLI flags (cmd/linespec/cli.go) is required or in scope — this is an internal execution-strategy change under buildSpecCommand / runRecordSpecs, not a new command surface.
+  - Must not require Docker or the actual rspec/pytest/jest/bundle toolchains to be installed to verify correctness — the grouping/command-construction logic must be unit-testable in Go (as buildSpecCommand already is), with execution-path tests (if any) driven by fake shell commands rather than real external test runners.
 affected_scope:
   - pkg/provenance/commands.go
   - pkg/provenance/run_specs_test.go
   - pkg/provenance/run_specs_batch_test.go
   - PROVENANCE_RECORDS.md
-forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
-related: []
-sealed_at_sha: ""
+superseded_by: ''
+sealed_at_sha: ''
 associated_specs:
   - path: pkg/provenance/run_specs_batch_test.go
-    run_command: make test # {{path}}
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:
