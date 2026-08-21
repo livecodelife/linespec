@@ -1,6 +1,6 @@
 id: prov-2026-531a0e0b
 title: 'provenance index: -c/--config drives embedding settings but not record discovery, yielding a silent no-op that reports success'
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -82,7 +82,7 @@ superseded_by: ""
 related:
   - prov-2026-57aff9e1
   - prov-2026-684303c3
-sealed_at_sha: ""
+sealed_at_sha: 391218c528128f8dfda259be947b825aadddffe0
 associated_specs:
   - path: cmd/linespec/index_discovery_test.go
     type: go_test
