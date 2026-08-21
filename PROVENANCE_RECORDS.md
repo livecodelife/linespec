@@ -1066,7 +1066,7 @@ provenance:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `dir` | string | `provenance` | Directory containing records |
+| `dir` | string | `provenance` | Directory containing records (see [below](#dir)) |
 | `enforcement` | string | `warn` | Global enforcement level |
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
@@ -1075,6 +1075,26 @@ provenance:
 | `shared_repos` | array | `[]` | Additional directories |
 | `exclude_paths` | array | `[]` | Files exempt from all governance (globs, paths, dir prefixes, `/regex/`) |
 | `write_restriction` | bool | `true` | Whether the filesystem write-permission projection is enforced at all |
+
+#### `dir`
+
+`dir` resolves relative to the directory holding the `.linespec.yml` that
+declares it — not the repository root and not the process's current working
+directory. A nested package's `packages/foo/.linespec.yml` with `dir:
+provenance` therefore loads records from `packages/foo/provenance/`, whatever
+directory you invoke `linespec` from.
+
+A record's own `affected_scope`, `forbidden_scope`, and `associated_specs`
+paths resolve against a **different** base: the git repository root, always —
+regardless of where `dir` (or the declaring `.linespec.yml`) lives, and
+regardless of the invoking working directory. This matches the
+`auto_affected_scope` convention (paths like `pkg/provenance/linter.go`, not
+paths relative to a nested config), so a record in
+`packages/foo/provenance/prov-....yml` still declares
+`affected_scope: [packages/foo/app/thing.rb]`, not `affected_scope:
+[app/thing.rb]`. `linespec provenance lint`, `open`, and `complete` report
+identical results for the same config + records no matter which directory
+you run them from.
 
 #### `write_restriction`
 

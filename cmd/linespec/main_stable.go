@@ -916,6 +916,26 @@ func loadProvenanceConfig() *provenance.ProvenanceConfig {
 	return loadProvenanceConfigFromFile(".linespec.yml")
 }
 
+// gitRepoRoot resolves the git repository root containing startDir, so
+// Commands.RepoRoot (and, through it, the Linter's record-internal path
+// resolution and fswrite's MaterializeScope) is invocation-independent —
+// lint/open/complete report the same result whether run from the repo root or
+// from inside a nested package directory (prov-2026-2f2bf9c3). Falls back to
+// startDir itself when it isn't inside a git working tree (e.g. `linespec
+// init` in a fresh, not-yet-initialized directory), preserving prior
+// cwd-as-root behavior for that case.
+func gitRepoRoot(startDir string) string {
+	out, err := exec.Command("git", "-C", startDir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return startDir
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return startDir
+	}
+	return root
+}
+
 func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig {
 	cfg := &provenance.ProvenanceConfig{
 		Dir:               "provenance",
@@ -971,6 +991,17 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 				cfg.Embedding = fullConfig.Provenance.Embedding
 			}
 		}
+	}
+
+	// cfg.Dir is resolved relative to filePath's own directory above, which is
+	// itself expressed relative to the process cwd (the default ".linespec.yml"
+	// or a -c/--config value). Absolutize it here, against cwd, so downstream
+	// consumers (NewCommandsWithEmbedder) don't need cwd to double as the repo
+	// root just to make this join land correctly (prov-2026-2f2bf9c3) — that
+	// param is reserved for the actual git repository root, used to resolve
+	// record-internal paths (affected_scope, forbidden_scope, associated_specs).
+	if abs, err := filepath.Abs(cfg.Dir); err == nil {
+		cfg.Dir = abs
 	}
 
 	return cfg
