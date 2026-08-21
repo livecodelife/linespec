@@ -1,0 +1,98 @@
+id: prov-2026-531a0e0b
+title: 'provenance index: -c/--config drives embedding settings but not record discovery, yielding a silent no-op that reports success'
+status: draft
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Follow-up to #188 (prov-2026-57aff9e1 / prov-2026-684303c3), which fixed
+  `-c/--config` for `linespec provenance index`'s embedding settings but left
+  record discovery on a different config source. Reported against
+  LineSpec v3.18.0 (d229fa8371db69fa6f59acdcf5f44246e1c54932), Homebrew/macOS.
+
+  Root cause is in `loadProvenanceConfigFromFile`
+  (cmd/linespec/main_stable.go:919-977), the function `reloadConfigIfNeeded`
+  calls to rebuild `*cfg` from the `-c` file. When the custom config sets
+  `provenance.dir`, it resolves the value with:
+
+      cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)
+
+  (main_stable.go:950), where `configDir` is the directory containing the
+  `-c` file. `filepath.Join` does not special-case an absolute second
+  argument -- `Join("/tmp/scratch", "/Users/x/relay/provenance")` yields
+  `/tmp/scratch/Users/x/relay/provenance`, not the absolute path itself. The
+  mangled result still satisfies `filepath.IsAbs`, so it also slips past the
+  one absolute-path guard that exists, in
+  `NewCommandsWithEmbedder` (pkg/provenance/commands.go:100-102), which only
+  re-joins a *relative* `config.Dir` against `repoRoot`. The result is a
+  syntactically absolute but nonexistent directory. `Loader.LoadFromDir`
+  (pkg/provenance/loader.go:54-57) treats a missing directory as "zero
+  records" rather than an error, so `Commands.Index`
+  (pkg/provenance/commands.go:3000) builds an empty `toIndex` slice and
+  prints "All implemented records already have embeddings."
+  (commands.go:3036) -- a false positive indistinguishable from the correct
+  "nothing left to do" case, because that line does not know whether zero
+  records were *found* versus zero records *needing* indexing.
+
+  A relative `provenance.dir` in a `-c` config that lives outside the repo is
+  working as designed (resolved relative to the config file, per
+  prov-2026-bde50f4d) and is not part of this bug -- the issue reporter
+  confirmed this by testing with an absolute path and observing identical
+  (silently-wrong) output.
+constraints:
+  - |
+    In loadProvenanceConfigFromFile (cmd/linespec/main_stable.go), an
+    absolute `provenance.dir` in the config passed via `-c/--config` must be
+    used verbatim, not joined with the config file's own directory. A
+    relative `provenance.dir` continues to resolve relative to the config
+    file's directory, unchanged from current behavior.
+  - |
+    After the fix, `linespec provenance index -c <file>` (and any other
+    provCmds-based subcommand sharing reloadConfigIfNeeded, e.g. `search`)
+    discovers records from the directory the `-c` config's
+    `provenance.dir` actually names -- both when that value is relative and
+    when it is absolute -- not from the invoking directory's own
+    `.linespec.yml`.
+  - |
+    Commands.Index (pkg/provenance/commands.go) must not print
+    "All implemented records already have embeddings." when zero records
+    were loaded at all. That message is reserved for the case where records
+    were found but all already carry embeddings; zero-records-found must be
+    reported distinguishably (e.g. a warning that no records were discovered
+    at the configured dir), so a misconfigured or misresolved `-c` path is
+    visibly wrong instead of silently reporting success.
+  - |
+    No behavior change for the no-`-c` (default `.linespec.yml`) path, and
+    no change to how `-c`'s `provenance.embedding` block is resolved
+    (prov-2026-57aff9e1 / prov-2026-684303c3) -- this record is additive to
+    that fix, not a replacement of it.
+  - |
+    make test passes, including a regression test reproducing the original
+    repro: a `-c` config with an absolute `provenance.dir` pointing outside
+    both the repo and the config file's own directory must yield the records
+    actually present at that absolute path.
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/index_discovery_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-57aff9e1
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-57aff9e1
+  - prov-2026-684303c3
+sealed_at_sha: ""
+associated_specs:
+  - path: cmd/linespec/index_discovery_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run 'TestIndexHonorsConfigFlagAbsoluteDir' -v
+  - path: provenance/prov-2026-531a0e0b.yml
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - provenance-index
+  - config
