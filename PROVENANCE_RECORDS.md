@@ -959,6 +959,8 @@ linespec provenance run-specs --record prov-2026-001
 
 Useful to verify proof artifacts pass *before* attempting to complete a record. See [Scope Enforcement &amp; When You're Blocked](#scope-enforcement--when-youre-blocked) for how `path`/`type`/`run_command` behave.
 
+Consecutive `associated_specs` entries that resolve to the same effective command (same auto-run type with no `run_command` override, or the same explicit `run_command` string with no `{{path}}` placeholder) run as a single batched invocation with all their paths appended, instead of one process per entry — this avoids paying a full framework boot (Rails, pytest, jest, …) once per spec when several specs share a runner. Entries are only batched when adjacent in `associated_specs` order, and a `{{path}}`-templated `run_command` always runs standalone (there is no well-defined multi-path form for a templated command). Per-entry ✓/✗ reporting is unaffected — each path still gets its own pass/fail line, with a failed batch re-run per-path to localize which one(s) actually failed.
+
 ### Install Hooks
 
 Install git hooks for automatic validation:
@@ -1209,7 +1211,7 @@ The pre-commit hook validates that modified provenance records are well-formed, 
 
 - **Linting**: Checks YAML syntax, required fields, and valid values
 - **Quick validation**: Ensures records can be parsed and loaded
-- **Spec execution** (opt-in): When `run_associated_specs_on_complete: true` is set in `.linespec.yml`, detects `open` → `implemented` status transitions and runs the record's `associated_specs` before allowing the commit. Supported types: `linespec`, `rspec`, `pytest`, `jest`. Use `run_command` on any spec entry to override the default command for that type.
+- **Spec execution** (opt-in): When `run_associated_specs_on_complete: true` is set in `.linespec.yml`, detects `open` → `implemented` status transitions and runs the record's `associated_specs` before allowing the commit. Supported types: `linespec`, `rspec`, `pytest`, `jest`. Use `run_command` on any spec entry to override the default command for that type. Consecutive specs sharing an effective command are batched into one invocation — see [Run Specs](#run-specs).
 
 ### Commit-msg Hook
 
