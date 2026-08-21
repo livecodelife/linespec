@@ -50,7 +50,7 @@ func TestIndexHonorsConfigFlagAbsoluteDir(t *testing.T) {
 
 	t.Chdir(scratchDir)
 
-	server := newFakeOpenAIEmbeddingServer(t)
+	server := newFakeOpenAIEmbeddingServer(t, 2048)
 	content := fmt.Sprintf(`provenance:
   dir: %s
   embedding:
