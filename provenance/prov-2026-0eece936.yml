@@ -1,0 +1,65 @@
+id: prov-2026-0eece936
+title: Resolve record-internal paths against the git repo root, not cwd
+status: deprecated
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |-
+  Add a `RepoRoot` field to `Linter` (pkg/provenance/linter.go), set from the
+  same `repoRoot` NewCommandsWithEmbedder already receives, and use it to
+  resolve every record-internal path (affected_scope, forbidden_scope,
+  associated_specs) before touching the filesystem — validateExactPath,
+  validateGlobPattern, validateRegexPattern (via a new walkRepoRoot helper
+  that walks RepoRoot but reports paths relative to it), checkDeadRecords /
+  patternHasMatches, validateAssociatedSpecs, and filesMatchingPatterns.
+  commands.go's Complete does the same for its associated-specs existence
+  check. A `resolveRecordPath(repoRoot, path)` helper joins repoRoot onto a
+  relative path (leaving absolute paths and an empty repoRoot untouched, so
+  existing direct-construction tests that never set RepoRoot keep their old
+  cwd-relative behavior).
+
+  Separately, `repoRoot` as threaded through cmd/linespec (provSetup,
+  reloadConfigIfNeeded, the next/govern fast-path, discover) changes meaning:
+  today it is `os.Getwd()` under a misleading name. A new `gitRepoRoot(dir)`
+  helper (cmd/linespec/main_stable.go) shells out to `git -C dir rev-parse
+  --show-toplevel`, falling back to dir itself outside a git working tree, and
+  every repoRoot local in cli.go now goes through it. This makes
+  Commands.RepoRoot the actual git repository root everywhere it already
+  conceptually meant that (Git's cmd.Dir, .git/hooks, embeddings store,
+  listTrackedFiles/Reconcile, AlwaysWritablePaths/LockFile,
+  MaterializeScope/materializeTargets) — not just record-internal path
+  resolution.
+implements: prov-2026-2f2bf9c3
+constraints:
+  - Changing repoRoot's meaning to the real git root must not break
+    config.Dir's existing (correct) resolution relative to the directory
+    holding the declaring .linespec.yml. loadProvenanceConfigFromFile
+    (cmd/linespec/main_stable.go) now absolutizes cfg.Dir with filepath.Abs
+    right where it computes it (which resolves against the process cwd,
+    matching how filePath/-c was expressed), so NewCommandsWithEmbedder's
+    pre-existing "join with repoRoot if relative" branch becomes a no-op for
+    the CLI's own config-loading path and only still matters for callers that
+    construct ProvenanceConfig directly with a relative Dir (clone flow,
+    tests) — those are untouched.
+  - A Linter built directly (NewLinter, not via NewCommandsWithEmbedder) has
+    RepoRoot == "" by default, so resolveRecordPath/walkRepoRoot fall back to
+    the prior cwd-relative behavior — no behavior change for existing tests
+    that never set it.
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/cli.go
+  - cmd/linespec/main_stable.go
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/scope_path_cwd_test.go
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - config
+  - provenance
+  - path-resolution
