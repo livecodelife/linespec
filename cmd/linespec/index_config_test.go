@@ -9,16 +9,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/livecodelife/linespec/v3/pkg/embeddings"
 	"github.com/livecodelife/linespec/v3/pkg/provenance"
 )
 
 // newFakeOpenAIEmbeddingServer starts an httptest server that answers the
 // OpenAI-compatible /v1/embeddings wire format, standing in for a local
 // server (LM Studio, Ollama, vLLM, ...) reached via base_url. It returns a
-// 2048-dim vector to match the store's fixed embedding dimension.
-func newFakeOpenAIEmbeddingServer(t *testing.T) *httptest.Server {
+// vector of the given width; callers that actually exercise storage use a
+// width other than the Voyage-specific 2048 to prove the store no longer
+// assumes it.
+func newFakeOpenAIEmbeddingServer(t *testing.T, width int) *httptest.Server {
 	t.Helper()
-	vector := make([]float64, 2048)
+	vector := make([]float64, width)
 	for i := range vector {
 		vector[i] = 0.001
 	}
@@ -68,7 +71,7 @@ func TestIndexHonorsConfigFlag(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	server := newFakeOpenAIEmbeddingServer(t)
+	server := newFakeOpenAIEmbeddingServer(t, 768)
 	configPath := writeCustomConfig(t, dir, server)
 
 	cmds := provCmds(configPath)
@@ -85,13 +88,74 @@ func TestIndexHonorsConfigFlag(t *testing.T) {
 	}
 }
 
+// TestIndexStoresNonVoyageWidth is the regression test for the storage-layer
+// half of the base_url bug: reaching a local OpenAI-compatible embedder over
+// base_url is not enough on its own if the store still rejects every vector
+// that isn't the Voyage-specific 2048 wide. It indexes a real implemented
+// record against a fake server emitting 768-dim vectors (the width
+// nomic-embed-text-v1.5 actually produces) and verifies the vector is
+// genuinely persisted — and that a fresh Store (a later process, as `index`,
+// `search`, `audit`, and `complete` each open their own) recovers that width
+// from the file itself, without being told, and still enforces it.
+func TestIndexStoresNonVoyageWidth(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	const localWidth = 768
+	server := newFakeOpenAIEmbeddingServer(t, localWidth)
+	configPath := writeCustomConfig(t, dir, server)
+
+	provDir := filepath.Join(dir, "provenance")
+	if err := os.MkdirAll(provDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	const recordID = "prov-2026-e2eabcd1"
+	recordYAML := fmt.Sprintf(`id: %s
+title: 'test record for local embedder indexing'
+status: implemented
+created_at: "2026-08-21"
+author: test@example.com
+intent: test intent for indexing
+type: blueprint
+`, recordID)
+	if err := os.WriteFile(filepath.Join(provDir, recordID+".yml"), []byte(recordYAML), 0o644); err != nil {
+		t.Fatalf("WriteFile record: %v", err)
+	}
+
+	cmds := provCmds(configPath)
+	if err := cmds.Index(provenance.IndexOptions{}); err != nil {
+		t.Fatalf("Index() failed: %v", err)
+	}
+
+	store := embeddings.NewStore(dir)
+	exists, err := store.Exists(recordID)
+	if err != nil {
+		t.Fatalf("Exists() failed: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected the record's 768-dim vector to be stored, but it was not found")
+	}
+
+	// A brand new Store value, exactly like the one the next `index`/`search`/
+	// `audit`/`complete` invocation would construct, must recover the 768-dim
+	// width from the file itself and still reject a mismatched (e.g.
+	// Voyage-shaped 2048) write — proving the width wasn't silently coerced
+	// back to the old hardcoded constant.
+	fresh := embeddings.NewStore(dir)
+	mismatched := make([]float32, 2048)
+	err = fresh.Write(embeddings.RecordEmbedding{RecordID: "prov-2026-other0000", Vector: mismatched})
+	if err == nil {
+		t.Fatal("expected dimension mismatch error writing a 2048-dim vector into a 768-dim store")
+	}
+}
+
 // TestSearchHonorsConfigFlag verifies the same reloadConfigIfNeeded fix for
 // `linespec provenance search -c <file>`, which shares the bug via provCmds.
 func TestSearchHonorsConfigFlag(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	server := newFakeOpenAIEmbeddingServer(t)
+	server := newFakeOpenAIEmbeddingServer(t, 768)
 	configPath := writeCustomConfig(t, dir, server)
 
 	cmds := provCmds(configPath)
