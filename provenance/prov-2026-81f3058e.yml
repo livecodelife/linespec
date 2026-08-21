@@ -1,6 +1,6 @@
 id: prov-2026-81f3058e
 title: Batch consecutive same-command associated_specs into one process, keyed for stable seen-dedup
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
@@ -48,7 +48,7 @@ implements: prov-2026-3ee1f3c3
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f080a21cc19a70d1c2f4eda7ee5df68776aefac3
 associated_specs:
   - path: pkg/provenance/run_specs_batch_test.go
     run_command: make test # {{path}}
