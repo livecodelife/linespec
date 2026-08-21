@@ -1,6 +1,6 @@
 id: prov-2026-772101a3
 title: 'provenance index: a record id with a suffix wedges the embedding store partway through, then later runs report the corpus fully indexed'
-status: draft
+status: open
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
