@@ -1,6 +1,6 @@
 id: prov-2026-e4530d2c
 title: Derive config-file always-writable entry from ConfigFileDir
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
@@ -41,7 +41,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-c65450b6
-sealed_at_sha: ""
+sealed_at_sha: fa18b2f6d20863b06bce43d77c1a16fe600edd20
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
     type: go_test
