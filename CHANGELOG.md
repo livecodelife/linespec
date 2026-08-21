@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`provenance index`/`search`/`audit`/`complete` now work with non-2048-dim local embedders** ([prov-2026-0f3c349b](./provenance/prov-2026-0f3c349b.yml)) — the embedding store no longer hardcodes a 2048-wide vector (voyage-4-large/voyage-4-lite's width); the width is now derived from the first vector actually written and persisted in `.linespec/embeddings.bin`'s header, so `openai`-provider `base_url` servers producing other widths (e.g. `nomic-embed-text-v1.5` at 768, `bge-large` at 1024, `all-MiniLM-L6-v2` at 384) work end to end. Existing headerless indexes keep working, since they were always written at 2048. Also fixed `index`'s summary line printing a `✓` when every record failed to index (0 succeeded); it now prints `✗` in that case (the non-zero exit code was already correct).
+
 ## [3.18.0] - 2026-08-19
 
 ### Fixed

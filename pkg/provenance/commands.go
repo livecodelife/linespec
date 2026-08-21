@@ -1269,7 +1269,6 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to generate embedding for %s: %v\n", record.ID, err)
 		} else {
 			store := embeddings.NewStore(c.RepoRoot)
-			store.SetDimension(c.Embedder.Dimension())
 			err := store.Write(embeddings.RecordEmbedding{
 				RecordID: record.ID,
 				Vector:   vector,
@@ -2979,7 +2978,6 @@ func (c *Commands) Search(opts SearchOptions) error {
 
 	// Search the store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(queryVector, opts.Limit)
 	if err != nil {
@@ -3073,7 +3071,6 @@ func (c *Commands) Audit(opts AuditOptions) error {
 
 	// Search for similar records
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(descVector, 5)
 	if err != nil {
@@ -3166,7 +3163,6 @@ func (c *Commands) Index(opts IndexOptions) error {
 
 	// Initialize embedding store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	// Get all implemented records
 	var toIndex []*Record
@@ -3179,13 +3175,14 @@ func (c *Commands) Index(opts IndexOptions) error {
 		if !opts.Force {
 			exists, err := store.Exists(record.ID)
 			if err != nil {
-				// If the store file doesn't exist yet, treat as not indexed
+				// If the store file doesn't exist yet, treat as not indexed. Any
+				// other error (e.g. a corrupt/desynced store) must not silently
+				// drop the record from toIndex — that's what let a wedged store
+				// masquerade as "fully indexed": surface it and retry instead.
 				if !os.IsNotExist(err) {
-					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v\n", record.ID, err)
-					continue
+					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v — will retry indexing\n", record.ID, err)
 				}
-			}
-			if exists {
+			} else if exists {
 				continue
 			}
 		}
@@ -3248,9 +3245,13 @@ func (c *Commands) Index(opts IndexOptions) error {
 		successCount++
 	}
 
+	glyph := "✓"
+	if successCount == 0 && failCount > 0 {
+		glyph = "✗"
+	}
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
-	fmt.Fprintf(os.Stdout, "✓ Indexing complete: %d succeeded, %d failed\n", successCount, failCount)
+	fmt.Fprintf(os.Stdout, "%s Indexing complete: %d succeeded, %d failed\n", glyph, successCount, failCount)
 	fmt.Fprintln(os.Stdout, "")
 
 	if failCount > 0 {
