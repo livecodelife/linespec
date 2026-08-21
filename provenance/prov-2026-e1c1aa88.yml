@@ -1,0 +1,63 @@
+id: prov-2026-e1c1aa88
+title: Remove Client.Dimension() and fix index summary glyph
+status: open
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Implements prov-2026-0f3c349b. With pkg/embeddings/store.go now deriving
+  its width from actual vectors (prov-2026-9eefeb1b), the four
+  store.SetDimension(c.Embedder.Dimension()) call sites in
+  pkg/provenance/commands.go (Complete, Search, Audit, Index) became not
+  just redundant but the exact mechanism the blueprint's constraints forbid
+  reintroducing: Client.Dimension() unconditionally returned 2048
+  regardless of provider, so keeping the calls would have silently
+  re-imposed the old hardcoded-2048 ceiling on every store the moment any
+  caller happened to invoke it. All four calls are removed; NewStore(...)
+  is used directly and Write/Find self-establish the width.
+
+  Client.Dimension() itself is deleted (client.go) along with its only test
+  (TestClientDimension in client_test.go) and the now-unused defaultDim
+  field, since removing its callers made it dead weight with no remaining
+  purpose — grep confirmed no other caller exists anywhere in the repo.
+
+  Separately, fixed the adjacent minor issue from the same ticket:
+  Index's summary line unconditionally printed "✓ Indexing complete: N
+  succeeded, M failed" even when every record failed (successCount == 0 &&
+  failCount > 0). It now prints "✗" in that case; the existing non-zero
+  exit-code behavior (failCount > 0 returning an error) was already correct
+  and is untouched.
+constraints:
+  - No behavior change for the voyage provider — generateVoyage still
+    requests OutputDimension 2048 and the store still accepts 2048-wide
+    vectors from it (now via width auto-detection rather than an explicit
+    SetDimension call).
+  - "The glyph swap only changes the successCount == 0 && failCount > 0
+    branch; partial-failure and all-success summaries keep printing the
+    check mark as before."
+affected_scope:
+  - pkg/embeddings/client.go
+  - pkg/embeddings/client_test.go
+  - pkg/provenance/commands.go
+  - cmd/linespec/index_config_test.go
+forbidden_scope: []
+type: imprint
+supersedes: ""
+superseded_by: ""
+implements: prov-2026-0f3c349b
+related:
+  - prov-2026-0f3c349b
+  - prov-2026-9eefeb1b
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/client_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: cmd/linespec/index_config_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - cleanup
+  - bugfix
