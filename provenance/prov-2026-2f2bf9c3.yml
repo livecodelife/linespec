@@ -1,6 +1,6 @@
 id: prov-2026-2f2bf9c3
 title: Scope paths resolve relative to cwd but provenance.dir resolves relative to the config, so linting from inside a package reports phantom failures
-status: open
+status: implemented
 created_at: '2026-08-12'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
@@ -127,7 +127,7 @@ related:
   - prov-2026-b4006eda
   - prov-2026-bde50f4d
   - prov-2026-3687be46
-sealed_at_sha: ''
+sealed_at_sha: 824cc0b42d9a0befc9ed76435a1c608982d3f657
 associated_specs:
   - path: pkg/provenance/scope_path_cwd_test.go
     run_command: make test

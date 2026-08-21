@@ -66,6 +66,13 @@ type Linter struct {
 	CommitTagRequired bool
 	ExcludePaths      []string // patterns for files exempt from provenance rules
 	Hasher            *Hasher  // nil when hash manifest is not configured
+	// RepoRoot is the git repository root that record-internal paths
+	// (affected_scope, forbidden_scope, associated_specs) resolve against, so
+	// linting produces the same result regardless of the process's cwd
+	// (prov-2026-2f2bf9c3). Empty preserves legacy cwd-relative resolution for
+	// callers (e.g. existing tests) that construct a Linter directly without
+	// going through NewCommandsWithEmbedder.
+	RepoRoot string
 }
 
 // NewLinter creates a new linter
@@ -74,6 +81,50 @@ func NewLinter(loader *Loader, enforcement string) *Linter {
 		Loader:      loader,
 		Enforcement: enforcement,
 	}
+}
+
+// resolveRecordPath resolves a record-internal path (affected_scope,
+// forbidden_scope, associated_specs) against repoRoot when it is relative, so
+// os.Stat/filepath.Glob see the same file regardless of the process's cwd.
+// Record-internal paths are conventionally repo-root-relative (the
+// auto_affected_scope convention documented in PROVENANCE_RECORDS.md).
+// An empty repoRoot or an already-absolute path is returned unchanged,
+// preserving legacy cwd-relative resolution.
+func resolveRecordPath(repoRoot, path string) string {
+	if repoRoot == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(repoRoot, path)
+}
+
+// walkRepoRoot walks l.RepoRoot (or cwd via "." when RepoRoot is empty),
+// invoking visit with each regular file's path relative to that root — the
+// same repo-root-relative form record-internal glob/regex patterns are
+// authored in — so pattern matching is invariant to the process's cwd.
+// visit returns true to stop the walk early (a match was found).
+func (l *Linter) walkRepoRoot(visit func(relPath string) bool) error {
+	root := l.RepoRoot
+	if root == "" {
+		root = "."
+	}
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue walking even if we can't access some paths
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel := path
+		if root != "." {
+			if r, relErr := filepath.Rel(root, path); relErr == nil {
+				rel = r
+			}
+		}
+		if visit(rel) {
+			return filepath.SkipDir
+		}
+		return nil
+	})
 }
 
 // LintAll validates all loaded records
@@ -480,7 +531,7 @@ func (l *Linter) validateScopePatternList(record *Record, patterns []string, inv
 
 // validateExactPath checks that an exact path exists and is a file
 func (l *Linter) validateExactPath(record *Record, path string, invalidSev, notFoundSev Severity, result *LintResult) {
-	info, err := os.Stat(path)
+	info, err := os.Stat(resolveRecordPath(l.RepoRoot, path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			msg := fmt.Sprintf("Scope path does not exist: %s", path)
@@ -519,7 +570,7 @@ func (l *Linter) validateExactPath(record *Record, path string, invalidSev, notF
 // not-yet-existing declaration, so it stays a hardcoded error unconditionally
 // (matching pre-existing behavior — it never varied with missingSev either).
 func (l *Linter) validateGlobPattern(record *Record, pattern string, notFoundSev Severity, result *LintResult) {
-	matches, err := filepath.Glob(pattern)
+	matches, err := filepath.Glob(resolveRecordPath(l.RepoRoot, pattern))
 	if err != nil {
 		result.Add(Issue{
 			RecordID: record.ID,
@@ -564,18 +615,12 @@ func (l *Linter) validateRegexPattern(record *Record, pattern string, notFoundSe
 
 	// Walk the filesystem to find matching files
 	foundMatch := false
-	walkErr := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Continue walking even if we can't access some paths
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if re.MatchString(path) {
+	walkErr := l.walkRepoRoot(func(relPath string) bool {
+		if re.MatchString(relPath) {
 			foundMatch = true
-			return filepath.SkipDir // Stop walking once we find a match
+			return true // Stop walking once we find a match
 		}
-		return nil
+		return false
 	})
 
 	if walkErr != nil {
@@ -734,7 +779,7 @@ func (l *Linter) validateAssociatedSpecs(record *Record, result *LintResult) {
 
 	// Check file existence and accessibility
 	for _, spec := range record.AssociatedSpecs {
-		info, err := os.Stat(spec.Path)
+		info, err := os.Stat(resolveRecordPath(l.RepoRoot, spec.Path))
 		if err != nil {
 			if os.IsNotExist(err) {
 				result.Add(Issue{
@@ -1081,7 +1126,7 @@ func (l *Linter) checkDeadRecords(result *LintResult) {
 			}
 
 			// Check exact paths
-			if _, err := os.Stat(pattern); !os.IsNotExist(err) {
+			if _, err := os.Stat(resolveRecordPath(l.RepoRoot, pattern)); !os.IsNotExist(err) {
 				anyMatch = true
 				break
 			}
@@ -1111,24 +1156,18 @@ func (l *Linter) patternHasMatches(pattern string, isRegex bool) bool {
 		}
 
 		foundMatch := false
-		filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
-				return nil
-			}
-			if re.MatchString(path) {
+		l.walkRepoRoot(func(relPath string) bool {
+			if re.MatchString(relPath) {
 				foundMatch = true
-				return filepath.SkipDir
+				return true
 			}
-			return nil
+			return false
 		})
 		return foundMatch
 	}
 
 	// Glob pattern
-	matches, err := filepath.Glob(pattern)
+	matches, err := filepath.Glob(resolveRecordPath(l.RepoRoot, pattern))
 	if err != nil {
 		return false
 	}
@@ -1457,15 +1496,12 @@ func (l *Linter) filesMatchingPatterns(patterns []string) []string {
 			if err != nil {
 				continue
 			}
-			filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
-					return nil
+			l.walkRepoRoot(func(relPath string) bool {
+				if re.MatchString(relPath) && !seen[relPath] {
+					seen[relPath] = true
+					files = append(files, relPath)
 				}
-				if re.MatchString(path) && !seen[path] {
-					seen[path] = true
-					files = append(files, path)
-				}
-				return nil
+				return false
 			})
 			continue
 		}
@@ -1476,21 +1512,18 @@ func (l *Linter) filesMatchingPatterns(patterns []string) []string {
 			if err != nil {
 				continue
 			}
-			filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
-					return nil
+			l.walkRepoRoot(func(relPath string) bool {
+				if re.MatchString(relPath) && !seen[relPath] {
+					seen[relPath] = true
+					files = append(files, relPath)
 				}
-				if re.MatchString(path) && !seen[path] {
-					seen[path] = true
-					files = append(files, path)
-				}
-				return nil
+				return false
 			})
 			continue
 		}
 
 		// Exact path
-		if _, err := os.Stat(pattern); err == nil && !seen[pattern] {
+		if _, err := os.Stat(resolveRecordPath(l.RepoRoot, pattern)); err == nil && !seen[pattern] {
 			seen[pattern] = true
 			files = append(files, pattern)
 		}

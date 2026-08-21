@@ -172,7 +172,8 @@ func newImportCmd() *cobra.Command {
 // its switch: load the default config, build the embedder, and construct Commands.
 func provSetup() (*provenance.ProvenanceConfig, *provenance.Commands, string, *embeddings.Client) {
 	cfg := loadProvenanceConfig()
-	repoRoot, _ := os.Getwd()
+	cwd, _ := os.Getwd()
+	repoRoot := gitRepoRoot(cwd)
 
 	var embedder *embeddings.Client
 	if cfg.Embedding != nil {
@@ -660,7 +661,8 @@ func newProvNextCmd() *cobra.Command {
 			}
 			// Fast path: serve from the cached scope index without a full record load.
 			cfg := loadProvenanceConfig()
-			repoRoot, _ := os.Getwd()
+			cwd, _ := os.Getwd()
+			repoRoot := gitRepoRoot(cwd)
 			if provenance.TryNextFromCache(cfg, repoRoot, os.Stdout, true, opts) {
 				return
 			}
@@ -691,7 +693,8 @@ func newProvGovernCmd() *cobra.Command {
 				opts.Format = "json"
 			}
 			cfg := loadProvenanceConfig()
-			repoRoot, _ := os.Getwd()
+			cwd, _ := os.Getwd()
+			repoRoot := gitRepoRoot(cwd)
 			if provenance.TryGovernFromCache(cfg, repoRoot, os.Stdout, true, opts) {
 				return
 			}
@@ -909,7 +912,8 @@ func newProvDiscoverCmd() *cobra.Command {
 		Short: "Scan codebase and generate draft provenance records + .linespec stubs",
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := loadProvenanceConfig()
-			repoRoot, _ := os.Getwd()
+			cwd, _ := os.Getwd()
+			repoRoot := gitRepoRoot(cwd)
 			runDiscover(opts, cfg, repoRoot)
 		},
 	}

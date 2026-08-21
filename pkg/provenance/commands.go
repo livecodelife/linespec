@@ -126,6 +126,10 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 	linter := NewLinter(loader, config.Enforcement)
 	linter.Hasher = NewHasher(filepath.Dir(config.Dir))
 	linter.ExcludePaths = config.ExcludePaths
+	// Record-internal paths (affected_scope, forbidden_scope, associated_specs)
+	// resolve against the git repository root, not the process cwd
+	// (prov-2026-2f2bf9c3), so lint/open/complete are invocation-independent.
+	linter.RepoRoot = repoRoot
 
 	// Create git helper
 	git := NewGit(repoRoot)
@@ -1050,7 +1054,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 	if !opts.Force && len(record.AssociatedSpecs) > 0 {
 		var missing []string
 		for _, spec := range record.AssociatedSpecs {
-			if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
+			if _, err := os.Stat(resolveRecordPath(c.RepoRoot, spec.Path)); os.IsNotExist(err) {
 				missing = append(missing, spec.Path)
 			}
 		}
