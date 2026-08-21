@@ -1,6 +1,6 @@
 id: prov-2026-c65450b6
 title: write_restriction locks the .linespec.yml that enables it, contradicting the documented always-writable exemption
-status: open
+status: implemented
 created_at: '2026-08-12'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
@@ -70,7 +70,7 @@ superseded_by: ''
 related:
   - prov-2026-bde50f4d
   - prov-2026-26efc162
-sealed_at_sha: ''
+sealed_at_sha: 9c22002e5b99c2935d07955319d97d8496ac2c75
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
     run_command: make test

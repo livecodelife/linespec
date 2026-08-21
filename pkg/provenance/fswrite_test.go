@@ -95,6 +95,42 @@ func TestIsAlwaysWritable_MatchesDirectoryPrefixAndGlob(t *testing.T) {
 	}
 }
 
+// TestAlwaysWritablePaths_ExemptsNestedConfigsOwnLinespecYML reproduces
+// issue #173 / prov-2026-c65450b6: PROVENANCE_RECORDS.md documents that
+// ".linespec.yml remains always-writable", but AlwaysWritablePaths used to
+// append the bare literal ".linespec.yml" regardless of where the reconciling
+// config actually lives, so only a repo-root config's own file matched — a
+// nested config (e.g. pkg_a/.linespec.yml, the very file that turns
+// write_restriction on) was locked like any other undeclared file. The fix
+// derives the config-file entry from config.ConfigFileDir the same way the
+// provenance-dir entry is derived from config.Dir.
+func TestAlwaysWritablePaths_ExemptsNestedConfigsOwnLinespecYML(t *testing.T) {
+	always := AlwaysWritablePaths(&ProvenanceConfig{Dir: "pkg_a/provenance", ConfigFileDir: "pkg_a"}, nil, "")
+
+	if !IsAlwaysWritable("pkg_a/.linespec.yml", always) {
+		t.Errorf("expected nested config's own .linespec.yml to be always-writable, got %v", always)
+	}
+	if IsAlwaysWritable("pkg_b/.linespec.yml", always) {
+		t.Errorf("a sibling config's .linespec.yml outside ConfigFileDir must not be exempted, got %v", always)
+	}
+	if IsAlwaysWritable(".linespec.yml", always) {
+		t.Errorf("the repo-root .linespec.yml must not be exempted by a nested config's reconcile pass, got %v", always)
+	}
+}
+
+// TestAlwaysWritablePaths_NilOrUnsetConfigFileDirExemptsRepoRootLinespecYML
+// guards the no-regression constraint: a nil config, or one with an empty
+// ConfigFileDir, must still exempt the repo-root ".linespec.yml" exactly as
+// before this fix.
+func TestAlwaysWritablePaths_NilOrUnsetConfigFileDirExemptsRepoRootLinespecYML(t *testing.T) {
+	if !IsAlwaysWritable(".linespec.yml", AlwaysWritablePaths(nil, nil, "")) {
+		t.Errorf("nil config should still exempt the repo-root .linespec.yml")
+	}
+	if !IsAlwaysWritable(".linespec.yml", AlwaysWritablePaths(&ProvenanceConfig{}, nil, "")) {
+		t.Errorf("unset ConfigFileDir should still exempt the repo-root .linespec.yml")
+	}
+}
+
 // --- OpenAllowlistScope ------------------------------------------------------
 
 func TestOpenAllowlistScope_OnlyOpenAllowlistRecordsContribute(t *testing.T) {
