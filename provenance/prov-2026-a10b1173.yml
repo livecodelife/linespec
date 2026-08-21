@@ -1,6 +1,6 @@
 id: prov-2026-a10b1173
 title: Fix ReadAll short-read desync and Index silent-skip masking
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -43,7 +43,7 @@ superseded_by: ""
 implements: prov-2026-7136e8c4
 related:
   - prov-2026-772101a3
-sealed_at_sha: ""
+sealed_at_sha: e21b720185ebd9bebf28f9b066c0da375403d35f
 associated_specs:
   - path: pkg/embeddings/index_wedge_test.go
     run_command: make test # {{path}}
