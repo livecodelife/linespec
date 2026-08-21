@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -94,9 +95,12 @@ func (s *Store) ReadAll() ([]RecordEmbedding, error) {
 			return nil, fmt.Errorf("failed to read ID length: %w", err)
 		}
 
-		// Read record ID
+		// Read record ID. bufio.Reader.Read only guarantees 1 <= n <= len(idBytes)
+		// bytes when data is available, not a full read, so io.ReadFull (which
+		// loops until idBytes is full or a real error/EOF occurs) is required —
+		// otherwise a short read here silently desyncs every record that follows.
 		idBytes := make([]byte, idLen)
-		if _, err := reader.Read(idBytes); err != nil {
+		if _, err := io.ReadFull(reader, idBytes); err != nil {
 			return nil, fmt.Errorf("failed to read ID: %w", err)
 		}
 		recordID := string(idBytes)
