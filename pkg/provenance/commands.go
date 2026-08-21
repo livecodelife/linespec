@@ -1497,51 +1497,148 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 	return nil
 }
 
+// specGroupEntry pairs an AssociatedSpec with its resolved (non-batched) single-path
+// command, so the group it lands in can be executed together while each entry still
+// carries the exact command it would have run standalone.
+type specGroupEntry struct {
+	spec   AssociatedSpec
+	cmdStr string
+}
+
 // runRecordSpecs executes the associated_specs of a single record, streaming each
 // command's output. It returns ran (whether the record has any executable spec) and
 // failed (whether any spec it ran exited non-zero). It deliberately does NOT consult
 // run_associated_specs_on_complete or look at record status — the caller decides when
 // to invoke it, so it can verify an arbitrary record's specs on demand.
 //
+// Consecutive entries whose effective command is identical (prov-2026-3ee1f3c3) are
+// batched into a single process with all their paths appended, instead of one process
+// per entry — this is what avoids paying a full framework boot (e.g. Rails/rspec) once
+// per spec when several specs share a runner. Grouping never reorders entries and never
+// merges a {{path}}-templated run_command, which has no multi-path form.
+//
 // When seen is non-nil it is used to de-duplicate identical spec commands across
 // calls: a command already present in seen is treated as already-verified and not
 // re-run (so completing a change to a widely-governed file does not run `make test`
-// dozens of times). A record still counts as ran if it has a runnable spec, even when
-// that spec's command was already executed for another record.
+// dozens of times). The seen key is always each entry's own single-path command, never
+// the batched command string, so whether a path was already verified does not depend
+// on which neighbors it happened to batch with in this or another record. A record
+// still counts as ran if it has a runnable spec, even when that spec's command was
+// already executed for another record.
 func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool) {
-	for _, spec := range record.AssociatedSpecs {
+	specs := record.AssociatedSpecs
+	for i := 0; i < len(specs); {
+		spec := specs[i]
 		cmdStr, skip, err := buildSpecCommand(spec)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "  · %s  ✗ could not build command: %v\n", spec.Path, err)
 			failed = true
+			i++
 			continue
 		}
 		if skip {
 			fmt.Fprintf(os.Stdout, "  · %s  (skipped — no type or run_command)\n", spec.Path)
+			i++
 			continue
 		}
 
-		ran = true
-		if seen != nil {
-			if seen[cmdStr] {
-				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", cmdStr)
-				continue
+		base, templated, _ := specCommandBase(spec)
+		group := []specGroupEntry{{spec, cmdStr}}
+		j := i + 1
+		if !templated {
+			for j < len(specs) {
+				nextCmd, nextSkip, nextErr := buildSpecCommand(specs[j])
+				if nextErr != nil || nextSkip {
+					break
+				}
+				nextBase, nextTemplated, _ := specCommandBase(specs[j])
+				if nextTemplated || nextBase != base {
+					break
+				}
+				group = append(group, specGroupEntry{specs[j], nextCmd})
+				j++
 			}
-			seen[cmdStr] = true
 		}
 
-		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
-		cmd := exec.Command("sh", "-c", cmdStr)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
-			failed = true
-		} else {
-			fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+		ran = true
+
+		var toRun []specGroupEntry
+		for _, g := range group {
+			if seen != nil && seen[g.cmdStr] {
+				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", g.cmdStr)
+				continue
+			}
+			toRun = append(toRun, g)
 		}
+
+		if len(toRun) == 0 {
+			i = j
+			continue
+		}
+		if seen != nil {
+			for _, g := range toRun {
+				seen[g.cmdStr] = true
+			}
+		}
+
+		if len(toRun) == 1 {
+			g := toRun[0]
+			fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", g.spec.Path, g.cmdStr)
+			if runErr := runShellCommand(g.cmdStr); runErr != nil {
+				fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
+				failed = true
+			} else {
+				fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+			}
+			i = j
+			continue
+		}
+
+		// Batched: run every path in this group as one process. Per-entry ✓/✗
+		// reporting is still one line per path — on a batch failure, re-run each
+		// path's own single-path command to localize which one(s) actually failed,
+		// rather than reporting the whole group as failed undifferentiated.
+		paths := make([]string, len(toRun))
+		for k, g := range toRun {
+			paths[k] = g.spec.Path
+		}
+		batchCmd := base + " " + strings.Join(paths, " ")
+		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", strings.Join(paths, ", "), batchCmd)
+
+		if runErr := runShellCommand(batchCmd); runErr == nil {
+			for _, g := range toRun {
+				fmt.Fprintf(os.Stdout, "    ✓ %s passed\n", g.spec.Path)
+			}
+			fmt.Fprintln(os.Stdout)
+		} else {
+			// The batch itself failed: mark the record failed regardless of what the
+			// per-path localization below finds, so an order-dependent or shared-state
+			// failure that only reproduces when paths run together can never be masked
+			// by every path passing when re-run standalone (prov-2026-3ee1f3c3).
+			failed = true
+			fmt.Fprintf(os.Stdout, "    ✗ batch failed — localizing per spec:\n")
+			for _, g := range toRun {
+				if singleErr := runShellCommand(g.cmdStr); singleErr != nil {
+					fmt.Fprintf(os.Stdout, "    ✗ %s failed\n", g.spec.Path)
+				} else {
+					fmt.Fprintf(os.Stdout, "    ✓ %s passed\n", g.spec.Path)
+				}
+			}
+			fmt.Fprintln(os.Stdout)
+		}
+
+		i = j
 	}
 	return ran, failed
+}
+
+// runShellCommand runs cmdStr through sh -c, streaming its output to the process's
+// own stdout/stderr, and reports whether it exited non-zero.
+func runShellCommand(cmdStr string) error {
+	cmd := exec.Command("sh", "-c", cmdStr)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // overlappingSealedRecords returns implemented (sealed) records — other than self —
@@ -1628,29 +1725,47 @@ func formatRecordList(records []*Record) string {
 // buildSpecCommand returns the shell command string to run for a given AssociatedSpec.
 // If the spec has no type and no run_command, skip is true and cmdStr is empty.
 func buildSpecCommand(spec AssociatedSpec) (cmdStr string, skip bool, err error) {
+	base, templated, skip := specCommandBase(spec)
+	if skip {
+		return "", true, nil
+	}
+	if templated {
+		return strings.ReplaceAll(spec.RunCommand, "{{path}}", spec.Path), false, nil
+	}
+	return base + " " + spec.Path, false, nil
+}
+
+// specCommandBase returns the effective command for spec with its path omitted (base),
+// so callers can compare two specs' commands for equality without the path baked in —
+// this is what lets runRecordSpecs batch consecutive same-command entries. templated
+// reports whether spec's run_command contains a literal {{path}} placeholder, which has
+// no multi-path form and so is never grouped with neighbors (base is "" in that case).
+// skip mirrors buildSpecCommand's skip: true when spec has neither run_command nor a
+// known type.
+func specCommandBase(spec AssociatedSpec) (base string, templated bool, skip bool) {
 	if spec.RunCommand != "" {
 		if strings.Contains(spec.RunCommand, "{{path}}") {
-			return strings.ReplaceAll(spec.RunCommand, "{{path}}", spec.Path), false, nil
+			return "", true, false
 		}
-		return spec.RunCommand + " " + spec.Path, false, nil
+		return spec.RunCommand, false, false
 	}
 
 	switch spec.Type {
 	case "linespec":
 		if _, statErr := os.Stat("./linespec"); statErr == nil {
-			return "./linespec test " + spec.Path, false, nil
+			return "./linespec test", false, false
 		}
-		return "linespec test " + spec.Path, false, nil
+		return "linespec test", false, false
 	case "rspec":
-		return "bundle exec rspec " + spec.Path, false, nil
+		return "bundle exec rspec", false, false
 	case "pytest":
-		return "pytest " + spec.Path, false, nil
+		return "pytest", false, false
 	case "jest":
-		return "npx jest " + spec.Path, false, nil
+		return "npx jest", false, false
 	default:
 		// Unknown type or no type — skip with a warning rather than hard-fail,
 		// since the user may have non-executable proof artifacts (e.g. type: config).
-		return "", true, nil
+		return "", false, true
 	}
 }
 
