@@ -1,6 +1,6 @@
 id: prov-2026-531a0e0b
 title: 'provenance index: -c/--config drives embedding settings but not record discovery, yielding a silent no-op that reports success'
-status: draft
+status: open
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
