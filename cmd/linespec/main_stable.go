@@ -591,7 +591,8 @@ func runImportCore(manifestURL, version string) {
 
 	// Run lint to surface reference issues with the local graph
 	fmt.Println("Running provenance lint...")
-	repoRoot, _ := os.Getwd()
+	cwd, _ := os.Getwd()
+	repoRoot := gitRepoRoot(cwd)
 	cmds, err := provenance.NewCommands(cfg, repoRoot, os.Stdout, true)
 	if err != nil {
 		logger.Error("Failed to initialize provenance for lint: %v", err)
