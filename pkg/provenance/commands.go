@@ -1611,11 +1611,15 @@ func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran boo
 			}
 			fmt.Fprintln(os.Stdout)
 		} else {
+			// The batch itself failed: mark the record failed regardless of what the
+			// per-path localization below finds, so an order-dependent or shared-state
+			// failure that only reproduces when paths run together can never be masked
+			// by every path passing when re-run standalone (prov-2026-3ee1f3c3).
+			failed = true
 			fmt.Fprintf(os.Stdout, "    ✗ batch failed — localizing per spec:\n")
 			for _, g := range toRun {
 				if singleErr := runShellCommand(g.cmdStr); singleErr != nil {
 					fmt.Fprintf(os.Stdout, "    ✗ %s failed\n", g.spec.Path)
-					failed = true
 				} else {
 					fmt.Fprintf(os.Stdout, "    ✓ %s passed\n", g.spec.Path)
 				}

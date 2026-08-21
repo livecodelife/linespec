@@ -273,6 +273,65 @@ func TestRunRecordSpecs_BatchFailureLocalizesPerPath(t *testing.T) {
 	}
 }
 
+// newFakeRunnerFailsOnlyWhenBatched writes a shell script that exits non-zero
+// only when invoked with 2+ paths at once, and exits 0 when invoked with a
+// single path — modeling an order-dependent or shared-state failure that only
+// reproduces when specs run together (rspec/pytest/jest all have this failure
+// mode), so it never shows up when a path is re-run standalone.
+func newFakeRunnerFailsOnlyWhenBatched(t *testing.T) (scriptPath, logPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	scriptPath = filepath.Join(dir, "runner.sh")
+	logPath = filepath.Join(dir, "invocations.log")
+	script := `#!/bin/sh
+LOG="$1"
+shift
+echo "RUN $*" >> "$LOG"
+if [ "$#" -ge 2 ]; then
+  exit 1
+fi
+exit 0
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write fake runner: %v", err)
+	}
+	return scriptPath, logPath
+}
+
+// TestRunRecordSpecs_BatchOnlyFailureIsNotMasked verifies the blueprint constraint
+// that a failure of the batched invocation itself must still mark the record
+// failed=true, even when every path happens to pass on its own during the
+// per-path localization re-run — e.g. an order-dependent or cross-file
+// shared-state failure that only reproduces when paths run together.
+func TestRunRecordSpecs_BatchOnlyFailureIsNotMasked(t *testing.T) {
+	script, log := newFakeRunnerFailsOnlyWhenBatched(t)
+	runCmd := "sh " + script + " " + log
+
+	record := &Record{
+		ID: "prov-2026-b1a7c4e2",
+		AssociatedSpecs: []AssociatedSpec{
+			{Path: "one.py", RunCommand: runCmd},
+			{Path: "two.py", RunCommand: runCmd},
+		},
+	}
+
+	cmds := &Commands{}
+	var ran, failed bool
+	stdout := captureStdout(t, func() {
+		ran, failed = cmds.runRecordSpecs(record, nil)
+	})
+
+	if !ran {
+		t.Error("expected ran=true")
+	}
+	if !failed {
+		t.Error("expected failed=true when the batch itself fails, even though every path passes standalone during localization")
+	}
+	if !strings.Contains(stdout, "✓ one.py passed") || !strings.Contains(stdout, "✓ two.py passed") {
+		t.Errorf("expected both paths to localize as passed, got stdout:\n%s", stdout)
+	}
+}
+
 // TestRunRecordSpecs_SeenDedupKeyIndependentOfBatching verifies the tricky
 // completion-time overlap-teeth case: a path already verified as part of a batch in
 // one record's run must still be recognized as already-verified in a later record's
