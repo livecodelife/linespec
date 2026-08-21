@@ -1,0 +1,61 @@
+id: prov-2026-772101a3
+title: 'provenance index: a record id with a suffix wedges the embedding store partway through, then later runs report the corpus fully indexed'
+status: draft
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |-
+  `pkg/embeddings/store.go`'s `Store.ReadAll` reads each record's ID with a
+  single `bufio.Reader.Read(idBytes)` call instead of `io.ReadFull`. `Read` is
+  only guaranteed to return `1 <= n <= len(idBytes)` bytes when data is
+  available, not `len(idBytes)`; a short read leaves `idBytes` partially
+  zero-filled but the code proceeds as if the full ID had been consumed. Once
+  the underlying byte stream is desynced by the shortfall, every subsequent
+  record in the file is parsed from the wrong offset, and parsing eventually
+  fails with "unexpected EOF" partway through a vector read. Because a
+  `bufio.Reader`'s short reads depend on how much is left in its internal
+  buffer relative to the read boundary, this only manifests once a record ID
+  of different length than its neighbors (e.g. `prov-2026-40000000-aaaaaaaaaaaaa`,
+  which carries a disambiguating suffix) lands at a byte offset that produces a
+  short read for a later `idLen`-sized read — small corpora and uniform-length
+  corpora never hit the boundary, matching the issue's isolation table.
+  Compounding this, `Commands.Index` (`pkg/provenance/commands.go`) treats a
+  non-`os.IsNotExist` error from `store.Exists` as "skip this record" (prints a
+  warning and `continue`s without adding it to `toIndex`), so once `ReadAll`
+  starts erroring, affected records vanish from the indexing plan entirely: a
+  run with zero candidates left prints "All implemented records already have
+  embeddings." even though some records were never successfully embedded, and
+  `--force` (which bypasses the `Exists` check but still routes through
+  `Store.Write` -> `ReadAll` to rewrite the file) fails on every record because
+  the store is already desynced. Fix `ReadAll` to consume exactly `idLen` bytes
+  (or fail loudly) regardless of ID length or buffer boundary, and stop
+  `Index` from silently dropping records whose existence check errored so a
+  wedged store is reported and retried instead of masked as complete.
+constraints:
+  - "`Store.ReadAll` must fully consume each record ID (`io.ReadFull` or equivalent short-read handling) regardless of ID byte length, so records are parsed correctly however they land relative to the underlying `bufio.Reader`'s internal buffer boundaries."
+  - "A corpus containing record IDs of non-uniform length (including a suffixed ID like `prov-2026-40000000-aaaaaaaaaaaaa` appearing anywhere in the file, not only first or last) must round-trip through `Store.writeAll`/`Store.ReadAll` with every record readable, for corpus sizes at least through the 200-record scale in the issue's repro."
+  - "`Commands.Index` must not report `\"All implemented records already have embeddings.\"` (or exit 0) when any record's `store.Exists` check failed with a real error (as opposed to the store file simply not existing yet) — such records must be surfaced as failures or retried, never silently excluded from `toIndex`."
+  - "Given the exact repro in issue #206 (200 synthetic records, one id suffixed and positioned first), both `linespec provenance index` runs must together account for all 200 records as indexed, with no run reporting full completion while indexed records are missing from `embeddings.bin`."
+  - "`linespec provenance index --force` must be able to fully re-index a store that was left in a partially-written state by a prior failed run, without every record failing with a read error."
+  - "Existing embeddings.bin readers/writers (`Write`, `Delete`, `Find`, `Exists`) must continue to work unchanged for uniform-length-ID corpora — this is a targeted correctness fix, not a format change."
+affected_scope:
+  - pkg/embeddings/store.go
+  - pkg/embeddings/store_test.go
+  - pkg/embeddings/index_wedge_test.go
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-7136e8c4
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/embeddings/index_wedge_test.go
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - embeddings
+  - index
+  - provenance-search
+  - bug
