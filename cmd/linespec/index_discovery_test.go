@@ -44,15 +44,13 @@ type: blueprint
 // records rather than an error, so Index() reports "already have embeddings"
 // without ever having found the records the -c config's dir actually points at.
 func TestIndexHonorsConfigFlagAbsoluteDir(t *testing.T) {
-	t.Skip("pending implementation of prov-2026-531a0e0b")
-
 	scratchDir := t.TempDir() // where the -c config file lives
 	recordsDir := t.TempDir() // absolute provenance.dir target -- deliberately not under scratchDir or the repo
 	writeMinimalImplementedRecord(t, recordsDir, "prov-2026-aaaaaaaa")
 
 	t.Chdir(scratchDir)
 
-	server := newFakeOpenAIEmbeddingServer(t)
+	server := newFakeOpenAIEmbeddingServer(t, 2048)
 	content := fmt.Sprintf(`provenance:
   dir: %s
   embedding:
