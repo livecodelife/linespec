@@ -1,6 +1,6 @@
 id: prov-2026-e1c1aa88
 title: Remove Client.Dimension() and fix index summary glyph
-status: open
+status: implemented
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -47,7 +47,7 @@ implements: prov-2026-0f3c349b
 related:
   - prov-2026-0f3c349b
   - prov-2026-9eefeb1b
-sealed_at_sha: ""
+sealed_at_sha: 43b64fa5a46eab0f328699e1c393fd588a00113c
 associated_specs:
   - path: pkg/embeddings/client_test.go
     type: go_test
