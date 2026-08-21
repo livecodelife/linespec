@@ -1,6 +1,6 @@
 id: prov-2026-3ee1f3c3
 title: run-specs invokes the runner once per spec entry, paying a full framework boot each time (1.7x on a 3-spec record)
-status: open
+status: implemented
 created_at: '2026-08-12'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |-
@@ -51,7 +51,7 @@ affected_scope:
   - PROVENANCE_RECORDS.md
 type: blueprint
 superseded_by: ''
-sealed_at_sha: ''
+sealed_at_sha: 5f079c7ae80dc16dd02c0a4d8e5dc06e96780096
 associated_specs:
   - path: pkg/provenance/run_specs_batch_test.go
     run_command: make test
