@@ -3194,6 +3194,15 @@ func (c *Commands) Index(opts IndexOptions) error {
 	}
 
 	if len(toIndex) == 0 {
+		if len(c.Loader.Records) == 0 {
+			// Zero records loaded at all is not the same as zero records
+			// needing embeddings -- most often a misresolved provenance.dir
+			// (e.g. from a -c/--config file) pointing at an empty or
+			// nonexistent directory (prov-2026-531a0e0b). Report it
+			// distinguishably instead of the success message below.
+			fmt.Fprintf(os.Stdout, "⚠ No provenance records found at %s\n", c.Loader.Dir)
+			return nil
+		}
 		fmt.Fprintln(os.Stdout, "✓ All implemented records already have embeddings.")
 		return nil
 	}

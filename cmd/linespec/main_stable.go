@@ -967,8 +967,15 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 			configDir := filepath.Dir(filePath)
 
 			if fullConfig.Provenance.Dir != "" {
-				// Make provenance dir relative to config file location
-				cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)
+				if filepath.IsAbs(fullConfig.Provenance.Dir) {
+					// An absolute provenance.dir names the directory outright;
+					// joining it with configDir would silently mangle it into
+					// a nonexistent path (prov-2026-531a0e0b).
+					cfg.Dir = fullConfig.Provenance.Dir
+				} else {
+					// Make provenance dir relative to config file location
+					cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)
+				}
 			}
 			if fullConfig.Provenance.Enforcement != "" {
 				cfg.Enforcement = fullConfig.Provenance.Enforcement
