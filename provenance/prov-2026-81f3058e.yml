@@ -1,0 +1,60 @@
+id: prov-2026-81f3058e
+title: Batch consecutive same-command associated_specs into one process, keyed for stable seen-dedup
+status: draft
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |-
+  Implements prov-2026-3ee1f3c3: batch consecutive associated_specs entries that
+  share an effective command into a single `sh -c` invocation with all their
+  paths appended, instead of one process per entry.
+
+  Key decisions:
+
+  - buildSpecCommand's public behavior (and its existing tests) stayed
+    untouched. It's now a thin wrapper over a new specCommandBase helper that
+    returns the command with the path omitted, plus a `templated` flag for
+    {{path}} entries. runRecordSpecs uses specCommandBase to decide whether two
+    adjacent specs are groupable, and buildSpecCommand for the per-entry
+    (non-batched) command each spec would have run standalone.
+
+  - The `seen` dedup map is keyed on each entry's own non-batched command
+    (base + " " + path, or the {{path}}-substituted string), never on the
+    batched command string. This is what makes dedup correct across records
+    that batch the same path with different neighbors: a path's identity in
+    `seen` doesn't shift depending on who it happened to run alongside.
+    Verified by TestRunRecordSpecs_SeenDedupKeyIndependentOfBatching, which
+    runs the same path through two records — once batched with a neighbor,
+    once standalone — sharing one `seen` map, and asserts only one invocation
+    is ever logged.
+
+  - Per-path ✓/✗ reporting for a batch: on success, print one "✓ <path>
+    passed" line per path (never a single aggregate line) so output
+    granularity matches the pre-batching format. On failure, re-run each
+    path's own single-path command to localize which one(s) actually failed,
+    rather than parsing runner-specific output — this keeps the mechanism
+    generic across rspec/pytest/jest/linespec/custom run_command without any
+    per-runner output parsing, at the cost of a second process for the
+    (uncommon) failing-batch case only.
+
+  - Tests use a fake `sh` script (recording invocations to a log file) rather
+    than real rspec/pytest/jest/bundle, per the blueprint's constraint that
+    grouping logic must be unit-testable without Docker or those toolchains.
+constraints: []
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/run_specs_batch_test.go
+type: imprint
+implements: prov-2026-3ee1f3c3
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/run_specs_batch_test.go
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - run-specs
+  - performance
+  - issue-177
