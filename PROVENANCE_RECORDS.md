@@ -623,10 +623,12 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force
 
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to mark as implemented
-- `--force` - Skip LineSpec existence check
+- `--force` - Skip the `associated_specs` existence check, and skip actually running them even when `run_associated_specs_on_complete` is enabled
 - `-c, --config path` - Use custom config
 
 **Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`, next to the resolved config's `provenance.dir` (see [Hash Manifest](#hash-manifest-linespechash_manifestjson) below for how the path is chosen). The manifest is created automatically on first use. Sealing a record only ever writes that one record's line in the manifest — no other record's entry, and no aggregate hash, is touched. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
+
+**`associated_specs` gate:** `complete` always checks that every `associated_specs` path exists on disk. When `run_associated_specs_on_complete: true` is also set, `complete` goes further and actually *runs* each spec's command — the same mechanism `run-specs` uses — before sealing. If any spec exits non-zero, the transition is rolled back (status, `sealed_at_sha`, the on-disk YAML, and the hash manifest are all restored exactly as they were) and `complete` exits nonzero, matching what `run-specs` would report for the same record. The success output reports each spec's actual pass/fail outcome in that case, rather than merely that its path exists. This holds regardless of `commit_on_status_change`. When `run_associated_specs_on_complete` is `false` (the default), `complete` does not execute any specs and continues to report on path existence only.
 
 ### Compile
 

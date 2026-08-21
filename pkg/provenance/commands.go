@@ -1144,6 +1144,31 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
+	// Run the record's OWN associated_specs — the actual completion-time gate.
+	// This uses the same mechanism as `run-specs` (runRecordSpecs), so a spec whose
+	// command exits non-zero blocks completion exactly like `run-specs` would report
+	// it: ✗ failed, exit nonzero. Only active when run_associated_specs_on_complete
+	// is enabled and the record has specs; opts.Force bypasses it the same way it
+	// bypasses the path-existence check above. A failure rolls back the seal —
+	// mirroring the lint-failure rollback just above — so the record is never left
+	// implemented with a failing proof.
+	var specOutcomes []SpecOutcome
+	if !opts.Force && c.Config.RunAssociatedSpecsOnComplete && len(record.AssociatedSpecs) > 0 {
+		fmt.Fprintf(c.Formatter.Output, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
+		_, failed, outcomes := c.runRecordSpecs(record, nil)
+		specOutcomes = outcomes
+		if failed {
+			rollback(false)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot complete %s: one or more of its own associated specs failed.\n\n"+
+					"  The transition was rolled back — %s is unchanged (still %s).\n"+
+					"  Fix the failing spec(s) above and run 'linespec provenance complete' again.",
+				opts.RecordID, opts.RecordID, origStatus,
+			))
+			return fmt.Errorf("associated spec failed")
+		}
+	}
+
 	// Governance-overlap verification (completion-time teeth). Find the sealed
 	// records this change actually touched — computed from the files across this
 	// record's commits, not glob intersection — and run their associated specs to
@@ -1167,7 +1192,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 					continue
 				}
 				fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
-				ran, failed := c.runRecordSpecs(r, seen)
+				ran, failed, _ := c.runRecordSpecs(r, seen)
 				if failed {
 					failedRecords = append(failedRecords, r)
 				}
@@ -1225,7 +1250,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
-	c.Formatter.FormatCompleteSuccess(record)
+	c.Formatter.FormatCompleteSuccess(record, specOutcomes)
 
 	// Completing gives up the record's exclusive claim on the write access its
 	// scope granted while open (prov-2026-8d2f5f2a) — re-lock any of its scope
@@ -1488,7 +1513,7 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
 
-	_, failed := c.runRecordSpecs(record, nil)
+	_, failed, _ := c.runRecordSpecs(record, nil)
 	if failed {
 		return fmt.Errorf("one or more associated specs failed — commit blocked")
 	}
@@ -1497,27 +1522,38 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 	return nil
 }
 
+// SpecOutcome records the actual executed result of one associated_spec — used by
+// FormatCompleteSuccess to report a real pass/fail/skip outcome instead of merely
+// checking that the spec's path exists on disk.
+type SpecOutcome struct {
+	Path   string
+	Status string // "passed", "failed", or "skipped"
+}
+
 // runRecordSpecs executes the associated_specs of a single record, streaming each
-// command's output. It returns ran (whether the record has any executable spec) and
-// failed (whether any spec it ran exited non-zero). It deliberately does NOT consult
-// run_associated_specs_on_complete or look at record status — the caller decides when
-// to invoke it, so it can verify an arbitrary record's specs on demand.
+// command's output. It returns ran (whether the record has any executable spec),
+// failed (whether any spec it ran exited non-zero), and the per-spec outcomes. It
+// deliberately does NOT consult run_associated_specs_on_complete or look at record
+// status — the caller decides when to invoke it, so it can verify an arbitrary
+// record's specs on demand.
 //
 // When seen is non-nil it is used to de-duplicate identical spec commands across
 // calls: a command already present in seen is treated as already-verified and not
 // re-run (so completing a change to a widely-governed file does not run `make test`
 // dozens of times). A record still counts as ran if it has a runnable spec, even when
 // that spec's command was already executed for another record.
-func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool) {
+func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool, outcomes []SpecOutcome) {
 	for _, spec := range record.AssociatedSpecs {
 		cmdStr, skip, err := buildSpecCommand(spec)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "  · %s  ✗ could not build command: %v\n", spec.Path, err)
 			failed = true
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "failed"})
 			continue
 		}
 		if skip {
 			fmt.Fprintf(os.Stdout, "  · %s  (skipped — no type or run_command)\n", spec.Path)
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "skipped"})
 			continue
 		}
 
@@ -1525,6 +1561,7 @@ func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran boo
 		if seen != nil {
 			if seen[cmdStr] {
 				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", cmdStr)
+				outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "passed"})
 				continue
 			}
 			seen[cmdStr] = true
@@ -1537,11 +1574,13 @@ func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran boo
 		if err := cmd.Run(); err != nil {
 			fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
 			failed = true
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "failed"})
 		} else {
 			fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "passed"})
 		}
 	}
-	return ran, failed
+	return ran, failed, outcomes
 }
 
 // overlappingSealedRecords returns implemented (sealed) records — other than self —
