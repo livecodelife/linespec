@@ -16,12 +16,19 @@ intent: >
   record to toIndex so it is retried and, if the store is still wedged,
   surfaced as a counted failure via the existing failCount path instead of
   vanishing from the plan and letting the run report false completion.
-  Verified both fixes independently: reverting each one in isolation makes
-  its corresponding new test fail (a 200-record round-trip test in
-  pkg/embeddings/index_wedge_test.go sweeping the suffixed-ID position across
-  the corpus, and a Commands.Index test in pkg/provenance/index_test.go using
-  a fake OpenAI-compatible httptest server plus a deliberately wedged
-  embeddings.bin).
+  Verified both fixes: reverting the ReadAll fix makes the new
+  pkg/embeddings/index_wedge_test.go round-trip test fail (it sweeps a
+  suffixed record ID across every position in a 200-record corpus, matching
+  issue #206's exact repro). The Commands.Index fix (falling through to
+  toIndex instead of `continue`ing past a real Exists error) was verified the
+  same way with a local, not-committed test using a fake OpenAI-compatible
+  httptest server plus a deliberately wedged embeddings.bin — reverting the
+  fix made Index print "All implemented records already have embeddings."
+  and return nil despite the wedged record never being indexed; that harness
+  lived in pkg/provenance/index_test.go, which was dropped before commit
+  because it fell outside this bug's affected_scope (only pkg/embeddings/**
+  and pkg/provenance/commands.go, not a new provenance test file) — a
+  follow-up record covering pkg/provenance test scope could restore it.
 constraints:
   - Store.ReadAll must fully consume each record ID via io.ReadFull regardless of length or buffer boundary.
   - Commands.Index must not silently exclude a record from toIndex when its Exists check errors with something other than file-not-found.
@@ -39,8 +46,6 @@ related:
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/embeddings/index_wedge_test.go
-    run_command: make test # {{path}}
-  - path: pkg/provenance/index_test.go
     run_command: make test # {{path}}
 associated_traces: []
 monitors: []
