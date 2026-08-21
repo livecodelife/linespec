@@ -54,20 +54,30 @@ func managedStatePaths() []string {
 
 // AlwaysWritablePaths returns the derived always-writable pattern set: the
 // existing provenance.exclude_paths whitelist plus the authoring coop — the
-// configured provenance directory, .linespec.yml, LineSpec's own managed
-// .linespec/ state directory (managedStatePaths), and every associated_spec path
-// across all loaded records (regardless of status), so the
-// Brief-to-Blueprint-to-Imprint authoring chain can never block its own
-// creation. This set is derived, never separately hand-maintained. repoRoot
-// normalizes an absolute config.Dir to repo-relative, since every path this
-// pattern set is matched against (from `git ls-files`) is repo-relative too.
+// configured provenance directory, the reconciling config's own .linespec.yml,
+// LineSpec's own managed .linespec/ state directory (managedStatePaths), and
+// every associated_spec path across all loaded records (regardless of
+// status), so the Brief-to-Blueprint-to-Imprint authoring chain can never
+// block its own creation. This set is derived, never separately
+// hand-maintained. repoRoot normalizes an absolute config.Dir to
+// repo-relative, since every path this pattern set is matched against (from
+// `git ls-files`) is repo-relative too. The config-file entry is joined from
+// config.ConfigFileDir the same way the provenance-dir entry is joined from
+// config.Dir, so a nested config's own .linespec.yml (e.g.
+// "pkg_a/.linespec.yml") is exempted at its actual path rather than only the
+// bare repo-root literal — a nil config or unset ConfigFileDir still exempts
+// the repo-root ".linespec.yml" exactly as before (prov-2026-c65450b6).
 func AlwaysWritablePaths(config *ProvenanceConfig, records []*Record, repoRoot string) []string {
 	var out []string
 	dir := "provenance"
+	configFileDir := "."
 	if config != nil {
 		out = append(out, config.ExcludePaths...)
 		if config.Dir != "" {
 			dir = config.Dir
+		}
+		if config.ConfigFileDir != "" {
+			configFileDir = config.ConfigFileDir
 		}
 	}
 	if repoRoot != "" && filepath.IsAbs(dir) {
@@ -75,7 +85,7 @@ func AlwaysWritablePaths(config *ProvenanceConfig, records []*Record, repoRoot s
 			dir = rel
 		}
 	}
-	out = append(out, dir, ".linespec.yml")
+	out = append(out, dir, filepath.Join(configFileDir, ".linespec.yml"))
 	out = append(out, managedStatePaths()...)
 
 	seen := map[string]bool{}
