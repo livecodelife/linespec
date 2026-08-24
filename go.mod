@@ -6,7 +6,7 @@ require (
 	github.com/docker/docker v26.1.5+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/go-mysql-org/go-mysql v1.14.0
-	github.com/go-sql-driver/mysql v1.9.3
+	github.com/go-sql-driver/mysql v1.10.0
 	github.com/lib/pq v1.12.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/spf13/cobra v1.10.2
