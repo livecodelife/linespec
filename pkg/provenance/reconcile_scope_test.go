@@ -214,14 +214,14 @@ func TestCommandsReconcile_BothPassesTogetherPartitionTheWholeTree(t *testing.T)
 		"pkg/uncovered.go": false,
 		"pkg/foo/foo.go":   true,
 		"pkg/foo/other.go": false,
-		// The repo-root .linespec.yml matches the literal always-writable
-		// ".linespec.yml" pattern (AlwaysWritablePaths); a nested config's own
-		// .linespec.yml does not (that pattern is not directory-relative), so it
-		// is governed like any other uncovered file in its own directory —
-		// outside prov-2026-bde50f4d's constraints, which are about scope
-		// precedence, not this pre-existing always-writable pattern.
+		// AlwaysWritablePaths derives each config's own .linespec.yml entry
+		// from its ConfigFileDir, so the repo-root config's .linespec.yml and
+		// the nested pkg/foo config's own .linespec.yml are both always
+		// writable at their own actual paths (prov-2026-c65450b6) — matching
+		// the documented "always-writable" exemption for the config file that
+		// enables the restriction, not just the repo-root one.
 		".linespec.yml":         true,
-		"pkg/foo/.linespec.yml": false,
+		"pkg/foo/.linespec.yml": true,
 	}
 	for rel, want := range writable {
 		got := isWritableOnDisk(t, filepath.Join(repo, rel))

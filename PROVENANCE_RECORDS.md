@@ -28,7 +28,7 @@ Provenance Records are structured YAML artifacts that capture the organizational
 brew tap livecodelife/linespec
 brew install linespec
 # Or use go install:
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.18.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.19.0
 
 # 2. Set up your repo (run these from the repo root)
 linespec init                          # interactive: writes .linespec.yml
@@ -75,7 +75,7 @@ brew install linespec
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.18.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.19.0
 ```
 
 ### GitHub Releases
@@ -623,10 +623,12 @@ linespec provenance complete --record prov-2026-a1b2c3d4 --force
 
 **Options:**
 - `--record prov-YYYY-XXXXXXXX` - Required. The record to mark as implemented
-- `--force` - Skip LineSpec existence check
+- `--force` - Skip the `associated_specs` existence check, and skip actually running them even when `run_associated_specs_on_complete` is enabled
 - `-c, --config path` - Use custom config
 
 **Hash sealing:** After marking a record as implemented, `complete` computes a SHA-256 hash of the record's canonical YAML content and writes it to `.linespec/hash_manifest.json`, next to the resolved config's `provenance.dir` (see [Hash Manifest](#hash-manifest-linespechash_manifestjson) below for how the path is chosen). The manifest is created automatically on first use. Sealing a record only ever writes that one record's line in the manifest — no other record's entry, and no aggregate hash, is touched. Once sealed, any modification to the record's immutable fields will be detected by `linespec provenance lint` as a **PROV-IMM** error.
+
+**`associated_specs` gate:** `complete` always checks that every `associated_specs` path exists on disk. When `run_associated_specs_on_complete: true` is also set, `complete` goes further and actually *runs* each spec's command — the same mechanism `run-specs` uses — before sealing. If any spec exits non-zero, the transition is rolled back (status, `sealed_at_sha`, the on-disk YAML, and the hash manifest are all restored exactly as they were) and `complete` exits nonzero, matching what `run-specs` would report for the same record. The success output reports each spec's actual pass/fail outcome in that case, rather than merely that its path exists. This holds regardless of `commit_on_status_change`. When `run_associated_specs_on_complete` is `false` (the default), `complete` does not execute any specs and continues to report on path existence only.
 
 ### Compile
 
@@ -957,6 +959,8 @@ linespec provenance run-specs --record prov-2026-001
 
 Useful to verify proof artifacts pass *before* attempting to complete a record. See [Scope Enforcement &amp; When You're Blocked](#scope-enforcement--when-youre-blocked) for how `path`/`type`/`run_command` behave.
 
+Consecutive `associated_specs` entries that resolve to the same effective command (same auto-run type with no `run_command` override, or the same explicit `run_command` string with no `{{path}}` placeholder) run as a single batched invocation with all their paths appended, instead of one process per entry — this avoids paying a full framework boot (Rails, pytest, jest, …) once per spec when several specs share a runner. Entries are only batched when adjacent in `associated_specs` order, and a `{{path}}`-templated `run_command` always runs standalone (there is no well-defined multi-path form for a templated command). Per-entry ✓/✗ reporting is unaffected — each path still gets its own pass/fail line, with a failed batch re-run per-path to localize which one(s) actually failed.
+
 ### Install Hooks
 
 Install git hooks for automatic validation:
@@ -1066,7 +1070,7 @@ provenance:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `dir` | string | `provenance` | Directory containing records |
+| `dir` | string | `provenance` | Directory containing records (see [below](#dir)) |
 | `enforcement` | string | `warn` | Global enforcement level |
 | `commit_tag_required` | bool | `false` | Require tags in commits |
 | `auto_affected_scope` | bool | `true` | Auto-populate scope |
@@ -1075,6 +1079,26 @@ provenance:
 | `shared_repos` | array | `[]` | Additional directories |
 | `exclude_paths` | array | `[]` | Files exempt from all governance (globs, paths, dir prefixes, `/regex/`) |
 | `write_restriction` | bool | `true` | Whether the filesystem write-permission projection is enforced at all |
+
+#### `dir`
+
+`dir` resolves relative to the directory holding the `.linespec.yml` that
+declares it — not the repository root and not the process's current working
+directory. A nested package's `packages/foo/.linespec.yml` with `dir:
+provenance` therefore loads records from `packages/foo/provenance/`, whatever
+directory you invoke `linespec` from.
+
+A record's own `affected_scope`, `forbidden_scope`, and `associated_specs`
+paths resolve against a **different** base: the git repository root, always —
+regardless of where `dir` (or the declaring `.linespec.yml`) lives, and
+regardless of the invoking working directory. This matches the
+`auto_affected_scope` convention (paths like `pkg/provenance/linter.go`, not
+paths relative to a nested config), so a record in
+`packages/foo/provenance/prov-....yml` still declares
+`affected_scope: [packages/foo/app/thing.rb]`, not `affected_scope:
+[app/thing.rb]`. `linespec provenance lint`, `open`, and `complete` report
+identical results for the same config + records no matter which directory
+you run them from.
 
 #### `write_restriction`
 
@@ -1148,6 +1172,16 @@ provenance:
     api_key: not-needed-locally     # Still required; send any non-empty value your server accepts
 ```
 
+The local embedding store doesn't assume a fixed vector width: the first vector
+ever written to `.linespec/embeddings.bin` establishes the width for that store,
+whatever your model actually produces (768 for `nomic-embed-text-v1.5`, 1024 for
+`Qwen3-Embedding-0.6B`/`bge-large`, 384 for `all-MiniLM-L6-v2`, or anything else),
+and that width is persisted in the file so later `index`/`search`/`audit`/`complete`
+runs read it back automatically. Mixing widths in one index is not supported —
+if you switch `provider`, `index_model`, or embedding server to one with a
+different output width, delete `.linespec/embeddings.bin` and re-run `linespec
+provenance index` to rebuild it at the new width.
+
 **Configuration Options:**
 
 | Option | Type | Default | Description |
@@ -1207,7 +1241,7 @@ The pre-commit hook validates that modified provenance records are well-formed, 
 
 - **Linting**: Checks YAML syntax, required fields, and valid values
 - **Quick validation**: Ensures records can be parsed and loaded
-- **Spec execution** (opt-in): When `run_associated_specs_on_complete: true` is set in `.linespec.yml`, detects `open` → `implemented` status transitions and runs the record's `associated_specs` before allowing the commit. Supported types: `linespec`, `rspec`, `pytest`, `jest`. Use `run_command` on any spec entry to override the default command for that type.
+- **Spec execution** (opt-in): When `run_associated_specs_on_complete: true` is set in `.linespec.yml`, detects `open` → `implemented` status transitions and runs the record's `associated_specs` before allowing the commit. Supported types: `linespec`, `rspec`, `pytest`, `jest`. Use `run_command` on any spec entry to override the default command for that type. Consecutive specs sharing an effective command are batched into one invocation — see [Run Specs](#run-specs).
 
 ### Commit-msg Hook
 

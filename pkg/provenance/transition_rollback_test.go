@@ -106,6 +106,32 @@ func validRecord(id, status, recordType string) string {
 		"tags: []\n"
 }
 
+// recordWithSpec returns a record that passes lint and declares one associated_spec
+// at specPath, run via run_command. The path must exist on disk (Complete's
+// existence check runs before the spec is ever executed) — callers create it.
+func recordWithSpec(id, status, specPath, runCommand string) string {
+	return "id: " + id + "\n" +
+		"title: Test record\n" +
+		"status: " + status + "\n" +
+		"created_at: \"2026-01-01\"\n" +
+		"author: test@example.com\n" +
+		"intent: Build the thing.\n" +
+		"constraints:\n  - Must work\n" +
+		"affected_scope:\n  - pkg/thing.go\n" +
+		"forbidden_scope: []\n" +
+		"type: blueprint\n" +
+		"supersedes: \"\"\n" +
+		"superseded_by: \"\"\n" +
+		"related: []\n" +
+		"sealed_at_sha: \"\"\n" +
+		"associated_specs:\n" +
+		"  - path: " + specPath + "\n" +
+		"    run_command: \"" + runCommand + "\"\n" +
+		"associated_traces: []\n" +
+		"monitors: []\n" +
+		"tags: []\n"
+}
+
 // invalidImprint returns an imprint whose implements points at a record that does
 // not exist, which is an error-level lint violation (PROV022) regardless of status.
 func invalidImprint(id, status string) string {
@@ -263,6 +289,123 @@ func TestComplete_SucceedsAndCommitsWhenValid(t *testing.T) {
 	}
 	if got := stagedFiles(t, repo); got != "" {
 		t.Errorf("index should be clean after a successful commit, staged: %q", got)
+	}
+}
+
+func TestComplete_RollsBackWhenOwnAssociatedSpecFails(t *testing.T) {
+	// Reproduces prov-2026-8d5c9376: a record whose own associated_spec fails must
+	// not be reported as verified and sealed — Complete must actually execute the
+	// spec (via the same mechanism as run-specs), roll back, and exit nonzero,
+	// exactly like run-specs would report ✗ failed / exit 1 for the same record.
+	cmds, repo, buf := newTransitionTestRepo(t, true)
+	t.Chdir(repo)
+	cmds.Config.RunAssociatedSpecsOnComplete = true
+	id := "prov-2026-aaaa0007"
+
+	specPath := filepath.Join(repo, "spec", "dummy.txt")
+	if err := os.MkdirAll(filepath.Dir(specPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(specPath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile spec: %v", err)
+	}
+	gitExec(t, repo, "add", "spec/dummy.txt")
+	gitExec(t, repo, "commit", "-m", "add spec fixture")
+
+	abs := writeAndCommitRecord(t, cmds, repo, id, recordWithSpec(id, "open", "spec/dummy.txt", "false"))
+	before, _ := os.ReadFile(abs)
+
+	err := cmds.Complete(CompleteOptions{RecordID: id})
+	if err == nil {
+		t.Fatal("expected Complete to fail when the record's own associated spec fails")
+	}
+
+	after, _ := os.ReadFile(abs)
+	if !bytes.Equal(before, after) {
+		t.Errorf("record file not restored after own-spec-failure rollback:\n--- before ---\n%s\n--- after ---\n%s", before, after)
+	}
+	if got := loadedRecord(t, cmds, id).Status; got != StatusOpen {
+		t.Errorf("in-memory status = %q, want open (transition must not stick)", got)
+	}
+	if got := loadedRecord(t, cmds, id).SealedAtSHA; got != "" {
+		t.Errorf("sealed_at_sha = %q, want empty after rollback", got)
+	}
+	if cmds.Linter.Hasher.ManifestExists() {
+		t.Errorf("hash manifest should not exist after own-spec-failure rollback")
+	}
+	if got := stagedFiles(t, repo); got != "" {
+		t.Errorf("expected clean index after rollback, staged: %q", got)
+	}
+	if head := gitOutput(t, repo, "log", "-1", "--format=%s"); strings.Contains(head, "Complete provenance record ["+id+"]") {
+		t.Errorf("no completion commit should have been made, HEAD = %q", head)
+	}
+	if msg := buf.String(); !strings.Contains(msg, "associated specs failed") || !strings.Contains(msg, "rolled back") || !strings.Contains(msg, "still open") {
+		t.Errorf("error message should explain the spec failure and rollback, got:\n%s", msg)
+	}
+}
+
+func TestComplete_SucceedsWhenOwnAssociatedSpecPasses(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, true)
+	t.Chdir(repo)
+	cmds.Config.RunAssociatedSpecsOnComplete = true
+	id := "prov-2026-aaaa0008"
+
+	specPath := filepath.Join(repo, "spec", "dummy.txt")
+	if err := os.MkdirAll(filepath.Dir(specPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(specPath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile spec: %v", err)
+	}
+	gitExec(t, repo, "add", "spec/dummy.txt")
+	gitExec(t, repo, "commit", "-m", "add spec fixture")
+
+	writeAndCommitRecord(t, cmds, repo, id, recordWithSpec(id, "open", "spec/dummy.txt", "true"))
+
+	if err := cmds.Complete(CompleteOptions{RecordID: id}); err != nil {
+		t.Fatalf("Complete should succeed when the record's own associated spec passes: %v", err)
+	}
+
+	if got := loadedRecord(t, cmds, id).Status; got != StatusImplemented {
+		t.Errorf("in-memory status = %q, want implemented", got)
+	}
+	// FormatCompleteSuccess must report the ACTUAL executed outcome (passed), not
+	// merely that the path exists on disk.
+	if msg := buf.String(); !strings.Contains(msg, "✓ passed") {
+		t.Errorf("success output should report the spec's real pass outcome, got:\n%s", msg)
+	}
+}
+
+func TestComplete_GateDisabled_ReportsPathExistenceOnlyAndDoesNotExecute(t *testing.T) {
+	// run_associated_specs_on_complete is false (the default) — Complete must not
+	// execute the spec at all, and must fall back to reporting mere path existence.
+	cmds, repo, buf := newTransitionTestRepo(t, true)
+	t.Chdir(repo)
+	id := "prov-2026-aaaa0009"
+
+	specPath := filepath.Join(repo, "spec", "dummy.txt")
+	if err := os.MkdirAll(filepath.Dir(specPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(specPath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile spec: %v", err)
+	}
+	gitExec(t, repo, "add", "spec/dummy.txt")
+	gitExec(t, repo, "commit", "-m", "add spec fixture")
+
+	// run_command "false" would fail the record if it were ever executed — proving
+	// that a disabled gate really does skip execution rather than merely ignoring
+	// the outcome.
+	writeAndCommitRecord(t, cmds, repo, id, recordWithSpec(id, "open", "spec/dummy.txt", "false"))
+
+	if err := cmds.Complete(CompleteOptions{RecordID: id}); err != nil {
+		t.Fatalf("Complete should succeed when the gate is disabled, even though the spec command would fail: %v", err)
+	}
+	if got := loadedRecord(t, cmds, id).Status; got != StatusImplemented {
+		t.Errorf("in-memory status = %q, want implemented", got)
+	}
+	if msg := buf.String(); !strings.Contains(msg, "spec/dummy.txt") || !strings.Contains(msg, "✓") || strings.Contains(msg, "✓ passed") {
+		t.Errorf("success output should report path existence only (not an executed outcome), got:\n%s", msg)
 	}
 }
 

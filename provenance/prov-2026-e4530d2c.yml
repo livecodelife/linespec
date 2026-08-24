@@ -1,0 +1,54 @@
+id: prov-2026-e4530d2c
+title: Derive config-file always-writable entry from ConfigFileDir
+status: implemented
+created_at: "2026-08-21"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |-
+  Implementation note for bug fix prov-2026-c65450b6 (linked via related, since
+  imprint records may only implement a blueprint; this imprint implements the
+  blueprint prov-2026-c65450b6 itself extends). AlwaysWritablePaths
+  (pkg/provenance/fswrite.go) appended the bare literal ".linespec.yml" to the
+  always-writable set instead of deriving it from config.ConfigFileDir the
+  same way the provenance-dir entry is derived from config.Dir. Fixed by
+  computing configFileDir (defaulting to "." when config is nil or
+  ConfigFileDir is unset) and joining it with ".linespec.yml" via
+  filepath.Join — filepath.Join(".", ".linespec.yml") collapses to
+  ".linespec.yml", so repo-root behavior is byte-identical to before. A nested
+  config (e.g. ConfigFileDir "pkg_a") now gets "pkg_a/.linespec.yml" in the
+  always-writable set instead of the unqualified literal, so it no longer
+  collides with — or fails to match — a differently-located config file.
+
+  Also updated reconcile_scope_test.go's
+  TestCommandsReconcile_BothPassesTogetherPartitionTheWholeTree, which
+  previously pinned the buggy behavior (asserted "pkg/foo/.linespec.yml":
+  false with a comment scoping that gap as pre-existing and out of
+  prov-2026-bde50f4d's constraints) — it now asserts the nested config's own
+  file is writable, matching the documented always-writable exemption.
+constraints:
+  - filepath.Join(".", ".linespec.yml") must remain exactly ".linespec.yml" so
+    repo-root reconcile behavior is unchanged when config is nil or
+    ConfigFileDir is unset.
+  - A nested config's ConfigFileDir must produce its own joined path (e.g.
+    "pkg_a/.linespec.yml"), not the bare literal, so a sibling config's file
+    is never accidentally exempted.
+affected_scope:
+  - pkg/provenance/fswrite.go
+  - pkg/provenance/fswrite_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-8d2f5f2a
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c65450b6
+sealed_at_sha: fa18b2f6d20863b06bce43d77c1a16fe600edd20
+associated_specs:
+  - path: pkg/provenance/fswrite_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - fswrite
+  - reconcile
+  - write-permissions

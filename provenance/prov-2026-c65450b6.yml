@@ -1,9 +1,9 @@
 id: prov-2026-c65450b6
 title: write_restriction locks the .linespec.yml that enables it, contradicting the documented always-writable exemption
-status: draft
-created_at: "2026-08-12"
+status: implemented
+created_at: '2026-08-12'
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
-intent: |
+intent: |-
   Issue #173: with write_restriction enabled, `reconcile` locks a nested
   package's own .linespec.yml — the file that turns the restriction on — even
   though PROVENANCE_RECORDS.md documents "The provenance directory and
@@ -36,52 +36,44 @@ intent: |
   without exempting any other config's file or requiring it to appear in any
   record's affected_scope.
 constraints:
-  - |
-    AlwaysWritablePaths must include the reconciling config's own .linespec.yml
-    at its actual repo-relative path (derived from config.ConfigFileDir, joined
-    with the ".linespec.yml" filename), not just the bare literal
-    ".linespec.yml" — so a nested package's config is exempted at its own path,
-    the same way a repo-root config already is.
-  - |
-    A nil config or one with an empty/unset ConfigFileDir must still exempt the
-    repo-root ".linespec.yml" exactly as before — no regression to existing
-    root-level behavior or to the existing AlwaysWritablePaths tests.
-  - |
-    The exemption stays scoped to the reconciling config's own .linespec.yml
-    only. A sibling or unrelated package's .linespec.yml (outside this config's
-    ConfigFileDir) must remain governed like any other undeclared file — this
-    is not a change to reconcile's directory-boundary behavior
-    (prov-2026-bde50f4d), only to which literal path counts as "the config
-    file" for the always-writable set.
-  - |
-    After the fix, `linespec provenance reconcile -c pkg_a/.linespec.yml` in a
-    package with write_restriction enabled leaves pkg_a/.linespec.yml writable,
-    and it stays writable across repeated reconcile runs (no chmod workaround
-    needed). Declaring .linespec.yml in some record's affected_scope must not
-    become necessary to edit it.
-  - |
-    Update TestCommandsReconcile_BothPassesTogetherPartitionTheWholeTree
-    (pkg/provenance/reconcile_scope_test.go), which currently pins the buggy
-    behavior (asserts pkg/foo/.linespec.yml stays locked), to assert it is
-    writable after both reconcile passes, and remove or correct its comment
-    documenting the old exemption gap.
+  - AlwaysWritablePaths must include the reconciling config's own .linespec.yml
+  - at its actual repo-relative path (derived from config.ConfigFileDir, joined
+  - with the ".linespec.yml" filename), not just the bare literal
+  - '".linespec.yml" — so a nested package''s config is exempted at its own path,'
+  - the same way a repo-root config already is.
+  - A nil config or one with an empty/unset ConfigFileDir must still exempt the
+  - repo-root ".linespec.yml" exactly as before — no regression to existing
+  - root-level behavior or to the existing AlwaysWritablePaths tests.
+  - The exemption stays scoped to the reconciling config's own .linespec.yml
+  - only. A sibling or unrelated package's .linespec.yml (outside this config's
+  - ConfigFileDir) must remain governed like any other undeclared file — this
+  - is not a change to reconcile's directory-boundary behavior
+  - (prov-2026-bde50f4d), only to which literal path counts as "the config
+  - file" for the always-writable set.
+  - After the fix, `linespec provenance reconcile -c pkg_a/.linespec.yml` in a
+  - package with write_restriction enabled leaves pkg_a/.linespec.yml writable,
+  - and it stays writable across repeated reconcile runs (no chmod workaround
+  - needed). Declaring .linespec.yml in some record's affected_scope must not
+  - become necessary to edit it.
+  - Update TestCommandsReconcile_BothPassesTogetherPartitionTheWholeTree
+  - (pkg/provenance/reconcile_scope_test.go), which currently pins the buggy
+  - behavior (asserts pkg/foo/.linespec.yml stays locked), to assert it is
+  - writable after both reconcile passes, and remove or correct its comment
+  - documenting the old exemption gap.
 affected_scope:
   - pkg/provenance/fswrite.go
   - pkg/provenance/fswrite_test.go
   - pkg/provenance/reconcile_scope_test.go
-forbidden_scope: []
 type: bug
 extends: prov-2026-8d2f5f2a
-supersedes: ""
-superseded_by: ""
+superseded_by: ''
 related:
   - prov-2026-bde50f4d
   - prov-2026-26efc162
-sealed_at_sha: ""
+sealed_at_sha: 9c22002e5b99c2935d07955319d97d8496ac2c75
 associated_specs:
   - path: pkg/provenance/fswrite_test.go
-    type: go_test
-    run_command: make test # {{path}}
+    run_command: make test
 associated_traces: []
 monitors: []
 tags:

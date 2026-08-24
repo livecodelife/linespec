@@ -695,13 +695,30 @@ func (f *Formatter) FormatLockLayerSuccess(record *Record) {
 	fmt.Fprintf(f.Output, "  Edit affected_scope and associated_specs to define the protected surface.\n\n")
 }
 
-// FormatCompleteSuccess formats the complete command success output
-func (f *Formatter) FormatCompleteSuccess(record *Record) {
+// FormatCompleteSuccess formats the complete command success output. When
+// outcomes is non-nil, the record's associated_specs were actually executed
+// (run_associated_specs_on_complete is enabled) and each spec's real pass/fail/skip
+// result is reported. When outcomes is nil — the gate is disabled, or opts.Force
+// bypassed it — there is nothing to report on execution, so this falls back to the
+// prior behavior of reporting mere path existence.
+func (f *Formatter) FormatCompleteSuccess(record *Record, outcomes []SpecOutcome) {
 	fmt.Fprintf(f.Output, "\n%s %s marked as implemented\n\n",
 		f.colored("✓", colorGreen),
 		record.ID)
 
-	if len(record.AssociatedSpecs) > 0 {
+	if outcomes != nil {
+		fmt.Fprintf(f.Output, "  Associated specs verified:\n")
+		for _, o := range outcomes {
+			status := f.colored("✓ passed", colorGreen)
+			switch o.Status {
+			case "failed":
+				status = f.colored("✗ failed", colorRed)
+			case "skipped":
+				status = "(skipped — no type or run_command)"
+			}
+			fmt.Fprintf(f.Output, "    · %-50s %s\n", o.Path, status)
+		}
+	} else if len(record.AssociatedSpecs) > 0 {
 		fmt.Fprintf(f.Output, "  Associated specs verified:\n")
 		for _, spec := range record.AssociatedSpecs {
 			exists := "✓"

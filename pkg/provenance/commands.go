@@ -126,6 +126,10 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 	linter := NewLinter(loader, config.Enforcement)
 	linter.Hasher = NewHasher(filepath.Dir(config.Dir))
 	linter.ExcludePaths = config.ExcludePaths
+	// Record-internal paths (affected_scope, forbidden_scope, associated_specs)
+	// resolve against the git repository root, not the process cwd
+	// (prov-2026-2f2bf9c3), so lint/open/complete are invocation-independent.
+	linter.RepoRoot = repoRoot
 
 	// Create git helper
 	git := NewGit(repoRoot)
@@ -1050,7 +1054,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 	if !opts.Force && len(record.AssociatedSpecs) > 0 {
 		var missing []string
 		for _, spec := range record.AssociatedSpecs {
-			if _, err := os.Stat(spec.Path); os.IsNotExist(err) {
+			if _, err := os.Stat(resolveRecordPath(c.RepoRoot, spec.Path)); os.IsNotExist(err) {
 				missing = append(missing, spec.Path)
 			}
 		}
@@ -1144,6 +1148,31 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
+	// Run the record's OWN associated_specs — the actual completion-time gate.
+	// This uses the same mechanism as `run-specs` (runRecordSpecs), so a spec whose
+	// command exits non-zero blocks completion exactly like `run-specs` would report
+	// it: ✗ failed, exit nonzero. Only active when run_associated_specs_on_complete
+	// is enabled and the record has specs; opts.Force bypasses it the same way it
+	// bypasses the path-existence check above. A failure rolls back the seal —
+	// mirroring the lint-failure rollback just above — so the record is never left
+	// implemented with a failing proof.
+	var specOutcomes []SpecOutcome
+	if !opts.Force && c.Config.RunAssociatedSpecsOnComplete && len(record.AssociatedSpecs) > 0 {
+		fmt.Fprintf(c.Formatter.Output, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
+		_, failed, outcomes := c.runRecordSpecs(record, nil)
+		specOutcomes = outcomes
+		if failed {
+			rollback(false)
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot complete %s: one or more of its own associated specs failed.\n\n"+
+					"  The transition was rolled back — %s is unchanged (still %s).\n"+
+					"  Fix the failing spec(s) above and run 'linespec provenance complete' again.",
+				opts.RecordID, opts.RecordID, origStatus,
+			))
+			return fmt.Errorf("associated spec failed")
+		}
+	}
+
 	// Governance-overlap verification (completion-time teeth). Find the sealed
 	// records this change actually touched — computed from the files across this
 	// record's commits, not glob intersection — and run their associated specs to
@@ -1167,7 +1196,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 					continue
 				}
 				fmt.Fprintf(c.Formatter.Output, "\nVerifying sealed record %s touched by this change (%s)...\n", r.ID, r.Title)
-				ran, failed := c.runRecordSpecs(r, seen)
+				ran, failed, _ := c.runRecordSpecs(r, seen)
 				if failed {
 					failedRecords = append(failedRecords, r)
 				}
@@ -1225,7 +1254,7 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 		}
 	}
 
-	c.Formatter.FormatCompleteSuccess(record)
+	c.Formatter.FormatCompleteSuccess(record, specOutcomes)
 
 	// Completing gives up the record's exclusive claim on the write access its
 	// scope granted while open (prov-2026-8d2f5f2a) — re-lock any of its scope
@@ -1240,7 +1269,6 @@ func (c *Commands) Complete(opts CompleteOptions) error {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to generate embedding for %s: %v\n", record.ID, err)
 		} else {
 			store := embeddings.NewStore(c.RepoRoot)
-			store.SetDimension(c.Embedder.Dimension())
 			err := store.Write(embeddings.RecordEmbedding{
 				RecordID: record.ID,
 				Vector:   vector,
@@ -1488,7 +1516,7 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nRunning %d associated spec(s) for %s...\n\n", len(record.AssociatedSpecs), record.ID)
 
-	_, failed := c.runRecordSpecs(record, nil)
+	_, failed, _ := c.runRecordSpecs(record, nil)
 	if failed {
 		return fmt.Errorf("one or more associated specs failed — commit blocked")
 	}
@@ -1497,51 +1525,165 @@ func (c *Commands) RunSpecs(opts RunSpecsOptions) error {
 	return nil
 }
 
+// SpecOutcome records the actual executed result of one associated_spec — used by
+// FormatCompleteSuccess to report a real pass/fail/skip outcome instead of merely
+// checking that the spec's path exists on disk.
+type SpecOutcome struct {
+	Path   string
+	Status string // "passed", "failed", or "skipped"
+}
+
+// specGroupEntry pairs an AssociatedSpec with its resolved (non-batched) single-path
+// command, so the group it lands in can be executed together while each entry still
+// carries the exact command it would have run standalone.
+type specGroupEntry struct {
+	spec   AssociatedSpec
+	cmdStr string
+}
+
 // runRecordSpecs executes the associated_specs of a single record, streaming each
-// command's output. It returns ran (whether the record has any executable spec) and
-// failed (whether any spec it ran exited non-zero). It deliberately does NOT consult
-// run_associated_specs_on_complete or look at record status — the caller decides when
-// to invoke it, so it can verify an arbitrary record's specs on demand.
+// command's output. It returns ran (whether the record has any executable spec),
+// failed (whether any spec it ran exited non-zero), and the per-spec outcomes. It
+// deliberately does NOT consult run_associated_specs_on_complete or look at record
+// status — the caller decides when to invoke it, so it can verify an arbitrary
+// record's specs on demand.
+//
+// Consecutive entries whose effective command is identical (prov-2026-3ee1f3c3) are
+// batched into a single process with all their paths appended, instead of one process
+// per entry — this is what avoids paying a full framework boot (e.g. Rails/rspec) once
+// per spec when several specs share a runner. Grouping never reorders entries and never
+// merges a {{path}}-templated run_command, which has no multi-path form.
 //
 // When seen is non-nil it is used to de-duplicate identical spec commands across
 // calls: a command already present in seen is treated as already-verified and not
 // re-run (so completing a change to a widely-governed file does not run `make test`
-// dozens of times). A record still counts as ran if it has a runnable spec, even when
-// that spec's command was already executed for another record.
-func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool) {
-	for _, spec := range record.AssociatedSpecs {
+// dozens of times). The seen key is always each entry's own single-path command, never
+// the batched command string, so whether a path was already verified does not depend
+// on which neighbors it happened to batch with in this or another record. A record
+// still counts as ran if it has a runnable spec, even when that spec's command was
+// already executed for another record.
+func (c *Commands) runRecordSpecs(record *Record, seen map[string]bool) (ran bool, failed bool, outcomes []SpecOutcome) {
+	specs := record.AssociatedSpecs
+	for i := 0; i < len(specs); {
+		spec := specs[i]
 		cmdStr, skip, err := buildSpecCommand(spec)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "  · %s  ✗ could not build command: %v\n", spec.Path, err)
 			failed = true
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "failed"})
+			i++
 			continue
 		}
 		if skip {
 			fmt.Fprintf(os.Stdout, "  · %s  (skipped — no type or run_command)\n", spec.Path)
+			outcomes = append(outcomes, SpecOutcome{Path: spec.Path, Status: "skipped"})
+			i++
 			continue
 		}
 
-		ran = true
-		if seen != nil {
-			if seen[cmdStr] {
-				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", cmdStr)
-				continue
+		base, templated, _ := specCommandBase(spec)
+		group := []specGroupEntry{{spec, cmdStr}}
+		j := i + 1
+		if !templated {
+			for j < len(specs) {
+				nextCmd, nextSkip, nextErr := buildSpecCommand(specs[j])
+				if nextErr != nil || nextSkip {
+					break
+				}
+				nextBase, nextTemplated, _ := specCommandBase(specs[j])
+				if nextTemplated || nextBase != base {
+					break
+				}
+				group = append(group, specGroupEntry{specs[j], nextCmd})
+				j++
 			}
-			seen[cmdStr] = true
 		}
 
-		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", spec.Path, cmdStr)
-		cmd := exec.Command("sh", "-c", cmdStr)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
-			failed = true
-		} else {
-			fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+		ran = true
+
+		var toRun []specGroupEntry
+		for _, g := range group {
+			if seen != nil && seen[g.cmdStr] {
+				fmt.Fprintf(os.Stdout, "  · %s  (already verified)\n", g.cmdStr)
+				outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "passed"})
+				continue
+			}
+			toRun = append(toRun, g)
 		}
+
+		if len(toRun) == 0 {
+			i = j
+			continue
+		}
+		if seen != nil {
+			for _, g := range toRun {
+				seen[g.cmdStr] = true
+			}
+		}
+
+		if len(toRun) == 1 {
+			g := toRun[0]
+			fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", g.spec.Path, g.cmdStr)
+			if runErr := runShellCommand(g.cmdStr); runErr != nil {
+				fmt.Fprintf(os.Stdout, "    ✗ failed\n\n")
+				failed = true
+				outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "failed"})
+			} else {
+				fmt.Fprintf(os.Stdout, "    ✓ passed\n\n")
+				outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "passed"})
+			}
+			i = j
+			continue
+		}
+
+		// Batched: run every path in this group as one process. Per-entry ✓/✗
+		// reporting is still one line per path — on a batch failure, re-run each
+		// path's own single-path command to localize which one(s) actually failed,
+		// rather than reporting the whole group as failed undifferentiated.
+		paths := make([]string, len(toRun))
+		for k, g := range toRun {
+			paths[k] = g.spec.Path
+		}
+		batchCmd := base + " " + strings.Join(paths, " ")
+		fmt.Fprintf(os.Stdout, "  · %s\n    %s\n", strings.Join(paths, ", "), batchCmd)
+
+		if runErr := runShellCommand(batchCmd); runErr == nil {
+			for _, g := range toRun {
+				fmt.Fprintf(os.Stdout, "    ✓ %s passed\n", g.spec.Path)
+				outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "passed"})
+			}
+			fmt.Fprintln(os.Stdout)
+		} else {
+			// The batch itself failed: mark the record failed regardless of what the
+			// per-path localization below finds, so an order-dependent or shared-state
+			// failure that only reproduces when paths run together can never be masked
+			// by every path passing when re-run standalone (prov-2026-3ee1f3c3).
+			failed = true
+			fmt.Fprintf(os.Stdout, "    ✗ batch failed — localizing per spec:\n")
+			for _, g := range toRun {
+				if singleErr := runShellCommand(g.cmdStr); singleErr != nil {
+					fmt.Fprintf(os.Stdout, "    ✗ %s failed\n", g.spec.Path)
+					outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "failed"})
+				} else {
+					fmt.Fprintf(os.Stdout, "    ✓ %s passed\n", g.spec.Path)
+					outcomes = append(outcomes, SpecOutcome{Path: g.spec.Path, Status: "passed"})
+				}
+			}
+			fmt.Fprintln(os.Stdout)
+		}
+
+		i = j
 	}
-	return ran, failed
+	return ran, failed, outcomes
+}
+
+// runShellCommand runs cmdStr through sh -c, streaming its output to the process's
+// own stdout/stderr, and reports whether it exited non-zero.
+func runShellCommand(cmdStr string) error {
+	cmd := exec.Command("sh", "-c", cmdStr)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // overlappingSealedRecords returns implemented (sealed) records — other than self —
@@ -1628,29 +1770,47 @@ func formatRecordList(records []*Record) string {
 // buildSpecCommand returns the shell command string to run for a given AssociatedSpec.
 // If the spec has no type and no run_command, skip is true and cmdStr is empty.
 func buildSpecCommand(spec AssociatedSpec) (cmdStr string, skip bool, err error) {
+	base, templated, skip := specCommandBase(spec)
+	if skip {
+		return "", true, nil
+	}
+	if templated {
+		return strings.ReplaceAll(spec.RunCommand, "{{path}}", spec.Path), false, nil
+	}
+	return base + " " + spec.Path, false, nil
+}
+
+// specCommandBase returns the effective command for spec with its path omitted (base),
+// so callers can compare two specs' commands for equality without the path baked in —
+// this is what lets runRecordSpecs batch consecutive same-command entries. templated
+// reports whether spec's run_command contains a literal {{path}} placeholder, which has
+// no multi-path form and so is never grouped with neighbors (base is "" in that case).
+// skip mirrors buildSpecCommand's skip: true when spec has neither run_command nor a
+// known type.
+func specCommandBase(spec AssociatedSpec) (base string, templated bool, skip bool) {
 	if spec.RunCommand != "" {
 		if strings.Contains(spec.RunCommand, "{{path}}") {
-			return strings.ReplaceAll(spec.RunCommand, "{{path}}", spec.Path), false, nil
+			return "", true, false
 		}
-		return spec.RunCommand + " " + spec.Path, false, nil
+		return spec.RunCommand, false, false
 	}
 
 	switch spec.Type {
 	case "linespec":
 		if _, statErr := os.Stat("./linespec"); statErr == nil {
-			return "./linespec test " + spec.Path, false, nil
+			return "./linespec test", false, false
 		}
-		return "linespec test " + spec.Path, false, nil
+		return "linespec test", false, false
 	case "rspec":
-		return "bundle exec rspec " + spec.Path, false, nil
+		return "bundle exec rspec", false, false
 	case "pytest":
-		return "pytest " + spec.Path, false, nil
+		return "pytest", false, false
 	case "jest":
-		return "npx jest " + spec.Path, false, nil
+		return "npx jest", false, false
 	default:
 		// Unknown type or no type — skip with a warning rather than hard-fail,
 		// since the user may have non-executable proof artifacts (e.g. type: config).
-		return "", true, nil
+		return "", false, true
 	}
 }
 
@@ -2818,7 +2978,6 @@ func (c *Commands) Search(opts SearchOptions) error {
 
 	// Search the store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(queryVector, opts.Limit)
 	if err != nil {
@@ -2912,7 +3071,6 @@ func (c *Commands) Audit(opts AuditOptions) error {
 
 	// Search for similar records
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	results, err := store.Find(descVector, 5)
 	if err != nil {
@@ -3005,7 +3163,6 @@ func (c *Commands) Index(opts IndexOptions) error {
 
 	// Initialize embedding store
 	store := embeddings.NewStore(c.RepoRoot)
-	store.SetDimension(c.Embedder.Dimension())
 
 	// Get all implemented records
 	var toIndex []*Record
@@ -3018,13 +3175,14 @@ func (c *Commands) Index(opts IndexOptions) error {
 		if !opts.Force {
 			exists, err := store.Exists(record.ID)
 			if err != nil {
-				// If the store file doesn't exist yet, treat as not indexed
+				// If the store file doesn't exist yet, treat as not indexed. Any
+				// other error (e.g. a corrupt/desynced store) must not silently
+				// drop the record from toIndex — that's what let a wedged store
+				// masquerade as "fully indexed": surface it and retry instead.
 				if !os.IsNotExist(err) {
-					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v\n", record.ID, err)
-					continue
+					fmt.Fprintf(os.Stderr, "Warning: Failed to check embedding for %s: %v — will retry indexing\n", record.ID, err)
 				}
-			}
-			if exists {
+			} else if exists {
 				continue
 			}
 		}
@@ -3033,6 +3191,15 @@ func (c *Commands) Index(opts IndexOptions) error {
 	}
 
 	if len(toIndex) == 0 {
+		if len(c.Loader.Records) == 0 {
+			// Zero records loaded at all is not the same as zero records
+			// needing embeddings -- most often a misresolved provenance.dir
+			// (e.g. from a -c/--config file) pointing at an empty or
+			// nonexistent directory (prov-2026-531a0e0b). Report it
+			// distinguishably instead of the success message below.
+			fmt.Fprintf(os.Stdout, "⚠ No provenance records found at %s\n", c.Loader.Dir)
+			return nil
+		}
 		fmt.Fprintln(os.Stdout, "✓ All implemented records already have embeddings.")
 		return nil
 	}
@@ -3078,9 +3245,13 @@ func (c *Commands) Index(opts IndexOptions) error {
 		successCount++
 	}
 
+	glyph := "✓"
+	if successCount == 0 && failCount > 0 {
+		glyph = "✗"
+	}
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, strings.Repeat("=", 60))
-	fmt.Fprintf(os.Stdout, "✓ Indexing complete: %d succeeded, %d failed\n", successCount, failCount)
+	fmt.Fprintf(os.Stdout, "%s Indexing complete: %d succeeded, %d failed\n", glyph, successCount, failCount)
 	fmt.Fprintln(os.Stdout, "")
 
 	if failCount > 0 {
