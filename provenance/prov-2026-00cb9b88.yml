@@ -1,0 +1,111 @@
+id: prov-2026-00cb9b88
+title: 'Postgres proxy: SELECT column alias ignored, and same-table READ+WRITE fails verification'
+status: draft
+created_at: "2026-08-24"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Fix GitHub issue #216, two independent bugs in the PostgreSQL mock proxy found
+  while adding a table that is both read and written within the same request
+  (v3.18.0):
+
+  Bug 1: For a mocked SELECT whose select-list is a computed expression (a bare
+  aggregate, a cast, or a nested call) followed by `AS <alias>`, extractSelectColumns
+  (pkg/proxy/postgresql/proxy.go) names the RowDescription field after the
+  pre-alias expression instead of the alias. The `" AS "` split at line ~2066
+  keeps `col[:asIdx]` (the text before AS) instead of the text after it, so
+  `sum(total_tokens) as total` retains `sum(total_tokens)`; a later block (lines
+  ~2075-2080) meant only to normalize *unaliased* bare aggregate calls
+  (COUNT(*) -> "count") then unconditionally strips everything from the first
+  `(` onward, collapsing the retained text to `sum`. The alias is discarded
+  twice over. splitColumns (used for RETURNING clauses, ~line 2104) has the
+  identical inverted `col[:asIdx]` bug. Because the RETURNS payload's own key
+  (e.g. `total: 500`) is delivered as the *value* under the wrong field name
+  (`sum`), the row object the driver builds is keyed wrong, and application code
+  reading `rows[0].total` gets undefined — real PostgreSQL honours the alias in
+  every one of these forms.
+
+  Bug 2: A spec that declares both `EXPECT WRITE:POSTGRESQL <table>` and
+  `EXPECT READ:POSTGRESQL <table>` for the same table (e.g. an INSERT
+  immediately followed by a SELECT against that table) always fails post-run
+  verification with "READ direction declared on EXPECT line, but the matched
+  query performed WRITE (operation=INSERT)", even though the proxy's own trace
+  shows each statement was intercepted and answered by the correct mock at the
+  time. Root cause in pkg/registry/registry.go: FindMockByTables only considers
+  candidates that declare ACCESSING_TABLES (line ~511); when only one of the
+  two same-table EXPECT lines declares it, a query of the *other* direction is
+  evaluated solely against that semantically-eligible mock, rejected for a
+  direction mismatch, and — because the candidate set ends up empty — that
+  rejection is unconditionally appended to the registry's global verifyErrors
+  (lines ~523-528). matchMock (pkg/proxy/postgresql/proxy.go) then falls back
+  to legacy FindMock, which correctly matches the actual EXPECT line for that
+  direction and serves the query — but the earlier rejection has already
+  poisoned verifyErrors, which VerifyAll (line ~961) treats as fatal regardless
+  of the eventual correct match. The two EXPECT lines are not kept as
+  independent verification targets.
+constraints:
+  - |
+    For a mocked SELECT (or RETURNING clause) whose column list contains an
+    `AS <alias>` clause, extractSelectColumns and splitColumns
+    (pkg/proxy/postgresql/proxy.go) must use the alias as the RowDescription /
+    DataRow field name, regardless of whether the aliased expression is a bare
+    column, a function/aggregate call, a nested call, or has a trailing type
+    cast (`::type`) — covering all three reproductions from the issue:
+    `coalesce(sum(total_tokens), 0) as total`, `sum(total_tokens) as total`,
+    `sum(total_tokens)::bigint as total`, plus `count(*)::int as n`.
+  - |
+    When no alias is present, existing behavior must be unchanged: unaliased
+    aggregate calls still normalize to Postgres's implicit lowercase function
+    name (e.g. `COUNT(*)` -> `count`), and unaliased qualified/plain column
+    names still resolve the same way they do today.
+  - |
+    A table declared with both a WRITE EXPECT and a READ EXPECT in the same
+    spec must verify both directions independently: a rejection recorded while
+    evaluating one EXPECT line's semantic candidate (e.g. a direction mismatch
+    against the wrong-direction query) must not be pushed into the registry's
+    global verifyErrors when a different, unrelated EXPECT line for the same
+    table set legitimately matches that query via the semantic or legacy
+    fallback path. This must hold regardless of whether the two EXPECT lines
+    use independent CALL N values or a shared CALL N sequence.
+  - |
+    Existing single-EXPECT-line direction-mismatch enforcement (issue #159 /
+    prov-2026-28061661 — e.g. a READ EXPECT declared against a table the app
+    only ever writes) must continue to correctly fail with the direction
+    mismatch VERIFY error; the fix must not simply suppress direction-mismatch
+    reporting altogether.
+  - |
+    `make test` and `make quality` must continue to pass with no regressions to
+    existing column-extraction or table-matching/verification behavior
+    (ACCESSING_TABLES matching, VERIFY_* enforcement, CALL N tiebreaking,
+    multi-database scoping).
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/proxy_column_alias_test.go
+  - pkg/registry/registry.go
+  - pkg/registry/registry_test.go
+  - pkg/registry/write_read_same_table_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/proxy_column_alias_test.go
+    type: go_test
+    run_command: go test ./pkg/proxy/postgresql/... -run TestExtractSelectColumns_RespectsAlias -v
+  - path: pkg/registry/write_read_same_table_test.go
+    type: go_test
+    run_command: go test ./pkg/registry/... -run TestIssue216_SameTableWriteAndRead_BothDirectionsVerify -v
+  - path: pkg/registry/registry_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - proxy
+  - registry
+  - column-alias
+  - verification
+  - issue-216
