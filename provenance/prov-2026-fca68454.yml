@@ -1,0 +1,60 @@
+id: prov-2026-fca68454
+title: Release 3.20.0
+status: draft
+created_at: "2026-08-24"
+author: calebcowen@gmail.com
+intent: |
+  Cut 3.20.0, shipping the GHCR proxy-image work (prov-2026-f57f1570 and its
+  three imprints) that missed the 3.19.0 train.
+
+  MINOR, not PATCH. The obvious reading is "this is only a bug fix", but the
+  release changes documented default behaviour: the proxy image every sidecar
+  runs now resolves to a published, version-pinned GHCR reference instead of a
+  locally built linespec:latest, and the Homebrew formula no longer ships a
+  post_install hook. Anyone who never set infrastructure.proxy_image sees
+  different behaviour after upgrading, which is a MINOR bump under semver even
+  though the motivation was a defect. 3.18.1 was considered and is not
+  available: 3.19.0 has already shipped, so a 3.18.x tag would sort below the
+  current release and Homebrew would never offer it as an upgrade.
+
+  Bumping VERSION is a release-blocking prerequisite here, not bookkeeping.
+  Dockerfile.linespec bakes `cat VERSION` into the image via ldflags, and the
+  new image job asserts that the version the published image reports matches
+  the tag being released. A stale VERSION therefore fails the image job, which
+  the release job depends on, and no artifacts ship at all.
+
+constraints:
+  - |
+    VERSION MUST equal the tag being pushed, minus the leading "v". The image
+    job compares the published image's self-reported version against
+    GITHUB_REF_NAME and fails the release on a mismatch, so this is enforced by
+    CI rather than convention.
+  - |
+    The GHCR package MUST be made public immediately after the first successful
+    image publish and before the formula update reaches users. This release
+    removes the post_install hook, so a user installing while the package is
+    still private gets a failing pull with no locally built image to fall back
+    on. This is a manual repo-settings step that CI cannot perform.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-f57f1570
+  - prov-2026-82b2dee6
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - release
