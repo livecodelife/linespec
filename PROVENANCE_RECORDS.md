@@ -28,7 +28,7 @@ Provenance Records are structured YAML artifacts that capture the organizational
 brew tap livecodelife/linespec
 brew install linespec
 # Or use go install:
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.19.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.20.0
 
 # 2. Set up your repo (run these from the repo root)
 linespec init                          # interactive: writes .linespec.yml
@@ -75,7 +75,7 @@ brew install linespec
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.19.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.20.0
 ```
 
 ### GitHub Releases
