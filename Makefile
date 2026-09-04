@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-integration-mysql test-integration-postgres clean bump-version quality install-hooks-quality
+.PHONY: test test-integration test-integration-mysql test-integration-postgres test-integration-oracle clean bump-version quality install-hooks-quality
 
 # Version injected into the binary so `linespec --version` matches the VERSION
 # file for local `make build`/`make install`. Release archives get their version
@@ -59,10 +59,35 @@ test-integration-postgres:
 	@docker stop linespec-test-postgres || true
 	@docker rm linespec-test-postgres || true
 
+# Oracle integration tests. The image has a native arm64 build, so this runs on
+# Apple Silicon without emulation; -faststart is pre-initialised and comes up in
+# well under a minute where a plain image takes several.
+#
+# The client is sqlplus inside the container dialling back out through the
+# proxy, which is why no Oracle driver appears in go.mod for the sake of a test.
+test-integration-oracle:
+	@echo "Starting Oracle test container..."
+	@docker run -d --name linespec-test-oracle \
+		-p 1521:1521 \
+		-e ORACLE_PASSWORD=linespec \
+		gvenzl/oracle-free:23-slim-faststart || echo "Container may already exist"
+	@echo "Waiting for Oracle to be ready..."
+	@until docker logs linespec-test-oracle 2>&1 | grep -q "DATABASE IS READY TO USE"; do sleep 5; done
+	@echo "Seeding the fixture table..."
+	@docker exec -i linespec-test-oracle bash -lc \
+		"sqlplus -s system/linespec@//localhost:1521/FREEPDB1" <<< \
+		"CREATE TABLE hr_employees (employee_id VARCHAR2(10) PRIMARY KEY, surname VARCHAR2(40), department VARCHAR2(10)); \
+		 INSERT INTO hr_employees VALUES ('4471', 'Lovelace', 'RES'); COMMIT; EXIT" || true
+	@echo "Running Oracle integration tests..."
+	ORACLE_TEST=1 go test -tags integration ./pkg/proxy/oracle/... -v
+	@echo "Stopping Oracle test container..."
+	@docker stop linespec-test-oracle || true
+	@docker rm linespec-test-oracle || true
+
 # Clean up test containers
 clean:
-	@docker stop linespec-test-mysql linespec-test-postgres 2>/dev/null || true
-	@docker rm linespec-test-mysql linespec-test-postgres 2>/dev/null || true
+	@docker stop linespec-test-mysql linespec-test-postgres linespec-test-oracle 2>/dev/null || true
+	@docker rm linespec-test-mysql linespec-test-postgres linespec-test-oracle 2>/dev/null || true
 
 # Build linespec (Provenance Records + LineSpec Testing)
 build:

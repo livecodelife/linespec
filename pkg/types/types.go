@@ -11,6 +11,8 @@ const (
 	WriteMySQL      ExpectChannel = "WRITE_MYSQL"
 	WritePostgreSQL ExpectChannel = "WRITE_POSTGRESQL"
 	ReadPostgreSQL  ExpectChannel = "READ_POSTGRESQL"
+	WriteOracle     ExpectChannel = "WRITE_ORACLE"
+	ReadOracle      ExpectChannel = "READ_ORACLE"
 	Event           ExpectChannel = "EVENT"
 	GRPC            ExpectChannel = "GRPC"
 	ReadRedis       ExpectChannel = "READ_REDIS"

@@ -308,6 +308,7 @@ func (r *MockRegistry) GetTables() []string {
 		for _, mock := range mocks {
 			if mock.Channel == types.ReadMySQL || mock.Channel == types.WriteMySQL ||
 				mock.Channel == types.ReadPostgreSQL || mock.Channel == types.WritePostgreSQL ||
+				mock.Channel == types.ReadOracle || mock.Channel == types.WriteOracle ||
 				mock.Channel == types.ReadMongoDB || mock.Channel == types.WriteMongoDB {
 				if len(mock.AccessingTables) > 0 {
 					// Expose individual table names from the set
@@ -352,9 +353,9 @@ func semanticSpecificity(mock *types.ExpectStatement) int {
 // channel, or "" for channels with no read/write distinction (HTTP, EVENT, ...).
 func channelDirection(channel types.ExpectChannel) string {
 	switch channel {
-	case types.ReadMySQL, types.ReadPostgreSQL, types.ReadMongoDB, types.ReadRedis:
+	case types.ReadMySQL, types.ReadPostgreSQL, types.ReadOracle, types.ReadMongoDB, types.ReadRedis:
 		return "READ"
-	case types.WriteMySQL, types.WritePostgreSQL, types.WriteMongoDB, types.WriteRedis:
+	case types.WriteMySQL, types.WritePostgreSQL, types.WriteOracle, types.WriteMongoDB, types.WriteRedis:
 		return "WRITE"
 	default:
 		return ""

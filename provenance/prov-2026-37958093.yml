@@ -58,10 +58,12 @@ constraints:
 affected_scope:
   - pkg/proxy/oracle/**
   - pkg/config/parser.go
-  - pkg/dsl/lexer.go
+  - pkg/dsl/parser.go
+  - pkg/registry/registry.go
   - pkg/types/types.go
   - CHANGELOG.md
   - scripts/go-test-for.sh
+  - Makefile
 forbidden_scope: []
 type: blueprint
 supersedes: ""

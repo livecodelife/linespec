@@ -46,6 +46,7 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/proxy/kafka"
 	mongodbproxy "github.com/livecodelife/linespec/v3/pkg/proxy/mongodb"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/mysql"
+	oracleproxy "github.com/livecodelife/linespec/v3/pkg/proxy/oracle"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/postgresql"
 	redisproxy "github.com/livecodelife/linespec/v3/pkg/proxy/redis"
 	"github.com/livecodelife/linespec/v3/pkg/registry"
@@ -853,6 +854,15 @@ func runProxyCore(pType, addr, upstream, dbName, kafkaHost, schemaDataB64, schem
 			}
 		}
 		proxyErr = pgProxy.Start(ctx)
+	case "oracle":
+		// Observe-and-relay: no schema to load, because nothing is synthesised,
+		// and no transparent mode, because every query is already passed through
+		// to the real database.
+		p := oracleproxy.NewProxy(addr, upstream, reg)
+		if dbName != "" {
+			p.SetDatabaseName(dbName)
+		}
+		proxyErr = p.Start(ctx)
 	case "http":
 		p := httpproxy.NewInterceptor(addr, reg)
 		p.SetResolver(resolver)

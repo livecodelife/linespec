@@ -372,6 +372,20 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 			expect.WithFile = p.consume().Literal
 		case TokenReturns:
 			returnsToken := p.consume()
+			// The Oracle channel observes the wire and relays it; it never
+			// answers for the database, so there is no response for RETURNS to
+			// replace. Saying so here is the difference between a spec that
+			// fails to parse and a spec that runs while quietly asserting
+			// something else.
+			if expect.Channel == types.ReadOracle || expect.Channel == types.WriteOracle {
+				return nil, fmt.Errorf(
+					"line %d: RETURNS is not supported on %s. The Oracle proxy relays to a real "+
+						"database and never synthesises a response, so a mocked one cannot be "+
+						"substituted. Assert what was asked instead - VERIFY_OPERATION, "+
+						"VERIFY_WHERE_COLUMNS, VERIFY_WHERE, VERIFY_WRITTEN_VALUES - or use "+
+						"EXPECT_NOT to assert the query never happened",
+					returnsToken.Line, strings.Replace(string(expect.Channel), "_", ":", 1))
+			}
 			literal := returnsToken.Literal
 			upper := strings.ToUpper(literal)
 			if upper == "EMPTY" {
@@ -516,7 +530,8 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 	// DB channels allow an empty table name when ACCESSING_TABLES will be used instead.
 	isDBChannel := channelPart == "WRITE:MYSQL" || channelPart == "READ:MYSQL" ||
 		channelPart == "WRITE:POSTGRESQL" || channelPart == "READ:POSTGRESQL" ||
-		channelPart == "WRITE:MONGODB" || channelPart == "READ:MONGODB"
+		channelPart == "WRITE:MONGODB" || channelPart == "READ:MONGODB" ||
+		channelPart == "WRITE:ORACLE" || channelPart == "READ:ORACLE"
 	if len(parts) < 2 && !isDBChannel {
 		return nil, fmt.Errorf("invalid EXPECT channel format at line %d: %s", line, value)
 	}
@@ -559,6 +574,20 @@ func parseExpectChannel(value string, line int) (*types.ExpectStatement, error) 
 	if channelPart == "READ:POSTGRESQL" {
 		return &types.ExpectStatement{
 			Channel: types.ReadPostgreSQL,
+			Table:   rest,
+		}, nil
+	}
+
+	if channelPart == "WRITE:ORACLE" {
+		return &types.ExpectStatement{
+			Channel: types.WriteOracle,
+			Table:   rest,
+		}, nil
+	}
+
+	if channelPart == "READ:ORACLE" {
+		return &types.ExpectStatement{
+			Channel: types.ReadOracle,
 			Table:   rest,
 		}, nil
 	}
