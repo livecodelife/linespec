@@ -1,0 +1,62 @@
+id: prov-2026-37bc00ad
+title: ODP.NET frames a long statement's length differently from sqlplus, and the parser sees only sqlplus's form
+status: open
+created_at: "2026-09-04"
+author: caleb.cowen@linq.com
+intent: |
+  Read both encodings of a long statement's length, and pin each to a packet the
+  client that sends it really sent.
+
+  prov-2026-37958093 found that a statement carries a one-byte length below 254 and
+  0xFE plus a 4-byte LITTLE-endian length at or above it, and pinned that against
+  captured packets. The capture was sqlplus. Oracle's managed .NET driver does not
+  do that: it sends 0xFE followed by a MARSHALLED length - one byte giving how many
+  length bytes follow, then that many bytes BIG-endian. A 489-byte statement arrives
+  as fe 02 01 e9, where sqlplus would send fe e9 01 00 00. The short form is the same
+  in both, one byte, which is why nothing showed until a statement crossed 254.
+
+  What it costs is not an error but silence. The parser finds no length it can agree
+  with, the packet contributes no interaction, and an expectation written against
+  that statement is reported as never called - or, worse, a different statement in
+  the same request satisfies it and the spec passes. Both were observed on the same
+  page: a get-by-key at 259 bytes vanished, and a paginated list matched its COUNT
+  while the 489-byte ROW_NUMBER query it was written for was never seen.
+
+  It matters more than the byte count suggests. Every service linespec would point
+  at an Oracle is a .NET service using this driver, and 254 bytes is a small
+  statement - a generated repository's SELECT with three columns and an alias is
+  already past it. On the sqlplus form the channel works; on the form its real users
+  send, it silently sees only the short statements.
+
+  The two forms are told apart the way the two packet framings already are, by what
+  agrees with itself: the length must be matched by exactly that many printable
+  bytes opening with a SQL verb, and Statement already scans every offset and keeps
+  the longest match. So reading a second interpretation adds a candidate rather than
+  a branch to get wrong.
+constraints:
+  - Both encodings are asserted against packets captured from the client that sends them - sqlplus for one, ODP.NET for the other - never bytes this package encoded.
+  - The existing sqlplus captures keep passing unchanged; this adds a reading, it does not replace one.
+  - A length that does not agree with the bytes that follow it is not a length, whichever encoding proposed it.
+  - The marshalled count byte is bounded, so a stray 0xFE cannot name a length from arbitrary following bytes.
+affected_scope:
+  - pkg/proxy/oracle/tns.go
+  - pkg/proxy/oracle/tns_test.go
+  - pkg/proxy/oracle/testdata/**
+  - CHANGELOG.md
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+extends: prov-2026-37958093
+related:
+  - prov-2026-f7f1d960
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/oracle/tns_test.go
+    run_command: scripts/go-test-for.sh
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - oracle
+  - tns
