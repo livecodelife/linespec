@@ -1,0 +1,47 @@
+id: prov-2026-bfb6000e
+title: VERIFY rules run on the Oracle channel, recorded rather than answered
+status: open
+created_at: "2026-09-04"
+author: caleb.cowen@linq.com
+intent: |
+  Run a matched Oracle expectation's VERIFY rules through verify.VerifySQL, the way
+  the PostgreSQL proxy already does, and record a failure on the registry.
+
+  Until now an Oracle expectation's VERIFY clauses were parsed, carried into the
+  registry and never evaluated - the proxy's observe() called FindMockByTables and
+  CheckNegativeMocksByTables and nothing else. So a spec could write
+  `VERIFY query MATCHES /ORDER BY UPPER\(VendorCategory\)/` against Oracle, watch it
+  pass, and be asserting nothing. That was found by a spec that kept passing after
+  the ORDER BY it named had changed, which is the worst way to find it and the
+  reason this is a bug rather than a gap.
+
+  The failure is RECORDED and not answered, which is the one place this differs from
+  the PostgreSQL path. That proxy replies to the client with an error when a VERIFY
+  rule fails; this one never writes to the client at all, by the design
+  prov-2026-37958093 settled. RecordVerifyError is enough: VerifyAll reports recorded
+  verify errors ahead of any never-called message, so the spec fails naming the rule
+  that broke rather than naming an expectation that looks absent.
+constraints:
+  - VERIFY rules are evaluated only on a mock that matched; an unmatched statement is not a VERIFY failure.
+  - A failure is recorded on the registry and never written to the client - this channel does not author bytes.
+  - verify.VerifySQL is reused rather than reimplemented, so operator semantics stay identical across channels.
+affected_scope:
+  - pkg/proxy/oracle/proxy.go
+  - pkg/proxy/oracle/channel_test.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f7f1d960
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-37958093
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/oracle/channel_test.go
+    run_command: scripts/go-test-for.sh
+associated_traces: []
+monitors: []
+tags:
+  - proxy
+  - oracle
+  - verify
