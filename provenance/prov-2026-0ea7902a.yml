@@ -53,8 +53,8 @@ superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/sqlanalysis/analyze_test.go
-    run_command: go test ./pkg/sqlanalysis/...
+  - path: pkg/sqlanalysis
+    run_command: go test ./{{path}}/...
 associated_traces: []
 monitors: []
 tags:
