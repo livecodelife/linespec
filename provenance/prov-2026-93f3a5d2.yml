@@ -1,0 +1,46 @@
+id: prov-2026-93f3a5d2
+title: The seed runs after the database opens, not from the image's init directory
+status: open
+created_at: "2026-09-04"
+author: caleb.cowen@linq.com
+intent: |
+  Stop mounting the configured init script into /container-entrypoint-initdb.d and
+  apply it from the reset container instead, once, immediately after the database
+  reports healthy - the same container and the same script that already run between
+  specs.
+
+  The blueprint assumed two moments for one script: the image's init directory at
+  first boot, and a reset container between specs. Measured against the image, those
+  are not the same moment. gvenzl runs user scripts BEFORE it creates APP_USER, so a
+  seed that grants privileges to the application account fails with ORA-01917 while
+  the container still reports a successful start. What surfaces later is ORA-00942
+  from the application - "table or view does not exist", which is what Oracle says
+  when the table exists and you cannot see it - so the failure names the wrong thing
+  twice over.
+
+  Seeding after readiness removes the ordering question rather than sequencing around
+  it, and leaves one code path instead of two. It costs one reset container on the
+  first spec, on top of the minute the database already takes to open.
+constraints:
+  - The init script is applied once before the first spec and again between specs, by the same container.
+  - Nothing is mounted into the image's init directory, so no user script runs before APP_USER exists.
+  - A failing seed fails the run - a spec against unseeded state reports on state nobody declared.
+affected_scope:
+  - pkg/runner/oracle.go
+  - pkg/runner/oracle_test.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-f7f1d960
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/runner/oracle_test.go
+    run_command: scripts/go-test-for.sh
+associated_traces: []
+monitors: []
+tags:
+  - runner
+  - oracle
