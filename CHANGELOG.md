@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`READ:ORACLE` and `WRITE:ORACLE`** ([prov-2026-37958093](./provenance/prov-2026-37958093.yml)) — a TNS proxy that frames Oracle Net, recovers the statement from the client's packets, and matches it through the same registry every other SQL channel uses, so `ACCESSING_TABLES`, `VERIFY_OPERATION`, `VERIFY_WHERE_COLUMNS`, `VERIFY_WHERE`, `VERIFY_WRITTEN_VALUES` and `EXPECT_NOT` all work against an Oracle service. Configure with `database.type: oracle` (default image `gvenzl/oracle-free:23-slim-faststart`, port 1521).
+
+  The channel **observes and relays**: bytes reach a real Oracle in both directions untouched and only the client-to-server direction is read. That is why it is a few hundred lines rather than a reimplementation of a database, and it has one stated cost — **`RETURNS` is not supported**, because a response the proxy did not author is one it cannot replace. A spec binding `RETURNS` to an Oracle expectation is refused when it is parsed, naming the reason and the alternatives, rather than ignored at run time. Bind values are not recovered from the wire either, so a column constrained by a placeholder reports the `PRESENT` sentinel — enough for `VERIFY_WHERE_COLUMNS` and for `VERIFY_WHERE` naming `PRESENT`, not enough to compare a bound value.
+
+  Framing was measured against a real Oracle 23ai rather than taken from the protocol's reputation, and the captured packets are checked in as testdata so the tests read bytes Oracle actually sent. Two details would have been wrong if assumed: Oracle uses **two** length framings on one connection (16-bit on the `CONNECT` that opens it, 32-bit on every `DATA` packet after negotiation, told apart by whether the header's high half is zero), and a statement carries a one-byte length below 254 bytes but `0xFE` plus a **4-byte little-endian** length at or above it — the one little-endian field in an otherwise big-endian header, and the path any realistic statement takes.
+
+  Run the integration suite with `make test-integration-oracle`. The image has a native arm64 build, so it needs no emulation on Apple Silicon.
+
 ### Changed
 
 - **SQL analysis moved into one dialect-parameterised package, and it now knows Oracle** ([prov-2026-0ea7902a](./provenance/prov-2026-0ea7902a.yml)) — the reading that backs semantic matching (operation, tables, `VERIFY_WHERE_COLUMNS`/`VERIFY_WHERE`, `VERIFY_WRITTEN_VALUES`) lived twice, once per SQL proxy, and the two copies had drifted: PostgreSQL captured a qualified `table.column` prefix and resolved `$N` against bind values, MySQL matched only `\w` (so its own prefix-strip could never fire) and reported every bound value as `PRESENT`. Both now delegate to `pkg/sqlanalysis`, where the genuine per-database differences — bind syntax, identifier quoting, schema qualification, WHERE scope — are named fields on a `Dialect` rather than an accident of which copy you were reading. Existing MySQL and PostgreSQL behaviour is unchanged and pinned by tests.

@@ -124,6 +124,8 @@ func applyDefaults(config *LineSpecConfig) {
 				db.Image = "postgres:16-alpine"
 			case "mongodb":
 				db.Image = "mongo:7"
+			case "oracle":
+				db.Image = "gvenzl/oracle-free:23-slim-faststart"
 			}
 		}
 		// Port defaults per db.Type whenever unset — independent of whether Image
@@ -139,6 +141,8 @@ func applyDefaults(config *LineSpecConfig) {
 				db.Port = 5432
 			case "mongodb":
 				db.Port = 27017
+			case "oracle":
+				db.Port = 1521
 			}
 		}
 		// Host defaults: single unnamed database keeps "db" for backward compat;
