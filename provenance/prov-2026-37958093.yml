@@ -1,6 +1,6 @@
 id: prov-2026-37958093
 title: An Oracle channel that watches the wire without answering for it
-status: open
+status: implemented
 created_at: "2026-09-03"
 author: caleb.cowen@linq.com
 intent: |
@@ -70,7 +70,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-0ea7902a
-sealed_at_sha: ""
+sealed_at_sha: 9970b84a244bf8ae1f7c6d05743dfbad756da770
 associated_specs:
   - path: pkg/proxy/oracle/tns_test.go
     run_command: scripts/go-test-for.sh
