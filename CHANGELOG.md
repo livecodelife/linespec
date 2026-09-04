@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **SQL analysis moved into one dialect-parameterised package, and it now knows Oracle** ([prov-2026-0ea7902a](./provenance/prov-2026-0ea7902a.yml)) — the reading that backs semantic matching (operation, tables, `VERIFY_WHERE_COLUMNS`/`VERIFY_WHERE`, `VERIFY_WRITTEN_VALUES`) lived twice, once per SQL proxy, and the two copies had drifted: PostgreSQL captured a qualified `table.column` prefix and resolved `$N` against bind values, MySQL matched only `\w` (so its own prefix-strip could never fire) and reported every bound value as `PRESENT`. Both now delegate to `pkg/sqlanalysis`, where the genuine per-database differences — bind syntax, identifier quoting, schema qualification, WHERE scope — are named fields on a `Dialect` rather than an accident of which copy you were reading. Existing MySQL and PostgreSQL behaviour is unchanged and pinned by tests.
+- **Oracle is available as a third SQL dialect** ([prov-2026-0ea7902a](./provenance/prov-2026-0ea7902a.yml)) — named binds (`:Name`) and schema-qualified tables (`INSERT INTO hr.employees`) are read correctly. Both previously failed *silently*: no positional pattern matches `:Name`, so `VERIFY_WHERE_COLUMNS` had nothing to compare, and an `INSERT` into a qualified table was not recognised as an INSERT into anything, so `VERIFY_WRITTEN_VALUES` saw nothing. This is the analysis layer only — there is no Oracle transport yet, so no `READ:ORACLE`/`WRITE:ORACLE` channel and no new config value.
+
 ## [3.20.0] - 2026-08-24
 
 ### Changed

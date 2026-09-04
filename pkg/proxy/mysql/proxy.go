@@ -18,6 +18,7 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/logger"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/base"
 	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
 	"github.com/livecodelife/linespec/v3/pkg/types"
 	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
@@ -924,114 +925,6 @@ func (p *Proxy) extractAllTables(query string) []string {
 	return tables
 }
 
-// extractQueryOperation returns the first SQL DML keyword.
-func (p *Proxy) extractQueryOperation(query string) string {
-	upper := strings.ToUpper(strings.TrimSpace(query))
-	switch {
-	case strings.HasPrefix(upper, "SELECT"), strings.HasPrefix(upper, "WITH"):
-		return "SELECT"
-	case strings.HasPrefix(upper, "INSERT"):
-		return "INSERT"
-	case strings.HasPrefix(upper, "UPDATE"):
-		return "UPDATE"
-	case strings.HasPrefix(upper, "DELETE"):
-		return "DELETE"
-	}
-	return ""
-}
-
-// MySQL (and the Rails mysql2 adapter in particular) always backtick-quotes
-// identifiers, e.g. `users`.`token` = '...' or INSERT INTO `users` (`name`, ...).
-// These patterns tolerate an optional backtick on either side of the
-// identifier so real wire queries — not just hand-written unquoted SQL — match.
-var (
-	mysqlReWhereCondition = regexp.MustCompile("(?i)`?\\b(\\w+)\\b`?\\s*=\\s*('[^']*'|\\d+(?:\\.\\d+)?|\\?)")
-	mysqlReInsertCols     = regexp.MustCompile("(?i)INSERT\\s+(?:INTO\\s+)?`?\\w+`?\\s*\\(([^)]+)\\)")
-	mysqlReInsertVals     = regexp.MustCompile(`(?i)\)\s*VALUES?\s*\(([^)]+)\)`)
-	mysqlReUpdateSet      = regexp.MustCompile(`(?i)SET\s+(.+?)(?:\s+WHERE\s+|\s*$)`)
-	mysqlReSetItem        = regexp.MustCompile("(?i)`?(\\w+)`?\\s*=\\s*('[^']*'|\\d+(?:\\.\\d+)?|\\?)")
-)
-
-// extractWhereInfo extracts WHERE clause column names and resolved values.
-func (p *Proxy) extractWhereInfo(query string) (columns []string, values map[string]string) {
-	upper := strings.ToUpper(query)
-	whereIdx := strings.Index(upper, " WHERE ")
-	if whereIdx == -1 {
-		return nil, nil
-	}
-	wherePart := query[whereIdx+7:]
-	// Trim ORDER BY / LIMIT etc.
-	for _, kw := range []string{" ORDER ", " LIMIT ", " GROUP ", " HAVING "} {
-		if i := strings.Index(strings.ToUpper(wherePart), kw); i != -1 {
-			wherePart = wherePart[:i]
-		}
-	}
-	values = make(map[string]string)
-	matches := mysqlReWhereCondition.FindAllStringSubmatch(wherePart, -1)
-	for _, m := range matches {
-		raw := strings.ToLower(m[1])
-		// Strip optional "table." prefix: "users.id" → "id"
-		col := raw
-		if dot := strings.LastIndex(raw, "."); dot >= 0 {
-			col = raw[dot+1:]
-		}
-		val := strings.Trim(m[2], "'")
-		if val == "?" {
-			val = "PRESENT"
-		}
-		columns = append(columns, col)
-		values[col] = val
-	}
-	return columns, values
-}
-
-// extractWrittenValuesFromSQL extracts written column/value pairs for INSERT/UPDATE.
-func (p *Proxy) extractWrittenValuesFromSQL(query, operation string) map[string]string {
-	result := make(map[string]string)
-	switch operation {
-	case "INSERT":
-		colM := mysqlReInsertCols.FindStringSubmatch(query)
-		valM := mysqlReInsertVals.FindStringSubmatch(query)
-		if colM == nil || valM == nil {
-			return result
-		}
-		cols := splitCommaTrimmedMySQL(colM[1])
-		vals := splitCommaTrimmedMySQL(valM[1])
-		for i, col := range cols {
-			col = strings.Trim(col, "`")
-			if i < len(vals) {
-				v := strings.Trim(vals[i], "'")
-				if v == "?" {
-					v = "PRESENT"
-				}
-				result[strings.ToLower(col)] = v
-			}
-		}
-	case "UPDATE":
-		setM := mysqlReUpdateSet.FindStringSubmatch(query)
-		if setM == nil {
-			return result
-		}
-		items := mysqlReSetItem.FindAllStringSubmatch(setM[1], -1)
-		for _, m := range items {
-			v := strings.Trim(m[2], "'")
-			if v == "?" {
-				v = "PRESENT"
-			}
-			result[strings.ToLower(m[1])] = v
-		}
-	}
-	return result
-}
-
-func splitCommaTrimmedMySQL(s string) []string {
-	parts := strings.Split(s, ",")
-	for i, p := range parts {
-		parts[i] = strings.TrimSpace(p)
-	}
-	return parts
-}
-
 // matchMock runs semantic-first, legacy-fallback matching using the supplied
 // registry lookups. findMock and peekMock differ only in whether the registry
 // increments hit counts, so they pass the Find*/Peek* pair respectively.
@@ -1042,9 +935,8 @@ func (p *Proxy) matchMock(
 ) (*types.ExpectStatement, bool) {
 	tables := p.extractAllTables(query)
 	if len(tables) > 0 {
-		op := p.extractQueryOperation(query)
-		whereCols, whereVals := p.extractWhereInfo(query)
-		written := p.extractWrittenValuesFromSQL(query, op)
+		r := sqlanalysis.Analyze(sqlanalysis.MySQL, query, sqlanalysis.Binds{})
+		op, whereCols, whereVals, written := r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues
 		if mock, ok := byTables(tables, op, whereCols, whereVals, written); ok {
 			return mock, true
 		}
@@ -1083,9 +975,8 @@ func (p *Proxy) checkNegativeMocksForQuery(query string) {
 	db := p.dbConfig.GetDatabaseName()
 	tables := p.extractAllTables(query)
 	if len(tables) > 0 {
-		op := p.extractQueryOperation(query)
-		whereCols, whereVals := p.extractWhereInfo(query)
-		written := p.extractWrittenValuesFromSQL(query, op)
+		r := sqlanalysis.Analyze(sqlanalysis.MySQL, query, sqlanalysis.Binds{})
+		op, whereCols, whereVals, written := r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues
 		p.registry.CheckNegativeMocksByTables(db, tables, op, whereCols, whereVals, written)
 	}
 	tableName := p.extractTable(query)

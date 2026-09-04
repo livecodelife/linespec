@@ -45,6 +45,7 @@ affected_scope:
   - pkg/sqlanalysis/**
   - pkg/proxy/mysql/proxy.go
   - pkg/proxy/postgresql/proxy.go
+  - CHANGELOG.md
 forbidden_scope: []
 type: blueprint
 supersedes: ""
