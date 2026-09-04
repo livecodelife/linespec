@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/logger"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/base"
 	"github.com/livecodelife/linespec/v3/pkg/registry"
+	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
 	"github.com/livecodelife/linespec/v3/pkg/types"
 	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
@@ -1574,20 +1574,6 @@ func (p *Proxy) extractAllTables(query string) []string {
 	return found
 }
 
-// extractQueryOperation returns SELECT, INSERT, UPDATE, or DELETE from the first
-// SQL keyword. WITH is treated as SELECT.
-func extractQueryOperation(query string) string {
-	re := regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b`)
-	if m := re.FindStringSubmatch(query); m != nil {
-		op := strings.ToUpper(m[1])
-		if op == "WITH" {
-			return "SELECT"
-		}
-		return op
-	}
-	return ""
-}
-
 // extractBindParams reads actual parameter values from a PostgreSQL Bind message payload.
 // Returns a slice of strings in $1, $2, … order. NULL params are represented as "".
 func (p *Proxy) extractBindParams(payload []byte) []string {
@@ -1595,151 +1581,48 @@ func (p *Proxy) extractBindParams(payload []byte) []string {
 		return nil
 	}
 	pos := 0
-	for pos < len(payload) && payload[pos] != 0 { pos++ } // skip portal name
-	if pos >= len(payload) { return nil }
+	for pos < len(payload) && payload[pos] != 0 {
+		pos++
+	} // skip portal name
+	if pos >= len(payload) {
+		return nil
+	}
 	pos++
-	for pos < len(payload) && payload[pos] != 0 { pos++ } // skip statement name
-	if pos >= len(payload) { return nil }
+	for pos < len(payload) && payload[pos] != 0 {
+		pos++
+	} // skip statement name
+	if pos >= len(payload) {
+		return nil
+	}
 	pos++
-	if pos+2 > len(payload) { return nil }
+	if pos+2 > len(payload) {
+		return nil
+	}
 	numParamFmts := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
 	pos += 2 + numParamFmts*2
-	if pos+2 > len(payload) { return nil }
+	if pos+2 > len(payload) {
+		return nil
+	}
 	numParams := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
 	pos += 2
 	params := make([]string, 0, numParams)
 	for i := 0; i < numParams; i++ {
-		if pos+4 > len(payload) { break }
+		if pos+4 > len(payload) {
+			break
+		}
 		length := int(int32(binary.BigEndian.Uint32(payload[pos : pos+4])))
 		pos += 4
 		if length == -1 {
 			params = append(params, "")
 			continue
 		}
-		if pos+length > len(payload) { break }
+		if pos+length > len(payload) {
+			break
+		}
 		params = append(params, string(payload[pos:pos+length]))
 		pos += length
 	}
 	return params
-}
-
-// reWhereCondition matches "col = $N", "table.col = $N", "col = 'literal'", "col = number"
-// following WHERE, AND, or OR.
-var reWhereCondition = regexp.MustCompile(
-	`(?i)(?:WHERE|AND|OR)\s+((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
-)
-
-// reInsertCols matches the column list in "INSERT INTO table (col1, col2, ...)"
-var reInsertCols = regexp.MustCompile(`(?i)INSERT\s+INTO\s+[a-z_][a-z0-9_]*\s*\(([^)]+)\)`)
-
-// reInsertVals matches the value list in "VALUES (val1, val2, ...)"
-var reInsertVals = regexp.MustCompile(`(?i)\bVALUES\s*\(([^)]+)\)`)
-
-// reUpdateSet matches the SET clause body up to WHERE or end-of-string
-var reUpdateSet = regexp.MustCompile(`(?i)\bSET\s+(.+?)(?:\s+WHERE\b|$)`)
-
-// reSetItem matches "col = $N", "col = 'literal'", or "col = number" in a SET clause
-var reSetItem = regexp.MustCompile(
-	`(?i)((?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*)\s*=\s*(?:\$(\d+)|'([^']*)'|(\d+(?:\.\d+)?))`,
-)
-
-// extractWhereInfo returns column names and resolved column-value pairs from the
-// WHERE clause. $N references are resolved from bindParams (1-indexed → index N-1).
-func extractWhereInfo(query string, bindParams []string) (columns []string, values map[string]string) {
-	values = make(map[string]string)
-	seen := make(map[string]struct{})
-	for _, m := range reWhereCondition.FindAllStringSubmatch(query, -1) {
-		raw := strings.ToLower(m[1])
-		// Strip optional "table." prefix so that "notifications.recipient" → "recipient"
-		col := raw
-		if dot := strings.LastIndex(raw, "."); dot >= 0 {
-			col = raw[dot+1:]
-		}
-		if _, ok := seen[col]; !ok {
-			seen[col] = struct{}{}
-			columns = append(columns, col)
-		}
-		switch {
-		case m[2] != "":
-			if idx, err := strconv.Atoi(m[2]); err == nil && idx >= 1 && idx <= len(bindParams) {
-				values[col] = bindParams[idx-1]
-			}
-		case m[3] != "":
-			values[col] = m[3]
-		case m[4] != "":
-			values[col] = m[4]
-		}
-	}
-	return
-}
-
-// extractWrittenValuesFromSQL extracts column-value pairs from INSERT or UPDATE statements.
-func extractWrittenValuesFromSQL(query, operation string, bindParams []string) map[string]string {
-	result := make(map[string]string)
-	switch strings.ToUpper(operation) {
-	case "INSERT":
-		cm := reInsertCols.FindStringSubmatch(query)
-		vm := reInsertVals.FindStringSubmatch(query)
-		if cm == nil || vm == nil {
-			return result
-		}
-		cols := splitCommaTrimmed(cm[1])
-		vals := splitCommaTrimmed(vm[1])
-		for i, col := range cols {
-			if i >= len(vals) { break }
-			result[strings.ToLower(col)] = resolveValue(vals[i], bindParams)
-		}
-	case "UPDATE":
-		sm := reUpdateSet.FindStringSubmatch(query)
-		if sm == nil { return result }
-		for _, item := range reSetItem.FindAllStringSubmatch(sm[1], -1) {
-			col := strings.ToLower(item[1])
-			result[col] = resolveValueFromCaptures(item[2], item[3], item[4], bindParams)
-		}
-	}
-	return result
-}
-
-// resolveValue converts a raw SQL value token to a string.
-func resolveValue(v string, bindParams []string) string {
-	v = strings.TrimSpace(v)
-	if strings.HasPrefix(v, "$") {
-		if idx, err := strconv.Atoi(v[1:]); err == nil && idx >= 1 && idx <= len(bindParams) {
-			return bindParams[idx-1]
-		}
-		return v
-	}
-	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
-		return v[1 : len(v)-1]
-	}
-	return v
-}
-
-// resolveValueFromCaptures resolves from regex submatch groups: $N ref, quoted literal, numeric literal.
-func resolveValueFromCaptures(paramIdx, quotedLit, numLit string, bindParams []string) string {
-	switch {
-	case paramIdx != "":
-		if idx, err := strconv.Atoi(paramIdx); err == nil && idx >= 1 && idx <= len(bindParams) {
-			return bindParams[idx-1]
-		}
-	case quotedLit != "":
-		return quotedLit
-	case numLit != "":
-		return numLit
-	}
-	return ""
-}
-
-// splitCommaTrimmed splits a comma-separated string and trims whitespace.
-func splitCommaTrimmed(s string) []string {
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // extractSemanticInfo derives all information needed for FindMockByTables from a
@@ -1750,10 +1633,9 @@ func (p *Proxy) extractSemanticInfo(query string, bindParams []string) (
 	writtenValues map[string]string,
 ) {
 	tables = p.extractAllTables(query)
-	operation = extractQueryOperation(query)
-	whereColumns, whereValues = extractWhereInfo(query, bindParams)
-	writtenValues = extractWrittenValuesFromSQL(query, operation, bindParams)
-	return
+	r := sqlanalysis.Analyze(sqlanalysis.PostgreSQL, query,
+		sqlanalysis.Binds{Positional: bindParams})
+	return tables, r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues
 }
 
 // matchMock runs semantic matching (ACCESSING_TABLES) first, then falls back to
@@ -1846,12 +1728,13 @@ func (p *Proxy) extractBindInfo(payload []byte) (portalName, stmtName string) {
 // extractBindResultFormats parses the Bind message payload and returns the
 // per-column result format codes requested by the client.
 // Bind layout (after portal\0 stmt\0):
-//   int16  numParamFmts
-//   int16  paramFmt[numParamFmts]
-//   int16  numParamValues
-//   for each param: int32 len, []byte value  (len=-1 → NULL)
-//   int16  numResultFmts
-//   int16  resultFmt[numResultFmts]
+//
+//	int16  numParamFmts
+//	int16  paramFmt[numParamFmts]
+//	int16  numParamValues
+//	for each param: int32 len, []byte value  (len=-1 → NULL)
+//	int16  numResultFmts
+//	int16  resultFmt[numResultFmts]
 //
 // Returns nil when the codes cannot be parsed.
 func (p *Proxy) extractBindResultFormats(payload []byte) []int16 {
