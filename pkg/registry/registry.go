@@ -1323,9 +1323,19 @@ func mockHitKey(mock *types.ExpectStatement) string {
 			mock.CallN,
 		)
 	}
+	// Every arm below folds in what its matcher discriminates on, and CallN
+	// wherever the matcher consumes a mock once — a key that tells fewer mocks
+	// apart than the matcher does reports a hit on one as satisfying another,
+	// which makes "was never called" inert for whichever the service skipped and
+	// lets a positive hit satisfy an EXPECT_NOT beside it.
 	switch mock.Channel {
 	case types.HTTP:
-		return fmt.Sprintf("%s-%s", mock.Channel, mock.URL)
+		// Method, because FindHTTPMock and FindHTTPMockWithBody match on it: two
+		// EXPECTs on one URL differing only in method were indistinguishable
+		// here. Measured — an insert asserted beside the read of the row its
+		// unique constraint refused passed against an implementation that only
+		// ever read, and a POST satisfied an EXPECT_NOT naming the GET.
+		return fmt.Sprintf("%s-%s-%s-%d", mock.Channel, mock.Method, mock.URL, mock.CallN)
 	case types.ReadMySQL, types.ReadPostgreSQL, types.WriteMySQL, types.WritePostgreSQL:
 		// WriteMySQL/WritePostgreSQL used to fall through to the generic
 		// Channel+Table default below, which drops both the SQL text and CallN —
@@ -1339,11 +1349,15 @@ func mockHitKey(mock *types.ExpectStatement) string {
 		}
 		return fmt.Sprintf("%s-%s-%s-%s-%d", mock.Channel, mock.Database, mock.Table, sqlKey, mock.CallN)
 	case types.GRPC:
-		return fmt.Sprintf("%s-%s/%s", mock.Channel, mock.Service, mock.RPCMethod)
+		return fmt.Sprintf("%s-%s/%s-%d", mock.Channel, mock.Service, mock.RPCMethod, mock.CallN)
 	case types.ReadRedis, types.WriteRedis:
-		return fmt.Sprintf("%s-%s:%s", mock.Channel, mock.Command, mock.RedisKey)
+		return fmt.Sprintf("%s-%s:%s-%d", mock.Channel, mock.Command, mock.RedisKey, mock.CallN)
 	default:
-		return fmt.Sprintf("%s-%s", mock.Channel, mock.Table)
+		// MongoDB read/write reaches here, and FindMock filters it on the
+		// database and consumes a mock once, so both belong in the key. The
+		// Oracle channel does not: its EXPECTs require ACCESSING_TABLES, so they
+		// are keyed by the semantic case above.
+		return fmt.Sprintf("%s-%s-%s-%d", mock.Channel, mock.Database, mock.Table, mock.CallN)
 	}
 }
 
