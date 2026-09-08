@@ -1,6 +1,6 @@
 id: prov-2026-7eea40c2
 title: A hit key distinguishes every mock its matcher can distinguish
-status: open
+status: implemented
 created_at: "2026-09-08"
 author: caleb.cowen@linq.com
 intent: |
@@ -46,7 +46,7 @@ supersedes: ""
 superseded_by: ""
 related:
     - prov-2026-4ea65be4
-sealed_at_sha: ""
+sealed_at_sha: 23c0426f587f20b1c4fc1e610eb3706539a8ac43
 associated_specs:
     - path: pkg/registry/hit_key_discrimination_test.go
       run_command: scripts/go-test-for.sh
