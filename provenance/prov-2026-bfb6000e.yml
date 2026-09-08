@@ -1,6 +1,6 @@
 id: prov-2026-bfb6000e
 title: VERIFY rules run on the Oracle channel, recorded rather than answered
-status: open
+status: implemented
 created_at: "2026-09-04"
 author: caleb.cowen@linq.com
 intent: |
@@ -35,7 +35,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-37958093
-sealed_at_sha: ""
+sealed_at_sha: cbcb5f2e57edf39a0a28776d735576d062387cd0
 associated_specs:
   - path: pkg/proxy/oracle/verify_test.go
     run_command: scripts/go-test-for.sh
