@@ -27,7 +27,7 @@ constraints:
   - verify.VerifySQL is reused rather than reimplemented, so operator semantics stay identical across channels.
 affected_scope:
   - pkg/proxy/oracle/proxy.go
-  - pkg/proxy/oracle/channel_test.go
+  - pkg/proxy/oracle/verify_test.go
 forbidden_scope: []
 type: imprint
 implements: prov-2026-f7f1d960
@@ -37,7 +37,7 @@ related:
   - prov-2026-37958093
 sealed_at_sha: ""
 associated_specs:
-  - path: pkg/proxy/oracle/channel_test.go
+  - path: pkg/proxy/oracle/verify_test.go
     run_command: scripts/go-test-for.sh
 associated_traces: []
 monitors: []
