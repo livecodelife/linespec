@@ -717,6 +717,23 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 			if err := r.suite.truncateMongoDBCollections(ctx, dbCfg, hostPort); err != nil {
 				logger.Debug("Failed to truncate MongoDB collections (%s): %v", host, err)
 			}
+		case "oracle":
+			// Oracle is reset by replaying its seed script rather than by truncating,
+			// because the alternative is an Oracle driver in this module and
+			// prov-2026-37958093 kept one out on purpose. Unlike the truncations
+			// above, a failure here is fatal: a spec that runs against the previous
+			// spec's leftovers reports a result about state nobody declared.
+			initScriptPath := ""
+			if dbCfg.InitScript != "" {
+				candidate := filepath.Join(serviceConfig.BaseDir, dbCfg.InitScript)
+				if _, statErr := os.Stat(candidate); statErr == nil {
+					initScriptPath = candidate
+				}
+			}
+			resetName := "linespec-oracle-reset-" + host
+			if err := r.suite.resetOracle(ctx, *dbCfg, "real-"+host, initScriptPath, resetName); err != nil {
+				return fmt.Errorf("failed to reset Oracle (%s): %w", host, err)
+			}
 		}
 	}
 	return nil
@@ -1308,6 +1325,127 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			logger.Debug("Setting up database: type=%s host=%s proxy=%v", dbType, db.Host, db.Proxy)
 
 			switch dbType {
+			case "oracle":
+				logger.Debug("Starting Oracle database (host=%s)", db.Host)
+				oracleContainerName := "linespec-oracle-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
+
+				initScriptPath := ""
+				if db.InitScript != "" {
+					candidate := filepath.Join(serviceConfig.BaseDir, db.InitScript)
+					if _, statErr := os.Stat(candidate); statErr == nil {
+						initScriptPath = candidate
+						logger.Debug("Mounting Oracle init script: %s", initScriptPath)
+					} else {
+						logger.Info("Oracle init script %s not found, starting with an empty database", candidate)
+					}
+				}
+
+				if err = r.suite.orch.EnsureImage(ctx, db.Image); err != nil {
+					return fmt.Errorf("failed to pull Oracle image %s: %w", db.Image, err)
+				}
+				oraCfg, oraHostCfg := oracleContainerSpec(db)
+				_, err = r.suite.orch.StartContainer(ctx, oraCfg, oraHostCfg,
+					oracleNetwork(r.suite.networkName, realAlias), oracleContainerName)
+				if err != nil {
+					return fmt.Errorf("failed to start Oracle container (%s): %w", db.Host, err)
+				}
+				dbContainers[db.Host] = oracleContainerName
+
+				containerGuard := new(bool)
+				*containerGuard = true
+				dbCleanupGuards = append(dbCleanupGuards, containerGuard)
+				localOracleContainer := oracleContainerName
+				localContainerGuard := containerGuard
+				defer func() {
+					if !*localContainerGuard {
+						return
+					}
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localOracleContainer)
+				}()
+
+				// An Oracle opens in about a minute, so this is the one wait in the
+				// runner measured in minutes rather than seconds. It is paid once per
+				// suite: HTTP specs keep the database container alive between specs and
+				// reset it with the seed script instead of rebuilding it.
+				logger.Info("Waiting for Oracle to open (host=%s) — about a minute on a cold start", db.Host)
+				if waitErr := r.suite.waitForOracle(ctx, oracleContainerName, 5*time.Minute); waitErr != nil {
+					return fmt.Errorf("oracle not ready (%s): %w\n%s",
+						db.Host, waitErr, r.suite.captureContainerLogs(oracleContainerName))
+				}
+				logger.Debug("Oracle is ready (host=%s)", db.Host)
+
+				// The seed is applied here rather than by the image, because the image
+				// runs its init directory before it creates APP_USER — see
+				// oracleResetScript. One moment, one code path, and the same container
+				// that replays it between specs.
+				if seedErr := r.suite.resetOracle(ctx, db, realAlias, initScriptPath,
+					"linespec-oracle-seed-"+db.Host); seedErr != nil {
+					return fmt.Errorf("failed to seed Oracle (%s): %w", db.Host, seedErr)
+				}
+
+				oracleHostPort, portErr := r.suite.waitForContainerPort(ctx, oracleContainerName, dbPort+"/tcp", 30*time.Second)
+				if portErr != nil {
+					return fmt.Errorf("failed to get Oracle host port (%s): %w", db.Host, portErr)
+				}
+				dbHostPortsMap[db.Host] = "localhost:" + oracleHostPort
+
+				if db.Proxy != nil && *db.Proxy {
+					// No --schema-file: the Oracle proxy synthesises nothing, so it has
+					// no use for column types.
+					oracleProxyCmd := []string{"proxy", "oracle", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort,
+						r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
+						"--db-name", oracleService(db)}
+					if logger.IsDebug() {
+						oracleProxyCmd = append(oracleProxyCmd, "--debug")
+					}
+					_, err = r.suite.orch.StartContainer(ctx, &container.Config{
+						Image: proxyImage,
+						Cmd:   oracleProxyCmd,
+						ExposedPorts: map[nat.Port]struct{}{
+							nat.Port(dbPort + "/tcp"): {},
+							nat.Port("8081/tcp"):      {},
+						},
+					}, &container.HostConfig{
+						Binds: []string{
+							r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
+							r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+						},
+						PortBindings: map[nat.Port][]nat.PortBinding{
+							nat.Port(dbPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
+							nat.Port("8081/tcp"):      {{HostIP: "0.0.0.0", HostPort: "0"}},
+						},
+					}, oracleNetwork(r.suite.networkName, proxyAlias), proxyContainerName)
+					if err != nil {
+						return fmt.Errorf("failed to start Oracle proxy (%s): %w", db.Host, err)
+					}
+					logger.Debug("Oracle proxy started (alias=%s)", proxyAlias)
+
+					proxyGuard := new(bool)
+					*proxyGuard = true
+					dbCleanupGuards = append(dbCleanupGuards, proxyGuard)
+					localProxyContainer := proxyContainerName
+					localProxyGuard := proxyGuard
+					defer func() {
+						if !*localProxyGuard {
+							return
+						}
+						cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer cancel()
+						_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, localProxyContainer)
+					}()
+					if logger.IsDebug() {
+						go func() {
+							logCtx, logCancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer logCancel()
+							_ = r.suite.orch.StreamLogs(logCtx, proxyContainerName, os.Stdout, os.Stderr)
+						}()
+					}
+				} else {
+					logger.Info("Oracle proxy disabled for host=%s, mock matching will not work", db.Host)
+				}
+
 			case "postgresql":
 				logger.Debug("Starting PostgreSQL database (host=%s)", db.Host)
 				pgContainerName := "linespec-postgresql-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
@@ -2093,6 +2231,21 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				envMap[namePrefix+"DATABASE_URL"] = dbURL
 				if isFirst {
 					envMap["DATABASE_URL"] = dbURL
+				}
+			case "oracle":
+				if db.Proxy != nil && *db.Proxy {
+					logger.Debug("Oracle proxy enabled: app will connect to '%s' (proxy)", dbHost)
+				} else {
+					logger.Debug("Oracle proxy disabled: app will connect directly to '%s'", dbHost)
+				}
+				// Easy Connect rather than a TNS alias, so the app needs no tnsnames.ora
+				// and the host is substitutable — which is the whole point, since the
+				// hostname here is the proxy's alias rather than the database's.
+				oracleDSN := fmt.Sprintf("User Id=%s;Password=%s;Data Source=%s:%d/%s;",
+					db.Username, db.Password, dbHost, db.Port, oracleService(db))
+				envMap[namePrefix+"ORACLE_CONNECTION_STRING"] = oracleDSN
+				if isFirst {
+					envMap["ORACLE_CONNECTION_STRING"] = oracleDSN
 				}
 			case "mongodb":
 				if db.Proxy != nil && *db.Proxy {
