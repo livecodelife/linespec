@@ -2,14 +2,17 @@ package oracle
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/livecodelife/linespec/v3/pkg/logger"
 	"github.com/livecodelife/linespec/v3/pkg/proxy/base"
 	"github.com/livecodelife/linespec/v3/pkg/registry"
 	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
+	"github.com/livecodelife/linespec/v3/pkg/verify"
 )
 
 // Proxy sits between a service and a real Oracle, relaying both directions
@@ -159,10 +162,28 @@ func (p *Proxy) observe(packet []byte) {
 	r := sqlanalysis.Analyze(sqlanalysis.Oracle, sql, sqlanalysis.Binds{})
 	db := p.dbConfig.GetDatabaseName()
 
-	if _, found := p.registry.FindMockByTables(
+	if mock, found := p.registry.FindMockByTables(
 		db, tables, r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues,
 	); found {
 		logger.Debug("Oracle proxy: matched %s on %v", r.Operation, tables)
+
+		// A matched expectation's VERIFY rules, through the same evaluator every
+		// other channel uses. One difference, and it follows from this channel's
+		// design rather than from convenience: the PostgreSQL proxy answers a
+		// failed rule with an error to the client, and this one never writes to
+		// the client at all. Recording is enough - VerifyAll reports a recorded
+		// verify error ahead of any never-called message, so the spec fails naming
+		// the rule that broke.
+		if len(mock.Verify) > 0 {
+			if err := verify.VerifySQL(sql, mock.Verify); err != nil {
+				logger.Debug("Oracle proxy: VERIFY failed: %v", err)
+				p.registry.RecordVerifyError(fmt.Sprintf("%s [%s]: %v",
+					// "READ_ORACLE" -> "READ:ORACLE", matching how the registry
+					// spells a channel in its own rejection messages.
+					strings.Replace(string(mock.Channel), "_", ":", 1),
+					strings.Join(mock.AccessingTables, ","), err))
+			}
+		}
 	}
 
 	p.registry.CheckNegativeMocksByTables(
