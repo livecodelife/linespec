@@ -611,7 +611,9 @@ func TestMockRegistry_GetHits_GRPC(t *testing.T) {
 	reg.FindGRPCMock("users.UserService", "GetUser")
 
 	hits := reg.GetHits()
-	key := "GRPC-users.UserService/GetUser"
+	// The trailing 0 is the EXPECT's CALL N, folded in so a CALL 1 / CALL 2
+	// sequence on one RPC does not collide (prov-2026-7eea40c2).
+	key := "GRPC-users.UserService/GetUser-0"
 	if hits[key] != 1 {
 		t.Errorf("Expected hit count 1 for key %q, got %d", key, hits[key])
 	}
@@ -736,7 +738,9 @@ func TestMockRegistry_GetHits_Redis(t *testing.T) {
 	reg.FindRedisMock("GET", "user:123")
 
 	hits := reg.GetHits()
-	key := "READ_REDIS-GET:user:123"
+	// The trailing 0 is the EXPECT's CALL N, folded in so a CALL 1 / CALL 2
+	// sequence on one key does not collide (prov-2026-7eea40c2).
+	key := "READ_REDIS-GET:user:123-0"
 	if hits[key] != 1 {
 		t.Errorf("Expected hit count 1 for key %q, got %d", key, hits[key])
 	}

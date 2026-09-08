@@ -609,7 +609,8 @@ Rules:
 * HEADERS is optional; headers are matched against the actual request
 * `RESPONSE_HEADERS` is optional; it sets explicit headers on the mocked response. Without it, `Content-Type` is inferred from the payload file extension (`.json` → `application/json`, `.yaml`/`.yml` → `application/yaml`, `.xml` → `application/xml`)
 * The proxy intercepts calls to the hostname and returns the mocked response
-* Tests fail if the HTTP mock is defined but not invoked
+* Tests fail if the HTTP mock is defined but not invoked. Two expectations on the same URL are told apart by their method, and two on the same URL *and* method by `CALL N` — each is asserted to have been called on its own
+* Matching is on the URL **path**: an expectation URL containing a query string matches nothing. To assert query parameters, match the path and add `VERIFY url MATCHES /<regex>/`, which sees the full request URI including the query
 
 ---
 
