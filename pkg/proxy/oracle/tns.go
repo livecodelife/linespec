@@ -112,15 +112,24 @@ const longFormMarker = 0xFE
 // statement.
 //
 // A statement is stored as a length followed by its bytes. Below 254 the length
-// is a single byte. At or above it, the length is 0xFE followed by four bytes
-// LITTLE-endian - the one little-endian field in a protocol that is big-endian
-// everywhere else, and the reason a parser proved only on short queries breaks
-// on the first realistic one.
+// is a single byte and every client agrees on that. At or above it, 0xFE
+// introduces a wide length - and the clients do NOT agree on what follows it:
+//
+//	sqlplus  fe 15 01 00 00      four bytes LITTLE-endian (277)
+//	ODP.NET  fe 02 01 15         marshalled: one byte saying how many follow,
+//	                             then that many BIG-endian (277)
+//
+// Both are read, because both were captured from the client that sends them, and
+// the .NET driver is the one a service under test actually uses. Reading only the
+// first form is silent rather than loud: no length agrees, the packet contributes
+// nothing, and an expectation written against a statement past 254 bytes is
+// reported as never called.
 //
 // The search is for a length that agrees with what follows it, which is a
 // strong constraint: the length must be matched by exactly that many printable
 // bytes, and those bytes must open with a SQL verb. Anything else is not a
-// statement as far as this package is concerned.
+// statement as far as this package is concerned - which is also why two competing
+// readings of the same bytes are safe to try in turn.
 func Statement(packet []byte) (string, bool) {
 	if PacketType(packet) != TypeData {
 		return "", false
@@ -143,37 +152,73 @@ func Statement(packet []byte) (string, bool) {
 	return best, best != ""
 }
 
-// statementAt tries to read a length-prefixed statement beginning at i.
+// maxMarshalledLenBytes bounds the count byte of a marshalled length. Oracle
+// marshals an integer as a byte count followed by that many big-endian bytes, and
+// a statement length needs at most four - so a larger count is not one, and
+// bounding it keeps a stray 0xFE from proposing a length out of arbitrary
+// following bytes.
+const maxMarshalledLenBytes = 4
+
+// statementAt tries to read a length-prefixed statement beginning at i, returning
+// the longest reading that agrees with the bytes after it.
 func statementAt(body []byte, i int) (string, bool) {
-	var start, length int
-
-	switch {
-	case body[i] == longFormMarker:
-		if i+5 > len(body) {
-			return "", false
+	best := ""
+	for _, c := range lengthCandidatesAt(body, i) {
+		if c.length < minStatementLen || c.start+c.length > len(body) {
+			continue
 		}
-		length = int(binary.LittleEndian.Uint32(body[i+1 : i+5]))
-		start = i + 5
-		// Below the marker's threshold the short form would have been used, so
-		// a long form claiming a small length is not a length.
-		if length < longFormMarker {
-			return "", false
+		text := body[c.start : c.start+c.length]
+		if !allPrintable(text) || !opensWithVerb(text) {
+			continue
 		}
-	case body[i] > 0 && body[i] < longFormMarker:
-		length = int(body[i])
-		start = i + 1
-	default:
-		return "", false
+		if len(text) > len(best) {
+			best = string(text)
+		}
+	}
+	return best, best != ""
+}
+
+// lengthCandidate is one reading of a length prefix: where the text would begin
+// and how long it would be.
+type lengthCandidate struct{ start, length int }
+
+// lengthCandidatesAt proposes every reading of a length prefix at i. The short
+// form has one reading; the wide form has two, because sqlplus and ODP.NET encode
+// it differently and a proxy does not get to choose its client.
+func lengthCandidatesAt(body []byte, i int) []lengthCandidate {
+	if body[i] != longFormMarker {
+		if body[i] > 0 && body[i] < longFormMarker {
+			return []lengthCandidate{{start: i + 1, length: int(body[i])}}
+		}
+		return nil
 	}
 
-	if length < minStatementLen || start+length > len(body) {
-		return "", false
+	var out []lengthCandidate
+
+	// sqlplus: four bytes little-endian.
+	if i+5 <= len(body) {
+		// Below the marker's threshold the short form would have been used, so a
+		// wide form claiming a small length is not a length.
+		if n := int(binary.LittleEndian.Uint32(body[i+1 : i+5])); n >= longFormMarker {
+			out = append(out, lengthCandidate{start: i + 5, length: n})
+		}
 	}
-	text := body[start : start+length]
-	if !allPrintable(text) || !opensWithVerb(text) {
-		return "", false
+
+	// ODP.NET: a marshalled length — a count byte, then that many big-endian.
+	if i+1 < len(body) {
+		count := int(body[i+1])
+		if count >= 1 && count <= maxMarshalledLenBytes && i+2+count <= len(body) {
+			n := 0
+			for _, b := range body[i+2 : i+2+count] {
+				n = n<<8 | int(b)
+			}
+			if n >= longFormMarker {
+				out = append(out, lengthCandidate{start: i + 2 + count, length: n})
+			}
+		}
 	}
-	return string(text), true
+
+	return out
 }
 
 // minStatementLen is the shortest thing worth calling a statement; it also
@@ -201,6 +246,14 @@ var verbs = []string{
 }
 
 func opensWithVerb(b []byte) bool {
+	// Leading whitespace is part of the statement, not noise before it. A C#
+	// verbatim interpolated string - which is how CrudRepositoryBase assembles a
+	// paginated query - puts a newline and an indent before SELECT, and Oracle
+	// sends that faithfully. Requiring the verb at byte zero rejects the statement
+	// on its formatting.
+	for len(b) > 0 && (b[0] == ' ' || b[0] == '\n' || b[0] == '\r' || b[0] == '\t') {
+		b = b[1:]
+	}
 	for _, v := range verbs {
 		if len(b) < len(v) {
 			continue
