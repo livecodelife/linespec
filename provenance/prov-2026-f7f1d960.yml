@@ -34,13 +34,15 @@ constraints:
   - No Oracle driver enters the module - readiness is the image's healthcheck, reset is sqlplus in a container.
   - Readiness is the pluggable database being open, not the listener accepting TCP.
   - The database container is reused across specs; only the reset container runs per spec.
-  - A configured init script is the single definition of the seed state, used at first boot and at every reset.
+  - A configured init script is the single definition of the seed state, applied after the database opens and again between specs (see prov-2026-93f3a5d2 for why not at first boot).
   - The proxy sidecar is the oracle proxy from prov-2026-37958093, unchanged, and loads no schema because nothing is synthesised.
   - Container spec construction and the reset command are pure functions, so they are asserted without Docker.
 affected_scope:
   - pkg/runner/runner.go
   - pkg/runner/oracle.go
   - pkg/runner/oracle_test.go
+  - pkg/proxy/oracle/proxy.go
+  - pkg/proxy/oracle/verify_test.go
   - CHANGELOG.md
 forbidden_scope: []
 type: blueprint

@@ -33,11 +33,19 @@ intent: |
   bytes opening with a SQL verb, and Statement already scans every offset and keeps
   the longest match. So reading a second interpretation adds a candidate rather than
   a branch to get wrong.
+
+  One consequence surfaced while implementing it and belongs here rather than in a
+  comment alone: that agreement test required the verb at byte zero, and a C#
+  verbatim interpolated string - which is how the base class assembles a paginated
+  query - puts a newline and an indent before SELECT. Oracle sends the statement
+  faithfully, whitespace included, so the test was rejecting a real statement on its
+  formatting. Leading whitespace is now skipped before the verb is looked for.
 constraints:
   - Both encodings are asserted against packets captured from the client that sends them - sqlplus for one, ODP.NET for the other - never bytes this package encoded.
   - The existing sqlplus captures keep passing unchanged; this adds a reading, it does not replace one.
   - A length that does not agree with the bytes that follow it is not a length, whichever encoding proposed it.
   - The marshalled count byte is bounded, so a stray 0xFE cannot name a length from arbitrary following bytes.
+  - Leading whitespace does not disqualify a statement; the verb is looked for after it, not at byte zero.
 affected_scope:
   - pkg/proxy/oracle/tns.go
   - pkg/proxy/oracle/tns_test.go
