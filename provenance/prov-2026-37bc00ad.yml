@@ -1,6 +1,6 @@
 id: prov-2026-37bc00ad
 title: ODP.NET frames a long statement's length differently from sqlplus, and the parser sees only sqlplus's form
-status: open
+status: implemented
 created_at: "2026-09-04"
 author: caleb.cowen@linq.com
 intent: |
@@ -58,7 +58,7 @@ superseded_by: ""
 extends: prov-2026-37958093
 related:
   - prov-2026-f7f1d960
-sealed_at_sha: ""
+sealed_at_sha: 1fb4ba4720f71a1aa3adf2160fc503d60f111107
 associated_specs:
   - path: pkg/proxy/oracle/tns_test.go
     run_command: scripts/go-test-for.sh
