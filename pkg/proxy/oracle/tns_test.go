@@ -159,6 +159,40 @@ func TestStatementLongForm(t *testing.T) {
 	}
 }
 
+// The same wide length, from the client every service under test actually uses.
+// ODP.NET does not send sqlplus's four little-endian bytes after 0xFE; it sends a
+// marshalled length - a count byte, then that many big-endian. Reading only
+// sqlplus's form fails silently rather than loudly: no length agrees with the bytes
+// after it, the packet contributes nothing, and the expectation written for that
+// statement reports as never called.
+//
+// Both fixtures are packets captured from a running Oracle managed .NET client, not
+// bytes this package encoded.
+func TestStatementLongFormAsODPNetSendsIt(t *testing.T) {
+	got, ok := Statement(load(t, "odp-select-long-489.bin"))
+	if !ok {
+		t.Fatal("no statement found in a packet ODP.NET really sent")
+	}
+	if len(got) != 489 {
+		t.Errorf("statement is %d bytes, want 489", len(got))
+	}
+	if !strings.Contains(got, "ROW_NUMBER() OVER (ORDER BY UPPER(VendorCategory))") {
+		t.Errorf("statement does not carry the paginated ORDER BY: %.80q", got)
+	}
+}
+
+// The short form is the one thing the two clients agree on, pinned from both so a
+// change to the wide reading cannot quietly move it.
+func TestStatementShortFormAsODPNetSendsIt(t *testing.T) {
+	got, ok := Statement(load(t, "odp-select-short-50.bin"))
+	if !ok {
+		t.Fatal("no statement found")
+	}
+	if !strings.HasPrefix(got, "SELECT COUNT(*) FROM fas.vendor_types vt WHERE 1=1") {
+		t.Errorf("got %q", got)
+	}
+}
+
 // A packet carrying no statement is ordinary traffic, not a failure. Reporting
 // it as an error would make every connection noisy; reporting it as a match
 // would satisfy an expectation nothing performed.
