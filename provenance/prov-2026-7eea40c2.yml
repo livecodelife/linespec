@@ -38,6 +38,7 @@ constraints:
 affected_scope:
     - pkg/registry/registry.go
     - pkg/registry/registry_test.go
+    - pkg/registry/hit_key_discrimination_test.go
     - LINESPEC.md
 forbidden_scope: []
 type: blueprint
@@ -46,7 +47,9 @@ superseded_by: ""
 related:
     - prov-2026-4ea65be4
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+    - path: pkg/registry/hit_key_discrimination_test.go
+      run_command: scripts/go-test-for.sh
 associated_traces: []
 monitors: []
 tags:
