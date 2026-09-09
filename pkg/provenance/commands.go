@@ -876,7 +876,34 @@ func (c *Commands) LockLayer(opts LockLayerOptions) error {
 		}
 	}
 
-	// Step 3: Complete it (reuses Complete — seals SHA, sets implemented).
+	// Step 3: Commit the record while it is still a draft. The pre-commit scope
+	// check refuses any commit tagged with an already-implemented record, so the
+	// commit that INTRODUCES the record has to land before the seal — sealing
+	// first leaves the file uncommitted and every commit that could introduce it
+	// forbidden, which is why this worked in a bare repo and failed in every repo
+	// that had run 'provenance install-hooks'. Exempting implemented records from
+	// the scope check was rejected: that check is what catches someone reusing a
+	// sealed record's id for new work.
+	//
+	// A rejected commit leaves the draft on disk rather than deleting it. The
+	// record is still a valid draft that the author can commit and complete by
+	// hand once the hook complaint is resolved, and discarding it here would
+	// throw away intent prose they may have just written in the editor.
+	if c.Config.CommitOnStatusChange {
+		msg := fmt.Sprintf("Create locked provenance record %s [%s]", record.ID, record.ID)
+		if err := c.Git.CommitRecord(msg, record.FilePath); err != nil {
+			c.Formatter.FormatError(fmt.Sprintf(
+				"Cannot create locked layer %s: the commit introducing the record was rejected:\n\n    %v\n\n"+
+					"  %s is still on disk as a draft and was NOT sealed. Resolve the issue above\n"+
+					"  (e.g. a failing pre-commit hook), then commit the record and run\n"+
+					"  'linespec provenance complete --record %s' to seal it.",
+				record.ID, err, record.ID, record.ID,
+			))
+			return err
+		}
+	}
+
+	// Step 4: Complete it (reuses Complete — seals SHA, sets implemented).
 	// Everything the record will ever say is already on disk, so the seal
 	// covers the finished article.
 	if err := c.Complete(CompleteOptions{RecordID: record.ID, Force: true}); err != nil {
