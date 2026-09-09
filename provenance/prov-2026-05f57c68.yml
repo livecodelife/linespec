@@ -1,0 +1,44 @@
+id: prov-2026-05f57c68
+title: 'Release 3.22.1: lock-layer works in repos with hooks installed'
+status: draft
+created_at: "2026-09-09"
+author: caleb.cowen@linq.com
+intent: |
+  Release 3.22.1: lock-layer finishes on its own in a repo that has run
+  `provenance install-hooks`. 3.22.0 made the command able to produce a locked
+  record for the first time, and in doing so exposed the next step in the same
+  sequence: the record was sealed before it was ever committed, so the commit
+  introducing it was tagged with an already-implemented record and the
+  pre-commit scope check refused it.
+
+  A patch rather than a minor. No flag, field or output contract changes — the
+  only difference is the order of two operations inside LockLayer, and the
+  resulting two commits instead of one. Nothing that worked before behaves
+  differently, because in a hooked repo nothing worked before.
+
+  Shipping alone rather than batching. 3.22.0 is the release that made
+  lock-layer usable, and it is only usable in repos with no hooks installed,
+  which is not the configuration anyone using provenance seriously runs.
+constraints:
+  - The CHANGELOG names the version, its date, and the record behind each entry.
+  - A version string in a tracked source states the released version.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-cdb13afd
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+associated_traces: []
+monitors: []
+tags:
+  - release
