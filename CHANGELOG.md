@@ -5,6 +5,21 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.1] - 2026-09-09
+
+### Fixed
+
+- **`lock-layer` could not commit its own record in a repo with hooks installed** ([prov-2026-cdb13afd](./provenance/prov-2026-cdb13afd.yml)) — the command sealed the record to `implemented` and only then made its first commit. The pre-commit scope check refuses any commit tagged with an already-implemented record, so the commit that introduced the record was rejected:
+
+      ✗ Forbidden scope violation in staged
+          <id> is already implemented - cannot commit with this ID.
+
+  3.22.0 made `lock-layer` able to produce a locked record for the first time, and so was the first release to reach this step at all. It worked in a bare repo and failed in every repo that had run `provenance install-hooks` — which is every repo using provenance seriously.
+
+  The draft is now committed before the seal, and `complete` makes the sealing commit: the same two-commit ordering that was the manual workaround. Exempting implemented records from the scope check was rejected — that check is what catches someone reusing a sealed record's id for new work.
+
+  A rejected introducing commit leaves the draft on disk with instructions to commit and complete it by hand, rather than discarding intent prose you may have just written in the editor.
+
 ## [3.22.0] - 2026-09-09
 
 **Upgrade note.** `lock-layer` now requires `--intent` when you pass `--no-edit`, and takes a new `--scope`. This can break no existing usage, because the command could not produce a usable record before this release.
