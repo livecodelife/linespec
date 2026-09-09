@@ -1,0 +1,44 @@
+id: prov-2026-6be85579
+title: Everything a sealed record says must be written before it is sealed
+status: draft
+created_at: "2026-09-09"
+author: caleb.cowen@linq.com
+intent: |
+  The blueprint diagnosed one defect: a created record was not registered with
+  the loader. Fixing it exposed three more, and they turned out to be the same
+  mistake repeated — the command treated a locked record as something it could
+  keep adjusting after `Complete`, when completing is exactly the point after
+  which nothing can change.
+
+  The one that hid the others: `SaveRecord` preserves hand-written formatting
+  by rewriting only `status`, `sealed_at_sha` and `superseded_by`. Any other
+  field assigned to a record and saved over an existing file is discarded
+  without an error. So `intent` and `locked` were set, saved, and lost, and the
+  command reported success over a record that was neither locked nor valid.
+
+  Rather than teach `SaveRecord` to write more fields — which would put
+  arbitrary values through text surgery on prose-bearing YAML — everything a
+  locked record needs is passed through `CreateOptions` and written by the
+  initial marshal of a new file, where the whole struct is serialized. That is
+  why `--intent` and `--scope` exist: not convenience flags, but the only
+  moment those values can reach disk.
+constraints:
+  - A locked record's intent and protected surface are supplied when it is created.
+  - A field assigned after a record's first write is not assumed to reach disk.
+affected_scope:
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-54d2b3f1
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/lock_layer_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - lock-layer
+  - provenance
