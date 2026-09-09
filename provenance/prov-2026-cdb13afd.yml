@@ -1,6 +1,6 @@
 id: prov-2026-cdb13afd
 title: lock-layer cannot commit its own record in a repo with hooks installed
-status: draft
+status: open
 created_at: "2026-09-09"
 author: caleb.cowen@linq.com
 intent: |
