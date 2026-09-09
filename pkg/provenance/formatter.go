@@ -692,7 +692,18 @@ func (f *Formatter) FormatLockLayerSuccess(record *Record) {
 		record.FilePath)
 	fmt.Fprintln(f.Output)
 	fmt.Fprintf(f.Output, "  Record created as implemented with locked: true.\n")
-	fmt.Fprintf(f.Output, "  Edit affected_scope and associated_specs to define the protected surface.\n\n")
+	if len(record.AffectedScope) == 0 {
+		// Deliberately not "edit the record": it is sealed, and editing it now
+		// fails PROV-IMM. The surface has to be given when the lock is created.
+		fmt.Fprintf(f.Output, "  It protects nothing yet — no affected_scope. A sealed record cannot be\n")
+		fmt.Fprintf(f.Output, "  edited, so re-create it with --scope to declare the protected surface.\n\n")
+		return
+	}
+	fmt.Fprintf(f.Output, "  Protected surface:\n")
+	for _, path := range record.AffectedScope {
+		fmt.Fprintf(f.Output, "    · %s\n", path)
+	}
+	fmt.Fprintln(f.Output)
 }
 
 // FormatCompleteSuccess formats the complete command success output. When

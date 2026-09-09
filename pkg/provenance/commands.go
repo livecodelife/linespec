@@ -156,13 +156,23 @@ func NewCommandsWithEmbedder(config *ProvenanceConfig, repoRoot string, output *
 
 // CreateOptions holds options for the create command
 type CreateOptions struct {
-	Title      string
-	Supersedes string
-	Tags       []string
-	NoEdit     bool
-	IDSuffix   string     // Service suffix for ID (e.g., "user-service" creates prov-YYYY-NNN-user-service)
-	Type       RecordType // Tier type: brief | blueprint | imprint
-	ConfigFile string     // Path to custom .linespec.yml file
+	Title  string
+	Intent string
+	// Locked seals this record as a locked layer. It is set at creation
+	// because SaveRecord's formatting-preserving path rewrites only status,
+	// sealed_at_sha and superseded_by — every other field reaches disk on the
+	// initial marshal of a new file and nowhere else.
+	Locked bool
+	// AffectedScope is the protected surface. Like Intent and Locked it is set
+	// at creation, because a locked record is sealed immediately and editing
+	// its scope afterwards fails PROV-IMM.
+	AffectedScope []string
+	Supersedes    string
+	Tags          []string
+	NoEdit        bool
+	IDSuffix      string     // Service suffix for ID (e.g., "user-service" creates prov-YYYY-NNN-user-service)
+	Type          RecordType // Tier type: brief | blueprint | imprint
+	ConfigFile    string     // Path to custom .linespec.yml file
 }
 
 // Create creates a new provenance record
@@ -219,6 +229,11 @@ func (c *Commands) createRecord(opts CreateOptions) (*Record, error) {
 		author = "unknown@example.com"
 	}
 
+	affectedScope := opts.AffectedScope
+	if affectedScope == nil {
+		affectedScope = []string{}
+	}
+
 	record := &Record{
 		ID:               id,
 		Title:            opts.Title,
@@ -226,9 +241,10 @@ func (c *Commands) createRecord(opts CreateOptions) (*Record, error) {
 		Type:             opts.Type,
 		CreatedAt:        CurrentDate(),
 		Author:           author,
-		Intent:           "",
+		Intent:           opts.Intent,
+		Locked:           opts.Locked,
 		Constraints:      []string{},
-		AffectedScope:    []string{},
+		AffectedScope:    affectedScope,
 		ForbiddenScope:   []string{},
 		Supersedes:       opts.Supersedes,
 		SupersededBy:     "",
@@ -253,6 +269,12 @@ func (c *Commands) createRecord(opts CreateOptions) (*Record, error) {
 	if err := c.Loader.SaveRecord(record); err != nil {
 		return nil, err
 	}
+
+	// Make the new record resolvable for the rest of this process. SaveRecord
+	// only writes the file, and a command that creates a record and then acts on
+	// it resolves through the loader — LockLayer completes and locks the record
+	// it has just created.
+	c.Loader.Add(record)
 
 	return record, nil
 }
@@ -786,47 +808,80 @@ func (c *Commands) AddScope(opts AddScopeOptions) error {
 // LockLayerOptions holds options for the lock-layer command
 type LockLayerOptions struct {
 	Title      string
+	Intent     string
+	Scope      []string
 	NoEdit     bool
 	ConfigFile string // Path to custom .linespec.yml file
 }
 
 // LockLayer creates a locked layer record — an architectural declaration
-// that is immediately implemented and locked
+// that is immediately implemented and locked.
+//
+// Order matters throughout, because completing a record SEALS it: the content
+// hash is taken over every exported field, and the record is immutable after.
+// So everything the record will ever say — its intent, and the locked flag
+// itself — has to be in place before Complete runs, not after.
 func (c *Commands) LockLayer(opts LockLayerOptions) error {
 	if opts.Title == "" {
 		c.Formatter.FormatError("--title is required")
 		return fmt.Errorf("--title is required")
 	}
 
-	// Step 1: Create record (reuses createRecord, no editor)
+	// A locked record is sealed the moment it is created, so its intent cannot
+	// be supplied afterwards. With --no-edit there is no editor to supply one,
+	// and a record with no intent cannot pass validation — so refuse now,
+	// rather than after writing a draft that could never be completed.
+	if opts.NoEdit && strings.TrimSpace(opts.Intent) == "" {
+		c.Formatter.FormatError(
+			"--intent is required with --no-edit: a locked record is sealed when it is created, so its intent cannot be added later")
+		return fmt.Errorf("--intent is required with --no-edit")
+	}
+
+	// Step 1: Create the record with everything that must survive to disk
+	// already set. SaveRecord's formatting-preserving path rewrites only
+	// status, sealed_at_sha and superseded_by, so intent and the locked flag
+	// reach the file only on this initial marshal — setting them afterwards
+	// leaves them in memory and drops them silently.
 	record, err := c.createRecord(CreateOptions{
-		Title:  opts.Title,
-		NoEdit: true,
+		Title:         opts.Title,
+		Intent:        opts.Intent,
+		AffectedScope: opts.Scope,
+		Locked:        true,
+		NoEdit:        true,
 	})
 	if err != nil {
 		c.Formatter.FormatError(fmt.Sprintf("Failed to create record: %v", err))
 		return err
 	}
 
-	// Step 2: Complete it (reuses Complete — seals SHA, sets implemented)
-	if err := c.Complete(CompleteOptions{RecordID: record.ID, Force: true}); err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to complete record: %v", err))
-		return err
-	}
-
-	// Step 3: Set locked and save
-	record, _ = c.Loader.GetRecord(record.ID)
-	record.Locked = true
-	if err := c.Loader.SaveRecord(record); err != nil {
-		c.Formatter.FormatError(fmt.Sprintf("Failed to save record: %v", err))
-		return err
-	}
-
-	// Step 4: Open editor if user didn't pass --no-edit
+	// Step 2: Let the author fill the record in BEFORE it is sealed. An editor
+	// opened after Complete would invite edits that break the sealed content
+	// hash and leave the record permanently failing its own integrity check.
 	if !opts.NoEdit {
 		if err := c.openInEditor(record.FilePath); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Could not open editor: %v\n", err)
 		}
+		// Adopt whatever the editor wrote, in place, so the loader's index and
+		// the completion below both see the edited record rather than the stale
+		// copy this function is holding.
+		if reloaded, err := c.Loader.LoadFile(record.FilePath); err == nil {
+			*record = *reloaded
+		}
+		// The flag was written for the author to see; if it was removed, say so
+		// rather than sealing something called a locked layer that locks nothing.
+		if !record.Locked {
+			c.Formatter.FormatError(fmt.Sprintf(
+				"%s no longer declares locked: true — a locked layer cannot be created without it", record.ID))
+			return fmt.Errorf("locked flag removed during edit")
+		}
+	}
+
+	// Step 3: Complete it (reuses Complete — seals SHA, sets implemented).
+	// Everything the record will ever say is already on disk, so the seal
+	// covers the finished article.
+	if err := c.Complete(CompleteOptions{RecordID: record.ID, Force: true}); err != nil {
+		c.Formatter.FormatError(fmt.Sprintf("Failed to complete record: %v", err))
+		return err
 	}
 
 	c.Formatter.FormatLockLayerSuccess(record)

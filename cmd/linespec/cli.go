@@ -562,6 +562,8 @@ func newProvLockLayerCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&opts.Title, "title", "", "Required. Title for the locked layer record")
+	f.StringVar(&opts.Intent, "intent", "", "Intent prose. Required with --no-edit, since a locked record is sealed on creation")
+	f.StringSliceVar(&opts.Scope, "scope", nil, "Protected path(s) (comma-separated; repeatable). Set here, not by editing: the record is sealed on creation")
 	f.BoolVar(&opts.NoEdit, "no-edit", false, "Write without opening editor")
 	f.StringVarP(&opts.ConfigFile, "config", "c", "", "Path to custom .linespec.yml file")
 	_ = cmd.MarkFlagRequired("title")
