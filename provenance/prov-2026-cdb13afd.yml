@@ -1,0 +1,53 @@
+id: prov-2026-cdb13afd
+title: lock-layer cannot commit its own record in a repo with hooks installed
+status: draft
+created_at: "2026-09-09"
+author: caleb.cowen@linq.com
+intent: |
+  `LockLayer` creates the record as `implemented` and only then makes its first
+  commit. The pre-commit scope check refuses any commit tagged with a record
+  that is already implemented, so the command fails on the commit that
+  introduces the record:
+
+      ✗ Forbidden scope violation in staged
+          <id> is already implemented - cannot commit with this ID.
+      Commit blocked due to provenance scope violations
+
+  It therefore works in a bare repo and fails in every repo that has run
+  `provenance install-hooks` — which is every repo using provenance seriously.
+  Reproduced in a downstream repo after 3.22.0; the workaround was to commit
+  the record while still a draft and complete it separately, which is two
+  commits and exactly the ordering the command should do itself.
+
+  The fix is to commit the draft before completing rather than completing
+  before committing, inside `LockLayer`. Rejected: exempting implemented
+  records from the scope check, which would weaken the check that catches
+  someone reusing a sealed record's id for new work.
+
+  This hid behind the four defects fixed in prov-2026-54d2b3f1 because that
+  work was verified in throwaway repos with no hooks. A locked record could
+  not be produced at all before 3.22.0, so nothing had ever reached this step.
+constraints:
+  - lock-layer completes in a repository with the provenance hooks installed.
+  - A commit introducing a record is tagged with that record while it is still a draft.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/lock_layer_test.go
+forbidden_scope: []
+type: bug
+supersedes: ""
+extends: prov-2026-7df318ca
+superseded_by: ""
+related:
+  - prov-2026-54d2b3f1
+  - prov-2026-6be85579
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/lock_layer_test.go
+    type: go-test
+associated_traces: []
+monitors: []
+tags:
+  - lock-layer
+  - provenance
+  - hooks
