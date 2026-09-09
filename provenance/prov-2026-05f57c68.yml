@@ -1,6 +1,6 @@
 id: prov-2026-05f57c68
 title: 'Release 3.22.1: lock-layer works in repos with hooks installed'
-status: draft
+status: open
 created_at: "2026-09-09"
 author: caleb.cowen@linq.com
 intent: |
