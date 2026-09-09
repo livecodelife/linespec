@@ -1,6 +1,6 @@
 id: prov-2026-54d2b3f1
 title: lock-layer cannot find the record it just created
-status: draft
+status: open
 created_at: "2026-09-09"
 author: caleb.cowen@linq.com
 intent: |
@@ -33,10 +33,13 @@ affected_scope:
 forbidden_scope: []
 type: bug
 supersedes: ""
+extends: prov-2026-7df318ca
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/lock_layer_test.go
+    type: go-test
 associated_traces: []
 monitors: []
 tags:
