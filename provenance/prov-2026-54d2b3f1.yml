@@ -1,0 +1,45 @@
+id: prov-2026-54d2b3f1
+title: lock-layer cannot find the record it just created
+status: draft
+created_at: "2026-09-09"
+author: caleb.cowen@linq.com
+intent: |
+  `createRecord` writes a new record with `SaveRecord` but never adds it to the
+  loader's in-memory index, so the record exists on disk and is invisible to
+  every lookup for the rest of the process. `lock-layer` is the only command
+  that creates a record and then acts on it, so it is the only one that fails:
+  step 2 of 4 calls `Complete`, which resolves through `GetRecord`, and the
+  command dies with "Record not found" naming the id it just wrote. It leaves a
+  stray draft behind and no locked record. Reproduced twice on a clean tree.
+
+  The fix registers the record with the loader at creation rather than
+  reloading inside `LockLayer`. `Complete` is not the only consumer that
+  resolves through that index — `SealRecord` and `LintRecord` do too — so
+  patching the one caller would fix this command and leave the next
+  create-then-use command to fail the same way.
+
+  This shipped because the lock-layer tests cover `checkLockedScope`, the
+  enforcement half, and nothing calls `LockLayer` at all. The half that decides
+  whether a locked record can be created has never run in a test, which is why
+  the end-to-end assertion below is the one that matters.
+constraints:
+  - A record created during a command is resolvable by its id for the rest of that command.
+  - lock-layer produces a record that is implemented and locked.
+  - A locked record makes an overlapping open record fail lint.
+affected_scope:
+  - pkg/provenance/loader.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/lock_layer_test.go
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - lock-layer
+  - bug
