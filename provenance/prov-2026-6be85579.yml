@@ -29,10 +29,11 @@ affected_scope:
   - pkg/provenance/commands.go
 forbidden_scope: []
 type: imprint
-implements: prov-2026-54d2b3f1
+implements: prov-2026-7df318ca
 supersedes: ""
 superseded_by: ""
-related: []
+related:
+  - prov-2026-54d2b3f1
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/provenance/lock_layer_test.go
