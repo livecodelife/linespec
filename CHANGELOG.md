@@ -5,6 +5,28 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.0] - 2026-09-09
+
+**Upgrade note.** `lock-layer` now requires `--intent` when you pass `--no-edit`, and takes a new `--scope`. This can break no existing usage, because the command could not produce a usable record before this release.
+
+### Fixed
+
+- **`lock-layer` could not create a locked record at all** ([prov-2026-54d2b3f1](./provenance/prov-2026-54d2b3f1.yml)) — the command died partway through, leaving a stray draft and no lock, so the locked-layer feature has never been usable in any repo. The enforcement half was sound the whole time and simply had nothing to enforce against: every test in `lock_layer_test.go` covered `checkLockedScope`, and nothing called `LockLayer`.
+
+  Four defects, all the same mistake — the command treated a locked record as something it could keep adjusting after `Complete`, when completing is precisely the point after which nothing can change.
+
+  **The record was invisible to itself.** `createRecord` wrote the file but never registered it with the loader, so `Complete` could not resolve the id it had just written and failed with `Record not found`. Registering now happens on creation, in the loader, because `SealRecord` and `LintRecord` resolve through the same index — fixing only the one caller would have left the next create-then-use command to fail identically.
+
+  **The editor opened after sealing.** Step 4 invited you to edit a record step 2 had already made immutable. It now opens before completion, and the record is reloaded in place so the seal covers what was actually written.
+
+  **`locked` was set after sealing.** It is an exported field, so it is part of the content hash; setting it post-seal left the record permanently failing `PROV-IMM`. It is set at creation now.
+
+  **`intent` and `affected_scope` never reached disk.** This is the one that hid the others. `SaveRecord` preserves hand-written formatting by rewriting only `status`, `sealed_at_sha` and `superseded_by` — any other field assigned to a record and saved over an existing file is discarded with no error. So both were set, saved, lost, and the command reported success over a record that was neither locked nor valid. Rather than put arbitrary values through text surgery on prose-bearing YAML, both are passed through `CreateOptions` and written by the initial marshal of a new file.
+
+### Added
+
+- **`lock-layer --intent` and `lock-layer --scope`** ([prov-2026-54d2b3f1](./provenance/prov-2026-54d2b3f1.yml)) — not conveniences. A locked record is sealed the moment it is created, so creation is the only point at which its intent and protected surface can reach disk; the success message used to tell you to edit them in afterwards, which fails the record's own integrity check. `--no-edit` with no intent is now refused before anything is written, instead of leaving behind a draft that could never be completed. The interactive path is unchanged in spirit: the editor opens, and what you write is what gets sealed.
+
 ## [3.21.0] - 2026-09-08
 
 **Upgrade note.** The hit-tracking key changes shape in this release, and the same code computes it in the binary and in the proxy sidecar image. The two must move together: a new binary talking to an old image, or the reverse, agrees on no key at all and reports **every** expectation as never called. An ordinary upgrade needs nothing — the published image is pinned to the binary's version — but a machine holding a locally built `linespec:latest` is served that image in preference to the pinned one, so rebuild it (`docker build -f Dockerfile.linespec -t linespec:latest .`) or delete the tag when you upgrade.
