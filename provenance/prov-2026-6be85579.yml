@@ -1,6 +1,6 @@
 id: prov-2026-6be85579
 title: Everything a sealed record says must be written before it is sealed
-status: open
+status: implemented
 created_at: "2026-09-09"
 author: caleb.cowen@linq.com
 intent: |
@@ -34,7 +34,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-54d2b3f1
-sealed_at_sha: ""
+sealed_at_sha: aea1fd530e5d1c4ce9662913c81c261989329e0f
 associated_specs:
   - path: pkg/provenance/lock_layer_test.go
     type: go-test
