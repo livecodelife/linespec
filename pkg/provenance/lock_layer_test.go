@@ -590,3 +590,109 @@ func TestCheckLockedScope_ExactPathMatch(t *testing.T) {
 		t.Errorf("Expected locked scope overlap error for exact path match, got issues: %v", result.Issues)
 	}
 }
+
+// TestLockLayer_CreatesLockedRecord covers the half of lock-layer that nothing
+// else in this file touches.
+//
+// Every other test here exercises checkLockedScope — whether an existing locked
+// record blocks an overlapping open one. That is the enforcement half, and it
+// works. Nothing called LockLayer itself, so the half that PRODUCES a locked
+// record was never run: createRecord wrote the file without registering it with
+// the loader, Complete could not resolve the id it had just written, and the
+// command died at step 2 of 4 leaving a stray draft and no lock.
+func TestLockLayer_CreatesLockedRecord(t *testing.T) {
+	cmds, _, buf := newTransitionTestRepo(t, false)
+
+	if err := cmds.LockLayer(LockLayerOptions{
+		Title:  "Applied migrations are history",
+		Intent: "An applied migration is a fact about a database, not an instance of a template.",
+		Scope:  []string{"supabase/migrations/**"},
+		NoEdit: true,
+	}); err != nil {
+		t.Fatalf("LockLayer: %v\n%s", err, buf.String())
+	}
+
+	ids := cmds.Loader.GetAllIDs()
+	if len(ids) != 1 {
+		t.Fatalf("expected exactly one record after LockLayer, got %d", len(ids))
+	}
+
+	inMemory, exists := cmds.Loader.GetRecord(ids[0])
+	if !exists {
+		t.Fatalf("record %s is not resolvable through the loader after LockLayer", ids[0])
+	}
+
+	// Assert against the FILE, not the in-memory record. SaveRecord's
+	// formatting-preserving path rewrites only status, sealed_at_sha and
+	// superseded_by, so a field set in memory can be silently absent on disk —
+	// and the in-memory copy agrees with itself either way. Reading the file
+	// back is what makes this test able to fail.
+	record, err := cmds.Loader.LoadFile(inMemory.FilePath)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+
+	if record.Intent == "" {
+		t.Error("intent is empty on disk; the intent never reached the file")
+	}
+	if len(record.AffectedScope) != 1 || record.AffectedScope[0] != "supabase/migrations/**" {
+		t.Errorf("affected_scope on disk = %v, want [supabase/migrations/**]", record.AffectedScope)
+	}
+
+	// The three things that make a record an actual lock rather than an
+	// ordinary allowlist. A record missing any one of them lints clean and
+	// locks nothing, which is the failure worth catching.
+	if record.Status != StatusImplemented {
+		t.Errorf("status = %q, want %q", record.Status, StatusImplemented)
+	}
+	if !record.Locked {
+		t.Error("locked = false; lock-layer must produce a locked record")
+	}
+	if record.SealedAtSHA == "" {
+		t.Error("sealed_at_sha is empty; the record was never sealed against HEAD")
+	}
+
+	// The locked flag is an exported field, so it is part of the sealed content
+	// hash. Setting it after Complete would leave the record permanently
+	// failing its own integrity check — green here only if it was sealed WITH
+	// the flag already set.
+	stored, current, ok, err := cmds.Linter.Hasher.VerifyRecord(record)
+	if err != nil {
+		t.Fatalf("VerifyRecord: %v", err)
+	}
+	_ = inMemory
+	if !ok {
+		t.Errorf("sealed content hash does not match the record on disk:\n stored  = %s\n current = %s", stored, current)
+	}
+}
+
+// TestLockLayer_NoEditRequiresIntent guards the refusal that replaced writing a
+// record nobody could ever complete. A locked record is sealed on creation, so
+// with no editor and no intent there is no point at which prose could arrive.
+func TestLockLayer_NoEditRequiresIntent(t *testing.T) {
+	cmds, _, _ := newTransitionTestRepo(t, false)
+
+	err := cmds.LockLayer(LockLayerOptions{Title: "No intent anywhere", NoEdit: true})
+	if err == nil {
+		t.Fatal("expected LockLayer to refuse --no-edit with no intent")
+	}
+	if ids := cmds.Loader.GetAllIDs(); len(ids) != 0 {
+		t.Errorf("refusal left %d record(s) behind; it must refuse before creating one", len(ids))
+	}
+}
+
+// TestCreateRecord_IsResolvableInSameProcess states the underlying invariant
+// directly, so the next command that creates a record and then acts on it does
+// not have to rediscover this. LockLayer is only the first caller to need it.
+func TestCreateRecord_IsResolvableInSameProcess(t *testing.T) {
+	cmds, _, _ := newTransitionTestRepo(t, false)
+
+	record, err := cmds.createRecord(CreateOptions{Title: "A record", NoEdit: true})
+	if err != nil {
+		t.Fatalf("createRecord: %v", err)
+	}
+
+	if _, exists := cmds.Loader.GetRecord(record.ID); !exists {
+		t.Fatalf("record %s was written to disk but is not resolvable by id in the same process", record.ID)
+	}
+}

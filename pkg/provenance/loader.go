@@ -161,6 +161,30 @@ func (l *Loader) checkCircularSupersedes(startID, targetID string) error {
 	return nil
 }
 
+// Add registers a record with the loader's in-memory index.
+//
+// SaveRecord writes a record to disk; it does not make that record visible to
+// GetRecord. A record created mid-process is therefore invisible to every
+// lookup for the rest of that process, which breaks any command that creates a
+// record and then acts on it — LockLayer creates one and immediately completes
+// and locks it.
+//
+// Registering a record that is already indexed is a no-op, so a caller that
+// also reloads is safe.
+func (l *Loader) Add(record *Record) {
+	if record == nil || record.ID == "" {
+		return
+	}
+	if l.RecordsByID == nil {
+		l.RecordsByID = make(map[string]*Record)
+	}
+	if _, exists := l.RecordsByID[record.ID]; exists {
+		return
+	}
+	l.Records = append(l.Records, record)
+	l.RecordsByID[record.ID] = record
+}
+
 // GetRecord returns a record by ID
 func (l *Loader) GetRecord(id string) (*Record, bool) {
 	record, exists := l.RecordsByID[id]
