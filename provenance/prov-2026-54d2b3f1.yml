@@ -30,6 +30,8 @@ affected_scope:
   - pkg/provenance/loader.go
   - pkg/provenance/commands.go
   - pkg/provenance/lock_layer_test.go
+  - pkg/provenance/formatter.go
+  - cmd/linespec/cli.go
 forbidden_scope: []
 type: bug
 supersedes: ""
