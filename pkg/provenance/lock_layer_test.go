@@ -2,6 +2,7 @@ package provenance
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -694,5 +695,123 @@ func TestCreateRecord_IsResolvableInSameProcess(t *testing.T) {
 
 	if _, exists := cmds.Loader.GetRecord(record.ID); !exists {
 		t.Fatalf("record %s was written to disk but is not resolvable by id in the same process", record.ID)
+	}
+}
+
+// installImplementedRejectingPreCommitHook writes a pre-commit hook that
+// reproduces the real scope check's teeth: a commit that INTRODUCES a
+// provenance record already marked implemented is refused, the way
+// 'provenance check --staged' refuses to let a sealed record's id be reused
+// for new work. A repo that has run 'provenance install-hooks' behaves this
+// way, which is why lock-layer worked in a bare repo and failed everywhere else.
+func installImplementedRejectingPreCommitHook(t *testing.T, repo string) {
+	t.Helper()
+	hookDir := filepath.Join(repo, ".git", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll hooks: %v", err)
+	}
+	hook := "#!/bin/sh\n" +
+		"for f in $(git diff --cached --name-only --diff-filter=A); do\n" +
+		"  case \"$f\" in\n" +
+		"    provenance/*.yml)\n" +
+		"      if git show \":$f\" | grep -q '^status: implemented'; then\n" +
+		"        echo \"pre-commit: $f is already implemented - cannot commit with this ID\" >&2\n" +
+		"        exit 1\n" +
+		"      fi\n" +
+		"      ;;\n" +
+		"  esac\n" +
+		"done\n" +
+		"exit 0\n"
+	if err := os.WriteFile(filepath.Join(hookDir, "pre-commit"), []byte(hook), 0o755); err != nil {
+		t.Fatalf("WriteFile hook: %v", err)
+	}
+}
+
+// TestLockLayer_CommitsDraftBeforeSealing pins the ordering that the fix for
+// prov-2026-cdb13afd introduced: the commit that introduces the record must
+// carry it as a draft, and the seal lands in a later commit. Asserting against
+// git history rather than the hook is what makes this state the invariant
+// instead of restating one hook's implementation.
+func TestLockLayer_CommitsDraftBeforeSealing(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, true)
+
+	if err := cmds.LockLayer(LockLayerOptions{
+		Title:  "Applied migrations are history",
+		Intent: "An applied migration is a fact about a database, not an instance of a template.",
+		Scope:  []string{"supabase/migrations/**"},
+		NoEdit: true,
+	}); err != nil {
+		t.Fatalf("LockLayer: %v\n%s", err, buf.String())
+	}
+
+	ids := cmds.Loader.GetAllIDs()
+	if len(ids) != 1 {
+		t.Fatalf("expected exactly one record after LockLayer, got %d", len(ids))
+	}
+	rel := "provenance/" + ids[0] + ".yml"
+
+	// Every commit that touched the record file, oldest first.
+	history := gitOutput(t, repo, "log", "--format=%H", "--reverse", "--", rel)
+	shas := strings.Fields(history)
+	if len(shas) < 2 {
+		t.Fatalf("record file has %d commit(s) (%v); lock-layer must introduce it as a draft "+
+			"and seal it in a separate commit", len(shas), shas)
+	}
+
+	// The introducing commit is the one the pre-commit scope check inspects.
+	introduced := gitOutput(t, repo, "show", shas[0]+":"+rel)
+	if !strings.Contains(introduced, "status: draft") {
+		t.Errorf("the commit introducing %s does not carry it as a draft:\n%s", rel, introduced)
+	}
+
+	// And the seal still has to arrive — committing the draft is worthless if
+	// the record never reaches implemented.
+	sealed := gitOutput(t, repo, "show", "HEAD:"+rel)
+	if !strings.Contains(sealed, "status: implemented") {
+		t.Errorf("%s is not implemented at HEAD:\n%s", rel, sealed)
+	}
+}
+
+// TestLockLayer_SucceedsWithHooksInstalled is the reported failure from
+// prov-2026-cdb13afd, end to end: lock-layer in a repo whose hooks refuse to
+// commit an already-implemented record. Before the fix this failed with
+// "already implemented - cannot commit with this ID" on the commit that
+// introduced the record.
+func TestLockLayer_SucceedsWithHooksInstalled(t *testing.T) {
+	cmds, repo, buf := newTransitionTestRepo(t, true)
+	installImplementedRejectingPreCommitHook(t, repo)
+
+	if err := cmds.LockLayer(LockLayerOptions{
+		Title:  "Applied migrations are history",
+		Intent: "An applied migration is a fact about a database, not an instance of a template.",
+		Scope:  []string{"supabase/migrations/**"},
+		NoEdit: true,
+	}); err != nil {
+		t.Fatalf("LockLayer failed in a repo with hooks installed: %v\n%s", err, buf.String())
+	}
+
+	ids := cmds.Loader.GetAllIDs()
+	if len(ids) != 1 {
+		t.Fatalf("expected exactly one record after LockLayer, got %d", len(ids))
+	}
+
+	record, err := cmds.Loader.LoadFile(filepath.Join(repo, "provenance", ids[0]+".yml"))
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if record.Status != StatusImplemented {
+		t.Errorf("status = %q, want %q", record.Status, StatusImplemented)
+	}
+	if !record.Locked {
+		t.Error("locked = false; lock-layer must produce a locked record")
+	}
+	if record.SealedAtSHA == "" {
+		t.Error("sealed_at_sha is empty; the record was never sealed against HEAD")
+	}
+
+	// Nothing may be left uncommitted: the whole point is that lock-layer
+	// finishes on its own in a hooked repo.
+	if dirty := gitOutput(t, repo, "status", "--porcelain"); dirty != "" {
+		t.Errorf("working tree is not clean after LockLayer:\n%s", dirty)
 	}
 }
