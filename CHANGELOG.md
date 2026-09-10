@@ -5,6 +5,28 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.0] - 2026-09-10
+
+**Upgrade note.** `registry.FindHTTPMockWithBody` takes a fifth parameter. Nothing in the CLI changes, but a Go importer of `pkg/registry` will not compile until it passes a `verifyMatch` predicate — or `nil`, which keeps the old declaration-order behavior exactly.
+
+### Fixed
+
+- **A concurrent fan-out picked its mock by arrival order, not by VERIFY** ([prov-2026-e24c7a3f](./provenance/prov-2026-e24c7a3f.yml)) — a service issuing several concurrent calls to one endpoint could not be asserted per call. Selection walked the mocks registered for a url in declaration order and took the first unconsumed one whose headers and `WITH` body matched; VERIFY rules were never consulted in choosing, only applied afterwards to whichever mock had already been picked. So the call that happened to arrive in slot two was judged against the second declared mock, and a spec whose mocks differ only in a `VERIFY body` failed whenever concurrent arrivals landed out of order.
+
+  It surfaced as a VERIFY mismatch — which can only be reported if content was ignored when choosing:
+
+      VERIFY failed: expected body to CONTAINS '"title":"first"', but got: {"title":"third"}
+
+  Measured downstream at roughly one failure in six runs, with the failing position moving between runs. Neither reordering the mocks nor `CALL n` helped; both are positional too.
+
+  VERIFY is now a tie-breaker. Among the candidates that pass the existing header and `WITH` body filters, the first whose VERIFY rules the request satisfies is selected. The header and body filters still exclude a candidate before VERIFY is consulted, and the registry evaluates no VERIFY rule itself — the predicate arrives from the interceptor beside the existing `bodyMatch`.
+
+  When no candidate's rules hold, the first candidate is returned anyway. That fallback is deliberate: it is what preserves the diagnostics for the common single-wrong-body case, where a mismatch should read `expected X, got Y` rather than degrade into "the mock was never called".
+
+  Every suite that passed before passes unchanged — where the first candidate already satisfied its rules, it is still the one chosen. One outcome does move: a mock declaring no VERIFY rules is vacuously satisfied, so it can now absorb a call that previously reached an earlier VERIFY-constrained mock and returned 400.
+
+  The identical tie-breaker on the Kafka and gRPC lookups was rejected. No case has arrived that needs it, and widening this without a spec that fails first is three untested paths instead of one tested one.
+
 ## [3.22.1] - 2026-09-09
 
 ### Fixed
