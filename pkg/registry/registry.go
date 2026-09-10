@@ -883,7 +883,18 @@ func (r *MockRegistry) FindHTTPMock(url string, method string) (*types.ExpectSta
 // the request body. bodyMatch is called for each candidate; it receives the mock's
 // WithFile path and BaseDir and returns true if the body matches (or if no body
 // constraint should be applied). Mocks with an empty WithFile always satisfy the check.
-func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[string]string, bodyMatch func(withFile, baseDir string) bool) (*types.ExpectStatement, bool) {
+//
+// verifyMatch breaks ties between the candidates that survive those filters: it
+// receives a candidate's VERIFY rules and reports whether this request satisfies
+// them all. Without it a concurrent fan-out to one endpoint would be paired with
+// its mocks by arrival order, so a spec whose mocks differ only in a VERIFY rule
+// would fail whenever calls land out of order. When no candidate's rules hold —
+// the common single-wrong-body case — the first candidate is returned anyway, so
+// the caller can still report which rule failed and what the value was instead of
+// the far less useful "the mock was never called". verifyMatch may be nil, which
+// selects the first candidate in declaration order. The registry evaluates no
+// VERIFY rule itself.
+func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[string]string, bodyMatch func(withFile, baseDir string) bool, verifyMatch func(rules []types.VerifyRule) bool) (*types.ExpectStatement, bool) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -892,6 +903,7 @@ func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[stri
 		return nil, false
 	}
 
+	var candidates []*types.ExpectStatement
 	for _, mock := range mocks {
 		if mock.Negative {
 			continue
@@ -906,12 +918,26 @@ func (r *MockRegistry) FindHTTPMockWithBody(url, method string, headers map[stri
 			if !bodyMatch(mock.WithFile, mock.BaseDir) {
 				continue
 			}
-			r.recordHit(mock)
-			return mock, true
+			candidates = append(candidates, mock)
 		}
 	}
 
-	return nil, false
+	if len(candidates) == 0 {
+		return nil, false
+	}
+
+	selected := candidates[0]
+	if verifyMatch != nil {
+		for _, mock := range candidates {
+			if verifyMatch(mock.Verify) {
+				selected = mock
+				break
+			}
+		}
+	}
+
+	r.recordHit(selected)
+	return selected, true
 }
 
 // FindKafkaMockWithBody finds a Kafka mock for the given topic, also filtering by

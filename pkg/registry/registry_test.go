@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/livecodelife/linespec/v3/pkg/types"
@@ -1031,7 +1032,7 @@ func TestFindHTTPMockWithBody_NoWithFile(t *testing.T) {
 	})
 
 	// Mock has no WithFile — alwaysMatch and neverMatch both should find it
-	mock, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, alwaysMatch)
+	mock, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, alwaysMatch, nil)
 	if !found || mock == nil {
 		t.Fatal("expected to find mock when no WithFile constraint")
 	}
@@ -1045,7 +1046,7 @@ func TestFindHTTPMockWithBody_BodyMatchSkipsNonMatching(t *testing.T) {
 		},
 	})
 
-	_, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, neverMatch)
+	_, found := reg.FindHTTPMockWithBody("/api/users", "POST", nil, neverMatch, nil)
 	if found {
 		t.Fatal("expected no match when bodyMatch returns false")
 	}
@@ -1064,11 +1065,11 @@ func TestFindHTTPMockWithBody_DisambiguatesByBody(t *testing.T) {
 	aliceMatcher := func(withFile, _ string) bool { return withFile == "alice.json" }
 	bobMatcher := func(withFile, _ string) bool { return withFile == "bob.json" }
 
-	m1, found1 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, aliceMatcher)
+	m1, found1 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, aliceMatcher, nil)
 	if !found1 || m1.ReturnsFile != "alice_resp.json" {
 		t.Fatalf("expected alice mock, got %v", m1)
 	}
-	m2, found2 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, bobMatcher)
+	m2, found2 := reg.FindHTTPMockWithBody("/api/users", "POST", nil, bobMatcher, nil)
 	if !found2 || m2.ReturnsFile != "bob_resp.json" {
 		t.Fatalf("expected bob mock, got %v", m2)
 	}
@@ -1129,3 +1130,129 @@ func TestFindGRPCMockWithBody_BodyMatchSkipsNonMatching(t *testing.T) {
 		t.Fatal("expected no match when bodyMatch returns false")
 	}
 }
+
+// TestFindHTTPMockWithBody_VerifySelectsOutOfOrder covers the concurrent fan-out
+// case: several mocks on one endpoint distinguished only by their VERIFY rules.
+// Arrival order must not decide the pairing — the call that arrives second must
+// still be matched to the mock whose VERIFY rules it satisfies.
+func TestFindHTTPMockWithBody_VerifySelectsOutOfOrder(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.HTTP, URL: "/api/generate", Method: "POST",
+				ReturnsFile: "first_resp.json",
+				Verify:      []types.VerifyRule{{Type: "CONTAINS", Target: "body", Pattern: `"title":"first"`}},
+			},
+			{
+				Channel: types.HTTP, URL: "/api/generate", Method: "POST",
+				ReturnsFile: "second_resp.json",
+				Verify:      []types.VerifyRule{{Type: "CONTAINS", Target: "body", Pattern: `"title":"second"`}},
+			},
+		},
+	})
+
+	// verifyMatch stands in for the interceptor's predicate: whether this request
+	// satisfies a candidate's rules. matcherFor("second") is the call carrying
+	// title "second", which arrives first — only the second mock's rules hold.
+	mock, found := reg.FindHTTPMockWithBody("/api/generate", "POST", nil, alwaysMatch, matcherForTitle("second"))
+	if !found {
+		t.Fatal("expected to find a mock for /api/generate")
+	}
+	if mock.ReturnsFile != "second_resp.json" {
+		t.Fatalf("expected the mock whose VERIFY rules hold (second_resp.json), got %s", mock.ReturnsFile)
+	}
+
+	// The remaining call, arriving second, must get the first mock.
+	mock2, found2 := reg.FindHTTPMockWithBody("/api/generate", "POST", nil, alwaysMatch, matcherForTitle("first"))
+	if !found2 {
+		t.Fatal("expected to find the remaining mock for /api/generate")
+	}
+	if mock2.ReturnsFile != "first_resp.json" {
+		t.Fatalf("expected first_resp.json for the remaining call, got %s", mock2.ReturnsFile)
+	}
+}
+
+// matcherForTitle builds a verifyMatch predicate standing in for a request whose
+// body carries the given title: a candidate's rules hold only if every rule's
+// pattern is one that title satisfies.
+func matcherForTitle(title string) func([]types.VerifyRule) bool {
+	body := `{"title":"` + title + `"}`
+	return func(rules []types.VerifyRule) bool {
+		for _, rule := range rules {
+			if !strings.Contains(body, rule.Pattern) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// TestFindHTTPMockWithBody_VerifyFallsBackToFirstCandidate keeps the diagnostics
+// for the common single-wrong-body case: when no candidate's VERIFY rules hold,
+// the first candidate is still returned so the interceptor can report which rule
+// failed rather than "the mock was never called".
+func TestFindHTTPMockWithBody_VerifyFallsBackToFirstCandidate(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.HTTP, URL: "/api/generate", Method: "POST",
+				ReturnsFile: "only_resp.json",
+				Verify:      []types.VerifyRule{{Type: "CONTAINS", Target: "body", Pattern: `"title":"expected"`}},
+			},
+		},
+	})
+
+	mock, found := reg.FindHTTPMockWithBody("/api/generate", "POST", nil, alwaysMatch, neverVerify)
+	if !found {
+		t.Fatal("expected the single candidate to be returned even though its VERIFY rules do not hold")
+	}
+	if mock.ReturnsFile != "only_resp.json" {
+		t.Fatalf("expected only_resp.json, got %s", mock.ReturnsFile)
+	}
+}
+
+// TestFindHTTPMockWithBody_VerifyDoesNotOverrideBodyFilter confirms the WITH body
+// filter still excludes a candidate before VERIFY is consulted.
+func TestFindHTTPMockWithBody_VerifyDoesNotOverrideBodyFilter(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.HTTP, URL: "/api/generate", Method: "POST", WithFile: "body.json",
+				Verify: []types.VerifyRule{{Type: "CONTAINS", Target: "body", Pattern: `"title":"x"`}},
+			},
+		},
+	})
+
+	_, found := reg.FindHTTPMockWithBody("/api/generate", "POST", nil, neverMatch, allVerify)
+	if found {
+		t.Fatal("expected no match: the WITH body filter must exclude the candidate before VERIFY is consulted")
+	}
+}
+
+// TestFindHTTPMockWithBody_NilVerifyMatchKeepsDeclarationOrder confirms a caller
+// passing no VERIFY predicate still gets first-unconsumed-candidate selection.
+func TestFindHTTPMockWithBody_NilVerifyMatchKeepsDeclarationOrder(t *testing.T) {
+	reg := NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		Expects: []types.ExpectStatement{
+			{Channel: types.HTTP, URL: "/api/generate", Method: "POST", ReturnsFile: "first_resp.json"},
+			{Channel: types.HTTP, URL: "/api/generate", Method: "POST", ReturnsFile: "second_resp.json"},
+		},
+	})
+
+	mock, found := reg.FindHTTPMockWithBody("/api/generate", "POST", nil, alwaysMatch, nil)
+	if !found || mock.ReturnsFile != "first_resp.json" {
+		t.Fatalf("expected first_resp.json with a nil verifyMatch, got %v", mock)
+	}
+}
+
+// neverVerify is a verifyMatch callback reporting that a candidate's VERIFY rules
+// never hold for this request.
+func neverVerify([]types.VerifyRule) bool { return false }
+
+// allVerify is a verifyMatch callback reporting that every candidate's VERIFY
+// rules hold for this request.
+func allVerify([]types.VerifyRule) bool { return true }

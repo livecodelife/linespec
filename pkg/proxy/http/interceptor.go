@@ -98,11 +98,19 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		i.registry.CheckNegativeHTTPMocks(key, method)
 	}
 	bodyMatcher := makeBodyMatcher(body, i.resolver)
+	verifyReq := &verify.HTTPRequest{
+		Method:  method,
+		URL:     r.URL.String(),
+		Path:    path,
+		Headers: requestHeaders,
+		Body:    body,
+	}
+	verifyMatcher := makeVerifyMatcher(verifyReq)
 
 	var mock *types.ExpectStatement
 	var found bool
 	for _, key := range keys {
-		mock, found = i.registry.FindHTTPMockWithBody(key, method, requestHeaders, bodyMatcher)
+		mock, found = i.registry.FindHTTPMockWithBody(key, method, requestHeaders, bodyMatcher, verifyMatcher)
 		if found {
 			break
 		}
@@ -120,14 +128,7 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 		// Filter rules for HTTP targets only
 		httpRules := verify.ExtractVerifyRulesForTarget(mock.Verify, "http")
 		if len(httpRules) > 0 {
-			req := &verify.HTTPRequest{
-				Method:  method,
-				URL:     r.URL.String(),
-				Path:    path,
-				Headers: requestHeaders,
-				Body:    body,
-			}
-			if err := verify.VerifyHTTP(req, httpRules); err != nil {
+			if err := verify.VerifyHTTP(verifyReq, httpRules); err != nil {
 				logger.Error("VERIFY failed for HTTP %s %s: %v", method, path, err)
 				i.registry.RecordVerifyError(fmt.Sprintf("HTTP [%s %s]: %v", method, path, err))
 				w.Header().Set("Content-Type", "application/json")
@@ -247,6 +248,20 @@ func (i *Interceptor) handleRequest(w http.ResponseWriter, r *http.Request) {
 // the file, parses the actual body as JSON, and delegates to verify.CompareJSON.
 func makeBodyMatcher(actualBody string, resolver *interpolate.Resolver) func(withFile, baseDir string) bool {
 	return verify.MakeJSONBodyMatcher(actualBody, "request body", resolver)
+}
+
+// makeVerifyMatcher returns the registry's VERIFY tie-breaker for this request: given
+// a candidate mock's VERIFY rules, it reports whether the request satisfies the ones
+// targeting HTTP. A candidate declaring no HTTP-targeted rules is vacuously satisfied,
+// which leaves declaration order deciding among unconstrained mocks exactly as before.
+func makeVerifyMatcher(req *verify.HTTPRequest) func(rules []types.VerifyRule) bool {
+	return func(rules []types.VerifyRule) bool {
+		httpRules := verify.ExtractVerifyRulesForTarget(rules, "http")
+		if len(httpRules) == 0 {
+			return true
+		}
+		return verify.VerifyHTTP(req, httpRules) == nil
+	}
 }
 
 // Note: Rails-specific auth extraction has been removed.
