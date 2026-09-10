@@ -1611,7 +1611,7 @@ infrastructure:
   # resolution (local linespec:latest if present, else the published
   # ghcr.io/livecodelife/linespec pinned to your linespec version). Set it to
   # override both — e.g. a private registry mirror.
-  proxy_image: ghcr.io/livecodelife/linespec:3.22.1
+  proxy_image: ghcr.io/livecodelife/linespec:3.23.0
 
 # ─────────────────────────────────────────────
 # Protobuf descriptor set (optional — gRPC)
