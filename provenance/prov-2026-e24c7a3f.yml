@@ -1,6 +1,6 @@
 id: prov-2026-e24c7a3f
 title: A concurrent fan-out picks its mock by VERIFY, not by arrival order
-status: open
+status: implemented
 created_at: "2026-09-10"
 author: caleb.cowen@linq.com
 intent: |
@@ -47,14 +47,14 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a3e85b3c53473c8fb5fdf818754365bb5ce00301
 associated_specs:
   - path: pkg/registry/registry_test.go
     type: code
-    run_command: go test ./pkg/registry/...
+    run_command: "go test ./pkg/registry/... # {{path}}"
   - path: pkg/proxy/http/interceptor_test.go
     type: code
-    run_command: go test ./pkg/proxy/http/...
+    run_command: "go test ./pkg/proxy/http/... # {{path}}"
 associated_traces: []
 monitors: []
 tags:
