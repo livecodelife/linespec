@@ -1,0 +1,56 @@
+id: prov-2026-e24c7a3f
+title: A concurrent fan-out picks its mock by VERIFY, not by arrival order
+status: draft
+created_at: "2026-09-10"
+author: caleb.cowen@linq.com
+intent: |
+  A service that fans out several concurrent calls to one endpoint cannot be
+  asserted per call. Selection walks the mocks registered for a url in
+  declaration order and takes the first unconsumed one whose headers and `WITH`
+  body match; VERIFY rules are not consulted, being applied afterwards to
+  whichever mock was already chosen. So the call that arrives in slot two is
+  judged against the second declared mock, and a spec whose mocks differ only in
+  a `VERIFY body` fails whenever concurrent arrivals land out of order.
+
+  Measured downstream: three concurrent generation calls, one mock each,
+  distinguished only by a title in the request body. Roughly one failure in six
+  runs, the failing position moving between runs, reported as a VERIFY mismatch —
+  which can only be reported if content was ignored when choosing. Reordering is
+  no fix, and neither is `CALL n`, positional too.
+
+  So VERIFY becomes a tie-breaker: among the candidates passing the header and
+  body filters, prefer one whose VERIFY rules all hold, and fall back to the
+  first candidate when none does. The fallback is what keeps today's
+  diagnostics — a single wrong body would otherwise stop being "expected X, got
+  Y" and become "the mock was never called", and that is the common case, where
+  the precise message is the whole value. The predicate arrives from the
+  interceptor beside the existing `bodyMatch`, so the registry still knows
+  nothing about how a VERIFY is evaluated.
+
+  Rejected: the same tie-breaker on the Kafka and gRPC lookups, identical in
+  shape. No case has arrived that needs it, and widening this without a spec
+  that fails first is three untested paths instead of one tested one.
+constraints:
+  - Several unconsumed mocks on one endpoint are selected among by their VERIFY rules.
+  - A concurrent fan-out matches each call to the mock whose VERIFY rules that call satisfies.
+  - A call satisfying no candidate's VERIFY rules is paired with the first candidate.
+  - A single non-matching mock still reports which rule failed and what the value was.
+  - Header and WITH body filters continue to exclude a candidate before VERIFY is consulted.
+  - The registry evaluates no VERIFY rule itself.
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/proxy/http/interceptor.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - registry
+  - http
+  - mock-selection
+  - concurrency
