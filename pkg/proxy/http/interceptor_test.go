@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,5 +126,94 @@ func TestInterceptor_Start(t *testing.T) {
 	err := interceptor.Start(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error from Start: %v", err)
+	}
+}
+
+// TestInterceptor_ConcurrentFanOutMatchesByVerify is the case the fix exists for:
+// three concurrent calls to one endpoint, one mock each, distinguished only by a
+// VERIFY rule on the request body. Every call must get the response belonging to
+// its own body no matter what order the calls arrive in.
+func TestInterceptor_ConcurrentFanOutMatchesByVerify(t *testing.T) {
+	titles := []string{"first", "second", "third"}
+
+	tmpDir := t.TempDir()
+	expects := make([]types.ExpectStatement, 0, len(titles))
+	for _, title := range titles {
+		file := title + "_resp.json"
+		if err := os.WriteFile(filepath.Join(tmpDir, file), []byte(`{"title":"`+title+`"}`), 0644); err != nil {
+			t.Fatalf("failed to write payload file: %v", err)
+		}
+		expects = append(expects, types.ExpectStatement{
+			Channel:     types.HTTP,
+			Method:      "POST",
+			URL:         "/api/generate",
+			ReturnsFile: file,
+			BaseDir:     tmpDir,
+			Verify: []types.VerifyRule{
+				{Type: "CONTAINS", Target: "body", Pattern: `"title":"` + title + `"`},
+			},
+		})
+	}
+
+	reg := registry.NewMockRegistry()
+	reg.Register(&types.TestSpec{BaseDir: tmpDir, Expects: expects})
+	interceptor := NewInterceptor(":0", reg)
+
+	// Drive the calls in the worst order for arrival-order pairing: exactly
+	// reversed against declaration order.
+	for i := len(titles) - 1; i >= 0; i-- {
+		title := titles[i]
+		body := `{"title":"` + title + `"}`
+		req := httptest.NewRequest("POST", "/api/generate", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		interceptor.handleRequest(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("call for %q: expected 200, got %d (%s)", title, w.Code, w.Body.String())
+		}
+		if got := w.Body.String(); got != body {
+			t.Errorf("call for %q: expected its own mock response %s, got %s", title, body, got)
+		}
+	}
+
+	if err := reg.VerifyAll(); err != nil {
+		t.Errorf("expected every mock to be consumed exactly once: %v", err)
+	}
+}
+
+// TestInterceptor_SingleWrongBodyStillReportsVerifyFailure guards the diagnostics
+// the fallback exists to keep: one mock, a request that fails its VERIFY rule, and
+// the failure must still name the rule rather than silently passing through as an
+// uncalled mock.
+func TestInterceptor_SingleWrongBodyStillReportsVerifyFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "resp.json"), []byte(`{"ok":true}`), 0644); err != nil {
+		t.Fatalf("failed to write payload file: %v", err)
+	}
+
+	reg := registry.NewMockRegistry()
+	reg.Register(&types.TestSpec{
+		BaseDir: tmpDir,
+		Expects: []types.ExpectStatement{
+			{
+				Channel: types.HTTP, Method: "POST", URL: "/api/generate",
+				ReturnsFile: "resp.json", BaseDir: tmpDir,
+				Verify: []types.VerifyRule{
+					{Type: "CONTAINS", Target: "body", Pattern: `"title":"expected"`},
+				},
+			},
+		},
+	})
+	interceptor := NewInterceptor(":0", reg)
+
+	req := httptest.NewRequest("POST", "/api/generate", strings.NewReader(`{"title":"wrong"}`))
+	w := httptest.NewRecorder()
+	interceptor.handleRequest(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a failed VERIFY, got %d (%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "VERIFY failed") {
+		t.Errorf("expected the response to report the VERIFY failure, got %s", w.Body.String())
 	}
 }
