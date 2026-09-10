@@ -1,0 +1,55 @@
+id: prov-2026-0bc2b792
+title: 'Release 3.23.0: VERIFY-aware HTTP mock selection'
+status: draft
+created_at: "2026-09-10"
+author: caleb.cowen@linq.com
+intent: |
+  Ships prov-2026-e24c7a3f: a concurrent fan-out to one endpoint is paired with
+  its mocks by their VERIFY rules rather than by arrival order.
+
+  Minor rather than patch. The CLI surface is unchanged — no flag, no field, no
+  output contract moves — which is the bar 3.22.1 was measured against. Two
+  things sit above it. `FindHTTPMockWithBody` takes a fifth parameter, so any
+  importer of `pkg/registry` fails to compile; the package is under `pkg/`, not
+  `internal/`, so that is a public break however rarely it is exercised. And
+  selection itself changed observably: a mock declaring no VERIFY rules is
+  vacuously satisfied, so it can now absorb a call that previously reached an
+  earlier VERIFY-constrained mock and returned 400.
+
+  Every suite that passed before passes unchanged — when the first candidate
+  already satisfied its rules, it is still the one chosen. Only outcomes that
+  were failures move, which is what makes this a fix and not a regression. But
+  "previously failing, now passing" is still a change in what the runner
+  reports, and a reader deciding whether to upgrade should not have to infer it
+  from a patch bump.
+
+  The release is the bump and the changelog entry only. No behavior is added
+  here; prov-2026-e24c7a3f is already implemented and sealed at a3e85b3.
+constraints:
+  - The CHANGELOG entry names the record that made the change.
+  - Version strings move only through scripts/bump-version.sh.
+  - No rendered docs artifact is hand-edited.
+affected_scope:
+  - VERSION
+  - CHANGELOG.md
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-e24c7a3f
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+    type: code
+    run_command: "test -f {{path}}"
+  - path: VERSION
+    type: code
+    run_command: "grep -qx 3.23.0 {{path}}"
+associated_traces: []
+monitors: []
+tags:
+  - release
