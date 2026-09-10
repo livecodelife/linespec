@@ -1,6 +1,6 @@
 id: prov-2026-0bc2b792
 title: 'Release 3.23.0: VERIFY-aware HTTP mock selection'
-status: open
+status: implemented
 created_at: "2026-09-10"
 author: caleb.cowen@linq.com
 intent: |
@@ -41,7 +41,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-e24c7a3f
-sealed_at_sha: ""
+sealed_at_sha: f826f1dd99aa2455032fc10ac90b6dcae60db3fc
 associated_specs:
   - path: CHANGELOG.md
     type: code
