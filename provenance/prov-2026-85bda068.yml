@@ -1,6 +1,6 @@
 id: prov-2026-85bda068
 title: 'Fix provenance status --filter: JSON output ignores it, unrecognized values silently fall back to unfiltered'
-status: draft
+status: open
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: >
@@ -25,13 +25,24 @@ constraints:
 affected_scope:
   - pkg/provenance/commands.go
   - pkg/provenance/formatter.go
+  - pkg/provenance/loader.go
+  - pkg/provenance/status_filter_test.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/provenance/status_filter_test.go
+    type: go_test
+    run_command: go test ./pkg/provenance/... -run 'TestStatusJSONHonorsFilter|TestStatusHumanHonorsDraftFilter|TestStatusUnknownFilterErrors' -v
+  - path: provenance/prov-2026-85bda068.yml
+    type: go_test
+    run_command: make test # {{path}}
 associated_traces: []
 monitors: []
-tags: []
+tags:
+  - status
+  - filter
+  - cli
