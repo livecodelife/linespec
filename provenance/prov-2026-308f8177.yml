@@ -1,6 +1,6 @@
 id: prov-2026-308f8177
 title: 'Release 3.23.1: provenance status --filter respects --format json and rejects unknown values'
-status: open
+status: implemented
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: |
@@ -32,7 +32,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-85bda068
-sealed_at_sha: ""
+sealed_at_sha: e5f5963716c78da9e7d700d8359f2d4cceed01ce
 associated_specs:
   - path: CHANGELOG.md
 associated_traces: []
