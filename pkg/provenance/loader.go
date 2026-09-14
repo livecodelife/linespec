@@ -451,4 +451,3 @@ func (l *Loader) ResolveFilter(filter string) ([]*Record, error) {
 	}
 	return nil, fmt.Errorf("unknown filter %q (expected one of: open, implemented, superseded, deprecated, draft, or tag:<name>)", filter)
 }
-
