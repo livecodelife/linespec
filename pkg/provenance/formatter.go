@@ -69,25 +69,17 @@ func (f *Formatter) colored(s, color string) string {
 	return s
 }
 
-// FormatStatus formats the status output
-func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter string) {
+// FormatStatus formats the status output. Returns an error if filter is
+// non-empty but not a recognized status or "tag:" prefix.
+func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter string) error {
+	records, err := loader.ResolveFilter(filter)
+	if err != nil {
+		return err
+	}
+
 	// Header
 	fmt.Fprintf(f.Output, "\n%s\n\n", f.colored("PROVENANCE RECORDS", colorBold))
 	fmt.Fprintf(f.Output, "  Enforcement: %s\n\n", enforcement)
-
-	// Filter records if needed
-	var records []*Record
-	switch {
-	case filter == "":
-		records = loader.Records
-	case filter == "open" || filter == "implemented" || filter == "superseded" || filter == "deprecated":
-		records = loader.FilterByStatus(Status(filter))
-	case strings.HasPrefix(filter, "tag:"):
-		tag := strings.TrimPrefix(filter, "tag:")
-		records = loader.FilterByTag(tag)
-	default:
-		records = loader.Records
-	}
 
 	// Table header
 	fmt.Fprintf(f.Output, "  %-15s %-14s %-45s %s\n",
@@ -143,6 +135,7 @@ func (f *Formatter) FormatStatus(loader *Loader, enforcement string, filter stri
 	}
 
 	fmt.Fprintln(f.Output)
+	return nil
 }
 
 // FormatStatusDetailed formats detailed status for a single record

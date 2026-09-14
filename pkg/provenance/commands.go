@@ -443,8 +443,12 @@ func (c *Commands) Status(opts StatusOptions) error {
 			return c.Formatter.FormatJSON(result)
 		}
 		// For all records, include notice if applicable
+		filtered, err := c.Loader.ResolveFilter(opts.Filter)
+		if err != nil {
+			return err
+		}
 		result := map[string]interface{}{
-			"records": c.Loader.Records,
+			"records": filtered,
 		}
 		if len(autoPopulatedRecords) > 0 && !opts.SaveScope {
 			result["_notice"] = "Scope auto-populated (not saved). Use --save-scope flag or run 'linespec provenance lock-scope' to persist"
@@ -461,8 +465,9 @@ func (c *Commands) Status(opts StatusOptions) error {
 			return fmt.Errorf("record not found")
 		}
 		c.Formatter.FormatStatusDetailed(record, c.Loader)
-	} else {
-		c.Formatter.FormatStatus(c.Loader, c.Config.Enforcement, opts.Filter)
+	} else if err := c.Formatter.FormatStatus(c.Loader, c.Config.Enforcement, opts.Filter); err != nil {
+		c.Formatter.FormatError(err.Error())
+		return err
 	}
 
 	// Show UX message for ephemeral mode (auto-populated but not saved)

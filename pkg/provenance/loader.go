@@ -434,3 +434,21 @@ func (l *Loader) FilterByTag(tag string) []*Record {
 	return result
 }
 
+// ResolveFilter applies a status/tag filter string (as accepted by the
+// `status`/`graph` commands' --filter flag) and returns the matching
+// records. An empty filter returns every record. A filter that is neither
+// a known Status nor a "tag:" prefix is an error, so a typo (or an
+// unsupported value) is reported instead of silently returning everything.
+func (l *Loader) ResolveFilter(filter string) ([]*Record, error) {
+	if filter == "" {
+		return l.Records, nil
+	}
+	if strings.HasPrefix(filter, "tag:") {
+		return l.FilterByTag(strings.TrimPrefix(filter, "tag:")), nil
+	}
+	if Status(filter).IsValid() {
+		return l.FilterByStatus(Status(filter)), nil
+	}
+	return nil, fmt.Errorf("unknown filter %q (expected one of: open, implemented, superseded, deprecated, draft, or tag:<name>)", filter)
+}
+
