@@ -1,0 +1,37 @@
+id: prov-2026-85bda068
+title: 'Fix provenance status --filter: JSON output ignores it, unrecognized values silently fall back to unfiltered'
+status: draft
+created_at: "2026-09-14"
+author: caleb.cowen@linq.com
+intent: >
+  `linespec provenance status --filter <status>` silently produces wrong
+  results in two ways: (1) `--format json` ignores `opts.Filter` entirely
+  (commands.go Status()), always dumping every record instead of the
+  filtered set; (2) the human-format filter switch (formatter.go
+  FormatStatus) falls back to the *unfiltered* list for any value it
+  doesn't recognize as one of open/implemented/superseded/deprecated/tag:*
+  (e.g. "draft", a case typo, or a misspelling), rather than erroring or
+  returning an empty set. Fix both: make JSON output apply the same
+  filtering as human output (including support for "draft" and tag:
+  prefixes), and make an unrecognized filter value return an error instead
+  of silently falling back to "no filter".
+constraints:
+  - Do not change the meaning of an empty/absent --filter (still means "all records").
+  - Human-format filtering behavior for valid filter values (open, implemented,
+    superseded, deprecated, tag:*) must not change — only extend it to "draft"
+    and route JSON through the same logic.
+  - An invalid/unrecognized filter value must produce a clear CLI error, not a
+    silent fallback to the full list, for both status and its JSON output.
+affected_scope:
+  - pkg/provenance/commands.go
+  - pkg/provenance/formatter.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
