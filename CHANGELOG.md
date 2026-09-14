@@ -5,6 +5,14 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.1] - 2026-09-14
+
+### Fixed
+
+- **`provenance status --filter` silently produced the wrong list** ([prov-2026-85bda068](./provenance/prov-2026-85bda068.yml)) — `--format json` ignored `--filter` entirely, always returning every record regardless of the value passed. Separately, the human-format filter recognized only `open`/`implemented`/`superseded`/`deprecated`/`tag:*` and fell back to the full unfiltered list for anything else, with no error — including the real `draft` status, or a simple typo.
+
+  `--format json` now applies the same filtering as human output, `draft` is a recognized filter value, and an unrecognized filter (e.g. `--filter bogus`) is now reported as a CLI error instead of silently returning everything.
+
 ## [3.23.0] - 2026-09-10
 
 **Upgrade note.** `registry.FindHTTPMockWithBody` takes a fifth parameter. Nothing in the CLI changes, but a Go importer of `pkg/registry` will not compile until it passes a `verifyMatch` predicate — or `nil`, which keeps the old declaration-order behavior exactly.
