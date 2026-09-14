@@ -1,0 +1,41 @@
+id: prov-2026-308f8177
+title: 'Release 3.23.1: provenance status --filter respects --format json and rejects unknown values'
+status: draft
+created_at: "2026-09-14"
+author: caleb.cowen@linq.com
+intent: |
+  Release 3.23.1: `linespec provenance status --filter <value>` no longer
+  silently produces the wrong result. `--format json` previously ignored
+  `--filter` entirely, always returning every record. Separately, the
+  human-format filter switch recognized only open/implemented/superseded/
+  deprecated/tag:*, and fell back to the full unfiltered list for anything
+  else — including the real "draft" status, and any typo — with no error.
+
+  A patch rather than a minor. No flag, field, or output contract changes:
+  the JSON path now filters the way the human path always did, "draft"
+  gains support it should already have had, and an unrecognized filter
+  value is now a CLI error instead of a silent no-op. Nothing that
+  previously filtered correctly behaves differently.
+constraints:
+  - The CHANGELOG names the version, its date, and the record behind the entry.
+  - A version string in a tracked source states the released version.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-85bda068
+sealed_at_sha: ""
+associated_specs:
+  - path: CHANGELOG.md
+associated_traces: []
+monitors: []
+tags:
+  - release
