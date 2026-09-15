@@ -398,6 +398,29 @@ func (l *Linter) validateSupersedes(record *Record, result *LintResult) {
 			Message:  fmt.Sprintf("supersedes references unknown record: %s", record.Supersedes),
 			Severity: SeverityError,
 		})
+		return
+	}
+
+	// Replacing a record that something else adds to would silently strand the
+	// addition: the extender still points at a decision that no longer stands,
+	// and nothing says whether it survived the replacement. Retarget the
+	// extension at the superseding record, or fold it in, before superseding.
+	for _, other := range l.Loader.Records {
+		if other.ID == record.ID || strings.TrimSpace(other.Extends) != record.Supersedes {
+			continue
+		}
+		if other.Status == StatusSuperseded || other.Status == StatusDeprecated {
+			continue
+		}
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "supersedes",
+			Message: fmt.Sprintf(
+				"cannot supersede %s while %s still extends it. Retarget that extends at %s, or deprecate it, first.",
+				record.Supersedes, other.ID, record.ID),
+			Severity: SeverityError,
+		})
+		return
 	}
 }
 
@@ -885,15 +908,10 @@ func (l *Linter) validateNotApplicableFields(record *Record, result *LintResult)
 		effectiveType = RecordTypeBlueprint
 	}
 
-	// extends is only valid on Bug records
-	if effectiveType != RecordTypeBug && strings.TrimSpace(record.Extends) != "" {
-		result.Add(Issue{
-			RecordID: record.ID,
-			Field:    "extends",
-			Message:  fmt.Sprintf("extends is not applicable on %s records; it is only valid on bug records", effectiveType),
-			Severity: SeverityError,
-		})
-	}
+	// extends is applicable on every type: it is the additive counterpart to
+	// supersedes. Which target a given type may extend is a graph question, not a
+	// field-applicability one, so the tier rules live in validateExtends and (for
+	// bug records) validateBugConditionals.
 
 	// Brief records must not carry affected_scope, forbidden_scope, or associated_specs
 	if effectiveType == RecordTypeBrief {
@@ -1417,8 +1435,15 @@ func (l *Linter) validateImplements(record *Record, result *LintResult) {
 	}
 }
 
-// validateExtends checks that the extends field references a valid record.
-// Target existence is validated here; type constraints are enforced in validateBugConditionals.
+// validateExtends checks that the extends field references a valid record and,
+// for non-Bug records, that it stays within its own tier.
+//
+// extends is the additive counterpart to supersedes: the target's decision still
+// stands and this record adds to it. So it carries the same tier discipline
+// supersedes has (PROV020) — a blueprint adds to a blueprint, an imprint to an
+// imprint. Bug records return early and are covered by validateBugConditionals,
+// which owns the bug-to-blueprint allowance; restating it here would give the
+// same rule two homes.
 func (l *Linter) validateExtends(record *Record, result *LintResult) {
 	if strings.TrimSpace(record.Extends) == "" {
 		return
@@ -1429,6 +1454,57 @@ func (l *Linter) validateExtends(record *Record, result *LintResult) {
 			RecordID: record.ID,
 			Field:    "extends",
 			Message:  fmt.Sprintf("extends value %q is not a valid provenance record ID (expected prov-YYYY-NNN format).", record.Extends),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	effectiveType := record.Type
+	if effectiveType == "" {
+		effectiveType = RecordTypeBlueprint
+	}
+	if effectiveType == RecordTypeBug {
+		return
+	}
+
+	target, exists := l.Loader.GetRecord(record.Extends)
+	if !exists {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "extends",
+			Message:  fmt.Sprintf("extends references unknown record: %s", record.Extends),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	targetType := target.Type
+	if targetType == "" {
+		targetType = RecordTypeBlueprint
+	}
+
+	if targetType != effectiveType {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "extends",
+			Message: fmt.Sprintf(
+				"extends must stay within the same tier: %s record %s cannot extend %s record %s. Use implements for a cross-tier link, or related when the connection is not additive.",
+				effectiveType, record.ID, targetType, target.ID),
+			Severity: SeverityError,
+		})
+		return
+	}
+
+	// An imprint describes how one blueprint was implemented, so adding to
+	// another imprint only means anything under the same parent. Mirrors the
+	// same-parent rule imprint supersession already carries.
+	if effectiveType == RecordTypeImprint && record.Implements != target.Implements {
+		result.Add(Issue{
+			RecordID: record.ID,
+			Field:    "extends",
+			Message: fmt.Sprintf(
+				"an imprint may extend only an imprint sharing its implements parent: %s implements %q but %s implements %q",
+				record.ID, record.Implements, target.ID, target.Implements),
 			Severity: SeverityError,
 		})
 	}
