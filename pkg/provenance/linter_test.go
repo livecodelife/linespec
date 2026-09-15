@@ -1622,3 +1622,124 @@ func TestValidateImprintScopeContainment_BlueprintNoScope_Passes(t *testing.T) {
 		t.Errorf("expected no errors when blueprint has no affected_scope, got: %v", result.Issues)
 	}
 }
+
+// --- extends as a same-tier additive edge [prov-2026-2a80a572] ---
+
+// extendsLinter builds a strict linter over an in-memory record set.
+func extendsLinter(t *testing.T, records ...*Record) *Linter {
+	t.Helper()
+	loader := NewLoader(t.TempDir(), nil)
+	loader.Records = records
+	loader.RecordsByID = make(map[string]*Record, len(records))
+	for _, r := range records {
+		loader.RecordsByID[r.ID] = r
+	}
+	return NewLinter(loader, "strict")
+}
+
+// extendsRecord is a lint-clean record of the given tier.
+func extendsRecord(id string, rt RecordType) *Record {
+	r := &Record{
+		ID:        id,
+		Title:     "fixture " + id,
+		Status:    StatusImplemented,
+		CreatedAt: "2026-09-14",
+		Author:    "test@example.com",
+		Type:      rt,
+		Intent:    "fixture record for extends tier tests",
+	}
+	if rt == RecordTypeBrief {
+		r.Constraints = []string{"a brief must carry constraints"}
+	}
+	return r
+}
+
+// findExtendsIssue returns the first issue on field whose message contains substr.
+func findExtendsIssue(result *LintResult, field, substr string) *Issue {
+	for i := range result.Issues {
+		if result.Issues[i].Field == field && strings.Contains(result.Issues[i].Message, substr) {
+			return &result.Issues[i]
+		}
+	}
+	return nil
+}
+
+// A record that adds to an earlier decision of the same tier must validate.
+func TestExtendsAcceptedOnEveryTier(t *testing.T) {
+	for _, rt := range []RecordType{RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint} {
+		target := extendsRecord("prov-2026-aaaa0001", rt)
+		source := extendsRecord("prov-2026-aaaa0002", rt)
+		source.Extends = target.ID
+
+		records := []*Record{target, source}
+		if rt == RecordTypeImprint {
+			parent := extendsRecord("prov-2026-aaaa0003", RecordTypeBlueprint)
+			target.Implements = parent.ID
+			source.Implements = parent.ID
+			records = append(records, parent)
+		}
+
+		linter := extendsLinter(t, records...)
+		result := &LintResult{}
+		linter.lintRecord(source, result)
+
+		if issue := findExtendsIssue(result, "extends", "only valid on bug records"); issue != nil {
+			t.Errorf("type=%s: extends rejected as bug-only: %s", rt, issue.Message)
+		}
+	}
+}
+
+// extends must not cross tiers: a blueprint cannot extend an imprint.
+func TestExtendsRejectedAcrossTiers(t *testing.T) {
+	parent := extendsRecord("prov-2026-bbbb0003", RecordTypeBlueprint)
+	target := extendsRecord("prov-2026-bbbb0001", RecordTypeImprint)
+	target.Implements = parent.ID
+	source := extendsRecord("prov-2026-bbbb0002", RecordTypeBlueprint)
+	source.Extends = target.ID
+
+	linter := extendsLinter(t, parent, target, source)
+	result := &LintResult{}
+	linter.lintRecord(source, result)
+
+	if findExtendsIssue(result, "extends", "same tier") == nil {
+		t.Errorf("expected a same-tier error for blueprint extending imprint, got: %v", result.Issues)
+	}
+}
+
+// An imprint may extend only an imprint sharing its implements parent.
+func TestImprintExtendsRequiresSameImplementsParent(t *testing.T) {
+	bpA := extendsRecord("prov-2026-cccc0001", RecordTypeBlueprint)
+	bpB := extendsRecord("prov-2026-cccc0002", RecordTypeBlueprint)
+	target := extendsRecord("prov-2026-cccc0003", RecordTypeImprint)
+	target.Implements = bpA.ID
+	source := extendsRecord("prov-2026-cccc0004", RecordTypeImprint)
+	source.Implements = bpB.ID
+	source.Extends = target.ID
+
+	linter := extendsLinter(t, bpA, bpB, target, source)
+	result := &LintResult{}
+	linter.lintRecord(source, result)
+
+	if findExtendsIssue(result, "extends", "implements") == nil {
+		t.Errorf("expected an error extending an imprint under a different parent, got: %v", result.Issues)
+	}
+}
+
+// Superseding a record that carries a live inbound extends is an error.
+func TestSupersedingRecordWithLiveExtendsIsAnError(t *testing.T) {
+	target := extendsRecord("prov-2026-dddd0001", RecordTypeBlueprint)
+	extender := extendsRecord("prov-2026-dddd0002", RecordTypeBlueprint)
+	extender.Extends = target.ID
+	superseder := extendsRecord("prov-2026-dddd0003", RecordTypeBlueprint)
+	superseder.Supersedes = target.ID
+	target.SupersededBy = superseder.ID
+	target.Status = StatusSuperseded
+
+	linter := extendsLinter(t, target, extender, superseder)
+	result := &LintResult{}
+	linter.lintRecord(superseder, result)
+
+	if findExtendsIssue(result, "supersedes", "extends") == nil {
+		t.Errorf("expected an error superseding a record with a live extends, got: %v", result.Issues)
+	}
+}
