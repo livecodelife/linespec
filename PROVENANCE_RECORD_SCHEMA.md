@@ -229,8 +229,8 @@ forbidden_scope:
 extends: prov-2026-a1b2c3d4
 ```
 **Set by:** Author.  
-**Behavior:** Expresses that this `bug` record adds constraint coverage that was missing from the target Blueprint or Bug. Unlike `supersedes`, the target record is not replaced — it remains valid. The linter validates that the target is a Blueprint or Bug; extending a Brief or Imprint is an error.  
-**Constraints:** Only applicable on `bug` records. Mutually exclusive with `supersedes` — a Bug must have exactly one of `extends` or `supersedes`. Omitted from YAML output when empty.
+**Behavior:** Expresses that this record adds to the target's decision rather than replacing it. Unlike `supersedes`, the target remains valid. It is the additive counterpart to `supersedes`, and the directional edge to reach for when `related` would otherwise be used to mean "this builds on that".  
+**Constraints:** Applicable on every record type. The target must be of the same type, with one exception: a `bug` may extend a `blueprint`. An `imprint` may extend only an `imprint` sharing its `implements` parent. A record carrying a live inbound `extends` cannot be superseded until that extension is retargeted or deprecated. On `bug` records, mutually exclusive with `supersedes` — a Bug must have exactly one of the two. Omitted from YAML output when empty.
 
 ---
 

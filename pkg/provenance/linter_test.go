@@ -753,19 +753,22 @@ func TestValidateRequiredFields_BriefConstraintsRequiredAtAllEnforcementLevels(t
 
 // --- validateNotApplicableFields tests ---
 
-func TestValidateNotApplicableFields_ExtendsOnNonBug(t *testing.T) {
+// extends is applicable on every type as a field. Which target a type may extend
+// is a graph question, checked in validateExtends — not here. Supersedes the
+// bug-only assertion this test previously carried [prov-2026-2a80a572].
+func TestValidateNotApplicableFields_ExtendsOnAnyType(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "linter-test")
 	defer os.RemoveAll(tmpDir)
 
 	loader := NewLoader(tmpDir, nil)
 	linter := NewLinter(loader, "strict")
 
-	for _, rt := range []RecordType{RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint} {
+	for _, rt := range []RecordType{RecordTypeBrief, RecordTypeBlueprint, RecordTypeImprint, RecordTypeBug} {
 		record := &Record{ID: "prov-2026-001", Type: rt, Extends: "prov-2026-002"}
 		result := &LintResult{}
 		linter.validateNotApplicableFields(record, result)
-		if result.ErrorCount != 1 {
-			t.Errorf("type=%s: expected 1 error for extends on non-Bug, got %d", rt, result.ErrorCount)
+		if result.ErrorCount != 0 {
+			t.Errorf("type=%s: expected no field-applicability error for extends, got %d: %v", rt, result.ErrorCount, result.Issues)
 		}
 	}
 }
