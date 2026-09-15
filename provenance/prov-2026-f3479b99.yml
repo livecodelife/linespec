@@ -1,0 +1,35 @@
+id: prov-2026-f3479b99
+title: Tier rules for extends live in validateExtends; bug records keep delegating to validateBugConditionals
+status: draft
+created_at: "2026-09-14"
+author: caleb.cowen@linq.com
+intent: >
+  Put every tier rule for `extends` in `validateExtends`, and delete the blanket
+  bug-only rejection from `validateNotApplicableFields` rather than widening it in
+  place. `validateNotApplicableFields` answers "may this type carry this field at
+  all", which after this change is yes for every type — so a rule that also has to
+  resolve the target and compare its type does not belong there.
+
+  Bug records return early from the new tier check and keep delegating to
+  `validateBugConditionals`, which already owns the bug-to-blueprint allowance and
+  the supersedes/extends exclusivity. Widening the same-tier rule to cover bug as
+  well would state that allowance in two places, and the two would drift the first
+  time either is touched.
+
+  The supersession conflict is the one rule that cannot live in `validateExtends`,
+  because it fires on the superseding record rather than the extending one. It
+  goes in `validateSupersedes`, which already walks the loader for the target.
+constraints: []
+affected_scope:
+  - pkg/provenance/linter.go
+forbidden_scope: []
+type: imprint
+implements: prov-2026-2a80a572
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
