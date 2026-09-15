@@ -218,7 +218,7 @@ tags:
 |-------|------|-------------|
 | `supersedes` | string | ID of older record this replaces (same tier; Bug may also supersede Blueprint) |
 | `superseded_by` | string | ID of newer record that replaces this |
-| `extends` | string | Bug only: ID of Blueprint or Bug whose constraint coverage this record supplements |
+| `extends` | string | ID of a same-tier record this one adds to, leaving its decision standing (Bug may also extend a Blueprint) |
 | `implements` | string | ID of the parent record one tier above (blueprint→brief, imprint→blueprint) |
 | `related` | array | Related record IDs (no directional relationship) |
 
@@ -259,7 +259,18 @@ Records without a `type` field default to `blueprint` for backward compatibility
 - **`implements` must resolve.** The referenced record must exist locally or in a configured shared repo cache. A missing reference is always an error. (PROV022)
 - **Imprint supersession requires same parent.** When an Imprint supersedes another Imprint, both must share the same `implements` value.
 - **Bug records require exactly one of `supersedes` or `extends`.** Use `supersedes` when existing constraints are incorrect; use `extends` when constraints are missing. Neither or both is an error.
-- **`extends` target must be a Blueprint or Bug.** A Bug extending a Brief or Imprint is an error.
+- **A Bug's `extends` target must be a Blueprint or Bug.** A Bug extending a Brief or Imprint is an error.
+- **`extends` must stay within the same tier.** It is the additive counterpart to `supersedes` — the target's decision still stands and this record adds to it — so it carries the same tier discipline. A `blueprint` adds to a `blueprint`, an `imprint` to an `imprint`. Use `implements` for a cross-tier link, or `related` when the connection is not additive. _Exception: a `bug` may extend a `blueprint`._
+- **An Imprint may extend only an Imprint sharing its `implements` parent.** An imprint describes how one blueprint was implemented, so adding to an imprint under a different parent says nothing coherent. Mirrors the same-parent rule imprint supersession already carries.
+- **A record with a live inbound `extends` cannot be superseded.** Replacing it would strand the addition — the extender would still point at a decision that no longer stands. Retarget that `extends` at the superseding record, or deprecate it, first. Extensions on records that are themselves `superseded` or `deprecated` do not block.
+
+**Choosing between `supersedes`, `extends` and `related`:**
+
+| You are… | Use |
+|---|---|
+| replacing a decision that turned out wrong | `supersedes` |
+| adding to a decision that still stands | `extends` |
+| noting two records touch the same area, with no directional claim | `related` |
 - **`brief` records must carry `constraints`.** A Brief with no constraints is a lint error.
 
 **Lifecycle note:** Draft records skip all scope and spec enforcement. Use `linespec provenance open` to begin enforcement when the record is ready.

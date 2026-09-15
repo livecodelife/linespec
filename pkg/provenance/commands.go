@@ -2389,8 +2389,11 @@ To author the ` + "`" + `.linespec` + "`" + ` files that back ` + "`" + `type: l
 - ` + "`" + `supersedes` + "`" + ` must stay within the same tier (exception: ` + "`" + `bug` + "`" + ` may supersede a ` + "`" + `blueprint` + "`" + `) — PROV020
 - ` + "`" + `implements` + "`" + ` must point exactly one tier up — PROV021
 - ` + "`" + `implements` + "`" + ` must resolve locally or via configured shared_repos cache — PROV022
-- ` + "`" + `extends` + "`" + ` is only valid on ` + "`" + `bug` + "`" + ` records; target must be a ` + "`" + `blueprint` + "`" + ` or ` + "`" + `bug` + "`" + `
+- ` + "`" + `extends` + "`" + ` must stay within the same tier (exception: ` + "`" + `bug` + "`" + ` may extend a ` + "`" + `blueprint` + "`" + `)
+- an ` + "`" + `imprint` + "`" + ` may extend only an ` + "`" + `imprint` + "`" + ` sharing its ` + "`" + `implements` + "`" + ` parent
+- a record with a live inbound ` + "`" + `extends` + "`" + ` cannot be superseded until that extension is retargeted or deprecated
 - ` + "`" + `bug` + "`" + ` must have exactly one of ` + "`" + `supersedes` + "`" + ` or ` + "`" + `extends` + "`" + `
+- use ` + "`" + `supersedes` + "`" + ` to replace a decision, ` + "`" + `extends` + "`" + ` to add to one that still stands, ` + "`" + `related` + "`" + ` for no directional claim
 
 ## Cross-Repo Provenance (shared_repos)
 
