@@ -1,0 +1,39 @@
+id: prov-2026-2a80a572
+title: extends is a same-tier additive edge on every record type, not a bug-only field
+status: draft
+created_at: "2026-09-14"
+author: caleb.cowen@linq.com
+intent: >
+  Widen `extends` from a bug-only field into a general same-tier additive edge, so
+  a record that adds to an earlier decision can say so directionally instead of
+  falling back to the non-directional `related`. The linter accepts `extends` on
+  brief, blueprint and imprint when the target resolves to a record of the same
+  type, keeps the existing bug-to-blueprint allowance, requires an extending
+  imprint to share its target's `implements` parent, and reports an error when a
+  record carrying a live inbound `extends` is superseded. The schema reference and
+  the create-command guidance state the widened rule.
+constraints:
+  - "`extends` must validate on brief, blueprint and imprint records when the target resolves to a record of the same type"
+  - A bug record extending a blueprint must continue to validate
+  - An imprint may extend only an imprint that shares its `implements` value
+  - Superseding a record that is the target of an `extends` on a non-superseded record must be reported as an error
+  - "`supersedes` and `extends` must remain mutually exclusive on bug records"
+  - An `extends` target that does not resolve must be reported as an error
+affected_scope:
+  - pkg/provenance/linter.go
+  - pkg/provenance/linter_test.go
+  - pkg/provenance/commands.go
+  - PROVENANCE_RECORDS.md
+  - PROVENANCE_RECORD_SCHEMA.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/linter_test.go
+    run_command: test -f {{path}} && go test -count=1 -run Extends ./pkg/provenance/
+associated_traces: []
+monitors: []
+tags: []
