@@ -1,6 +1,6 @@
 id: prov-2026-2a80a572
 title: extends is a same-tier additive edge on every record type, not a bug-only field
-status: draft
+status: open
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: >
