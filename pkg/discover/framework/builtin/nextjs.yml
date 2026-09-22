@@ -1,0 +1,61 @@
+name: nextjs
+language: typescript
+
+detection:
+  - manifest: package.json
+    contains:
+      - "\"next\":"
+
+# Next.js's routing is filesystem-convention-based (app/**/route.ts,
+# app/**/page.tsx, and the legacy pages/**) — there is no route-registration
+# call site for route_queries/group_queries/middleware_queries to match, so
+# this framework uses filesystem_routes instead. grouping_strategy is unused
+# in this mode: routes are always grouped by their containing route-segment
+# directory, the natural App Router unit.
+filesystem_routes:
+  app_dir: app
+  pages_dir: pages
+  route_file: route
+  page_file: page
+  methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+    - HEAD
+    - OPTIONS
+
+boundary_queries:
+  # node-postgres (pg): pool.query("SELECT...") / client.query("INSERT...").
+  # Direction is "both" (like Rails' raw-SQL query, which shares this same
+  # single-method-name-covers-every-verb shape) — TableFromSQL resolves the
+  # target table from the SQL text regardless of verb.
+  - protocol: postgresql
+    direction: both
+    pattern: |
+      (call_expression
+        function: (member_expression
+          property: (property_identifier) @method)
+        arguments: (arguments
+          (string (string_fragment) @query))
+        (#eq? @method "query"))
+    captures:
+      target: query
+
+  # Outbound fetch(): fetch("https://...") or fetch("https://...", { method: "POST", ... }).
+  # Direction is "both" for the same reason as above — the HTTP method, when
+  # present, is a property inside an options object literal rather than a
+  # distinct function name (unlike Go's http.Get/http.Post), so it isn't
+  # captured as a simple call-site pattern.
+  - protocol: http
+    direction: both
+    pattern: |
+      (call_expression
+        function: (identifier) @fn
+        arguments: (arguments
+          (string (string_fragment) @url)
+          _?)
+        (#eq? @fn "fetch"))
+    captures:
+      target: url

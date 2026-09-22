@@ -139,6 +139,82 @@ func TestDetect_NoMatch(t *testing.T) {
 	}
 }
 
+// TestLoader_Builtin_Nextjs verifies nextjs.yml (prov-2026-4446307d) loads
+// with its filesystem_routes section intact, since it has no
+// route_queries/group_queries at all — the field this framework relies on
+// entirely instead.
+func TestLoader_Builtin_Nextjs(t *testing.T) {
+	descs, err := framework.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	d, ok := descs["nextjs"]
+	if !ok {
+		t.Fatalf("expected built-in 'nextjs' framework, got keys: %v", keys(descs))
+	}
+	if d.Language != "typescript" {
+		t.Errorf("Language: got %q, want %q", d.Language, "typescript")
+	}
+	if d.FilesystemRoutes == nil {
+		t.Fatal("expected FilesystemRoutes to be set")
+	}
+	if d.FilesystemRoutes.AppDir != "app" {
+		t.Errorf("AppDir: got %q, want %q", d.FilesystemRoutes.AppDir, "app")
+	}
+	if d.FilesystemRoutes.RouteFile != "route" {
+		t.Errorf("RouteFile: got %q, want %q", d.FilesystemRoutes.RouteFile, "route")
+	}
+	if len(d.BoundaryQueries) == 0 {
+		t.Error("expected at least one boundary query (DB client + fetch)")
+	}
+}
+
+// TestDetect_Nextjs verifies auto-detection from package.json's "next"
+// dependency, per prov-2026-4446307d's constraint.
+func TestDetect_Nextjs(t *testing.T) {
+	dir := t.TempDir()
+	pkgJSON := `{"name": "my-app", "dependencies": {"next": "^14.2.0", "react": "^18.0.0"}}`
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkgJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	descs, err := framework.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := framework.Detect(dir, descs)
+	if result == nil {
+		t.Fatal("expected detection result for a package.json with a next dependency, got nil")
+	}
+	if result.Framework != "nextjs" {
+		t.Errorf("Framework: got %q, want %q", result.Framework, "nextjs")
+	}
+	if result.Language != "typescript" {
+		t.Errorf("Language: got %q, want %q", result.Language, "typescript")
+	}
+}
+
+// TestDetect_Nextjs_NoFalsePositiveOnUnrelatedNextSubstring guards the
+// detection pattern's precision: a package merely containing the substring
+// "next" (e.g. a hypothetical "next-gen-utils" dependency) must not trigger
+// detection — only the literal "next" dependency key does.
+func TestDetect_Nextjs_NoFalsePositiveOnUnrelatedNextSubstring(t *testing.T) {
+	dir := t.TempDir()
+	pkgJSON := `{"name": "my-app", "dependencies": {"next-gen-utils": "^1.0.0"}}`
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkgJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	descs, err := framework.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := framework.Detect(dir, descs)
+	if result != nil && result.Framework == "nextjs" {
+		t.Errorf("expected no nextjs detection for an unrelated \"next-gen-utils\" dependency, got %+v", result)
+	}
+}
+
 func keys(m map[string]*framework.Description) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

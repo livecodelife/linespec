@@ -92,8 +92,28 @@ var specs = map[lang.Language]langSpec{
 	lang.JavaScript: {
 		tsLang: treesitter.LangJavaScript,
 		symbolQueries: []symbolQuery{
-			{`(program (function_declaration name: (identifier) @name))`, KindFunction},
-			{`(program (class_declaration name: (identifier) @name))`, KindClass},
+			// Unanchored (not "(program (function_declaration ...))"): an
+			// exported top-level declaration is wrapped in an
+			// export_statement node, so anchoring directly under program
+			// silently missed every "export function"/"export class".
+			{`(function_declaration name: (identifier) @name)`, KindFunction},
+			{`(class_declaration name: (identifier) @name)`, KindClass},
+		},
+		importQueries: []string{
+			`(import_statement source: (string (string_fragment) @path))`,
+			`(call_expression function: (identifier) @__fn (#eq? @__fn "require") arguments: (arguments (string (string_fragment) @path)))`,
+		},
+	},
+	lang.TypeScript: {
+		tsLang: treesitter.LangTypeScript,
+		symbolQueries: []symbolQuery{
+			// Unanchored for the same reason as JavaScript's, above.
+			// class_declaration's name field is a type_identifier in the
+			// TypeScript/TSX grammar, unlike JavaScript's identifier.
+			{`(function_declaration name: (identifier) @name)`, KindFunction},
+			{`(class_declaration name: (type_identifier) @name)`, KindClass},
+			{`(interface_declaration name: (type_identifier) @name)`, KindType},
+			{`(type_alias_declaration name: (type_identifier) @name)`, KindType},
 		},
 		importQueries: []string{
 			`(import_statement source: (string (string_fragment) @path))`,

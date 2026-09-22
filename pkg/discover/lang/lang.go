@@ -20,10 +20,15 @@ const (
 	Ruby       Language = "ruby"
 	Python     Language = "python"
 	JavaScript Language = "javascript"
+	TypeScript Language = "typescript"
 )
 
 // extensions maps a lowercase file extension (including the leading dot) to
-// the language it signals.
+// the language it signals. .ts and .tsx both map to TypeScript: both are
+// parsed with tree-sitter's TSX grammar (a strict syntactic superset of
+// plain TypeScript), so one Language and one set of extraction queries
+// covers both rather than splitting them into two languages that would
+// otherwise need duplicate queries.
 var extensions = map[string]Language{
 	".go":  Go,
 	".rb":  Ruby,
@@ -32,6 +37,8 @@ var extensions = map[string]Language{
 	".jsx": JavaScript,
 	".mjs": JavaScript,
 	".cjs": JavaScript,
+	".ts":  TypeScript,
+	".tsx": TypeScript,
 }
 
 // Detect returns the language signaled by path's extension and whether one

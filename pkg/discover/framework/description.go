@@ -31,6 +31,44 @@ type Description struct {
 	// routing that cannot be fully expressed as tree-sitter queries. Discover will
 	// report discovered routes alongside a warning about incomplete coverage.
 	Partial bool `yaml:"partial"`
+
+	// FilesystemRoutes configures filesystem-convention route discovery
+	// (e.g. Next.js's App/Pages Router) for frameworks with no
+	// route-registration call site for RouteQueries to match against. When
+	// set, the route assembler uses this instead of RouteQueries/
+	// GroupQueries/MiddlewareQueries/GroupingStrategy entirely.
+	FilesystemRoutes *FilesystemRoutes `yaml:"filesystem_routes"`
+}
+
+// FilesystemRoutes describes a filesystem-convention routing scheme: a
+// route or page is signaled by a file's name and directory position rather
+// than by a registration call. Each discovered route is grouped by its
+// containing route-segment directory.
+type FilesystemRoutes struct {
+	// AppDir is the App Router root, relative to the scanned directory
+	// (e.g. "app"). A RouteFile under any of its subdirectories is a route
+	// handler; a PageFile is a page. Directory segments named "[name]" or
+	// "[...name]" become path parameters (":name") or catch-alls ("*name").
+	// Segments named "(name)" (route groups) contribute no path segment.
+	AppDir string `yaml:"app_dir"`
+
+	// PagesDir is the legacy Pages Router root (e.g. "pages"), handled
+	// best-effort: every file under it is a page, and every file under
+	// PagesDir+"/api" is an API route whose default export handles all
+	// methods.
+	PagesDir string `yaml:"pages_dir"`
+
+	// RouteFile is the App Router route handler basename, without
+	// extension (e.g. "route" for route.ts).
+	RouteFile string `yaml:"route_file"`
+
+	// PageFile is the App Router page basename, without extension (e.g.
+	// "page" for page.tsx).
+	PageFile string `yaml:"page_file"`
+
+	// Methods lists the exported HTTP method function names a RouteFile is
+	// scanned for (e.g. GET, POST, PUT, PATCH, DELETE).
+	Methods []string `yaml:"methods"`
 }
 
 // DetectionRule describes how to identify this framework in a project directory.

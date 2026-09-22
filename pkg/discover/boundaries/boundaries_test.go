@@ -629,6 +629,133 @@ func ListUsers() {
 	}
 }
 
+// --- Tracer: TypeScript / Next.js filesystem routing ---
+
+func nextjsBoundaryQueries() []framework.BoundaryQuery {
+	return []framework.BoundaryQuery{
+		{
+			Protocol:  "postgresql",
+			Direction: "both",
+			Pattern: `(call_expression
+				function: (member_expression property: (property_identifier) @method)
+				arguments: (arguments (string (string_fragment) @query))
+				(#eq? @method "query"))`,
+			Captures: framework.BoundaryCaptures{Target: "query"},
+		},
+		{
+			Protocol:  "http",
+			Direction: "both",
+			Pattern: `(call_expression
+				function: (identifier) @fn
+				arguments: (arguments (string (string_fragment) @url) _?)
+				(#eq? @fn "fetch"))`,
+			Captures: framework.BoundaryCaptures{Target: "url"},
+		},
+	}
+}
+
+func TestTracer_TypeScript_PostgreSQL(t *testing.T) {
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	writeFile(t, dir, "route.ts", `export async function GET(req: Request) {
+	const rows = await db.query("SELECT * FROM users")
+	return Response.json(rows)
+}
+`)
+
+	hits, err := tr.Trace(context.Background(), dir, []routes.Route{
+		{Method: "GET", Path: "/api/users", HandlerRef: "GET"},
+	})
+	if err != nil {
+		t.Fatalf("Trace: %v", err)
+	}
+	h := findHit(t, hits["GET"], "postgresql", "both")
+	if h.Target != "users" {
+		t.Errorf("Target = %q; want %q", h.Target, "users")
+	}
+}
+
+func TestTracer_TypeScript_Fetch(t *testing.T) {
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	writeFile(t, dir, "route.ts", `export async function POST(req: Request) {
+	const res = await fetch("https://payments.example.com/charge", { method: "POST" })
+	return Response.json(await res.json())
+}
+`)
+
+	hits, err := tr.Trace(context.Background(), dir, []routes.Route{
+		{Method: "POST", Path: "/api/charge", HandlerRef: "POST"},
+	})
+	if err != nil {
+		t.Fatalf("Trace: %v", err)
+	}
+	h := findHit(t, hits["POST"], "http", "both")
+	if h.Target != "https://payments.example.com/charge" {
+		t.Errorf("Target = %q; want %q", h.Target, "https://payments.example.com/charge")
+	}
+}
+
+// TestTracer_TypeScript_FileScopedHandlerRef reproduces the disambiguation
+// problem filesystem-convention routing introduces: every route.ts in a
+// Next.js project exports a function named "GET" (or "POST", ...), so a
+// bare-name search across the whole index would incorrectly merge two
+// unrelated routes' hits. The "file::name" HandlerRef form scopes the
+// top-level lookup to one file; recursive callee lookups stay unscoped.
+func TestTracer_TypeScript_FileScopedHandlerRef(t *testing.T) {
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "users"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "orders"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "users"), "route.ts", `export async function GET(req: Request) {
+	return Response.json(await db.query("SELECT * FROM users"))
+}
+`)
+	writeFile(t, filepath.Join(dir, "orders"), "route.ts", `export async function GET(req: Request) {
+	return Response.json(await db.query("SELECT * FROM orders"))
+}
+`)
+
+	usersFile := filepath.Join(dir, "users", "route.ts")
+	ordersFile := filepath.Join(dir, "orders", "route.ts")
+
+	hits, err := tr.Trace(context.Background(), dir, []routes.Route{
+		{Method: "GET", Path: "/api/users", HandlerRef: usersFile + "::GET"},
+		{Method: "GET", Path: "/api/orders", HandlerRef: ordersFile + "::GET"},
+	})
+	if err != nil {
+		t.Fatalf("Trace: %v", err)
+	}
+
+	usersHits := hits[usersFile+"::GET"]
+	if len(usersHits) != 1 || usersHits[0].Target != "users" {
+		t.Errorf("expected exactly 1 hit targeting users for %s, got %+v", usersFile, usersHits)
+	}
+	ordersHits := hits[ordersFile+"::GET"]
+	if len(ordersHits) != 1 || ordersHits[0].Target != "orders" {
+		t.Errorf("expected exactly 1 hit targeting orders for %s, got %+v", ordersFile, ordersHits)
+	}
+}
+
 func TestTracer_PackageQualifiedHandlerRef(t *testing.T) {
 	desc := loadFramework(t, "chi")
 	tr, err := boundaries.New(desc)

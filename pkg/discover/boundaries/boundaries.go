@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	sittergo "github.com/smacker/go-tree-sitter/golang"
+	sitterjs "github.com/smacker/go-tree-sitter/javascript"
 	sitterruby "github.com/smacker/go-tree-sitter/ruby"
+	sittertsx "github.com/smacker/go-tree-sitter/typescript/tsx"
 
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
 	"github.com/livecodelife/linespec/v3/pkg/discover/ignorewalk"
@@ -30,17 +33,17 @@ type Hit struct {
 type Tracer struct {
 	desc  *framework.Description
 	lang  *sitter.Language
-	ext   string
+	exts  map[string]bool
 	depth int
 }
 
 // New returns a Tracer for the given framework description.
 func New(desc *framework.Description) (*Tracer, error) {
-	lang, ext, err := langAndExt(desc.Language)
+	lang, exts, err := langAndExt(desc.Language)
 	if err != nil {
 		return nil, err
 	}
-	return &Tracer{desc: desc, lang: lang, ext: ext, depth: DefaultDepth}, nil
+	return &Tracer{desc: desc, lang: lang, exts: exts, depth: DefaultDepth}, nil
 }
 
 // WithDepth returns a new Tracer with the call graph depth set to d.
@@ -50,14 +53,27 @@ func (t *Tracer) WithDepth(d int) *Tracer {
 	return &cp
 }
 
-func langAndExt(language string) (*sitter.Language, string, error) {
+// langAndExt returns the tree-sitter grammar and set of source file
+// extensions for a framework description's language. javascript and
+// typescript both parse with a single grammar across multiple extensions —
+// unlike Go/Ruby, a JS/TS project's route and handler files are not
+// confined to one extension (.js/.jsx, or .ts/.tsx), so exts is a set
+// rather than the single value the other two languages need.
+func langAndExt(language string) (*sitter.Language, map[string]bool, error) {
 	switch language {
 	case "go":
-		return sittergo.GetLanguage(), ".go", nil
+		return sittergo.GetLanguage(), map[string]bool{".go": true}, nil
 	case "ruby":
-		return sitterruby.GetLanguage(), ".rb", nil
+		return sitterruby.GetLanguage(), map[string]bool{".rb": true}, nil
+	case "javascript":
+		return sitterjs.GetLanguage(), map[string]bool{".js": true, ".jsx": true, ".mjs": true, ".cjs": true}, nil
+	case "typescript":
+		// TSX's grammar is a strict syntactic superset of plain TypeScript,
+		// so one grammar parses both extensions (pkg/discover/lang's same
+		// reasoning for the TypeScript Language constant).
+		return sittertsx.GetLanguage(), map[string]bool{".ts": true, ".tsx": true}, nil
 	default:
-		return nil, "", fmt.Errorf("unsupported language: %q", language)
+		return nil, nil, fmt.Errorf("unsupported language: %q", language)
 	}
 }
 
@@ -77,7 +93,8 @@ func (t *Tracer) Trace(ctx context.Context, dir string, rs []routes.Route) (map[
 			continue
 		}
 		visited[r.HandlerRef] = true
-		hits, err := t.traceHandler(r.HandlerRef, idx, t.depth, make(map[string]bool))
+		fileHint, ref := splitHandlerRef(r.HandlerRef)
+		hits, err := t.traceHandler(ref, fileHint, idx, t.depth, make(map[string]bool))
 		if err != nil {
 			return nil, fmt.Errorf("trace %q: %w", r.HandlerRef, err)
 		}
@@ -105,7 +122,7 @@ func (t *Tracer) buildIndex(ctx context.Context, dir string) (*fileIndex, error)
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || filepath.Ext(path) != t.ext {
+		if info.IsDir() || !t.exts[filepath.Ext(path)] {
 			return nil
 		}
 		src, err := os.ReadFile(path)
@@ -127,7 +144,14 @@ func (t *Tracer) buildIndex(ctx context.Context, dir string) (*fileIndex, error)
 
 // traceHandler finds all boundary hits for a handler reference, walking the call
 // graph up to depth levels. callStack prevents recursion on the same function.
-func (t *Tracer) traceHandler(handlerRef string, idx *fileIndex, depth int, callStack map[string]bool) ([]Hit, error) {
+// fileHint, when non-empty, restricts the search for handlerRef itself to that
+// one file — needed for filesystem-convention routing (prov-2026-4446307d),
+// where every route.ts in a Next.js project exports a function with the same
+// literal name ("GET", "POST", ...), so a bare name search across the whole
+// index would incorrectly merge every route's hits together. Recursive callee
+// lookups are never restricted this way: a handler's own helper functions can
+// live in any file, exactly as they do for Go and Ruby today.
+func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth int, callStack map[string]bool) ([]Hit, error) {
 	funcName := extractFuncName(handlerRef, t.desc.Language)
 	if funcName == "" || callStack[funcName] {
 		return nil, nil
@@ -137,6 +161,9 @@ func (t *Tracer) traceHandler(handlerRef string, idx *fileIndex, depth int, call
 
 	var hits []Hit
 	for _, pf := range idx.files {
+		if fileHint != "" && pf.path != fileHint {
+			continue
+		}
 		body := t.findFuncBody(funcName, pf)
 		if body == nil {
 			continue
@@ -147,7 +174,7 @@ func (t *Tracer) traceHandler(handlerRef string, idx *fileIndex, depth int, call
 				if callStack[callee] {
 					continue
 				}
-				sub, err := t.traceHandler(callee, idx, depth-1, callStack)
+				sub, err := t.traceHandler(callee, "", idx, depth-1, callStack)
 				if err != nil {
 					return nil, err
 				}
@@ -158,9 +185,21 @@ func (t *Tracer) traceHandler(handlerRef string, idx *fileIndex, depth int, call
 	return deduplicateHits(hits), nil
 }
 
+// splitHandlerRef splits a "file::name"-form HandlerRef (used by
+// filesystem-convention routing) into its file hint and bare ref. A
+// HandlerRef with no "::" (Go and Ruby's forms) returns an empty hint and
+// the ref unchanged.
+func splitHandlerRef(handlerRef string) (fileHint, ref string) {
+	if i := strings.LastIndex(handlerRef, "::"); i >= 0 {
+		return handlerRef[:i], handlerRef[i+2:]
+	}
+	return "", handlerRef
+}
+
 // extractFuncName strips the package or controller qualifier from a handler ref.
-// Go:   "handlers.CreateUser" → "CreateUser", "myHandler" → "myHandler"
-// Ruby: "users#create" → "create", "UsersController#show" → "show"
+// Go:              "handlers.CreateUser" → "CreateUser", "myHandler" → "myHandler"
+// Ruby:             "users#create" → "create", "UsersController#show" → "show"
+// JavaScript/TypeScript: no qualifier to strip — "GET" stays "GET".
 func extractFuncName(ref, language string) string {
 	if ref == "" {
 		return ""
@@ -212,6 +251,11 @@ func (t *Tracer) funcDefPatterns(name string) []string {
 			fmt.Sprintf(`(method name: (identifier) @name (#eq? @name "%s") body: (body_statement) @body)`, name),
 			// Fallback: without field name for older grammar versions
 			fmt.Sprintf(`(method (identifier) @name (body_statement) @body (#eq? @name "%s"))`, name),
+		}
+	case "javascript", "typescript":
+		return []string{
+			fmt.Sprintf(`(function_declaration name: (identifier) @name (#eq? @name "%s") body: (statement_block) @body)`, name),
+			fmt.Sprintf(`(method_definition name: (property_identifier) @name (#eq? @name "%s") body: (statement_block) @body)`, name),
 		}
 	default:
 		return nil
@@ -327,6 +371,8 @@ func (t *Tracer) calleePattern() string {
 		return `(call_expression function: [(identifier) @callee (selector_expression field: (field_identifier) @callee)])`
 	case "ruby":
 		return `(call method: (identifier) @callee)`
+	case "javascript", "typescript":
+		return `(call_expression function: [(identifier) @callee (member_expression property: (property_identifier) @callee)])`
 	default:
 		return ""
 	}

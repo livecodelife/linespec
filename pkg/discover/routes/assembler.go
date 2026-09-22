@@ -10,7 +10,9 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	sittergo "github.com/smacker/go-tree-sitter/golang"
+	sitterjs "github.com/smacker/go-tree-sitter/javascript"
 	sitterruby "github.com/smacker/go-tree-sitter/ruby"
+	sittertsx "github.com/smacker/go-tree-sitter/typescript/tsx"
 
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
 )
@@ -19,33 +21,48 @@ import (
 type Assembler struct {
 	desc *framework.Description
 	lang *sitter.Language
-	ext  string
+	exts map[string]bool
 }
 
 // New returns an Assembler for the given framework description.
 func New(desc *framework.Description) (*Assembler, error) {
-	lang, ext, err := langAndExt(desc.Language)
+	lang, exts, err := langAndExt(desc.Language)
 	if err != nil {
 		return nil, err
 	}
-	return &Assembler{desc: desc, lang: lang, ext: ext}, nil
+	return &Assembler{desc: desc, lang: lang, exts: exts}, nil
 }
 
-func langAndExt(language string) (*sitter.Language, string, error) {
+// langAndExt mirrors pkg/discover/boundaries's function of the same name —
+// see its doc comment for why javascript/typescript need an extension set
+// rather than a single extension.
+func langAndExt(language string) (*sitter.Language, map[string]bool, error) {
 	switch language {
 	case "go":
-		return sittergo.GetLanguage(), ".go", nil
+		return sittergo.GetLanguage(), map[string]bool{".go": true}, nil
 	case "ruby":
-		return sitterruby.GetLanguage(), ".rb", nil
+		return sitterruby.GetLanguage(), map[string]bool{".rb": true}, nil
+	case "javascript":
+		return sitterjs.GetLanguage(), map[string]bool{".js": true, ".jsx": true, ".mjs": true, ".cjs": true}, nil
+	case "typescript":
+		return sittertsx.GetLanguage(), map[string]bool{".ts": true, ".tsx": true}, nil
 	default:
-		return nil, "", fmt.Errorf("unsupported language: %q", language)
+		return nil, nil, fmt.Errorf("unsupported language: %q", language)
 	}
 }
 
-// Assemble scans dir for source files matching the framework's language and returns
-// discovered route groups. Each group's name reflects the grouping_strategy declared
+// Assemble discovers routes in dir. When the framework description declares
+// filesystem_routes (e.g. Next.js — no route registration call site exists
+// to query), it dispatches to the filesystem-convention scanner instead of
+// the tree-sitter route-query pipeline below. Otherwise it scans dir for
+// source files matching the framework's language and returns discovered
+// route groups, each group's name reflecting the grouping_strategy declared
 // in the framework description (package, controller, or file).
 func (a *Assembler) Assemble(ctx context.Context, dir string) ([]Group, error) {
+	if a.desc.FilesystemRoutes != nil {
+		return assembleFilesystemRoutes(dir, a.desc.FilesystemRoutes)
+	}
+
 	files, err := a.sourceFiles(dir)
 	if err != nil {
 		return nil, err
@@ -84,7 +101,7 @@ func (a *Assembler) sourceFiles(dir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && filepath.Ext(path) == a.ext {
+		if !info.IsDir() && a.exts[filepath.Ext(path)] {
 			files = append(files, path)
 		}
 		return nil
