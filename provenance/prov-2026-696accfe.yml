@@ -1,0 +1,82 @@
+id: prov-2026-696accfe
+title: TypeScript uses one Language/grammar, boundaries/routes generalized to an extension set
+status: open
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  Two decisions made while wiring TypeScript into the existing Go/Ruby-only
+  language dispatch across pkg/discover/lang, pkg/discover/treesitter,
+  pkg/discover/symbols, pkg/discover/boundaries, and pkg/discover/routes:
+
+  1. One `lang.TypeScript` constant covers both .ts and .tsx, always parsed
+     with tree-sitter-typescript's TSX grammar rather than switching between
+     the "typescript" and "tsx" grammars per extension. Considered two
+     separate Language/Lang constants (TypeScript, TSX) with duplicated
+     symbol-query sets, since the two grammars are genuinely distinct
+     compiled parsers. Rejected: TSX's grammar is a strict syntactic
+     superset — every construct plain TypeScript accepts, TSX also accepts,
+     the reverse is not true (JSX literals) — so a single grammar handles
+     both extensions correctly with one query set, and doubling the
+     Language enum only to select between two option-compatible parsers
+     bought nothing. Verified directly: extracting symbols from both a
+     .tsx file with JSX (`<div>hello</div>`) and a plain .ts route handler
+     via lang.TypeScript/treesitter.LangTypeScript both parse and match
+     correctly (see TestExtract_TypeScript_TSX).
+
+  2. boundaries.Tracer and routes.Assembler both previously assumed a
+     single file extension per framework language (`ext string` on both
+     structs, from `langAndExt`). A Next.js project mixes .ts and .tsx (and
+     for a plain-JS Next.js app, .js/.jsx) within the very same route tree,
+     so `langAndExt` now returns a `map[string]bool` of extensions instead
+     of one string, and both structs' `ext` field became `exts`. This is a
+     mechanical, behavior-preserving generalization for Go/Ruby (each still
+     gets a single-entry set) — confirmed by the full existing Go/Ruby test
+     suite in both packages passing unchanged.
+
+  While verifying (2) I found and fixed an unrelated pre-existing bug in
+  pkg/discover/symbols/symbols.go while confirming the JS/TS symbol queries
+  worked on realistic Next.js source (`export function`/`export class`):
+  every JS and TS symbolQuery was anchored as `(program (X_declaration
+  ...))`, but an exported top-level declaration is wrapped in an
+  export_statement node in tree-sitter's JS/TS grammars, so the anchor
+  silently missed every exported function/class — which is how virtually
+  all real JS/TS top-level code is written, and unconditionally how every
+  Next.js route/page export is written. Fixed by dropping the `(program
+  ...)` anchor for both JavaScript and TypeScript (unanchored matches
+  function/class declarations at any nesting depth, which Go's/Ruby's/
+  Python's specs already effectively do). Also corrected TypeScript's
+  class_declaration name field type from `identifier` to `type_identifier`
+  — confirmed empirically (see the "class_declaration ... invalid unknown"
+  compile error) rather than assumed from Go's grammar, since TS/TSX names
+  class declarations differently than plain JS does. Regression-tested via
+  TestExtract_JavaScript_ExportedDeclarations.
+constraints: []
+affected_scope:
+  - pkg/discover/lang/**
+  - pkg/discover/treesitter/**
+  - pkg/discover/symbols/**
+  - pkg/discover/boundaries/**
+  - pkg/discover/routes/**
+forbidden_scope: []
+type: imprint
+implements: prov-2026-4446307d
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/discover/lang/lang_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/lang/... -v
+  - path: pkg/discover/symbols/symbols_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/symbols/... -run 'TypeScript|JavaScript' -v
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run 'Go_|Ruby_|TypeScript' -v
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - typescript
+  - tree-sitter
