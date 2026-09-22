@@ -1,0 +1,50 @@
+id: prov-2026-f0b20266
+title: discover framework-agnostic scan does not respect .gitignore
+status: draft
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  runDiscoverAgnostic's file walk (scanAgnosticFiles, cmd/linespec/main_stable.go:1493-1514)
+  skips only a hardcoded directory denylist (agnosticSkipDirs, main_stable.go:1392-1399:
+  .git, node_modules, vendor, .venv, venv, __pycache__) — it never reads .gitignore. Any
+  gitignored build/output directory outside that denylist gets walked and grouped like
+  source code.
+
+  Reproduced against a real Next.js project (linq-lens): `.next/` is gitignored but not in
+  agnosticSkipDirs, so a repo-root `discover --dry-run` produced 56 draft blueprint records,
+  54 of them for `.next/` build chunks (minified bundle output), against only 2 for anything
+  else. Running the real (non-dry-run, --enrich) command as-is would have written ~54 junk
+  provenance records for disposable build artifacts and spent ~54 real LLM calls
+  summarizing minified JS, before ever reaching the project's actual source tree.
+
+  The same gap exists in the framework-driven walk (pkg/discover/boundaries/boundaries.go's
+  buildIndex, ~line 103) and the git-history-only-file walk (main_stable.go:1018, which at
+  least skips .git by name) — none of the three walks parse .gitignore.
+constraints:
+  - discover's directory walk(s) MUST exclude paths that a project's own .gitignore (and,
+    where present, nested .gitignore files) would exclude, not just the hardcoded
+    agnosticSkipDirs denylist.
+  - The hardcoded denylist MAY remain as a fallback for repos with no .gitignore, but MUST
+    NOT be the only mechanism once a .gitignore is present.
+  - MUST NOT regress existing behavior for repos with no .gitignore file.
+  - "Fix SHOULD apply uniformly to all three walks that currently lack it: scanAgnosticFiles
+    (main_stable.go), boundaries.buildIndex (pkg/discover/boundaries/boundaries.go), and the
+    git-history file walk (main_stable.go:1018)."
+affected_scope:
+  - cmd/linespec/main_stable.go
+  - pkg/discover/boundaries/boundaries.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-a5eb1192
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a5eb1192  # Framework-agnostic discover — introduced agnosticSkipDirs, the denylist this bug is about
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - bug
+  - gitignore
