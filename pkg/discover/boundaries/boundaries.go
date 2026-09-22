@@ -11,6 +11,7 @@ import (
 	sitterruby "github.com/smacker/go-tree-sitter/ruby"
 
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
+	"github.com/livecodelife/linespec/v3/pkg/discover/ignorewalk"
 	"github.com/livecodelife/linespec/v3/pkg/discover/routes"
 )
 
@@ -100,7 +101,7 @@ type fileIndex struct {
 
 func (t *Tracer) buildIndex(ctx context.Context, dir string) (*fileIndex, error) {
 	var files []*parsedFile
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := ignorewalk.Walk(dir, ignorewalk.DefaultSkipDirs, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

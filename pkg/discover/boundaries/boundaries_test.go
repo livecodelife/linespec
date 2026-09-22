@@ -579,6 +579,56 @@ end
 	}
 }
 
+// TestTracer_RespectsGitignore reproduces prov-2026-f0b20266's second gap:
+// buildIndex walked every directory with no denylist or .gitignore
+// awareness at all, so a decoy handler living in a gitignored build output
+// directory (.next/, mirroring the real Next.js project this was found on)
+// would be indexed and traced right alongside real source, producing a
+// spurious protocol boundary hit.
+func TestTracer_RespectsGitignore(t *testing.T) {
+	desc := loadFramework(t, "chi")
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".next/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "handler.go", `package handlers
+
+import "net/http"
+
+func ListUsers(w http.ResponseWriter, r *http.Request) {}
+`)
+	nextDir := filepath.Join(dir, ".next")
+	if err := os.MkdirAll(nextDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nextDir, "decoy.go"), []byte(`package decoy
+
+func ListUsers() {
+	db.Query("SELECT * FROM users WHERE id = $1", 1)
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := tr.Trace(context.Background(), dir, []routes.Route{
+		{Method: "GET", Path: "/users", HandlerRef: "ListUsers"},
+	})
+	if err != nil {
+		t.Fatalf("Trace: %v", err)
+	}
+
+	for _, h := range hits["ListUsers"] {
+		if h.Protocol == "postgresql" {
+			t.Errorf("expected no postgresql hit — it only exists in the gitignored .next/decoy.go, got %+v", h)
+		}
+	}
+}
+
 func TestTracer_PackageQualifiedHandlerRef(t *testing.T) {
 	desc := loadFramework(t, "chi")
 	tr, err := boundaries.New(desc)

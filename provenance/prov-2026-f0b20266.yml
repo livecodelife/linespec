@@ -32,7 +32,10 @@ constraints:
     git-history file walk (main_stable.go:1018)."
 affected_scope:
   - cmd/linespec/main_stable.go
+  - cmd/linespec/discover_test.go
+  - cmd/linespec/find_configs_test.go
   - pkg/discover/boundaries/boundaries.go
+  - pkg/discover/boundaries/boundaries_test.go
   - pkg/discover/ignorewalk/**
 forbidden_scope: []
 type: bug
