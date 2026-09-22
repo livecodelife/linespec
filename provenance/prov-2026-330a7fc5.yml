@@ -1,0 +1,81 @@
+id: prov-2026-330a7fc5
+title: discover still hangs at ~236 files despite name-collision memoization fix
+status: draft
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  prov-2026-afd410b6 diagnosed the repo-root discover hang as Tracer.traceHandler's lack of
+  memoization causing exponential blowup on JS/TS name collisions (get, map, filter, ...),
+  fixed it by memoizing (function name, remaining depth) results, and sealed with a passing
+  test (TestTracer_TypeScript_NoExponentialBlowupOnNameCollisions, 40 synthetic files / 8
+  shared names). That fix is real — its own test passes — but the original symptom still
+  reproduces on a real, only moderately larger file set. This is the same hang, still open,
+  not a new mechanism as far as verification could tell; it extends rather than duplicates
+  prov-2026-afd410b6 because that record is sealed/immutable and the fix it shipped is
+  correct as far as it goes, just insufficient.
+
+  Re-verified against linq-lens at the current sealed commit (built from source, associated
+  specs for both prov-2026-afd410b6 and prov-2026-ebc2266b passing): `discover --dry-run` at
+  the repo root still pegs ~95% CPU with zero output for 2+ minutes before being killed.
+
+  Isolated with a much smaller, portable repro than "the whole linq-lens repo" (built by
+  copying real linq-lens source, no synthetic fixture):
+    1. A scratch dir containing only linq-lens's app/ (56 files) plus a minimal package.json
+       declaring a `next` dependency (so the framework auto-detects, same as at linq-lens's
+       real root). `discover --dry-run` there: fast, correctly finds 36 routes
+       (prov-2026-ebc2266b's fix confirmed working here).
+    2. The same scratch dir with linq-lens's lib/ and components/ also copied in (236 files
+       total, same 36 routes — lib/ and components/ contain no route.ts/page.tsx of their
+       own): hangs the same way as the full repo root.
+
+  So the threshold is somewhere between 56 and 236 total indexed files, with the route count
+  held constant at 36 — this is not about more routes, it's about a bigger shared file index
+  for those same 36 routes' call-graph tracing to walk. One plausible link to the fix that
+  didn't take: prov-2026-afd410b6's fix landed while prov-2026-ebc2266b's route-detection fix
+  was also landing (both sealed in nearby commits under the same open blueprint), and 0
+  routes were being found through most of this bug's original investigation — meaning Phase 2
+  boundary tracing may never have run for real against a repo-sized index until both fixes
+  were in place together. The memoization fix was validated against a 40-file synthetic
+  fixture; it may cover the within-single-handler collision case but not whatever scales with
+  total index size across many real handlers. Root cause beyond that is unconfirmed — this
+  record documents the smaller repro so it doesn't have to be rediscovered from the full
+  linq-lens tree.
+constraints:
+  - MUST NOT hang or exhibit worse than roughly linear-in-(routes × index size) behavior
+    once discover's route detection actually finds a realistic number of routes (36 here) —
+    the original bug's symptom was masked for most of its own investigation by
+    prov-2026-ebc2266b's separate 0-routes bug, so it was never exercised end-to-end until
+    both fixes landed together.
+  - MUST be reproduced and fixed against a fixture in the 56-to-236-file range with routes
+    held roughly constant, not only against the smaller synthetic collision fixture that
+    validated the prior fix — that fixture did not catch this.
+  - "Before considering this resolved, MUST re-run the exact repro that surfaced it: a
+    directory combining app/, lib/, and components/-shaped real source (not just
+    minimized/synthetic files) with a package.json declaring `next`, run through plain
+    `discover --dry-run` with no --dir/--framework overrides."
+  - SHOULD add basic timing/progress instrumentation to discover (echoed already as a SHOULD
+    in prov-2026-afd410b6) so future regressions like this show up as "slow" rather than as
+    an indistinguishable-from-hung silent spin.
+affected_scope:
+  - pkg/discover/boundaries/boundaries.go
+  - pkg/discover/boundaries/boundaries_test.go
+  - pkg/discover/routes/assembler.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-afd410b6
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-afd410b6  # Prior hang bug — real fix, same symptom still reproduces at slightly larger scale
+  - prov-2026-ebc2266b  # Route-detection fix — landed alongside afd410b6; 0 routes had been masking this until both fixes were in place
+  - prov-2026-4446307d  # Next.js + JS/TS support for discover — the still-open blueprint both hang bugs extend
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - bug
+  - nextjs
+  - performance
