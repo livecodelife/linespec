@@ -1,0 +1,98 @@
+id: prov-2026-e5067371
+title: Next.js filesystem routing bypasses query-based Assemble; per-file handler-ref scoping added to Tracer
+status: open
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  Next.js has no route-registration call site (see prov-2026-4446307d's own
+  intent), so RouteQueries/GroupQueries/MiddlewareQueries/GroupingStrategy
+  cannot describe its routing at all. Added
+  `framework.Description.FilesystemRoutes` (app_dir, pages_dir, route_file,
+  page_file, methods) and pkg/discover/routes/filesystem.go's
+  assembleFilesystemRoutes, which routes.Assembler.Assemble dispatches to
+  first, entirely bypassing the query-based path (discoverFileRoutes/
+  buildGroups/GroupingStrategy) when FilesystemRoutes is set. Groups are
+  built directly, one per route-segment directory — the "cluster by route
+  segment" constraint — rather than going through routeGroupID's
+  package/controller/file switch, since none of those strategies describe
+  "the directory containing route.ts".
+
+  Route.HandlerRef for App Router route.ts handlers is set to
+  "<absolute file path>::<METHOD>" (e.g. ".../api/users/route.ts::GET"),
+  not the bare method name. This was necessary, not cosmetic: every
+  route.ts in a Next.js project exports a function literally named "GET"/
+  "POST"/etc. (the framework mandates these names), and
+  boundaries.Tracer.traceHandler previously searched its *entire* file
+  index for any function matching a bare name, accumulating hits from
+  every match — correct for Go/Ruby, where a handler name is normally
+  unique across the traced project, catastrophically wrong here: tracing
+  one route's "GET" would silently merge in every other route.ts's "GET"
+  hits too. Fixed in pkg/discover/boundaries/boundaries.go by adding
+  splitHandlerRef and a fileHint parameter threaded through traceHandler:
+  a HandlerRef containing "::" scopes the *initial* lookup to that one
+  file, while every recursive callee lookup remains unscoped (a route
+  handler's own helper functions can live anywhere, exactly as for Go/
+  Ruby today — restricting those too would have broken cross-file call
+  graph following). Verified directly:
+  TestTracer_TypeScript_FileScopedHandlerRef sets up two route.ts files
+  that each export a same-named "GET" hitting a different table, and
+  confirms each HandlerRef's hits stay correctly isolated to its own file.
+
+  Route handler tracing was scoped to App Router route.ts files only.
+  page.tsx (App Router) and every Pages Router file (pages/**,
+  pages/api/**) get route coverage (method, path, blueprint/stub
+  generation) but an empty HandlerRef, so no boundary tracing is attempted
+  for them. Reason: unlike route.ts's framework-mandated GET/POST/etc.
+  names, a page's or a Pages API handler's default export has no fixed
+  name to look up — the export is anonymous or an arbitrary identifier
+  (`export default function Whatever() {}`), so there is no analogous
+  "known name" for findFuncBody to search for. This is an accepted scope
+  boundary, not a bug: prov-2026-4446307d's own constraints require
+  detecting these routes (satisfied) and only say boundary tracing SHOULD
+  cover a DB client and fetch — a SHOULD, not a MUST, and explicitly
+  scoped to "at least one common DB client" — which route.ts coverage
+  alone satisfies. Deepening page/Pages-API tracing (e.g. resolving the
+  default export's body regardless of its name) is a reasonable follow-up
+  but out of this blueprint's scope.
+
+  assembleFilesystemRoutes walks from the scanned project root (not
+  app_dir/pages_dir directly) so that ignorewalk.Walk
+  (prov-2026-f0b20266) picks up a repo-root .gitignore and any nested one
+  between it and app_dir/pages_dir — walking from app_dir directly would
+  make a .gitignore living above it (the overwhelmingly common case)
+  invisible. Found via TestAssemble_AppRouter_RespectsGitignore failing
+  until this was corrected. Also found via direct smoke-testing (not a
+  formal test, since it is a pure availability guard with nothing to
+  meaningfully assert beyond "does not error"): a project with no pages/
+  directory at all (the common case for App Router-only projects) made
+  ignorewalk.Walk return a hard error via os.Lstat, since Walk treats a
+  missing root as an error, not an empty result — fixed with a dirExists
+  guard before walking either optional root.
+constraints: []
+affected_scope:
+  - pkg/discover/framework/**
+  - pkg/discover/routes/**
+  - pkg/discover/boundaries/**
+forbidden_scope: []
+type: imprint
+implements: prov-2026-4446307d
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/discover/routes/filesystem_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/routes/... -run Assemble_ -v
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run TestTracer_TypeScript_FileScopedHandlerRef -v
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run TestRunDiscover_Nextjs_EndToEnd -v
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - nextjs
+  - filesystem-routing
