@@ -29,6 +29,7 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/discover/enrich"
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
 	"github.com/livecodelife/linespec/v3/pkg/discover/graph"
+	"github.com/livecodelife/linespec/v3/pkg/discover/ignorewalk"
 	"github.com/livecodelife/linespec/v3/pkg/discover/lang"
 	discoverrecords "github.com/livecodelife/linespec/v3/pkg/discover/records"
 	discoverroutes "github.com/livecodelife/linespec/v3/pkg/discover/routes"
@@ -1012,17 +1013,15 @@ func loadProvenanceConfigFromFile(filePath string) *provenance.ProvenanceConfig 
 }
 
 // findAllLinespecConfigs returns paths to all .linespec.yml files found under root,
-// excluding .git directories. filepath.Walk visits in lexicographic order.
+// excluding .git directories and anything the project's own .gitignore excludes
+// (prov-2026-f0b20266). ignorewalk.Walk visits in lexicographic order.
 func findAllLinespecConfigs(root string) []string {
 	var configs []string
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	ignorewalk.Walk(root, map[string]bool{".git": true}, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if info.IsDir() {
-			if info.Name() == ".git" {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		if info.Name() == ".linespec.yml" {
@@ -1387,17 +1386,6 @@ func agnosticResultsToDiscoverResults(results []agnosticResult) []discoverrecord
 	return out
 }
 
-// agnosticSkipDirs lists directory names skipped during a framework-agnostic scan —
-// dependency and VCS directories whose contents are not the user's own code.
-var agnosticSkipDirs = map[string]bool{
-	".git":         true,
-	"node_modules": true,
-	"vendor":       true,
-	".venv":        true,
-	"venv":         true,
-	"__pycache__":  true,
-}
-
 // agnosticResult is the outcome of generating one blueprint record for a directory group.
 type agnosticResult struct {
 	GroupName string
@@ -1494,14 +1482,11 @@ func scanAgnosticFiles(ctx context.Context, dir string) ([]graph.File, []string,
 	var files []graph.File
 	var unclassified []string
 
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
+	err := ignorewalk.Walk(dir, ignorewalk.DefaultSkipDirs, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() {
-			if path != dir && agnosticSkipDirs[info.Name()] {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 

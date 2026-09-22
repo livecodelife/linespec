@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,43 @@ import (
 
 	"github.com/livecodelife/linespec/v3/pkg/provenance"
 )
+
+// TestScanAgnosticFiles_RespectsGitignore reproduces prov-2026-f0b20266: a
+// gitignored build output directory (.next/, as seen on a real Next.js
+// project) is not in the hardcoded agnostic-scan denylist, so it used to be
+// walked and treated as source code. It must now be excluded once the
+// project's own .gitignore says so.
+func TestScanAgnosticFiles_RespectsGitignore(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		".gitignore":           ".next/\n",
+		"main.go":              "package main\n\nfunc main() {}\n",
+		".next/chunks/main.js": "minified build junk that is not source code",
+	}
+	for rel, content := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, _, err := scanAgnosticFiles(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("scanAgnosticFiles: %v", err)
+	}
+
+	for _, f := range got {
+		if strings.Contains(f.Path, ".next") {
+			t.Errorf("scanAgnosticFiles scanned a file under the gitignored .next/ directory: %s", f.Path)
+		}
+	}
+	if len(got) != 1 || !strings.HasSuffix(got[0].Path, "main.go") {
+		t.Errorf("expected only main.go to be scanned, got %v", got)
+	}
+}
 
 // writeChiProject lays out a minimal chi service with one route-bearing package
 // (handlers) and three directories that contain no HTTP route registration at
