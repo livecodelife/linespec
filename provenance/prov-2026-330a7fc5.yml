@@ -1,6 +1,6 @@
 id: prov-2026-330a7fc5
 title: discover still hangs at ~236 files despite name-collision memoization fix
-status: draft
+status: open
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -40,6 +40,23 @@ intent: |
   total index size across many real handlers. Root cause beyond that is unconfirmed — this
   record documents the smaller repro so it doesn't have to be rediscovered from the full
   linq-lens tree.
+
+  Root cause confirmed: reproduced a 180+ second, still-not-finished trace against a 236-file/
+  36-route fixture built from scratch with entirely UNIQUE function names (no collisions at
+  all), ruling out the exponential-blowup mechanism prov-2026-afd410b6 fixed as the cause here.
+  boundaries.go's queryForNode/queryNode both called sitter.NewQuery fresh on every single
+  invocation — compiling a tree-sitter query is not cheap, and the same pattern (a boundary
+  query, the static callee pattern, or one function's funcDefPatterns entry) was being
+  recompiled from scratch once per file, for every memoized (name, depth) pair. The
+  memoization fix made the number of distinct lookups roughly linear in call-graph size, but
+  each lookup still scanned every file in the index, so the *count* of query compilations is
+  roughly (distinct (name, depth) pairs) × (files) × (patterns per lookup) — on this fixture,
+  back-of-envelope, on the order of 1,000 pairs × 236 files × ~3 patterns ≈ 700k+ compiles,
+  which lines up with the observed multi-minute wall time. Fixed by caching each distinct
+  compiled query pattern for the lifetime of one Trace() call (queryCache), so a pattern is
+  compiled once and reused — via qc.Exec(q, tree) — across every file/node it's matched
+  against, which is tree-sitter's own intended usage pattern (a compiled Query is stateless
+  with respect to which tree it runs against).
 constraints:
   - MUST NOT hang or exhibit worse than roughly linear-in-(routes × index size) behavior
     once discover's route detection actually finds a realistic number of routes (36 here) —
@@ -59,8 +76,6 @@ constraints:
 affected_scope:
   - pkg/discover/boundaries/boundaries.go
   - pkg/discover/boundaries/boundaries_test.go
-  - pkg/discover/routes/assembler.go
-  - cmd/linespec/main_stable.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-afd410b6
@@ -71,7 +86,10 @@ related:
   - prov-2026-ebc2266b  # Route-detection fix — landed alongside afd410b6; 0 routes had been masking this until both fixes were in place
   - prov-2026-4446307d  # Next.js + JS/TS support for discover — the still-open blueprint both hang bugs extend
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run LargeIndexWithUniqueNames -v
 associated_traces: []
 monitors: []
 tags:
