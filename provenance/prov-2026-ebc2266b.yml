@@ -1,6 +1,6 @@
 id: prov-2026-ebc2266b
 title: Next.js route.ts handlers not detected by discover (0 routes found)
-status: draft
+status: open
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -50,8 +50,12 @@ constraints:
     did not cover.
 affected_scope:
   - pkg/discover/routes/filesystem.go
+  - pkg/discover/routes/filesystem_test.go
   - pkg/discover/routes/assembler.go
   - pkg/discover/framework/builtin/**
+  - pkg/discover/boundaries/boundaries.go
+  - pkg/discover/boundaries/boundaries_test.go
+  - cmd/linespec/discover_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-4446307d
@@ -61,7 +65,16 @@ related:
   - prov-2026-4446307d  # Next.js + JS/TS support for discover — sets the route-detection constraint this bug is about
   - prov-2026-e5067371  # Next.js filesystem routing imprint — implements the (currently non-functional) route.ts matching
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/routes/filesystem_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/routes/... -run 'ScopedDirectlyToAppDir|RepoRootStillWorks|ArrowFunctionExport' -v
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run ArrowFunctionHandler -v
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run TestRunDiscover_Nextjs_ScopedToAppDir -v
 associated_traces: []
 monitors: []
 tags:
