@@ -2,9 +2,12 @@ package boundaries_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/livecodelife/linespec/v3/pkg/discover/boundaries"
 	"github.com/livecodelife/linespec/v3/pkg/discover/framework"
@@ -706,6 +709,38 @@ func TestTracer_TypeScript_Fetch(t *testing.T) {
 	}
 }
 
+// TestTracer_TypeScript_ArrowFunctionHandler reproduces the other route
+// export shape prov-2026-ebc2266b's constraint calls for:
+// `export const GET = async (req) => {}` must be traceable the same as a
+// `function_declaration` handler.
+func TestTracer_TypeScript_ArrowFunctionHandler(t *testing.T) {
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	writeFile(t, dir, "route.ts", `export const dynamic = "force-dynamic"
+
+export const GET = async (req: Request) => {
+	const rows = await db.query("SELECT * FROM users")
+	return Response.json(rows)
+}
+`)
+
+	hits, err := tr.Trace(context.Background(), dir, []routes.Route{
+		{Method: "GET", Path: "/api/users", HandlerRef: "GET"},
+	})
+	if err != nil {
+		t.Fatalf("Trace: %v", err)
+	}
+	h := findHit(t, hits["GET"], "postgresql", "both")
+	if h.Target != "users" {
+		t.Errorf("Target = %q; want %q", h.Target, "users")
+	}
+}
+
 // TestTracer_TypeScript_FileScopedHandlerRef reproduces the disambiguation
 // problem filesystem-convention routing introduces: every route.ts in a
 // Next.js project exports a function named "GET" (or "POST", ...), so a
@@ -753,6 +788,81 @@ func TestTracer_TypeScript_FileScopedHandlerRef(t *testing.T) {
 	ordersHits := hits[ordersFile+"::GET"]
 	if len(ordersHits) != 1 || ordersHits[0].Target != "orders" {
 		t.Errorf("expected exactly 1 hit targeting orders for %s, got %+v", ordersFile, ordersHits)
+	}
+}
+
+// TestTracer_TypeScript_NoExponentialBlowupOnNameCollisions reproduces
+// prov-2026-afd410b6: without memoization, traceHandler's recursive callee
+// walk redoes the same (function name, remaining depth) work every time it
+// is reached via a different call path. Real JS/TS codebases routinely
+// redefine short, common names (get, map, filter, parse, ...) across many
+// unrelated files/classes — findFuncBody matches by bare name only, with no
+// scoping — so this isn't a contrived pathology: it reproduced a multi-minute
+// hang on a real ~500-file Next.js repo, and this fixture (a handful of
+// "hub" files that all define the same 6 names, each calling 3 others,
+// crossed against several route handlers) is enough to make the
+// pre-memoization implementation take many seconds even at this small scale.
+// A regression here should show up as this test timing out, not just
+// getting slower — the growth is exponential in call-graph depth, not linear.
+func TestTracer_TypeScript_NoExponentialBlowupOnNameCollisions(t *testing.T) {
+	dir := t.TempDir()
+
+	names := []string{"get", "set", "map", "filter", "parse", "log"}
+	// Every hub file redefines every name, each calling a fixed set of 3
+	// other names — deliberately dense branching, not sparse/random, so the
+	// reproduction doesn't depend on a particular RNG seed's luck.
+	callees := map[string][3]string{
+		"get": {"set", "map", "filter"}, "set": {"map", "filter", "parse"},
+		"map": {"filter", "parse", "log"}, "filter": {"parse", "log", "get"},
+		"parse": {"log", "get", "set"}, "log": {"get", "set", "map"},
+	}
+	for i := 0; i < 12; i++ {
+		var body strings.Builder
+		for _, n := range names {
+			c := callees[n]
+			body.WriteString("export function " + n + "(x) { return " + c[0] + "(x) + " + c[1] + "(x) + " + c[2] + "(x) }\n")
+		}
+		writeFile(t, dir, fmt.Sprintf("hub%d.ts", i), body.String())
+	}
+
+	var calls strings.Builder
+	for _, n := range names {
+		calls.WriteString(n + "(1);\n")
+	}
+	writeFile(t, dir, "route.ts", `export async function GET(req: Request) {
+`+calls.String()+`	const rows = await db.query("SELECT * FROM entries")
+	return Response.json(rows)
+}
+`)
+
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	done := make(chan struct{})
+	var hits map[string][]boundaries.Hit
+	var traceErr error
+	go func() {
+		hits, traceErr = tr.Trace(context.Background(), dir, []routes.Route{
+			{Method: "GET", Path: "/api/entries", HandlerRef: "GET"},
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("Trace did not complete within 15s — exponential blowup on colliding names likely reintroduced")
+	}
+
+	if traceErr != nil {
+		t.Fatalf("Trace: %v", traceErr)
+	}
+	h := findHit(t, hits["GET"], "postgresql", "both")
+	if h.Target != "entries" {
+		t.Errorf("Target = %q; want %q", h.Target, "entries")
 	}
 }
 

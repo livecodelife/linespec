@@ -187,6 +187,97 @@ func TestAssemble_PagesRouter_BestEffort(t *testing.T) {
 	}
 }
 
+// TestAssemble_AppRouter_ScopedDirectlyToAppDir reproduces prov-2026-ebc2266b:
+// `discover --dir app --framework nextjs` scopes the scan directly to the App
+// Router root itself, but assembleFilesystemRoutes unconditionally joined
+// AppDir onto dir, looking for a nonexistent nested "app/app" and silently
+// finding zero routes.
+func TestAssemble_AppRouter_ScopedDirectlyToAppDir(t *testing.T) {
+	root := t.TempDir()
+	writeFSFile(t, root, "app/api/users/route.ts", `export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
+export async function GET(req: Request) {
+	return Response.json([])
+}
+`)
+
+	a, err := routes.New(nextjsFilesystemDesc())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	appDir := filepath.Join(root, "app")
+	groups, err := a.Assemble(context.Background(), appDir)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if len(groups) == 0 {
+		t.Fatal("expected routes when scanning app/ directly, got none")
+	}
+	g := findGroup(t, groups, "api/users")
+	r := findRoute(t, g.Routes, "GET", "/api/users")
+	if r.HandlerRef == "" {
+		t.Error("expected a non-empty HandlerRef")
+	}
+}
+
+// TestAssemble_AppRouter_RepoRootStillWorks guards against a regression in
+// the fix above: scanning the actual project root (the normal case, where
+// AppDir is a real subdirectory of dir) must keep working.
+func TestAssemble_AppRouter_RepoRootStillWorks(t *testing.T) {
+	root := t.TempDir()
+	writeFSFile(t, root, "app/api/users/route.ts", `export async function GET(req: Request) {
+	return Response.json([])
+}
+`)
+
+	a, err := routes.New(nextjsFilesystemDesc())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	groups, err := a.Assemble(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	g := findGroup(t, groups, "api/users")
+	findRoute(t, g.Routes, "GET", "/api/users")
+}
+
+// TestAssemble_AppRouter_ArrowFunctionExport reproduces the other route
+// export shape prov-2026-ebc2266b's constraint calls for:
+// `export const GET = async (req) => {}`, alongside sibling route-segment
+// config consts (dynamic/runtime/maxDuration) that must not be mistaken for
+// handlers.
+func TestAssemble_AppRouter_ArrowFunctionExport(t *testing.T) {
+	dir := t.TempDir()
+	writeFSFile(t, dir, "app/api/cron/ingest/route.ts", `import { NextResponse } from "next/server"
+
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+export const maxDuration = 300
+
+export const GET = async (request: Request) => {
+	return NextResponse.json({ ok: true })
+}
+`)
+
+	a, err := routes.New(nextjsFilesystemDesc())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	groups, err := a.Assemble(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	g := findGroup(t, groups, "api/cron/ingest")
+	if len(g.Routes) != 1 {
+		t.Fatalf("expected exactly 1 route (GET only, no route for the config consts), got %+v", g.Routes)
+	}
+	findRoute(t, g.Routes, "GET", "/api/cron/ingest")
+}
+
 // TestAssemble_MissingAppAndPagesDir verifies a project with neither app/
 // nor pages/ produces zero routes rather than an error — most real App
 // Router-only projects have no pages/ directory at all.

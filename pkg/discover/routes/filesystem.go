@@ -37,16 +37,14 @@ func assembleFilesystemRoutes(dir string, fr *framework.FilesystemRoutes) ([]Gro
 	}
 
 	if fr.AppDir != "" {
-		appRoot := filepath.Join(dir, fr.AppDir)
-		if dirExists(appRoot) {
+		if appRoot, ok := resolveRouterRoot(dir, fr.AppDir); ok {
 			if err := walkAppRouter(dir, appRoot, fr, addRoute); err != nil {
 				return nil, err
 			}
 		}
 	}
 	if fr.PagesDir != "" {
-		pagesRoot := filepath.Join(dir, fr.PagesDir)
-		if dirExists(pagesRoot) {
+		if pagesRoot, ok := resolveRouterRoot(dir, fr.PagesDir); ok {
 			if err := walkPagesRouter(dir, pagesRoot, addRoute); err != nil {
 				return nil, err
 			}
@@ -66,6 +64,25 @@ func assembleFilesystemRoutes(dir string, fr *framework.FilesystemRoutes) ([]Gro
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// resolveRouterRoot locates a configured router root (AppDir or PagesDir)
+// under the scanned directory. It tries dir/configuredName first — the
+// normal case, where dir is the project root and configuredName ("app",
+// "pages") is one of its subdirectories. If that doesn't exist, but dir's
+// own base name is configuredName, dir itself is treated as the router
+// root: `discover --dir app` scopes the scan directly to the App Router
+// root, so joining "app" onto it again would look for a nonexistent
+// "app/app" (prov-2026-ebc2266b).
+func resolveRouterRoot(dir, configuredName string) (root string, ok bool) {
+	joined := filepath.Join(dir, configuredName)
+	if dirExists(joined) {
+		return joined, true
+	}
+	if filepath.Base(dir) == configuredName && dirExists(dir) {
+		return dir, true
+	}
+	return "", false
 }
 
 // walkAppRouter walks the project root (rather than appRoot directly) so
@@ -162,25 +179,34 @@ func scanRouteFile(path, ext, urlPath string, methods map[string]bool) ([]Route,
 	}
 	pf := &parsedFile{lang: lang, src: src, root: root}
 
-	matches, err := pf.query(`(function_declaration name: (identifier) @name)`, nil)
-	if err != nil {
-		return nil, fmt.Errorf("scan %s: %w", path, err)
+	// Two export shapes both need matching: `export function GET(...) {}`
+	// and `export const GET = async (...) => {}` — both are common in real
+	// Next.js route.ts files (prov-2026-ebc2266b).
+	patterns := []string{
+		`(function_declaration name: (identifier) @name)`,
+		`(variable_declarator name: (identifier) @name value: (arrow_function))`,
 	}
 
 	var out []Route
 	seen := make(map[string]bool)
-	for _, m := range matches {
-		name, ok := m.captures["name"]
-		if !ok || !methods[name.text] || seen[name.text] {
-			continue
+	for _, pattern := range patterns {
+		matches, err := pf.query(pattern, nil)
+		if err != nil {
+			return nil, fmt.Errorf("scan %s: %w", path, err)
 		}
-		seen[name.text] = true
-		out = append(out, Route{
-			Method:     name.text,
-			Path:       urlPath,
-			HandlerRef: path + "::" + name.text,
-			Source:     SourceLocation{File: path, Line: name.row + 1, Column: name.col},
-		})
+		for _, m := range matches {
+			name, ok := m.captures["name"]
+			if !ok || !methods[name.text] || seen[name.text] {
+				continue
+			}
+			seen[name.text] = true
+			out = append(out, Route{
+				Method:     name.text,
+				Path:       urlPath,
+				HandlerRef: path + "::" + name.text,
+				Source:     SourceLocation{File: path, Line: name.row + 1, Column: name.col},
+			})
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Method < out[j].Method })
 	return out, nil
