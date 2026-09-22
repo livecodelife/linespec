@@ -1,6 +1,6 @@
 id: prov-2026-afd410b6
 title: discover hangs indefinitely scanning a real Next.js repo root
-status: draft
+status: open
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -25,6 +25,18 @@ intent: |
   doesn't reproduce with any single directory in isolation. The exact mechanism (call-graph
   tracing, symbol/import cross-referencing, or record grouping) was not identified; this
   record documents the reproduction for whoever picks it up to profile.
+
+  Root cause identified: pkg/discover/boundaries's Tracer.traceHandler has no memoization —
+  callStack only guards against a genuine cycle within one DFS path, not against revisiting
+  the same function from an unrelated sibling branch. JS/TS code routinely redefines short,
+  common names (get, map, filter, parse, ...) across many unrelated files/classes, and
+  findFuncBody matches by bare name only with no scoping, so at the default call-graph depth
+  of 3 this becomes exponential: reproduced a multi-minute-plus hang with as few as 40
+  synthetic files sharing 8 common names. This explains why single-directory runs never hit
+  it (fewer files means far fewer name collisions to fan out across) and why moving
+  node_modules/.next aside didn't help (the blowup is driven by the app's own source files'
+  name collisions, not dependency/build volume). Fixed by memoizing each unscoped (function
+  name, remaining depth) result the first time it's computed.
 constraints:
   - MUST NOT hang or exhibit worse than roughly linear-in-file-count behavior when
     discover's framework-driven pipeline runs across a repo root containing multiple
@@ -39,11 +51,8 @@ constraints:
     imports between them) — the existing associated_specs for prov-2026-4446307d and its
     imprints only exercise small/single-directory fixtures and did not catch this.
 affected_scope:
-  - cmd/linespec/main_stable.go
-  - pkg/discover/routes/**
-  - pkg/discover/boundaries/**
-  - pkg/discover/framework/**
-  - pkg/discover/symbols/**
+  - pkg/discover/boundaries/boundaries.go
+  - pkg/discover/boundaries/boundaries_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-4446307d
@@ -54,7 +63,10 @@ related:
   - prov-2026-e5067371  # Next.js filesystem routing imprint — the route-discovery half of the pipeline that hangs
   - prov-2026-696accfe  # TypeScript language-support imprint — the symbol/boundary half of the pipeline that hangs
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run NoExponentialBlowupOnNameCollisions -v
 associated_traces: []
 monitors: []
 tags:
