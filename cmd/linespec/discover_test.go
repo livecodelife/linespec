@@ -116,6 +116,42 @@ func TestRunDiscover_Nextjs_EndToEnd(t *testing.T) {
 	}
 }
 
+// TestRunDiscover_Nextjs_ScopedToAppDir reproduces prov-2026-ebc2266b's exact
+// repro command: `discover --dir app --framework nextjs`, scoping the scan
+// directly to the App Router root itself rather than the project root.
+func TestRunDiscover_Nextjs_ScopedToAppDir(t *testing.T) {
+	dir := writeNextjsProject(t)
+	appDir := filepath.Join(dir, "app")
+
+	cfg := &provenance.ProvenanceConfig{Dir: "provenance", Enforcement: "warn"}
+	opts := discoverOptions{Dir: appDir, Framework: "nextjs", Format: "table"}
+
+	runDiscover(opts, cfg, appDir)
+
+	provDir := filepath.Join(appDir, "provenance")
+	entries, err := os.ReadDir(provDir)
+	if err != nil {
+		t.Fatalf("read provenance dir: %v", err)
+	}
+
+	sawUsers := false
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(provDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "app/api/users/route.ts") {
+			sawUsers = true
+		}
+	}
+	if !sawUsers {
+		t.Fatalf("expected a record covering app/api/users/route.ts when scoped directly to app/, found none among %d records", len(entries))
+	}
+}
+
 // TestScanAgnosticFiles_RespectsGitignore reproduces prov-2026-f0b20266: a
 // gitignored build output directory (.next/, as seen on a real Next.js
 // project) is not in the hardcoded agnostic-scan denylist, so it used to be

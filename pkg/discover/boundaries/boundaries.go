@@ -88,19 +88,33 @@ func (t *Tracer) Trace(ctx context.Context, dir string, rs []routes.Route) (map[
 
 	out := make(map[string][]Hit)
 	visited := make(map[string]bool)
+	// memo caches unscoped (fileHint == "") callee results by (name, remaining
+	// depth), shared across every route traced below — see traceHandler's
+	// doc comment for why this is required, not just an optimization.
+	memo := make(map[memoKey][]Hit)
 	for _, r := range rs {
 		if r.HandlerRef == "" || visited[r.HandlerRef] {
 			continue
 		}
 		visited[r.HandlerRef] = true
 		fileHint, ref := splitHandlerRef(r.HandlerRef)
-		hits, err := t.traceHandler(ref, fileHint, idx, t.depth, make(map[string]bool))
+		hits, err := t.traceHandler(ref, fileHint, idx, t.depth, make(map[string]bool), memo)
 		if err != nil {
 			return nil, fmt.Errorf("trace %q: %w", r.HandlerRef, err)
 		}
 		out[r.HandlerRef] = hits
 	}
 	return out, nil
+}
+
+// memoKey identifies one memoized traceHandler call: a function name at a
+// given remaining call-graph depth. Depth is part of the key because the
+// same function reached with less remaining depth explores strictly less of
+// its own call graph — reusing a shallower result for a deeper request
+// would silently drop hits.
+type memoKey struct {
+	name  string
+	depth int
 }
 
 // parsedFile holds a parsed source file for repeated querying.
@@ -143,19 +157,42 @@ func (t *Tracer) buildIndex(ctx context.Context, dir string) (*fileIndex, error)
 }
 
 // traceHandler finds all boundary hits for a handler reference, walking the call
-// graph up to depth levels. callStack prevents recursion on the same function.
+// graph up to depth levels. callStack prevents recursion on the same function
+// within one DFS path (a genuine cycle); it does NOT prevent revisiting the
+// same function from an unrelated sibling branch, so without memo this
+// function's own work is exponential in call-graph depth whenever a name is
+// reached by more than one path — normal for JS/TS, where single-word method/
+// property names (get, map, filter, parse, ...) routinely collide across
+// unrelated definitions in a codebase of any real size (prov-2026-afd410b6:
+// reproduced a multi-minute hang with as few as 40 files sharing 8 common
+// names at the default depth of 3). memo caches each unscoped (name, depth)
+// result the first time it's computed and reuses it for every later branch
+// that reaches the same pair, turning that exponential blowup into work
+// roughly proportional to the number of distinct (name, depth) pairs.
+//
 // fileHint, when non-empty, restricts the search for handlerRef itself to that
 // one file — needed for filesystem-convention routing (prov-2026-4446307d),
 // where every route.ts in a Next.js project exports a function with the same
 // literal name ("GET", "POST", ...), so a bare name search across the whole
 // index would incorrectly merge every route's hits together. Recursive callee
 // lookups are never restricted this way: a handler's own helper functions can
-// live in any file, exactly as they do for Go and Ruby today.
-func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth int, callStack map[string]bool) ([]Hit, error) {
+// live in any file, exactly as they do for Go and Ruby today. A fileHint-scoped
+// call is never memoized: memo is keyed by bare name only, and caching a
+// file-scoped result under that key would let an unrelated file's
+// identically-named handler wrongly reuse it.
+func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth int, callStack map[string]bool, memo map[memoKey][]Hit) ([]Hit, error) {
 	funcName := extractFuncName(handlerRef, t.desc.Language)
 	if funcName == "" || callStack[funcName] {
 		return nil, nil
 	}
+
+	key := memoKey{name: funcName, depth: depth}
+	if fileHint == "" {
+		if cached, ok := memo[key]; ok {
+			return cached, nil
+		}
+	}
+
 	callStack[funcName] = true
 	defer delete(callStack, funcName)
 
@@ -174,7 +211,7 @@ func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth
 				if callStack[callee] {
 					continue
 				}
-				sub, err := t.traceHandler(callee, "", idx, depth-1, callStack)
+				sub, err := t.traceHandler(callee, "", idx, depth-1, callStack, memo)
 				if err != nil {
 					return nil, err
 				}
@@ -182,7 +219,11 @@ func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth
 			}
 		}
 	}
-	return deduplicateHits(hits), nil
+	result := deduplicateHits(hits)
+	if fileHint == "" {
+		memo[key] = result
+	}
+	return result, nil
 }
 
 // splitHandlerRef splits a "file::name"-form HandlerRef (used by
@@ -256,6 +297,9 @@ func (t *Tracer) funcDefPatterns(name string) []string {
 		return []string{
 			fmt.Sprintf(`(function_declaration name: (identifier) @name (#eq? @name "%s") body: (statement_block) @body)`, name),
 			fmt.Sprintf(`(method_definition name: (property_identifier) @name (#eq? @name "%s") body: (statement_block) @body)`, name),
+			// export const GET = async (req) => { ... } — the other common
+			// Next.js route-handler export shape (prov-2026-ebc2266b).
+			fmt.Sprintf(`(variable_declarator name: (identifier) @name (#eq? @name "%s") value: (arrow_function body: (statement_block) @body))`, name),
 		}
 	default:
 		return nil
