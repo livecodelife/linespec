@@ -10,6 +10,112 @@ import (
 	"github.com/livecodelife/linespec/v3/pkg/provenance"
 )
 
+// writeNextjsProject lays out a minimal Next.js App Router project: a
+// package.json with a "next" dependency (for auto-detection), one API route
+// with a DB read and an outbound fetch, one dynamic-segment route, and one
+// page — the shapes described in prov-2026-4446307d.
+func writeNextjsProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"package.json": `{"name": "app", "dependencies": {"next": "^14.2.0"}}`,
+		"app/api/users/route.ts": `export async function GET(req: Request) {
+	const rows = await db.query("SELECT * FROM users")
+	return Response.json(rows)
+}
+`,
+		"app/api/users/[id]/route.ts": `export async function GET(req: Request) {
+	const res = await fetch("https://example.com/profile")
+	return Response.json(await res.json())
+}
+`,
+		"app/dashboard/page.tsx": `export default function Page() { return null }
+`,
+	}
+	for rel, content := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// TestRunDiscover_Nextjs_EndToEnd exercises the full discover pipeline —
+// auto-detection, filesystem route discovery, and boundary tracing — against
+// a synthetic Next.js project, per prov-2026-4446307d's constraints.
+func TestRunDiscover_Nextjs_EndToEnd(t *testing.T) {
+	dir := writeNextjsProject(t)
+
+	cfg := &provenance.ProvenanceConfig{Dir: "provenance", Enforcement: "warn"}
+	opts := discoverOptions{Dir: dir, Format: "table"}
+
+	runDiscover(opts, cfg, dir)
+
+	provDir := filepath.Join(dir, "provenance")
+	entries, err := os.ReadDir(provDir)
+	if err != nil {
+		t.Fatalf("read provenance dir: %v", err)
+	}
+
+	var recordFiles []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			recordFiles = append(recordFiles, e.Name())
+		}
+	}
+	if len(recordFiles) == 0 {
+		t.Fatal("expected at least one blueprint record for the Next.js project, got none")
+	}
+
+	found := map[string]bool{"users": false, "id": false, "dashboard": false}
+	for _, name := range recordFiles {
+		data, err := os.ReadFile(filepath.Join(provDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(data)
+		switch {
+		case strings.Contains(content, "app/api/users/route.ts"):
+			found["users"] = true
+		case strings.Contains(content, "app/api/users/[id]/route.ts"):
+			found["id"] = true
+		case strings.Contains(content, "app/dashboard/page.tsx"):
+			found["dashboard"] = true
+		}
+	}
+	for group, ok := range found {
+		if !ok {
+			t.Errorf("expected a record covering %q, found none among: %v", group, recordFiles)
+		}
+	}
+
+	specsDir := filepath.Join(dir, "linespecs")
+	specEntries, err := os.ReadDir(specsDir)
+	if err != nil {
+		t.Fatalf("read linespecs dir: %v", err)
+	}
+	var allSpecs strings.Builder
+	for _, e := range specEntries {
+		data, err := os.ReadFile(filepath.Join(specsDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		allSpecs.Write(data)
+	}
+	specs := allSpecs.String()
+	if !strings.Contains(specs, "WRITE:POSTGRESQL") && !strings.Contains(specs, "READ:POSTGRESQL") {
+		t.Errorf("expected a generated .linespec stub with a postgresql EXPECT for the DB read, got:\n%s", specs)
+	}
+	if !strings.Contains(specs, "HTTP:") {
+		t.Errorf("expected a generated .linespec stub with an HTTP EXPECT for the fetch() call, got:\n%s", specs)
+	}
+}
+
 // TestScanAgnosticFiles_RespectsGitignore reproduces prov-2026-f0b20266: a
 // gitignored build output directory (.next/, as seen on a real Next.js
 // project) is not in the hardcoded agnostic-scan denylist, so it used to be

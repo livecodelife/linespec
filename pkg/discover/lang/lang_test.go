@@ -19,6 +19,8 @@ func TestDetect(t *testing.T) {
 		{"web/App.jsx", lang.JavaScript, true},
 		{"web/module.mjs", lang.JavaScript, true},
 		{"scripts/build.cjs", lang.JavaScript, true},
+		{"app/api/users/route.ts", lang.TypeScript, true},
+		{"app/dashboard/page.tsx", lang.TypeScript, true},
 		{"README.md", "", false},
 		{"Makefile", "", false},
 	}

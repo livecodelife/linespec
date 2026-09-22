@@ -162,6 +162,87 @@ class Handler {
 	}
 }
 
+// TestExtract_JavaScript_ExportedDeclarations guards against the bug found
+// while adding TypeScript support (prov-2026-4446307d): the symbol queries
+// were anchored directly under program, so an exported top-level
+// declaration — wrapped in an export_statement node — was silently missed.
+// Every Next.js route/page export is of this exact shape.
+func TestExtract_JavaScript_ExportedDeclarations(t *testing.T) {
+	src := []byte(`
+export function handler() {}
+export class Controller {}
+`)
+	f, err := symbols.Extract(context.Background(), lang.JavaScript, src)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if !hasSymbol(f, "handler", symbols.KindFunction) {
+		t.Errorf("expected exported function symbol %q, got %+v", "handler", f.Symbols)
+	}
+	if !hasSymbol(f, "Controller", symbols.KindClass) {
+		t.Errorf("expected exported class symbol %q, got %+v", "Controller", f.Symbols)
+	}
+}
+
+func TestExtract_TypeScript(t *testing.T) {
+	src := []byte(`
+import { NextRequest } from "next/server"
+import db from "./db"
+
+interface User {
+	id: number
+}
+
+type Handler = (req: NextRequest) => Promise<Response>
+
+export async function GET(req: NextRequest) {
+	return db.query("SELECT * FROM users")
+}
+
+export class Repository {}
+`)
+	f, err := symbols.Extract(context.Background(), lang.TypeScript, src)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if !hasSymbol(f, "GET", symbols.KindFunction) {
+		t.Errorf("expected exported function symbol %q, got %+v", "GET", f.Symbols)
+	}
+	if !hasSymbol(f, "Repository", symbols.KindClass) {
+		t.Errorf("expected exported class symbol %q, got %+v", "Repository", f.Symbols)
+	}
+	if !hasSymbol(f, "User", symbols.KindType) {
+		t.Errorf("expected interface symbol %q, got %+v", "User", f.Symbols)
+	}
+	if !hasSymbol(f, "Handler", symbols.KindType) {
+		t.Errorf("expected type alias symbol %q, got %+v", "Handler", f.Symbols)
+	}
+	if !hasImport(f, "next/server") {
+		t.Errorf("expected import %q, got %+v", "next/server", f.Imports)
+	}
+	if !hasImport(f, "./db") {
+		t.Errorf("expected import %q, got %+v", "./db", f.Imports)
+	}
+}
+
+// TestExtract_TypeScript_TSX verifies the .tsx-specific case: JSX syntax
+// parses fine under the shared TypeScript Language, since it's always
+// backed by the TSX grammar.
+func TestExtract_TypeScript_TSX(t *testing.T) {
+	src := []byte(`
+export default function Page() {
+	return <div>hello</div>
+}
+`)
+	f, err := symbols.Extract(context.Background(), lang.TypeScript, src)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if !hasSymbol(f, "Page", symbols.KindFunction) {
+		t.Errorf("expected function symbol %q, got %+v", "Page", f.Symbols)
+	}
+}
+
 func TestExtract_Unsupported(t *testing.T) {
 	if _, err := symbols.Extract(context.Background(), lang.Language("rust"), []byte("fn main() {}")); err == nil {
 		t.Fatal("expected error for unsupported language, got nil")
@@ -169,7 +250,7 @@ func TestExtract_Unsupported(t *testing.T) {
 }
 
 func TestSupported(t *testing.T) {
-	for _, l := range []lang.Language{lang.Go, lang.Ruby, lang.Python, lang.JavaScript} {
+	for _, l := range []lang.Language{lang.Go, lang.Ruby, lang.Python, lang.JavaScript, lang.TypeScript} {
 		if !symbols.Supported(l) {
 			t.Errorf("expected %q to be supported", l)
 		}
