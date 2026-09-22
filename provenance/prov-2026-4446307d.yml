@@ -1,0 +1,76 @@
+id: prov-2026-4446307d
+title: Next.js + JavaScript/TypeScript support for discover
+status: draft
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  discover currently only detects Go, Ruby, and Python (pkg/discover/lang/lang.go maps only
+  .go/.rb/.py), and only ships framework descriptions for Chi, Rails, and Sinatra
+  (prov-2026-c60ec2ad) — all registration-call-based routing. A file with an unrecognized
+  extension is skipped outright by both the framework-driven pipeline and framework-agnostic
+  mode (prov-2026-a5eb1192), not even reported as unclassified. Verified against a real
+  Next.js 16 App Router codebase (linq-lens): dry-run against app/, components/, lib/,
+  scripts/, and tests/ each returned zero draft records, because none of those files are
+  .go/.rb/.py.
+
+  This blueprint adds (1) TypeScript/JavaScript as a supported language for symbol
+  extraction — tree-sitter already ships production-grade TS/JS grammars, per
+  LINESPEC_DISCOVER.md's own parsing-infrastructure rationale for choosing tree-sitter over
+  per-language native tooling — and (2) a Next.js framework description so App Router (and
+  Pages Router) projects get real route-driven discovery instead of only directory grouping.
+
+  Next.js's routing is filesystem-convention-based, not registration-call-based like
+  Chi/Rails/Sinatra: a route is `app/**/route.ts` exporting `GET`/`POST`/etc., or
+  `app/**/page.tsx` for a page — there is no `r.Post(...)` or `get '/path' do` call site for
+  a tree-sitter route query to match. The route/middleware/group query shape LineSpec's
+  framework description format already assumes (see LINESPEC_DISCOVER.md's "Route queries")
+  is built around call-site matching, so Next.js needs a filesystem-convention detection mode
+  alongside (or instead of) query-based route matching.
+constraints:
+  - MUST add .ts/.tsx/.js/.jsx to pkg/discover/lang/lang.go's extension map, with tree-sitter
+    TypeScript/JavaScript grammars wired into symbols.Supported() and the per-language
+    dispatch in pkg/discover/boundaries and pkg/discover/routes/assembler.go (currently
+    Go/Ruby only).
+  - MUST NOT regress existing Go/Ruby/Python detection or the Chi/Rails/Sinatra
+    framework-driven pipeline — the same non-regression bar prov-2026-a5eb1192 set for its
+    own additions.
+  - MUST add a Next.js framework description (e.g.
+    pkg/discover/framework/builtin/nextjs.yml) that derives routes from the app/ (and
+    pages/) directory filesystem convention rather than from a route-registration
+    call-site query, since Next.js has no such call site.
+  - MUST detect App Router route handlers (route.ts exporting
+    GET/POST/PUT/PATCH/DELETE) and pages (page.tsx); SHOULD cover the legacy Pages
+    Router (pages/**/*.tsx, pages/api/**/*.ts) where practical.
+  - MUST auto-detect Next.js from `next` in package.json dependencies, consistent with the
+    existing dependency-manifest detection rules (go.mod/Gemfile) LINESPEC_DISCOVER.md
+    already documents.
+  - Protocol boundary tracing for JS/TS SHOULD cover at least one common DB client and
+    outbound fetch/HTTP calls, mirroring the Go/Ruby boundary query pattern in
+    LINESPEC_DISCOVER.md Phase 2 — exact library coverage is an implementation decision, not
+    a hard requirement of this blueprint.
+  - Grouping hints for Next.js SHOULD cluster by route segment/directory (the natural App
+    Router unit), not by arbitrary file directory the way framework-agnostic mode does.
+affected_scope:
+  - pkg/discover/lang/**
+  - pkg/discover/symbols/**
+  - pkg/discover/routes/**
+  - pkg/discover/boundaries/**
+  - pkg/discover/framework/builtin/nextjs.yml
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c60ec2ad  # Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra) — same pattern, new framework
+  - prov-2026-a5eb1192  # Framework-agnostic discover — the language-detection gap this closes for JS/TS
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - nextjs
+  - typescript
+  - javascript
+  - framework-descriptions
