@@ -866,6 +866,88 @@ func TestTracer_TypeScript_NoExponentialBlowupOnNameCollisions(t *testing.T) {
 	}
 }
 
+// TestTracer_TypeScript_LargeIndexWithUniqueNames reproduces prov-2026-330a7fc5:
+// prov-2026-afd410b6's memoization fix made the number of distinct (function
+// name, remaining depth) lookups roughly linear in call-graph size, but each
+// lookup still recompiled its tree-sitter query pattern from scratch for
+// every single file in the index — on a real ~236-file/36-route Next.js
+// project that constant factor alone was enough to look hung again (2+
+// minutes with no progress), even with zero name collisions at all (unlike
+// prov-2026-afd410b6's fixture, every function name here is unique). This
+// fixture is a smaller, CI-sized version of the same shape: many files, each
+// with its own uniquely-named functions, crossed against several routes.
+func TestTracer_TypeScript_LargeIndexWithUniqueNames(t *testing.T) {
+	dir := t.TempDir()
+
+	const numFiles = 80
+	const numRoutes = 15
+	var allNames []string
+	for i := 0; i < numFiles; i++ {
+		for j := 0; j < 3; j++ {
+			allNames = append(allNames, fmt.Sprintf("fn_%d_%d", i, j))
+		}
+	}
+	for i := 0; i < numFiles; i++ {
+		var body strings.Builder
+		for j := 0; j < 3; j++ {
+			name := fmt.Sprintf("fn_%d_%d", i, j)
+			c1 := allNames[(i*3+j+1)%len(allNames)]
+			c2 := allNames[(i*3+j+2)%len(allNames)]
+			body.WriteString(fmt.Sprintf("export function %s(x) { return %s(x) + %s(x) }\n", name, c1, c2))
+		}
+		writeFile(t, dir, fmt.Sprintf("mod%d.ts", i), body.String())
+	}
+
+	var routeList []routes.Route
+	for r := 0; r < numRoutes; r++ {
+		var calls strings.Builder
+		for k := 0; k < 5; k++ {
+			calls.WriteString(allNames[(r*5+k)%len(allNames)] + "(1);\n")
+		}
+		handler := fmt.Sprintf("Handler%d", r)
+		writeFile(t, dir, fmt.Sprintf("route%d.ts", r), fmt.Sprintf(`export async function %s(req: Request) {
+%s	const rows = await db.query("SELECT * FROM r%d")
+	return Response.json(rows)
+}
+`, handler, calls.String(), r))
+		routeList = append(routeList, routes.Route{Method: "GET", Path: fmt.Sprintf("/r%d", r), HandlerRef: handler})
+	}
+
+	desc := &framework.Description{Name: "nextjs", Language: "typescript", BoundaryQueries: nextjsBoundaryQueries()}
+	tr, err := boundaries.New(desc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	done := make(chan struct{})
+	var hits map[string][]boundaries.Hit
+	var traceErr error
+	go func() {
+		hits, traceErr = tr.Trace(context.Background(), dir, routeList)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Trace did not complete within 10s on an 80-file/15-route index with unique names — query-recompilation cost likely reintroduced")
+	}
+
+	if traceErr != nil {
+		t.Fatalf("Trace: %v", traceErr)
+	}
+	if len(hits) != numRoutes {
+		t.Errorf("expected %d handler entries, got %d", numRoutes, len(hits))
+	}
+	for r := 0; r < numRoutes; r++ {
+		h := findHit(t, hits[fmt.Sprintf("Handler%d", r)], "postgresql", "both")
+		want := fmt.Sprintf("r%d", r)
+		if h.Target != want {
+			t.Errorf("Handler%d: Target = %q; want %q", r, h.Target, want)
+		}
+	}
+}
+
 func TestTracer_PackageQualifiedHandlerRef(t *testing.T) {
 	desc := loadFramework(t, "chi")
 	tr, err := boundaries.New(desc)

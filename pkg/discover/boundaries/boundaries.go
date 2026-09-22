@@ -86,6 +86,13 @@ func (t *Tracer) Trace(ctx context.Context, dir string, rs []routes.Route) (map[
 		return nil, err
 	}
 
+	// cache compiles each distinct tree-sitter query pattern once and reuses
+	// it across every file/node it's run against for the rest of this Trace
+	// call, instead of recompiling from scratch on every single call — see
+	// its doc comment for why this matters, not just as a micro-optimization.
+	cache := newQueryCache(t.lang)
+	defer cache.close()
+
 	out := make(map[string][]Hit)
 	visited := make(map[string]bool)
 	// memo caches unscoped (fileHint == "") callee results by (name, remaining
@@ -98,13 +105,58 @@ func (t *Tracer) Trace(ctx context.Context, dir string, rs []routes.Route) (map[
 		}
 		visited[r.HandlerRef] = true
 		fileHint, ref := splitHandlerRef(r.HandlerRef)
-		hits, err := t.traceHandler(ref, fileHint, idx, t.depth, make(map[string]bool), memo)
+		hits, err := t.traceHandler(ref, fileHint, idx, t.depth, make(map[string]bool), memo, cache)
 		if err != nil {
 			return nil, fmt.Errorf("trace %q: %w", r.HandlerRef, err)
 		}
 		out[r.HandlerRef] = hits
 	}
 	return out, nil
+}
+
+// queryCache compiles each distinct tree-sitter query pattern at most once
+// and reuses the compiled *sitter.Query across every file/node it's matched
+// against for the rest of one Trace call.
+//
+// Before this, queryForNode/queryNode each called sitter.NewQuery fresh on
+// every invocation — compiling a query is not cheap, and the same pattern
+// (a boundary query, the static callee pattern, or one function's
+// funcDefPatterns entry reused across every file in the index) was being
+// recompiled from scratch for every file × every memoized (name, depth)
+// pair. prov-2026-afd410b6's memoization fix made the number of distinct
+// lookups roughly linear in call-graph size, but each lookup still scanned
+// every file in the index — so on a real ~236-file project with ~36 routes
+// (prov-2026-330a7fc5), that constant factor alone (recompiling on the
+// order of hundreds of thousands of times) was enough to make discover look
+// hung again, well after the exponential-blowup mechanism was fixed.
+type queryCache struct {
+	lang    *sitter.Language
+	queries map[string]*sitter.Query
+}
+
+func newQueryCache(lang *sitter.Language) *queryCache {
+	return &queryCache{lang: lang, queries: make(map[string]*sitter.Query)}
+}
+
+func (c *queryCache) get(pattern string) (*sitter.Query, error) {
+	if q, ok := c.queries[pattern]; ok {
+		return q, nil
+	}
+	q, err := sitter.NewQuery([]byte(pattern), c.lang)
+	if err != nil {
+		return nil, err
+	}
+	c.queries[pattern] = q
+	return q, nil
+}
+
+// close releases every compiled query. Call once, after the cache is done
+// being used — a *sitter.Query is safe to run against any number of trees,
+// so nothing needs releasing until the whole Trace call is finished with it.
+func (c *queryCache) close() {
+	for _, q := range c.queries {
+		q.Close()
+	}
 }
 
 // memoKey identifies one memoized traceHandler call: a function name at a
@@ -180,7 +232,7 @@ func (t *Tracer) buildIndex(ctx context.Context, dir string) (*fileIndex, error)
 // call is never memoized: memo is keyed by bare name only, and caching a
 // file-scoped result under that key would let an unrelated file's
 // identically-named handler wrongly reuse it.
-func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth int, callStack map[string]bool, memo map[memoKey][]Hit) ([]Hit, error) {
+func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth int, callStack map[string]bool, memo map[memoKey][]Hit, cache *queryCache) ([]Hit, error) {
 	funcName := extractFuncName(handlerRef, t.desc.Language)
 	if funcName == "" || callStack[funcName] {
 		return nil, nil
@@ -201,17 +253,17 @@ func (t *Tracer) traceHandler(handlerRef, fileHint string, idx *fileIndex, depth
 		if fileHint != "" && pf.path != fileHint {
 			continue
 		}
-		body := t.findFuncBody(funcName, pf)
+		body := t.findFuncBody(funcName, pf, cache)
 		if body == nil {
 			continue
 		}
-		hits = append(hits, t.runBoundaryQueries(body, pf)...)
+		hits = append(hits, t.runBoundaryQueries(body, pf, cache)...)
 		if depth > 0 {
-			for _, callee := range t.findCallees(body, pf) {
+			for _, callee := range t.findCallees(body, pf, cache) {
 				if callStack[callee] {
 					continue
 				}
-				sub, err := t.traceHandler(callee, "", idx, depth-1, callStack, memo)
+				sub, err := t.traceHandler(callee, "", idx, depth-1, callStack, memo, cache)
 				if err != nil {
 					return nil, err
 				}
@@ -268,9 +320,9 @@ func extractFuncName(ref, language string) string {
 }
 
 // findFuncBody returns the body node of the named function/method in pf, or nil.
-func (t *Tracer) findFuncBody(name string, pf *parsedFile) *sitter.Node {
+func (t *Tracer) findFuncBody(name string, pf *parsedFile, cache *queryCache) *sitter.Node {
 	for _, pattern := range t.funcDefPatterns(name) {
-		if node := t.queryForNode(pattern, "body", pf); node != nil {
+		if node := t.queryForNode(pattern, "body", pf, cache); node != nil {
 			return node
 		}
 	}
@@ -306,14 +358,14 @@ func (t *Tracer) funcDefPatterns(name string) []string {
 	}
 }
 
-// queryForNode compiles pattern, runs it against pf.root, and returns the first
-// node captured under captureName, or nil if no match.
-func (t *Tracer) queryForNode(pattern, captureName string, pf *parsedFile) *sitter.Node {
-	q, err := sitter.NewQuery([]byte(pattern), t.lang)
+// queryForNode runs pattern (fetched from cache, compiling it on first use)
+// against pf.root and returns the first node captured under captureName, or
+// nil if no match.
+func (t *Tracer) queryForNode(pattern, captureName string, pf *parsedFile, cache *queryCache) *sitter.Node {
+	q, err := cache.get(pattern)
 	if err != nil {
 		return nil
 	}
-	defer q.Close()
 
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
@@ -336,10 +388,10 @@ func (t *Tracer) queryForNode(pattern, captureName string, pf *parsedFile) *sitt
 
 // runBoundaryQueries runs all framework boundary queries against the subtree rooted
 // at node and returns the resulting hits.
-func (t *Tracer) runBoundaryQueries(node *sitter.Node, pf *parsedFile) []Hit {
+func (t *Tracer) runBoundaryQueries(node *sitter.Node, pf *parsedFile, cache *queryCache) []Hit {
 	var hits []Hit
 	for _, bq := range t.desc.BoundaryQueries {
-		matches := t.queryNode(bq.Pattern, node, pf)
+		matches := t.queryNode(bq.Pattern, node, pf, cache)
 		for _, caps := range matches {
 			hits = append(hits, t.capsToHit(caps, bq))
 		}
@@ -390,12 +442,12 @@ func (t *Tracer) resolveTarget(raw, protocol string) string {
 
 // findCallees returns all function/method names called from within node.
 // These are candidates for recursive call graph traversal.
-func (t *Tracer) findCallees(node *sitter.Node, pf *parsedFile) []string {
+func (t *Tracer) findCallees(node *sitter.Node, pf *parsedFile, cache *queryCache) []string {
 	pattern := t.calleePattern()
 	if pattern == "" {
 		return nil
 	}
-	matches := t.queryNode(pattern, node, pf)
+	matches := t.queryNode(pattern, node, pf, cache)
 	seen := make(map[string]bool)
 	var callees []string
 	for _, caps := range matches {
@@ -422,14 +474,14 @@ func (t *Tracer) calleePattern() string {
 	}
 }
 
-// queryNode runs pattern against the subtree rooted at node and returns all matches
-// as maps of capture name → text.
-func (t *Tracer) queryNode(pattern string, node *sitter.Node, pf *parsedFile) []map[string]string {
-	q, err := sitter.NewQuery([]byte(pattern), t.lang)
+// queryNode runs pattern (fetched from cache, compiling it on first use)
+// against the subtree rooted at node and returns all matches as maps of
+// capture name → text.
+func (t *Tracer) queryNode(pattern string, node *sitter.Node, pf *parsedFile, cache *queryCache) []map[string]string {
+	q, err := cache.get(pattern)
 	if err != nil {
 		return nil
 	}
-	defer q.Close()
 
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
