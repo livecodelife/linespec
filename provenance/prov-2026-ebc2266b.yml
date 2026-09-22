@@ -1,0 +1,71 @@
+id: prov-2026-ebc2266b
+title: Next.js route.ts handlers not detected by discover (0 routes found)
+status: draft
+created_at: "2026-09-22"
+author: caleb.cowen@linq.com
+intent: |
+  prov-2026-4446307d's constraint "MUST detect App Router route handlers (route.ts exporting
+  GET/POST/PUT/PATCH/DELETE) and pages (page.tsx)" is not met yet. Verified against linq-lens
+  (real Next.js 16 App Router repo): `discover --dir app --framework nextjs --dry-run`
+  completes and prints "Scanned: app (nextjs/typescript)" but reports "0 route(s), 0 protocol
+  boundary hit(s)" across all 38 grouped modules, even though real route handlers exist, e.g.:
+
+    app/api/cron/ingest/route.ts:37   export async function GET(request: Request) {
+    app/api/search/users/route.ts:20  export async function GET(request: Request) {
+    app/auth/callback/route.ts:16     export async function GET(request: Request) {
+    app/auth/signout/route.ts:6       export async function POST(request: Request) {
+
+  Each of those files also exports unrelated route-segment config constants ahead of the
+  handler (`export const dynamic = "force-dynamic"`, `export const runtime = "nodejs"`,
+  `export const maxDuration = 300`) — plausible distractors if route detection is matching
+  on "the file is named route.ts" without correctly isolating the exported
+  GET/POST/PUT/PATCH/DELETE function declarations from those sibling exports.
+
+  Because 0 routes are found, Phase 2 protocol boundary tracing and Phase 3 stub generation
+  never have anything to run against either — the whole point of the Next.js framework
+  description (route-driven discovery instead of directory-only grouping, per
+  prov-2026-4446307d intent) is currently inert. Framework-agnostic mode was already
+  fine before this blueprint; this bug is about the framework-driven path it added.
+constraints:
+  - MUST detect an App Router route handler as a file matching app/**/route.ts (or .js) that
+    exports one or more of GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS as a named function
+    or const-assigned arrow function — reproduced against app/api/cron/ingest/route.ts,
+    app/api/search/users/route.ts, app/auth/callback/route.ts, and app/auth/signout/route.ts,
+    all of which currently yield 0 routes.
+  - MUST NOT be thrown off by sibling named exports in the same file that are route-segment
+    config, not handlers (dynamic, runtime, maxDuration, revalidate, fetchCache, and the
+    like) — all four reproduction files above export at least one of these ahead of their
+    real handler.
+  - MUST derive the route's path from the file's location under app/ per Next.js convention
+    (directory segments become path segments; a parenthesized segment like (dashboard) is a
+    route group and contributes nothing to the URL path; a bracketed segment like [name] or
+    [user_id] is a dynamic path parameter) — linq-lens's app/(dashboard)/... and
+    app/(dashboard)/people/[user_id]/... trees exercise both cases.
+  - SHOULD also detect app/**/page.tsx as a page route per the same blueprint's constraint,
+    which is untested here since this record is scoped to the route.ts / API-handler gap
+    that blocks Phase 2/3 entirely.
+  - A fix here MUST be proven against a fixture with real route.ts files carrying config-const
+    exports ahead of the handler, not only a minimal single-export fixture — that shape is
+    exactly what the existing associated_specs for prov-2026-4446307d and prov-2026-e5067371
+    did not cover.
+affected_scope:
+  - pkg/discover/routes/filesystem.go
+  - pkg/discover/routes/assembler.go
+  - pkg/discover/framework/builtin/**
+forbidden_scope: []
+type: bug
+extends: prov-2026-4446307d
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-4446307d  # Next.js + JS/TS support for discover — sets the route-detection constraint this bug is about
+  - prov-2026-e5067371  # Next.js filesystem routing imprint — implements the (currently non-functional) route.ts matching
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - discovery
+  - bug
+  - nextjs
+  - routes
