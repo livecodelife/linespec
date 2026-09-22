@@ -1,6 +1,6 @@
 id: prov-2026-ebc2266b
 title: Next.js route.ts handlers not detected by discover (0 routes found)
-status: open
+status: implemented
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -64,7 +64,7 @@ superseded_by: ""
 related:
   - prov-2026-4446307d  # Next.js + JS/TS support for discover — sets the route-detection constraint this bug is about
   - prov-2026-e5067371  # Next.js filesystem routing imprint — implements the (currently non-functional) route.ts matching
-sealed_at_sha: ""
+sealed_at_sha: c3bdcbb41ded51a74aa1b98c40c0a0c36e8e18d6
 associated_specs:
   - path: pkg/discover/routes/filesystem_test.go
     type: go_test
