@@ -1,6 +1,6 @@
 id: prov-2026-f0b20266
 title: discover framework-agnostic scan does not respect .gitignore
-status: draft
+status: open
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -33,6 +33,7 @@ constraints:
 affected_scope:
   - cmd/linespec/main_stable.go
   - pkg/discover/boundaries/boundaries.go
+  - pkg/discover/ignorewalk/**
 forbidden_scope: []
 type: bug
 extends: prov-2026-a5eb1192
@@ -41,7 +42,22 @@ superseded_by: ""
 related:
   - prov-2026-a5eb1192  # Framework-agnostic discover — introduced agnosticSkipDirs, the denylist this bug is about
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/ignorewalk/gitignore_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/ignorewalk/... -v
+  - path: pkg/discover/ignorewalk/walk_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/ignorewalk/... -v
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run TestScanAgnosticFiles_RespectsGitignore -v
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run TestTracer_RespectsGitignore -v
+  - path: cmd/linespec/find_configs_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run TestFindAllLinespecConfigs -v
 associated_traces: []
 monitors: []
 tags:
