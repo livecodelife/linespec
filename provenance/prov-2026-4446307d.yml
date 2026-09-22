@@ -1,6 +1,6 @@
 id: prov-2026-4446307d
 title: Next.js + JavaScript/TypeScript support for discover
-status: draft
+status: open
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -55,8 +55,9 @@ affected_scope:
   - pkg/discover/symbols/**
   - pkg/discover/routes/**
   - pkg/discover/boundaries/**
-  - pkg/discover/framework/builtin/nextjs.yml
-  - cmd/linespec/main_stable.go
+  - pkg/discover/treesitter/**
+  - pkg/discover/framework/**
+  - cmd/linespec/discover_test.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
@@ -65,7 +66,25 @@ related:
   - prov-2026-c60ec2ad  # Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra) — same pattern, new framework
   - prov-2026-a5eb1192  # Framework-agnostic discover — the language-detection gap this closes for JS/TS
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/discover/lang/lang_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/lang/... -v
+  - path: pkg/discover/symbols/symbols_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/symbols/... -v
+  - path: pkg/discover/boundaries/boundaries_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/boundaries/... -run TypeScript -v
+  - path: pkg/discover/routes/filesystem_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/routes/... -run Assemble_ -v
+  - path: pkg/discover/framework/framework_test.go
+    type: go_test
+    run_command: go test ./pkg/discover/framework/... -run Nextjs -v
+  - path: cmd/linespec/discover_test.go
+    type: go_test
+    run_command: go test ./cmd/linespec/... -run TestRunDiscover_Nextjs_EndToEnd -v
 associated_traces: []
 monitors: []
 tags:
