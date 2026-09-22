@@ -1,6 +1,6 @@
 id: prov-2026-330a7fc5
 title: discover still hangs at ~236 files despite name-collision memoization fix
-status: open
+status: implemented
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -85,7 +85,7 @@ related:
   - prov-2026-afd410b6  # Prior hang bug — real fix, same symptom still reproduces at slightly larger scale
   - prov-2026-ebc2266b  # Route-detection fix — landed alongside afd410b6; 0 routes had been masking this until both fixes were in place
   - prov-2026-4446307d  # Next.js + JS/TS support for discover — the still-open blueprint both hang bugs extend
-sealed_at_sha: ""
+sealed_at_sha: 36bba572aa4c27307370067c3aa1ea097a9f683a
 associated_specs:
   - path: pkg/discover/boundaries/boundaries_test.go
     type: go_test
