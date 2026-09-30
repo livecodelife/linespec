@@ -1,6 +1,6 @@
 id: prov-2026-f3479b99
 title: Tier rules for extends live in validateExtends; bug records keep delegating to validateBugConditionals
-status: open
+status: implemented
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: >
@@ -28,7 +28,7 @@ implements: prov-2026-2a80a572
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1b81979efa5e86113f104e0f33117c5d8f8da0fc
 associated_specs:
   - path: pkg/provenance/linter_test.go
     run_command: test -f {{path}} && go test -count=1 -run Extends ./pkg/provenance/
