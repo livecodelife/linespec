@@ -1,6 +1,6 @@
 id: prov-2026-2a80a572
 title: extends is a same-tier additive edge on every record type, not a bug-only field
-status: open
+status: implemented
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: >
@@ -30,7 +30,7 @@ type: blueprint
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 27e8aaca2eced3acf140145263037d79a798052b
 associated_specs:
   - path: pkg/provenance/linter_test.go
     run_command: test -f {{path}} && go test -count=1 -run Extends ./pkg/provenance/
