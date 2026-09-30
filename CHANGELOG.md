@@ -5,6 +5,26 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.24.0] - 2026-09-30
+
+**Upgrade note.** `linespec provenance lint` now rejects two record shapes that were previously accepted: an `extends` that crosses tiers (other than a `bug` extending a `blueprint`), and a `supersedes` whose target still has a live `extends` pointing at it. Existing repos that have either will see new lint errors. Retarget the `extends` at the superseding record, or deprecate it, to clear the second; use `implements` or `related` for the first.
+
+### Added
+
+- **`extends` works on every tier** ([prov-2026-2a80a572](./provenance/prov-2026-2a80a572.yml), [prov-2026-f3479b99](./provenance/prov-2026-f3479b99.yml)) — `extends` is now a same-tier additive edge: a blueprint adds to a blueprint, an imprint to an imprint, and a bug may also extend a blueprint. It is the additive counterpart to `supersedes`: the target's decision still stands. A record with a live inbound `extends` cannot be superseded, since replacing it would strand the addition; extensions on records that are themselves superseded or deprecated do not block.
+
+- **TypeScript/JavaScript support and Next.js filesystem routing for `discover`** ([prov-2026-4446307d](./provenance/prov-2026-4446307d.yml)) — `.ts`/`.tsx` (via tree-sitter's TSX grammar) join JavaScript. A new `nextjs` framework description discovers routes from the filesystem rather than a route-registration call site: App Router `route.ts` handlers (GET/POST/PUT/PATCH/DELETE) and `page.tsx`, with the legacy Pages Router best-effort. Boundary tracing covers a node-postgres-style DB client and outbound `fetch()`. Route and boundary scanning now work over a set of file extensions rather than a single one.
+
+### Fixed
+
+- **JS/TS symbol queries missed every `export function` and `export class`** ([prov-2026-4446307d](./provenance/prov-2026-4446307d.yml)) — the queries were anchored under `program`, so they silently skipped exported declarations, which is how nearly all real top-level JS/TS code is written.
+
+- **`discover` scanned gitignored files** ([prov-2026-f0b20266](./provenance/prov-2026-f0b20266.yml)) — all three directory walks used only a hardcoded VCS/dependency denylist and never read `.gitignore`. A repo-root dry run over a Next.js project produced 56 draft blueprints, 54 of them for minified chunks under `.next/`. The walks now honor root and nested `.gitignore` files; the denylist stays as an unconditional fallback.
+
+- **`discover --dir app --framework nextjs` found zero routes** ([prov-2026-ebc2266b](./provenance/prov-2026-ebc2266b.yml)) — scoping the scan to the App Router root made route assembly look for a nonexistent nested `app/app`. The scanned directory is now treated as the router root when its base name matches. `export const GET = async (req) => {}` handlers are also detected alongside function declarations.
+
+- **`discover` hung on large call graphs** ([prov-2026-afd410b6](./provenance/prov-2026-afd410b6.yml), [prov-2026-330a7fc5](./provenance/prov-2026-330a7fc5.yml)) — the boundary tracer's recursive walk had no memoization, and each lookup then recompiled its tree-sitter query for every file. Memoization fixed the exponential case; caching each compiled query once per trace cut a 236-file/36-route scenario from over 180 seconds (never finished) to about 6.
+
 ## [3.23.1] - 2026-09-14
 
 ### Fixed
