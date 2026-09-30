@@ -1,0 +1,59 @@
+id: prov-2026-5a74cbb9
+title: Release 3.24.0
+status: draft
+created_at: "2026-09-30"
+author: caleb.cowen@linq.com
+intent: |
+  Cut 3.24.0, shipping the 30 commits on main since v3.23.1: `extends` as a
+  same-tier additive edge on every tier (prov-2026-2a80a572, prov-2026-f3479b99),
+  TypeScript/JavaScript language support and Next.js filesystem routing for
+  `discover` (prov-2026-4446307d and its supporting records), and the fixes that
+  followed from running it on a real Next.js repo: `.gitignore`-aware directory
+  walks (prov-2026-f0b20266), route.ts detection and call-graph memoization
+  (prov-2026-ebc2266b, prov-2026-afd410b6), and cached compiled tree-sitter
+  queries (prov-2026-330a7fc5).
+
+  MINOR, not PATCH: new language support and a new record-graph capability are
+  additive features. Record authors also see one behavior change worth an
+  upgrade note: supersede is now blocked while a live extension of the record
+  exists.
+
+constraints:
+  - |
+    VERSION MUST equal the tag being pushed, minus the leading "v". The release
+    image job compares the published image's self-reported version against
+    GITHUB_REF_NAME and fails the release on a mismatch.
+  - |
+    CHANGELOG.md MUST gain a [3.24.0] section dated with the release day,
+    including an upgrade note for the supersede-blocked-while-extended behavior.
+  - |
+    The tag MUST be pushed only after the release commit and the record
+    completion commit are on main.
+affected_scope:
+  - CHANGELOG.md
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - .linespec/hash_manifest.json
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-2a80a572
+  - prov-2026-f3479b99
+  - prov-2026-4446307d
+  - prov-2026-f0b20266
+  - prov-2026-ebc2266b
+  - prov-2026-afd410b6
+  - prov-2026-330a7fc5
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: CHANGELOG.md
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - release
