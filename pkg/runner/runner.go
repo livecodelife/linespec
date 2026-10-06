@@ -288,16 +288,30 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		logger.Debug("No MySQL services found, skipping shared MySQL infrastructure")
 	}
 
-	// Run migrations for all discovered services based on their framework
+	// Run migrations for discovered services based on their framework. Only the
+	// shared MySQL instance exists at this point; PostgreSQL, MongoDB and Oracle
+	// containers are started per spec in run(), which runs their migrations once the
+	// database is up. A service that touches any non-MySQL database is therefore
+	// skipped here. A failed migration fails setup: continuing would leave an empty
+	// schema and produce confusing downstream failures or false passes.
 	logger.Debug("Running migrations for discovered services")
 	for serviceName, cfg := range s.serviceConfigs {
+		deferred := false
+		for _, db := range cfg.Databases {
+			if db.Type != "mysql" {
+				deferred = true
+			}
+		}
+		if deferred {
+			logger.Debug("Deferring migrations for %s until its non-MySQL database is running", serviceName)
+			continue
+		}
 		serviceDir := cfg.BaseDir
 		if serviceDir == "" {
 			serviceDir = filepath.Join(s.cwd, serviceName)
 		}
 		if err := s.runMigrationsForConfig(ctx, cfg, serviceName, serviceDir); err != nil {
-			logger.Debug("Failed to run migrations for %s: %v", serviceName, err)
-			// Continue with other services, don't fail completely
+			return fmt.Errorf("migrations failed for service %s: %w", serviceName, err)
 		}
 	}
 	logger.Debug("Migrations complete")
@@ -920,28 +934,27 @@ func (s *TestSuite) runMigrations(ctx context.Context, serviceName string, servi
 		Image: imageName + ":latest",
 		Env:   appEnv,
 		Cmd:   migrationCmd,
-	}, &container.HostConfig{
-		AutoRemove: true,
-	}, &network.NetworkingConfig{
+	}, &container.HostConfig{}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {}},
 	}, containerName)
 	if err != nil {
 		return fmt.Errorf("failed to start migration container: %w", err)
 	}
+	// The container is not AutoRemove so its output can still be read after it
+	// exits; remove it here once that is done.
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = s.orch.StopAndRemoveContainer(cleanupCtx, containerName)
+	}()
 
 	// Wait for container to complete
 	statusCh, errCh := s.orch.WaitForContainer(ctx, containerName)
 	select {
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
-			logger.Debug("Migrations failed with exit code %d. Fetching logs...", status.StatusCode)
-			if logger.IsDebug() {
-				// Stream logs to see what went wrong
-				logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer logCancel()
-				_ = s.orch.StreamLogs(logCtx, containerName, os.Stdout, os.Stderr)
-			}
-			return fmt.Errorf("migrations failed with exit code %d", status.StatusCode)
+			return fmt.Errorf("migration command %q exited with code %d\n%s",
+				strings.Join(migrationCmd, " "), status.StatusCode, s.captureContainerLogs(containerName))
 		}
 		return nil
 	case err := <-errCh:
@@ -2210,6 +2223,20 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			if err != nil {
 				return fmt.Errorf("%s not ready: %w", proxyWaits[i].name, err)
 			}
+		}
+	}
+
+	// Migrations for services with non-MySQL databases run here, now that those
+	// databases are up (suite setup only has the shared MySQL instance).
+	hasNonMySQL := false
+	for _, db := range serviceConfig.Databases {
+		if db.Type != "mysql" {
+			hasNonMySQL = true
+		}
+	}
+	if hasNonMySQL {
+		if err := r.suite.runMigrationsForConfig(ctx, serviceConfig, serviceName, serviceConfig.BaseDir); err != nil {
+			return fmt.Errorf("migrations failed for service %s: %w", serviceName, err)
 		}
 	}
 
