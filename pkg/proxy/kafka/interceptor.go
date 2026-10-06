@@ -123,13 +123,13 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 						if err := verify.VerifyKafka(msg, kafkaRules); err != nil {
 							logger.Error("VERIFY failed for Kafka topic %s: %v", topic, err)
 							i.registry.RecordVerifyError("EVENT [" + topic + "]: " + err.Error())
-							i.sendProduceResponse(conn, correlationID, topic)
+							i.sendProduceResponse(conn, correlationID, topic, apiVersion)
 							continue
 						}
 					}
 				}
 			}
-			i.sendProduceResponse(conn, correlationID, topic)
+			i.sendProduceResponse(conn, correlationID, topic, apiVersion)
 
 		case 1: // Fetch
 			topic := parseFetchTopic(request, apiVersion)
@@ -239,14 +239,14 @@ func buildRecordBatch(msgs [][]byte, baseOffset int64) []byte {
 
 	// Batch body (everything that CRC covers: from attributes onwards).
 	var body []byte
-	body = appendInt16(body, 0)                   // attributes
-	body = appendInt32(body, int32(len(msgs)-1))  // lastOffsetDelta
-	body = appendInt64(body, now)                  // baseTimestamp
-	body = appendInt64(body, now)                  // maxTimestamp
-	body = appendInt64(body, -1)                   // producerId
-	body = appendInt16(body, -1)                   // producerEpoch
-	body = appendInt32(body, -1)                   // baseSequence
-	body = appendInt32(body, int32(len(msgs)))     // numRecords
+	body = appendInt16(body, 0)                  // attributes
+	body = appendInt32(body, int32(len(msgs)-1)) // lastOffsetDelta
+	body = appendInt64(body, now)                // baseTimestamp
+	body = appendInt64(body, now)                // maxTimestamp
+	body = appendInt64(body, -1)                 // producerId
+	body = appendInt16(body, -1)                 // producerEpoch
+	body = appendInt32(body, -1)                 // baseSequence
+	body = appendInt32(body, int32(len(msgs)))   // numRecords
 	body = append(body, recordsData...)
 
 	crc := crc32.Checksum(body, crc32.MakeTable(crc32.Castagnoli))
@@ -254,7 +254,7 @@ func buildRecordBatch(msgs [][]byte, baseOffset int64) []byte {
 	// Header: partitionLeaderEpoch + magic + crc + body.
 	var header []byte
 	header = appendInt32(header, 0) // partitionLeaderEpoch
-	header = append(header, 2)       // magic = 2
+	header = append(header, 2)      // magic = 2
 	header = appendInt32(header, int32(crc))
 	header = append(header, body...)
 
@@ -269,11 +269,11 @@ func buildRecordBatch(msgs [][]byte, baseOffset int64) []byte {
 // buildRecord encodes a single Kafka Record (varint/zigzag encoded).
 func buildRecord(offsetDelta int, value []byte) []byte {
 	var body []byte
-	body = append(body, 0)                                    // attributes INT8
-	body = append(body, zigzagVarint(0)...)                   // timestampDelta
-	body = append(body, zigzagVarint(int64(offsetDelta))...)  // offsetDelta
-	body = append(body, zigzagVarint(-1)...)                  // keyLength = -1 (null)
-	body = append(body, zigzagVarint(int64(len(value)))...)   // valueLen
+	body = append(body, 0)                                   // attributes INT8
+	body = append(body, zigzagVarint(0)...)                  // timestampDelta
+	body = append(body, zigzagVarint(int64(offsetDelta))...) // offsetDelta
+	body = append(body, zigzagVarint(-1)...)                 // keyLength = -1 (null)
+	body = append(body, zigzagVarint(int64(len(value)))...)  // valueLen
 	body = append(body, value...)
 	body = append(body, zigzagVarint(0)...) // numHeaders = 0
 
@@ -321,7 +321,7 @@ func (i *Interceptor) sendListOffsetsResponse(conn net.Conn, correlationID []byt
 	// Always return offset 0 so that auto_offset_reset='latest' consumers still
 	// start from the beginning of the seeded messages (the fake topic always starts at 0).
 	p := append([]byte(nil), correlationID...)
-	p = appendInt32(p, 1)  // topics count
+	p = appendInt32(p, 1) // topics count
 	p = appendString(p, topic)
 	p = appendInt32(p, 1)  // partitions count
 	p = appendInt32(p, 0)  // partition
@@ -360,11 +360,11 @@ func (i *Interceptor) sendOffsetCommitResponse(conn net.Conn, correlationID []by
 		topic = i.firstSeededTopic()
 	}
 	p := append([]byte(nil), correlationID...)
-	p = appendInt32(p, 1)      // topics count
+	p = appendInt32(p, 1) // topics count
 	p = appendString(p, topic)
-	p = appendInt32(p, 1)      // partitions count
-	p = appendInt32(p, 0)      // partition
-	p = appendInt16(p, 0)      // error_code
+	p = appendInt32(p, 1) // partitions count
+	p = appendInt32(p, 0) // partition
+	p = appendInt16(p, 0) // error_code
 
 	i.writeResponse(conn, p)
 }
@@ -403,13 +403,13 @@ func (i *Interceptor) sendOffsetFetchResponse(conn net.Conn, correlationID []byt
 		topic = i.firstSeededTopic()
 	}
 	p := append([]byte(nil), correlationID...)
-	p = appendInt32(p, 1)      // topics count
+	p = appendInt32(p, 1) // topics count
 	p = appendString(p, topic)
-	p = appendInt32(p, 1)      // partitions count
+	p = appendInt32(p, 1)         // partitions count
 	p = appendInt32(p, partition) // partition
-	p = appendInt64(p, -1)     // offset = -1 (no committed offset → consume from beginning)
-	p = appendString(p, "")    // metadata
-	p = appendInt16(p, 0)      // error_code
+	p = appendInt64(p, -1)        // offset = -1 (no committed offset → consume from beginning)
+	p = appendString(p, "")       // metadata
+	p = appendInt16(p, 0)         // error_code
 
 	i.writeResponse(conn, p)
 }
@@ -480,9 +480,10 @@ func (i *Interceptor) sendJoinGroupResponse(conn net.Conn, correlationID, reques
 
 // parseJoinGroupProtocol extracts the first protocol name from a JoinGroup request.
 // JoinGroup v1 request body (after apiKey, apiVersion, correlationID, clientId):
-//   group_id STRING, session_timeout_ms INT32, rebalance_timeout_ms INT32 (v1+),
-//   member_id STRING, protocol_type STRING,
-//   group_protocols ARRAY of (name STRING, metadata BYTES)
+//
+//	group_id STRING, session_timeout_ms INT32, rebalance_timeout_ms INT32 (v1+),
+//	member_id STRING, protocol_type STRING,
+//	group_protocols ARRAY of (name STRING, metadata BYTES)
 func parseJoinGroupProtocol(request []byte, apiVersion uint16) string {
 	// request[0:8] = apiKey(2)+apiVersion(2)+correlationID(4), request[8:] = clientId + body
 	data := skipClientID(request[8:])
@@ -577,8 +578,8 @@ func (i *Interceptor) buildPartitionAssignment() []byte {
 	a = appendInt32(a, int32(len(topics)))
 	for _, t := range topics {
 		a = appendString(a, t)
-		a = appendInt32(a, 1)  // 1 partition
-		a = appendInt32(a, 0)  // partition 0
+		a = appendInt32(a, 1) // 1 partition
+		a = appendInt32(a, 0) // partition 0
 	}
 	a = appendInt32(a, -1) // null user_data
 
@@ -638,16 +639,17 @@ func (i *Interceptor) sendApiVersionsResponse(conn net.Conn, correlationID []byt
 // sendMetadataResponse builds a Metadata response matching the requested apiVersion.
 //
 //	v0:  brokers(no rack) + topics(no is_internal), no throttle/controller/cluster fields
-//	v1:  + throttle_time_ms, rack per broker, controller_id, is_internal per topic
-//	v2+: + cluster_id (NULLABLE_STRING) between brokers and controller_id
+//	v1:  + rack per broker, controller_id, is_internal per topic (no throttle_time_ms)
+//	v2:  + cluster_id (NULLABLE_STRING) between brokers and controller_id
+//	v3+: + throttle_time_ms at the start of the body (not emitted: only v0-v2 are advertised)
 func (i *Interceptor) sendMetadataResponse(conn net.Conn, correlationID []byte, apiVersion uint16) {
 	topics := i.getKnownTopics()
 
 	p := make([]byte, 0, 512)
 	p = append(p, correlationID...)
 
-	if apiVersion >= 1 {
-		p = appendInt32(p, 0) // throttle_time_ms (v1+)
+	if apiVersion >= 3 {
+		p = appendInt32(p, 0) // throttle_time_ms (v3+)
 	}
 
 	// brokers array: one broker (self)
@@ -719,20 +721,28 @@ func (i *Interceptor) getKnownTopics() []string {
 
 // ── Produce ───────────────────────────────────────────────────────────────────
 
-func (i *Interceptor) sendProduceResponse(conn net.Conn, correlationID []byte, topic string) {
+// sendProduceResponse builds a Produce response for v0-v2 (the advertised range):
+//
+//	v0: responses[topic, partitions[partition, error_code, base_offset]]
+//	v1: + throttle_time_ms AFTER the responses array
+//	v2: + log_append_time (INT64) per partition after base_offset
+func (i *Interceptor) sendProduceResponse(conn net.Conn, correlationID []byte, topic string, apiVersion uint16) {
 	if topic == "" {
 		topic = i.firstSeededTopic()
 	}
 	p := append([]byte(nil), correlationID...)
-	p = appendInt32(p, 0) // throttle_time_ms
 	p = appendInt32(p, 1) // topics count
 	p = appendString(p, topic)
 	p = appendInt32(p, 1) // partition responses count
 	p = appendInt32(p, 0) // partition
 	p = appendInt16(p, 0) // error_code
 	p = appendInt64(p, 0) // base_offset
-	p = appendInt64(p, -1) // log_append_time (v1+)
-	p = appendInt64(p, -1) // log_start_offset (v5+)
+	if apiVersion >= 2 {
+		p = appendInt64(p, -1) // log_append_time (v2+)
+	}
+	if apiVersion >= 1 {
+		p = appendInt32(p, 0) // throttle_time_ms (v1+, trailing)
+	}
 
 	i.writeResponse(conn, p)
 }
@@ -1027,4 +1037,3 @@ func (i *Interceptor) writeResponse(conn net.Conn, payload []byte) {
 	conn.Write(lenBuf)
 	conn.Write(payload)
 }
-
