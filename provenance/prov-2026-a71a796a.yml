@@ -1,0 +1,48 @@
+id: prov-2026-a71a796a
+title: EXPECT_NOT drops trailing clauses and following EXPECTs; parser never rejects unconsumed tokens
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  parseExpectNot consumes only WITH. The documented negative form carries
+  USING_SQL, ACCESSING_TABLES, VERIFY_* and DATABASE clauses, and none are read.
+  With an HTTP trigger the leftover tokens surface as a misleading "RESPOND
+  block is required" error. With a Kafka or Job trigger the clauses and every
+  later EXPECT are dropped without a word: a probe declaring two expects parsed
+  one. The spec passes with its assertions deleted.
+
+  The fix is twofold. parseExpectNot accepts the same clause family as the
+  positive EXPECT it mirrors, and Parse fails on any token left unconsumed at
+  the end of a statement or the input, naming the token and its line. The
+  second half is the load-bearing one: it closes this bug and the class of
+  future clauses that are lexed but never read. A per-clause allow-list per
+  channel was rejected here as larger than the bug; the broader typed model is
+  the separate Protocol-agnostic testing core blueprint. Related issue #222
+  (EXPECT_NOT HTTP never failing) is a distinct enforcement bug and is not
+  covered here.
+constraints:
+  - Every clause documented for EXPECT_NOT in LINESPEC.md parses and is retained on the statement
+  - Unconsumed tokens after a statement, or at end of input, are a parse error with line information
+  - A spec with Kafka or Job trigger and EXPECT_NOT with trailing clauses retains every subsequent EXPECT
+  - No currently valid spec in examples/*-linespecs changes parse result
+affected_scope:
+  - pkg/dsl/parser.go
+  - LINESPEC.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-28061661
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/dsl/expect_not_clauses_test.go
+    type: unit
+    run_command: go test -count=1 -run TestExpectNotTrailingClauses ./pkg/dsl/
+associated_traces: []
+monitors: []
+tags:
+  - dsl
+  - parser
+  - silent-pass
