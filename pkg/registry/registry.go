@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/livecodelife/linespec/v3/pkg/logger"
+	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
 	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
@@ -752,6 +753,47 @@ func firstOrEmpty(vals []string) string {
 	return ""
 }
 
+// skipsLegacyMatch reports whether FindMock must leave mock to the semantic
+// ACCESSING_TABLES matcher. Mongo has no such matcher (its interceptor only calls
+// FindMock), so a Mongo mock declaring ACCESSING_TABLES is matched here instead,
+// provided the collection being accessed is one of the declared names.
+func skipsLegacyMatch(mock *types.ExpectStatement, key string) bool {
+	if len(mock.AccessingTables) == 0 {
+		return false
+	}
+	if mock.Channel == types.ReadMongoDB || mock.Channel == types.WriteMongoDB {
+		for _, t := range mock.AccessingTables {
+			if strings.EqualFold(t, key) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// legacyVerifyHolds applies a mock's VERIFY_* clauses to the statement the legacy
+// FindMock path matched. Mocks that declare none are unaffected.
+func legacyVerifyHolds(mock *types.ExpectStatement, query string) (bool, string) {
+	if semanticSpecificity(mock) == 0 {
+		return true, ""
+	}
+	switch mock.Channel {
+	case types.ReadMongoDB, types.WriteMongoDB:
+		// The Mongo interceptor passes the command name (FIND, INSERT, ...) as the
+		// query; there is no WHERE or written-value information to analyze.
+		return matchesSemanticConstraints(mock, query, nil, nil, nil)
+	}
+	d := sqlanalysis.MySQL
+	switch mock.Channel {
+	case types.ReadPostgreSQL, types.WritePostgreSQL:
+		d = sqlanalysis.PostgreSQL
+	case types.ReadOracle, types.WriteOracle:
+		d = sqlanalysis.Oracle
+	}
+	r := sqlanalysis.Analyze(d, query, sqlanalysis.Binds{})
+	return matchesSemanticConstraints(mock, r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues)
+}
+
 // FindMock is the legacy (non-ACCESSING_TABLES) mock lookup, keyed by table/topic
 // name and optionally constrained by USING_SQL/USING_SQL_CONTAINS. database optionally
 // identifies which `databases:` list entry the calling proxy serves (see
@@ -762,6 +804,29 @@ func (r *MockRegistry) FindMock(key string, query string, database ...string) (*
 	r.Lock()
 	defer r.Unlock()
 
+	// accept applies the mock's declared VERIFY_* constraints to the matched
+	// statement before consuming it. A rejection is remembered and, if no other
+	// mock matches, surfaced as a VERIFY failure (mirroring FindMockByTables).
+	rejectReason := ""
+	accept := func(mock *types.ExpectStatement) bool {
+		if ok, reason := legacyVerifyHolds(mock, query); !ok {
+			if rejectReason == "" {
+				rejectReason = fmt.Sprintf("%s [%s]: %s", channelLabel(mock.Channel), key, reason)
+			}
+			return false
+		}
+		r.recordHit(mock)
+		return true
+	}
+	mock, found := r.findMockLocked(key, query, db, accept)
+	if !found && rejectReason != "" {
+		r.verifyErrors = append(r.verifyErrors, rejectReason)
+	}
+	return mock, found
+}
+
+func (r *MockRegistry) findMockLocked(key, query, db string, accept func(*types.ExpectStatement) bool) (*types.ExpectStatement, bool) {
+
 	mocks, ok := r.mocks[key]
 	if !ok {
 		// Fallback: scan all mocks in registration order for an SQL match.
@@ -769,19 +834,21 @@ func (r *MockRegistry) FindMock(key string, query string, database ...string) (*
 		// deterministic results — first declared match wins.
 		if query != "" {
 			for _, mock := range r.orderedMocks {
-				if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
+				if mock.Negative || skipsLegacyMatch(mock, key) || !mockMatchesDatabase(mock, db) {
 					continue
 				}
 				if r.hits[mock] != 0 {
 					continue
 				}
 				if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-					r.recordHit(mock)
-					return mock, true
+					if accept(mock) {
+						return mock, true
+					}
 				}
 				if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
-					r.recordHit(mock)
-					return mock, true
+					if accept(mock) {
+						return mock, true
+					}
 				}
 			}
 		}
@@ -793,26 +860,28 @@ func (r *MockRegistry) FindMock(key string, query string, database ...string) (*
 	// re-matching them here would bypass their VERIFY_*/direction constraints.
 	if query != "" {
 		for _, mock := range mocks {
-			if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
+			if mock.Negative || skipsLegacyMatch(mock, key) || !mockMatchesDatabase(mock, db) {
 				continue
 			}
 			if r.hits[mock] > 0 {
 				continue
 			}
 			if mock.SQL != "" && r.matchSQL(mock.SQL, query) {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 			if mock.SQLContains != "" && r.matchSQLContains(mock.SQLContains, query) {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 		}
 	}
 
 	// 2. Fuzzy Match (no SQL constraint on mock)
 	for _, mock := range mocks {
-		if mock.Negative || len(mock.AccessingTables) > 0 || !mockMatchesDatabase(mock, db) {
+		if mock.Negative || skipsLegacyMatch(mock, key) || !mockMatchesDatabase(mock, db) {
 			continue
 		}
 		if r.hits[mock] > 0 {
@@ -823,30 +892,36 @@ func (r *MockRegistry) FindMock(key string, query string, database ...string) (*
 			continue
 		}
 		if mock.Channel == types.HTTP || mock.Channel == types.Event {
-			r.recordHit(mock)
-			return mock, true
+			if accept(mock) {
+				return mock, true
+			}
 		}
 		if query != "" {
 			q := strings.TrimSpace(strings.ToUpper(query))
 			if strings.HasPrefix(q, "SELECT") && (mock.Channel == types.ReadMySQL || mock.Channel == types.ReadPostgreSQL) {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 			if (strings.HasPrefix(q, "INSERT") || strings.HasPrefix(q, "UPDATE") || strings.HasPrefix(q, "DELETE")) && (mock.Channel == types.WriteMySQL || mock.Channel == types.WritePostgreSQL) {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 			if isMongoReadCommand(q) && mock.Channel == types.ReadMongoDB {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 			if isMongoWriteCommand(q) && mock.Channel == types.WriteMongoDB {
-				r.recordHit(mock)
-				return mock, true
+				if accept(mock) {
+					return mock, true
+				}
 			}
 		} else {
-			r.recordHit(mock)
-			return mock, true
+			if accept(mock) {
+				return mock, true
+			}
 		}
 	}
 

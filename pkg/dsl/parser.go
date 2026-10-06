@@ -381,8 +381,8 @@ func (p *Parser) parseExpectClauses(expect *types.ExpectStatement) error {
 			}
 			expect.SQLContains = p.resolve(sqlToken.Literal)
 		case TokenNoTransaction:
-			p.consume()
-			expect.NoTransaction = true
+			t := p.consume()
+			return fmt.Errorf("line %d: NO TRANSACTION is not supported: it was never enforced, so accepting it would let a spec pass while asserting nothing. Remove the clause", t.Line)
 		case TokenWith:
 			expect.WithFile = p.consume().Literal
 		case TokenReturns:
