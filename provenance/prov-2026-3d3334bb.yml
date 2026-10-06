@@ -1,0 +1,55 @@
+id: prov-2026-3d3334bb
+title: Kafka interceptor responses omit version-dependent fields for ApiVersions, FindCoordinator, Heartbeat, LeaveGroup, SyncGroup and use the wrong ListOffsets layout for the versions it advertises
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  The ApiVersions response advertises a version range per API, and a client then
+  uses the highest version both sides support. Several handlers build one fixed
+  response layout regardless of the request version, so a client that picks the
+  advertised maximum decodes garbage. Same class as the Metadata and Produce
+  layouts fixed under prov-2026-919f8621. Against the advertised ranges:
+  ApiVersions v1 lacks the trailing throttle_time_ms; FindCoordinator v1 lacks
+  the leading throttle_time_ms and the error_message field; Heartbeat,
+  LeaveGroup and SyncGroup v1 lack the leading throttle_time_ms;
+  ListOffsets is advertised as v0 only but the body carries the v1 layout
+  (timestamp plus a single offset) where v0 expects an array of offsets.
+  JoinGroup, OffsetCommit and OffsetFetch v0-v1, and Fetch v1, match their
+  advertised layouts. Layouts here are from the Kafka protocol definition and
+  should be confirmed by the proof test.
+
+  Fix: the dispatcher passes the request apiVersion to each affected sender,
+  which emits the layout for that version, and ListOffsets emits its advertised
+  version's layout. Proof compares each response to a reference encoder.
+  Options: adopt twmb/franz-go kmsg to encode responses, which removes
+  hand-written layouts altogether and fits the protocol-agnostic core in
+  prov-2026-167380f0 but adds a dependency; or lower the advertised maximum to
+  v0 for these APIs, which is the smallest change but forces old protocol
+  versions on every client. The record should pick one; hand-fixing the layouts
+  is the default.
+constraints:
+  - For every API the interceptor advertises, the response for each advertised version matches the Kafka protocol layout for that version
+  - Request apiVersion is passed to every sender whose layout varies by version
+  - Responses for versions that already work (Produce, Metadata, JoinGroup, OffsetCommit, OffsetFetch, Fetch v1) are unchanged byte for byte
+  - The proof test decodes each response with an independent encoder or decoder, not a copy of the interceptor's own layout
+affected_scope:
+  - pkg/proxy/kafka/interceptor.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-919f8621
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/kafka/response_layouts_test.go
+    type: unit
+    run_command: go test -count=1 -run TestAdvertisedVersionResponseLayouts ./pkg/proxy/kafka/
+associated_traces: []
+monitors: []
+tags:
+  - kafka
+  - protocol
+  - interceptor
