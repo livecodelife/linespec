@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -61,8 +64,10 @@ func LoadConfigFile(path string) (*LineSpecConfig, error) {
 	}
 
 	var config LineSpecConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&config); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
 
 	// Set base directory
@@ -244,6 +249,8 @@ func applyDefaults(config *LineSpecConfig) {
 	}
 }
 
+var supportedDatabaseTypes = map[string]bool{"mysql": true, "postgresql": true, "mongodb": true, "oracle": true}
+
 // validate checks that required configuration is present
 func validate(config *LineSpecConfig) error {
 	if config.Service.Name == "" {
@@ -251,6 +258,15 @@ func validate(config *LineSpecConfig) error {
 	}
 	if config.Service.Port == 0 {
 		return fmt.Errorf("service.port is required")
+	}
+	for i, db := range config.Databases {
+		if !supportedDatabaseTypes[db.Type] {
+			label := db.Name
+			if label == "" {
+				label = fmt.Sprintf("databases[%d]", i)
+			}
+			return fmt.Errorf("%s.type %q is not supported; supported types: mysql, postgresql, mongodb, oracle", label, db.Type)
+		}
 	}
 	if config.Infrastructure.Database {
 		if len(config.Databases) == 0 {
