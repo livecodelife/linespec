@@ -1,0 +1,45 @@
+id: prov-2026-3168d841
+title: Migration failures are swallowed at Debug level and non-MySQL migrations run before the database exists
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Suite setup runs migrations for every discovered service and, on error, logs
+  at Debug and continues. A failed migration therefore leaves an empty schema
+  and the run proceeds, producing confusing downstream failures or false
+  passes. Worse, the migration container targets the real-<host> alias, but
+  PostgreSQL, MongoDB and Oracle containers are only started per spec inside
+  run(), after suite setup. Only MySQL, whose shared instance starts in suite
+  setup, can be reached. For the other types the migration cannot succeed and
+  the error is the one being swallowed. Ordering verified by reading the
+  runner: the migration loop sits in suite setup, the per-type database
+  start switch in run().
+
+  The fix surfaces migration errors as failures with the command output, and
+  moves non-MySQL migrations to run after the per-spec database is up (or
+  starts those databases first). Failing loudly alone was rejected because it
+  would turn every non-MySQL migrating project red without a way to pass.
+constraints:
+  - A migration command that exits non-zero fails the run with the service name and command output, at Info or above
+  - PostgreSQL, MongoDB and Oracle migrations execute against a running database
+  - MySQL migration behavior is unchanged for passing migrations
+  - Services with no migration command or database disabled are still skipped without error
+affected_scope:
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/runner/migration_failure_test.go
+    type: unit
+    run_command: go test -count=1 -run TestMigrationFailureSurfaced ./pkg/runner/
+associated_traces: []
+monitors: []
+tags:
+  - runner
+  - migrations
+  - silent-pass
