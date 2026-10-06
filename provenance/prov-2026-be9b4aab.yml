@@ -1,0 +1,58 @@
+id: prov-2026-be9b4aab
+title: "EXPECT WRITE ... WITH <payload> on SQL channels is parsed and never asserted, so a write with the wrong values passes"
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  The parser stores the WITH file of an EXPECT into ExpectStatement.WithFile.
+  The only readers of that field are the HTTP and Kafka body matchers in the
+  registry; neither the MySQL nor the PostgreSQL proxy, nor FindMock or
+  FindMockByTables, reads it for a WRITE. So the payload is not compared as a
+  subset, nor by column names, nor at all. Example:
+  examples/todo-linespecs/update_todo_success.linespec expects
+  payloads/todo_update.yaml, whose description is "Milk, eggs, and bread", while
+  the request sends "Milk, eggs, and bread - organic only", and the spec passes.
+  LINESPEC.md documents WITH on WRITE:MYSQL as an accepted clause, and eleven
+  example specs use it. This is the same silent-pass class as the clauses fixed
+  for prov-2026-a3105d31 and issue 159.
+
+  Fix: where the SQL analysis yields written values (INSERT and UPDATE), compare
+  the payload's fields to them and fail the spec with a diff on mismatch, for
+  both MySQL and PostgreSQL. Where it cannot (DELETE, or a payload with no
+  column match) reject the clause at parse time with a clear error rather than
+  accept it inert. Existing examples whose payloads disagree with the real
+  write are corrected in the same change. Rejected: removing WITH on WRITE
+  outright, as it leaves a documented clause with no replacement and breaks all
+  eleven examples at once.
+constraints:
+  - A WRITE with a WITH payload whose value differs from the written value fails the spec
+  - A WITH clause on a WRITE is either asserted or rejected at parse time, never silently ignored
+  - Applies to both MySQL and PostgreSQL write paths
+  - Example specs that pass today only because WITH was ignored are corrected, not left failing
+  - VERIFY_WRITTEN_VALUES behaviour is unchanged
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/proxy/mysql/proxy.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/dsl/parser.go
+  - examples/todo-linespecs/payloads/todo_update.yaml
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a3105d31
+  - prov-2026-919f8621
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/write_with_enforcement_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses' ./pkg/registry/
+associated_traces: []
+monitors: []
+tags:
+  - registry
+  - mysql
+  - postgresql
+  - silent-pass
