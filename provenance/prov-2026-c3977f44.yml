@@ -1,0 +1,59 @@
+id: prov-2026-c3977f44
+title: Concurrent linespec runs on one machine destroy each other's shared Docker network, database and Kafka containers
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Every linespec run on a machine uses the same fixed Docker names by default:
+  network linespec-shared-net and containers linespec-shared-db and
+  linespec-shared-kafka. SetupSharedInfrastructure begins by calling
+  CleanupSharedInfrastructure, and a run ends by calling it again, and that
+  function force-removes those containers and the network by name without
+  checking that this run created them. A second run in another repo therefore
+  deletes the first run's network mid-run. Observed: specs failing with
+  "network linespec-shared-net not found" and health timeouts.
+
+  Fix: the default shared names carry a per-run (or per-project-root hash)
+  suffix, so two runs cannot collide, and cleanup removes only resources this
+  run created. Explicit container_naming overrides in .linespec.yml are used
+  verbatim, since the user chose them. Rejected: a machine-wide lock that
+  serializes runs, because it removes the parallelism that shared
+  infrastructure was meant to give a single run and a stuck run would block all
+  others.
+
+  Related defect in the same naming area: the debug log-streaming calls in the
+  health-failure and verification-failure paths use "app-"+spec.Name instead of
+  the app_container template, so with a custom or namespaced name they stream
+  nothing. They should use GetAppContainer like the other call site.
+constraints:
+  - Two linespec runs started concurrently on one Docker host, in different directories, both complete without interfering
+  - Default shared network, db, kafka, migrate, app and proxy names are unique per run or per project root
+  - Cleanup never removes a container or network this run did not create
+  - A container_naming override in .linespec.yml is honoured verbatim
+  - Debug log streaming resolves the app container name through the app_container template
+  - A single run's behaviour is otherwise unchanged
+affected_scope:
+  - pkg/config/types.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/container_naming_isolation_test.go
+    type: unit
+    run_command: go test -count=1 -run TestContainerNamingDefaultsAreIsolatedPerRun ./pkg/config/
+  - path: pkg/runner/shared_cleanup_ownership_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestCleanupSharedInfrastructureOnlyRemovesOwnResources|TestAppLogStreamUsesAppContainerTemplate' ./pkg/runner/
+associated_traces: []
+monitors: []
+tags:
+  - runner
+  - docker
+  - container-naming
+  - concurrency
