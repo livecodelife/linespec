@@ -1,0 +1,48 @@
+id: prov-2026-22e2de8d
+title: Shared MySQL readiness wait is a fixed 30 seconds and its timeout error does not say what to do
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Suite setup waits for the shared MySQL container by polling a ping with a
+  hard-coded 30 second deadline, after a separate 60 second TCP wait. The
+  PostgreSQL and MongoDB waits in the runner are likewise fixed at 30 and 45
+  seconds. None is configurable. On a loaded Docker host MySQL initialisation
+  can exceed the deadline (a mysql:8.4 container was observed needing about 42
+  seconds), and the run then fails with "MySQL not accepting connections:
+  timeout waiting for MySQL at localhost:<port>". That message omits the
+  timeout used, the last connection error, and the container to inspect.
+
+  Fix: add a config setting for the database readiness timeout in
+  .linespec.yml with a default longer than today's (the observed 42 seconds
+  must pass without configuration), apply it to the MySQL, PostgreSQL and
+  MongoDB waits, and make the timeout error state the timeout, the last ping
+  error, and the setting that raises it. Rejected: only raising the constant,
+  which fixes this host and leaves the next slower one with the same opaque
+  failure.
+constraints:
+  - The database readiness timeout is settable in .linespec.yml and the default exceeds 42 seconds
+  - The MySQL, PostgreSQL and MongoDB readiness waits all use the setting
+  - The timeout error names the timeout in seconds, the last connection error, and the config key to raise it
+  - A healthy database still returns as soon as it answers, not after the full timeout
+affected_scope:
+  - pkg/runner/runner.go
+  - pkg/config/types.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c3977f44
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/runner/db_ready_timeout_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestWaitForSQLDBTimeoutErrorIsActionable|TestDBReadyTimeoutConfigurable' ./pkg/runner/
+associated_traces: []
+monitors: []
+tags:
+  - runner
+  - mysql
+  - timeout
