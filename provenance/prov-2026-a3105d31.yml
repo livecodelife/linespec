@@ -1,0 +1,48 @@
+id: prov-2026-a3105d31
+title: 'Dead semantic clauses: VERIFY_* on legacy table EXPECTs, NO_TRANSACTION, and MongoDB ACCESSING_TABLES/VERIFY_* are parsed but never enforced'
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Three clause families parse and then do nothing. The legacy table-keyed
+  FindMock path never calls matchesSemanticConstraints, so VERIFY_* on a
+  table-form EXPECT cannot fail. NO_TRANSACTION is stored by the parser and
+  never read. The MongoDB interceptor calls only FindMock, so ACCESSING_TABLES
+  and VERIFY_* on Mongo expectations are dead. This is the remaining gap after
+  the earlier fix for the semantic path, which made the semantic path enforce
+  VERIFY_* but did not touch FindMock itself.
+
+  The fix applies the semantic constraint check inside FindMock and routes the
+  Mongo interceptor through it. For NO_TRANSACTION, either enforce it or
+  reject it at parse time as unsupported; leaving it accepted and inert is the
+  one outcome ruled out. Enforcing it in the registry for Mongo only was
+  rejected as it leaves the SQL path uneven.
+constraints:
+  - A table-form EXPECT with a VERIFY_* clause that does not hold fails the spec
+  - Mongo ACCESSING_TABLES and VERIFY_* clauses can fail a spec
+  - NO_TRANSACTION is either enforced or a parse error, never silently ignored
+  - Specs that pass today with correct VERIFY_* clauses keep passing
+  - Existing TestIssue159 semantic enforcement tests keep passing
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/proxy/mongodb/interceptor.go
+  - pkg/dsl/parser.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-28061661
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/legacy_verify_enforcement_test.go
+    type: unit
+    run_command: go test -count=1 -run TestLegacyFindMockEnforcesVerify ./pkg/registry/
+associated_traces: []
+monitors: []
+tags:
+  - registry
+  - mongodb
+  - verify
+  - silent-pass
