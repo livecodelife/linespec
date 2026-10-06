@@ -1,0 +1,53 @@
+id: prov-2026-d4ce27e4
+title: "check --staged without --message-file attributes the staged diff to the previous commit's record, and reports plain out-of-scope as 'forbids changes'"
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Run by hand, `linespec provenance check --staged` has no commit in progress
+  and no --message-file, so CheckStaged falls back to the message of HEAD, which
+  is the previous commit. It then judges the staged files against whichever
+  record that commit named and reports "<other record> forbids changes to
+  <file>", blaming a record unrelated to the work. The documented workflow
+  (run check --staged before each implementation commit) is exactly this manual
+  form. Only the commit-msg hook, which passes --message-file, is correct.
+  The --record flag is accepted but never reaches the staged path, so it cannot
+  be used to say which record the change belongs to.
+
+  Fix: without --message-file, staged mode must not read HEAD. It takes the
+  record from --record (now honoured in staged mode) and otherwise reports that
+  it cannot tell which record applies and checks only what needs no record.
+  Separately, the violation text "forbids changes to" is produced both for a
+  file matching forbidden_scope and for a file merely absent from
+  affected_scope, because IsInScope collapses the two. Out-of-scope should say
+  the file is not in the record's affected_scope, reserving "forbids" for
+  forbidden_scope. Rejected: reading .git/COMMIT_EDITMSG as the fallback, as it
+  holds the same stale message.
+constraints:
+  - check --staged with no --message-file never derives record IDs from HEAD's commit message
+  - check --staged --record <id> checks staged files against that record
+  - The commit-msg hook path (--message-file) behaves as before
+  - A file outside affected_scope is reported with wording distinct from a forbidden_scope match
+  - Exit codes and the set of violations for correct commits are unchanged
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/commands.go
+  - pkg/provenance/types.go
+  - cmd/linespec/cli.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/check_staged_message_source_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestCheckStagedIgnoresHeadMessage|TestCheckStagedHonoursRecordFlag|TestViolationWordingDistinguishesOutOfScope' ./pkg/provenance/
+associated_traces: []
+monitors: []
+tags:
+  - provenance
+  - check
+  - hooks
