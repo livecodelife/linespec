@@ -107,7 +107,7 @@ func (i *Interceptor) handleConn(conn net.Conn) {
 
 		switch apiKey {
 		case 0: // Produce
-			topic, key, value, headers := i.extractProduceData(request[8:])
+			topic, key, value, headers := i.extractProduceDataVersioned(request[8:], apiVersion)
 			if topic != "" {
 				logger.Debug("Kafka Interceptor: Produce to topic %s", topic)
 				i.registry.CheckNegativeMocks(topic, "")
@@ -610,7 +610,7 @@ func (i *Interceptor) sendApiVersionsResponse(conn net.Conn, correlationID []byt
 	p = appendInt16(p, 0) // error_code = 0
 
 	apis := []struct{ key, min, max uint16 }{
-		{0, 0, 2},  // Produce
+		{0, 0, 3},  // Produce: v0-v3 (v3 response layout == v2)
 		{1, 1, 1},  // Fetch: v1 only (throttle_time_ms, no last_stable_offset/aborted_txns)
 		{2, 0, 0},  // ListOffsets
 		{3, 0, 2},  // Metadata: v0-v2 (handled correctly by sendMetadataResponse)
@@ -721,11 +721,12 @@ func (i *Interceptor) getKnownTopics() []string {
 
 // ── Produce ───────────────────────────────────────────────────────────────────
 
-// sendProduceResponse builds a Produce response for v0-v2 (the advertised range):
+// sendProduceResponse builds a Produce response for v0-v3 (the advertised range):
 //
 //	v0: responses[topic, partitions[partition, error_code, base_offset]]
 //	v1: + throttle_time_ms AFTER the responses array
 //	v2: + log_append_time (INT64) per partition after base_offset
+//	v3: identical to v2 (only the request gained transactional_id)
 func (i *Interceptor) sendProduceResponse(conn net.Conn, correlationID []byte, topic string, apiVersion uint16) {
 	if topic == "" {
 		topic = i.firstSeededTopic()
@@ -756,10 +757,20 @@ func (i *Interceptor) sendGenericResponse(conn net.Conn, correlationID []byte) {
 const maxKafkaFieldSize = 1 << 20 // 1 MiB cap for key/value/header fields
 
 func (i *Interceptor) extractProduceData(data []byte) (topic, key, value string, headers map[string]string) {
+	return i.extractProduceDataVersioned(data, 0)
+}
+
+// extractProduceDataVersioned parses a Produce request body (starting at
+// client_id). For apiVersion >= 3 the body carries a NULLABLE_STRING
+// transactional_id before acks, which is skipped here.
+func (i *Interceptor) extractProduceDataVersioned(data []byte, apiVersion uint16) (topic, key, value string, headers map[string]string) {
 	headers = make(map[string]string)
 
 	// Phase A: parse the Produce request envelope.
 	data = skipClientID(data)
+	if apiVersion >= 3 {
+		data = skipClientID(data) // transactional_id: same NULLABLE_STRING encoding
+	}
 	if len(data) < 10 {
 		return
 	}

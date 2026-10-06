@@ -133,8 +133,8 @@ func TestMetadataResponse_Layout_V0toV2(t *testing.T) {
 	}
 }
 
-func TestProduceResponse_Layout_V0toV2(t *testing.T) {
-	for _, v := range []uint16{0, 1, 2} {
+func TestProduceResponse_Layout_V0toV3(t *testing.T) {
+	for _, v := range []uint16{0, 1, 2, 3} {
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			ic := NewInterceptor("localhost:0", registry.NewMockRegistry())
 			payload := capture(t, func(c net.Conn) {
@@ -171,3 +171,43 @@ func TestProduceResponse_Layout_V0toV2(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractProduceData_V3_TransactionalID(t *testing.T) {
+	rs := buildTestRecordV2([]byte("k3"), []byte(`{"a":1}`), nil)
+	for name, txn := range map[string]*string{"null": nil, "non-null": strPtr("txn-1")} {
+		t.Run(name, func(t *testing.T) {
+			ic := NewInterceptor("localhost:0", registry.NewMockRegistry())
+			var b []byte
+			b = appendString(b, "ruby-kafka")
+			if txn == nil {
+				b = appendInt16(b, -1)
+			} else {
+				b = appendString(b, *txn)
+			}
+			b = appendInt16(b, 1)
+			b = appendInt32(b, 1500)
+			b = appendInt32(b, 1)
+			b = appendString(b, "orders")
+			b = appendInt32(b, 1)
+			b = appendInt32(b, 0)
+			b = appendInt32(b, int32(len(rs)))
+			b = append(b, rs...)
+
+			topic, key, value, _ := ic.extractProduceDataVersioned(b, 3)
+			if topic != "orders" || key != "k3" || value != `{"a":1}` {
+				t.Errorf("got topic=%q key=%q value=%q", topic, key, value)
+			}
+		})
+	}
+}
+
+func TestExtractProduceData_V3_Truncated(t *testing.T) {
+	ic := NewInterceptor("localhost:0", registry.NewMockRegistry())
+	b := appendString(nil, "c")
+	b = appendInt16(b, 50) // transactional_id length exceeds remaining bytes
+	if topic, _, _, _ := ic.extractProduceDataVersioned(b, 3); topic != "" {
+		t.Errorf("topic = %q, want empty", topic)
+	}
+}
+
+func strPtr(s string) *string { return &s }
