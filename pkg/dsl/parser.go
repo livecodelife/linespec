@@ -15,9 +15,9 @@ import (
 // Package-level compiled regex patterns — compiled once at program startup.
 var (
 	// parseExpectStatement patterns
-	reExpectHTTP     = regexp.MustCompile(`^HTTP:(\w+)$`)
+	reExpectHTTP         = regexp.MustCompile(`^HTTP:(\w+)$`)
 	reExpectMySQLWriteOp = regexp.MustCompile(`(?i)^(INSERT|UPDATE|DELETE)\s+(.+)$`)
-	reExpectCallN    = regexp.MustCompile(`(?i)\s+CALL\s+(\d+)$`)
+	reExpectCallN        = regexp.MustCompile(`(?i)\s+CALL\s+(\d+)$`)
 
 	// parseVerifyRule patterns — query
 	reVerifyQueryContains    = regexp.MustCompile(`(?i)^query\s+CONTAINS\s+['"](.+?)['"]$`)
@@ -70,10 +70,10 @@ var (
 	reVerifyCommandMatches     = regexp.MustCompile(`(?i)^command\s+MATCHES\s/(.+?)/$`)
 
 	// parseTestSpec / parseReceive patterns
-	reReceiveHTTP      = regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
-	reReceiveKafka     = regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
-	reReceiveGRPC      = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
-	reReceiveJob       = regexp.MustCompile(`(?i)^JOB$`)
+	reReceiveHTTP    = regexp.MustCompile(`(?i)^HTTP:(\w+)\s+(.+)$`)
+	reReceiveKafka   = regexp.MustCompile(`(?i)^(?:KAFKA|EVENT):(.+)$`)
+	reReceiveGRPC    = regexp.MustCompile(`(?i)^GRPC:(.+)/(\w+)$`)
+	reReceiveJob     = regexp.MustCompile(`(?i)^JOB$`)
 	reRespondStatus  = regexp.MustCompile(`(?i)^HTTP:(\d+)$`)
 	reReturnsPayload = regexp.MustCompile(`^\{\{(.+)\}\}$`)
 
@@ -183,20 +183,21 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		spec.Timeout = d
 	}
 
-	for p.peek().Type == TokenExpect {
-		expect, err := p.parseExpect()
-		if err != nil {
-			return nil, err
+	// EXPECT and EXPECT_NOT statements may be interleaved in any order.
+	for p.peek().Type == TokenExpect || p.peek().Type == TokenExpectNot {
+		if p.peek().Type == TokenExpect {
+			expect, err := p.parseExpect()
+			if err != nil {
+				return nil, err
+			}
+			spec.Expects = append(spec.Expects, *expect)
+		} else {
+			expectNot, err := p.parseExpectNot()
+			if err != nil {
+				return nil, err
+			}
+			spec.ExpectsNot = append(spec.ExpectsNot, *expectNot)
 		}
-		spec.Expects = append(spec.Expects, *expect)
-	}
-
-	for p.peek().Type == TokenExpectNot {
-		expectNot, err := p.parseExpectNot()
-		if err != nil {
-			return nil, err
-		}
-		spec.ExpectsNot = append(spec.ExpectsNot, *expectNot)
 	}
 
 	// RESPOND is required for HTTP-triggered tests, optional for Kafka consumer tests.
@@ -228,6 +229,12 @@ func (p *Parser) Parse(filename string) (*types.TestSpec, error) {
 		return nil, fmt.Errorf("RESPOND block is required for HTTP-triggered tests")
 	} else if spec.Receive.Channel == types.Job {
 		// Job-triggered tests have no synchronous response to verify.
+	}
+
+	// Anything left over was lexed but never consumed by a statement. Silently
+	// dropping it would let a spec pass with its assertions deleted.
+	if tok := p.peek(); tok != nil && tok.Type != TokenEOF {
+		return nil, fmt.Errorf("parser error at line %d: unexpected %s %q here; it does not belong to any preceding statement", tok.Line, tok.Type, tok.Literal)
 	}
 
 	return spec, nil
@@ -322,6 +329,14 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 		expect.RPCMethod = p.resolve(expect.RPCMethod)
 	}
 
+	if err := p.parseExpectClauses(expect); err != nil {
+		return nil, err
+	}
+	return expect, nil
+}
+
+// parseExpectClauses consumes the trailing clause family shared by EXPECT and EXPECT_NOT.
+func (p *Parser) parseExpectClauses(expect *types.ExpectStatement) error {
 	// Trailing EXPECT clauses (HEADERS, ACCESSING_TABLES, VERIFY_*, USING_SQL[_CONTAINS],
 	// NO_TRANSACTION, WITH, RETURNS, RESPONSE_HEADERS, legacy VERIFY) may appear in any
 	// order in the source. A fixed if-chain would only recognize each clause type once,
@@ -355,14 +370,14 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 			p.consume() // TokenUsingSql
 			sqlToken, err := p.expect(TokenSqlBlock)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			expect.SQL = p.resolve(sqlToken.Literal)
 		case TokenUsingSqlContains:
 			p.consume() // TokenUsingSqlContains
 			sqlToken, err := p.expect(TokenSqlBlock)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			expect.SQLContains = p.resolve(sqlToken.Literal)
 		case TokenNoTransaction:
@@ -378,7 +393,7 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 			// fails to parse and a spec that runs while quietly asserting
 			// something else.
 			if expect.Channel == types.ReadOracle || expect.Channel == types.WriteOracle {
-				return nil, fmt.Errorf(
+				return fmt.Errorf(
 					"line %d: RETURNS is not supported on %s. The Oracle proxy relays to a real "+
 						"database and never synthesises a response, so a mocked one cannot be "+
 						"substituted. Assert what was asked instead - VERIFY_OPERATION, "+
@@ -409,11 +424,11 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 			verifyToken := p.consume()
 			rule, err := parseVerifyRule(verifyToken.Literal, verifyToken.Line)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			expect.Verify = append(expect.Verify, *rule)
 		default:
-			return expect, nil
+			return nil
 		}
 	}
 }
@@ -434,8 +449,8 @@ func (p *Parser) parseExpectNot() (*types.ExpectStatement, error) {
 		expect.RPCMethod = p.resolve(expect.RPCMethod)
 	}
 
-	if p.peek().Type == TokenWith {
-		expect.WithFile = p.consume().Literal
+	if err := p.parseExpectClauses(expect); err != nil {
+		return nil, err
 	}
 
 	return expect, nil
