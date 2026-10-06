@@ -1,0 +1,51 @@
+id: prov-2026-439805d1
+title: Mongo EXPECT with VERIFY_WHERE, VERIFY_WHERE_COLUMNS or VERIFY_WRITTEN_VALUES can never match, and NoTransaction is a dead field
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Two leftovers from prov-2026-a3105d31. First, the legacy FindMock path now
+  applies VERIFY_* to Mongo expectations, but the Mongo interceptor passes only
+  a command name, so legacyVerifyHolds calls the constraint check with no WHERE
+  columns, WHERE values or written values. VERIFY_OPERATION and ACCESSING_TABLES
+  work on Mongo; VERIFY_WHERE_COLUMNS, VERIFY_WHERE and VERIFY_WRITTEN_VALUES
+  cannot hold, so a spec using them fails at run time with a message about the
+  statement not matching, which does not say the clause is unsupported.
+
+  Fix: the parser rejects those three clauses on READ:MONGODB and WRITE:MONGODB
+  with an error naming the clause and saying Mongo has no WHERE analysis, the
+  same approach the parser already takes for RETURNS on Oracle and for NO
+  TRANSACTION. Rejected: implementing WHERE analysis for Mongo filters, which is
+  a feature and a separate decision.
+
+  Second, the parser now rejects NO TRANSACTION, so ExpectStatement.NoTransaction
+  is never set and nothing outside one test reads it. Remove the field. That
+  test (TestLegacyFindMockEnforcesVerify_NoTransactionNotInert) reads the field
+  after a parse that is allowed to succeed, so it must be updated to assert the
+  parse error instead.
+constraints:
+  - A Mongo EXPECT using VERIFY_WHERE, VERIFY_WHERE_COLUMNS or VERIFY_WRITTEN_VALUES fails at parse time with a message naming the clause and the channel
+  - VERIFY_OPERATION and ACCESSING_TABLES on Mongo keep working
+  - SQL channels accept those clauses exactly as before
+  - ExpectStatement has no NoTransaction field and the NO TRANSACTION parse error is unchanged
+affected_scope:
+  - pkg/dsl/parser.go
+  - pkg/types/types.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a3105d31
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/dsl/mongo_verify_clauses_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestMongoRejectsWhereAnalysisClauses|TestNoTransactionRejectedAtParse' ./pkg/dsl/
+associated_traces: []
+monitors: []
+tags:
+  - dsl
+  - mongodb
+  - cleanup
