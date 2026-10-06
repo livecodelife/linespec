@@ -1,6 +1,6 @@
 id: prov-2026-919f8621
 title: 'EXPECT EVENT is never asserted: unhit Event mocks skipped and hit keys collide'
-status: draft
+status: open
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
