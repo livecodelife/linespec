@@ -1,6 +1,6 @@
 event_type: todo_updated
 todo_id: 1
-title: Buy groceries updated
-description: Milk, eggs, bread, and cheese
+title: Buy groceries
+description: Milk, eggs, and bread - organic only
 completed: false
 user_id: 42
