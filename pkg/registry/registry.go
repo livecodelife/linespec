@@ -1073,11 +1073,6 @@ func (r *MockRegistry) VerifyAll() error {
 				}
 			} else {
 				if count == 0 {
-					// Skip EVENT mocks since we use real Kafka and can't intercept
-					if mock.Channel == types.Event {
-						logger.Debug("Event sent successfully to topic [%s]", mock.Topic)
-						continue
-					}
 					return fmt.Errorf("expectation failed: [%s] on [%s/%s/%s] was never called", mock.Channel, mock.Table, mock.URL, mock.Topic)
 				}
 			}
@@ -1449,6 +1444,10 @@ func mockHitKey(mock *types.ExpectStatement) string {
 			sqlKey = "~" + mock.SQLContains
 		}
 		return fmt.Sprintf("%s-%s-%s-%s-%d", mock.Channel, mock.Database, mock.Table, sqlKey, mock.CallN)
+	case types.Event:
+		// Keyed by Topic (Table is always empty for EVENT) and Negative, so
+		// EXPECT EVENT and EXPECT_NOT EVENT on one topic stay distinct.
+		return fmt.Sprintf("%s-%s-neg=%t-%d", mock.Channel, mock.Topic, mock.Negative, mock.CallN)
 	case types.GRPC:
 		return fmt.Sprintf("%s-%s/%s-%d", mock.Channel, mock.Service, mock.RPCMethod, mock.CallN)
 	case types.ReadRedis, types.WriteRedis:

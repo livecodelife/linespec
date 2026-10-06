@@ -554,7 +554,24 @@ func commonAncestor(a, b string) string {
 // tests for this spec. Kafka consumer and Job tests are excluded because their trigger
 // mechanism (seeding + polling) requires a fresh interceptor per test.
 func canUsePersistentContainers(spec *types.TestSpec) bool {
-	return spec.Receive.Channel != types.Event && spec.Receive.Channel != types.Job
+	return spec.Receive.Channel != types.Event && spec.Receive.Channel != types.Job && !specHasEventExpect(spec)
+}
+
+// specHasEventExpect reports whether the spec asserts on a produced Kafka event
+// (EXPECT EVENT or EXPECT_NOT EVENT). Such a spec needs the Kafka interceptor in
+// the producer's path so the produce is observed and counted.
+func specHasEventExpect(spec *types.TestSpec) bool {
+	for _, e := range spec.Expects {
+		if e.Channel == types.Event {
+			return true
+		}
+	}
+	for _, e := range spec.ExpectsNot {
+		if e.Channel == types.Event {
+			return true
+		}
+	}
+	return false
 }
 
 // reloadProxy POSTs registry bytes to a proxy sidecar's /reload-registry endpoint.
@@ -1029,6 +1046,9 @@ type testRunner struct {
 	tempDir     string                // Temp directory for registry and other test artifacts
 	resolver    *interpolate.Resolver // Resolver for environment variable substitution
 	projectRoot string                // Common ancestor of cwd and spec BaseDir; used as the proxy volume mount source
+	// kafkaVerifyPort is the host port of the Kafka interceptor's verify sidecar for
+	// the spec currently running, or "" when no interceptor was started.
+	kafkaVerifyPort string
 }
 
 func (r *testRunner) run(ctx context.Context, specPath string) error {
@@ -1900,7 +1920,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	// Requires infrastructure.kafka: true, consistent with all other proxy types.
 	const kafkaProxyAlias = "kafka-proxy"
 	kafkaProxyContainerName := r.suite.containerNaming.GetProxyContainer(config.ContainerNameParams{SpecName: spec.Name, Type: "kafka"})
-	if serviceConfig.Infrastructure.Kafka && spec.Receive.Channel == types.Event {
+	needsKafkaProxy := serviceConfig.Infrastructure.Kafka && (spec.Receive.Channel == types.Event || specHasEventExpect(spec))
+	r.kafkaVerifyPort = ""
+	if needsKafkaProxy {
 		kafkaProxyCmd := []string{
 			"proxy", "kafka", "0.0.0.0:9092", "unused",
 			r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json",
@@ -1912,10 +1934,16 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_, err = r.suite.orch.StartContainer(ctx, &container.Config{
 			Image: proxyImage,
 			Cmd:   kafkaProxyCmd,
+			ExposedPorts: map[nat.Port]struct{}{
+				nat.Port("8081/tcp"): {},
+			},
 		}, &container.HostConfig{
 			Binds: []string{
 				r.projectRoot + ":" + r.suite.containerNaming.GetProjectMountPath(),
 				r.tempDir + ":" + r.suite.containerNaming.GetRegistryMountPath(),
+			},
+			PortBindings: map[nat.Port][]nat.PortBinding{
+				nat.Port("8081/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},
 			},
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -1926,6 +1954,11 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			return fmt.Errorf("failed to start Kafka interceptor: %w", err)
 		}
 		logger.Debug("Kafka interceptor started with alias %s", kafkaProxyAlias)
+		if inspectKafka, inspectErr := r.suite.orch.GetContainerInspect(ctx, kafkaProxyContainerName); inspectErr == nil && inspectKafka.NetworkSettings != nil {
+			if p, ok := inspectKafka.NetworkSettings.Ports["8081/tcp"]; ok && len(p) > 0 {
+				r.kafkaVerifyPort = p[0].HostPort
+			}
+		}
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -2159,6 +2192,9 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 	if redisHostPort != "" {
 		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + redisHostPort, "Redis proxy"})
 	}
+	if r.kafkaVerifyPort != "" {
+		proxyWaits = append(proxyWaits, proxyWait{"localhost:" + r.kafkaVerifyPort, "Kafka proxy"})
+	}
 	if len(proxyWaits) > 0 {
 		proxyErrs := make([]error, len(proxyWaits))
 		var proxyWg sync.WaitGroup
@@ -2327,7 +2363,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	// 1.5. Override KAFKA_BROKERS for consumer tests — must beat user-defined config since
 	// the interceptor must receive Fetch requests regardless of what the service config sets.
-	if serviceConfig.Infrastructure.Kafka && spec.Receive.Channel == types.Event {
+	if serviceConfig.Infrastructure.Kafka && (spec.Receive.Channel == types.Event || specHasEventExpect(spec)) {
 		envMap["KAFKA_BROKERS"] = kafkaProxyAlias + ":9092"
 	}
 
@@ -2519,6 +2555,9 @@ func (r *testRunner) runTestPhase(
 			if redisVerifyPort != "" {
 				r.collectHits("localhost:" + redisVerifyPort)
 			}
+			if r.kafkaVerifyPort != "" {
+				r.collectHits("localhost:" + r.kafkaVerifyPort)
+			}
 			if r.registry.VerifyAll() == nil {
 				logger.Debug("Async test: all expected interactions satisfied")
 				break asyncPollLoop
@@ -2564,6 +2603,9 @@ func (r *testRunner) runTestPhase(
 			if redisVerifyPort != "" {
 				r.collectHits("localhost:" + redisVerifyPort)
 			}
+			if r.kafkaVerifyPort != "" {
+				r.collectHits("localhost:" + r.kafkaVerifyPort)
+			}
 			if errs := r.registry.GetVerifyErrors(); len(errs) > 0 {
 				return r.withVarContext(fmt.Errorf("%s", errs[0]))
 			}
@@ -2600,6 +2642,9 @@ func (r *testRunner) runTestPhase(
 	}
 	if redisVerifyPort != "" {
 		r.collectHits("localhost:" + redisVerifyPort)
+	}
+	if r.kafkaVerifyPort != "" {
+		r.collectHits("localhost:" + r.kafkaVerifyPort)
 	}
 	// collectHits already waits for proxy responses with retry logic
 
