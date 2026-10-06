@@ -1,6 +1,6 @@
 id: prov-2026-79b59b40
 title: 'Config typos are silently ignored: non-strict YAML decode and unknown database type only logged at Debug'
-status: draft
+status: open
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
