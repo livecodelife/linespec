@@ -1,0 +1,49 @@
+id: prov-2026-919f8621
+title: 'EXPECT EVENT is never asserted: unhit Event mocks skipped and hit keys collide'
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  The registry's unmet-expectation sweep skips Event mocks under a stale
+  comment saying Kafka cannot be intercepted. A Kafka interceptor now exists,
+  so an EXPECT EVENT that never fires still passes. Two further defects hide
+  behind that skip. mockHitKey's default arm keys EVENT mocks by Table rather
+  than Topic, so every EVENT expectation collides on one key. Negative is in no
+  key arm, so EXPECT_NOT EVENT and EXPECT EVENT share a key. Separately, the
+  Kafka proxy exposes no verify port, is absent from the runner's proxy waits,
+  and its hits are not collected.
+
+  The fix keys EVENT by Topic and Negative, stops skipping Event mocks, and
+  wires the Kafka proxy into hit collection like the other proxies so an
+  unfired EXPECT EVENT fails and a fired EXPECT_NOT EVENT fails. Keeping the
+  skip and documenting EVENT as unasserted was rejected: the DSL presents it
+  as an assertion. If the Kafka verify wiring proves large it may be split
+  from the key fix at implementation time.
+constraints:
+  - An EXPECT EVENT whose topic was never produced to fails the spec as unmet
+  - An EXPECT_NOT EVENT whose topic was produced to fails the spec
+  - Two EXPECT EVENT mocks on different topics hit independently
+  - Negative and positive expectations on the same topic have distinct hit keys
+  - Existing Kafka specs in examples/*-linespecs that produce their expected events keep passing
+affected_scope:
+  - pkg/registry/registry.go
+  - pkg/proxy/kafka/interceptor.go
+  - pkg/runner/runner.go
+  - cmd/linespec/main_stable.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/registry/expect_event_assertion_test.go
+    type: unit
+    run_command: go test -count=1 -run TestExpectEventAsserted ./pkg/registry/
+associated_traces: []
+monitors: []
+tags:
+  - kafka
+  - registry
+  - silent-pass
