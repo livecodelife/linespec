@@ -44,7 +44,7 @@ associated_specs:
     run_command: go test -count=1 -run TestExpectEventAsserted ./pkg/registry/
   - path: pkg/proxy/kafka/metadata_response_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestMetadataResponse_Layout_V0toV2|TestProduceResponse_Layout_V0toV2' ./pkg/proxy/kafka/
+    run_command: go test -count=1 -run 'TestMetadataResponse_Layout|TestProduceResponse_Layout|TestExtractProduceData_V3' ./pkg/proxy/kafka/
 associated_traces: []
 monitors: []
 tags:
