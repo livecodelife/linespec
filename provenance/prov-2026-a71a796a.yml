@@ -1,6 +1,6 @@
 id: prov-2026-a71a796a
 title: EXPECT_NOT drops trailing clauses and following EXPECTs; parser never rejects unconsumed tokens
-status: draft
+status: open
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
