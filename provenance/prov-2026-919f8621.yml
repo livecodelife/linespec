@@ -28,6 +28,7 @@ constraints:
 affected_scope:
   - pkg/registry/registry.go
   - pkg/proxy/kafka/interceptor.go
+  - pkg/proxy/kafka/metadata_response_test.go
   - pkg/runner/runner.go
   - cmd/linespec/main_stable.go
 forbidden_scope: []
@@ -41,6 +42,9 @@ associated_specs:
   - path: pkg/registry/expect_event_assertion_test.go
     type: unit
     run_command: go test -count=1 -run TestExpectEventAsserted ./pkg/registry/
+  - path: pkg/proxy/kafka/metadata_response_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestMetadataResponse_Layout_V0toV2|TestProduceResponse_Layout_V0toV2' ./pkg/proxy/kafka/
 associated_traces: []
 monitors: []
 tags:
