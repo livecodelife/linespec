@@ -29,6 +29,9 @@ affected_scope:
   - pkg/registry/registry.go
   - pkg/proxy/kafka/interceptor.go
   - pkg/proxy/kafka/metadata_response_test.go
+  - examples/todo-linespecs/create_todo_success.linespec
+  - examples/todo-linespecs/payloads/todo_insert_result.yaml
+  - examples/todo-linespecs/payloads/todo_updated_event.yaml
   - pkg/runner/runner.go
   - cmd/linespec/main_stable.go
 forbidden_scope: []
