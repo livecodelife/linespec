@@ -1,0 +1,42 @@
+id: prov-2026-79b59b40
+title: 'Config typos are silently ignored: non-strict YAML decode and unknown database type only logged at Debug'
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  LoadConfigFile decodes .linespec.yml with a non-strict yaml.Unmarshal, so a
+  misspelled key (proxy, init_script, start_command) is dropped and the default
+  applies. An unknown database type reaches the runner's switch default and
+  logs only at Debug, so no proxy starts and mocks silently never match. Both
+  are configuration mistakes reported as nothing.
+
+  The fix decodes with unknown fields rejected, naming the key and line, and
+  makes an unknown database type a config validation error listing the
+  supported types. Warning instead of erroring was rejected: warnings in a
+  green run are the silence this fixes. The risk is configs that carry
+  currently ignored keys, so strictness must be checked against every
+  .linespec.yml in the repo's examples before it ships.
+constraints:
+  - An unknown top-level or nested key in .linespec.yml fails loading with the key name
+  - An unknown database type fails validation and names the supported types
+  - Every .linespec.yml under examples/ loads without error
+  - The provenance section, including embedding settings, still loads
+affected_scope:
+  - pkg/config/parser.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/strict_config_test.go
+    type: unit
+    run_command: go test -count=1 -run TestStrictConfig ./pkg/config/
+associated_traces: []
+monitors: []
+tags:
+  - config
+  - silent-pass
