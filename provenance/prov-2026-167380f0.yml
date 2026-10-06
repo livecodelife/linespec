@@ -1,0 +1,85 @@
+id: prov-2026-167380f0
+title: Protocol-agnostic testing core
+status: draft
+created_at: "2026-10-06"
+author: caleb.cowen@linq.com
+intent: >
+  Adding a protocol or database today means touching the parser if-ladder, a
+  types.ExpectChannel enum, per-protocol Find* and CheckNegative* functions in
+  the registry, a hand-built string hit key, a proxy switch in main_stable.go,
+  and per-database copy-pasted lifecycles in a 1,400-line runner. Each seam is
+  where silent-pass bugs have appeared: dropped clauses, colliding hit keys,
+  unasserted EVENT, dead VERIFY_*. Postgres proxy defects alone are about a
+  quarter of historical testing bugs. This blueprint replaces the seams with a
+  small typed core so a new protocol is a codec plus a spec entry, and an
+  unconsumed or unenforced clause is structurally impossible.
+
+  The core has seven parts, to become imprints. (1) Proxies decode wire
+  traffic into an Interaction (Protocol, Direction, Database, Resources, Op,
+  Attrs, Body, Seq); the parser turns every clause into a typed Predicate
+  (eq, present, contains, matches, json-subset) and each channel declares its
+  allowed clauses, so unconsumed clauses are parse errors. (2) One Matcher in
+  the registry replaces the per-protocol Find* and CheckNegative* and returns
+  copies, never mutating registry-owned mocks. (3) Satisfaction is keyed by a
+  parser-assigned Expectation ID (file plus index), and sidecars report
+  id-to-count. (4) A ProtocolSpec registry (ParseHead, AllowedClauses,
+  Directions) replaces the channel enum and if-ladder. (5) A shared proxy
+  runtime in pkg/proxy/base: accept, dial, shutdown, Reset, and a single
+  serialized client writer so upstream and mock frames never interleave, plus
+  a small Codec interface (ReadFrame, Classify, Encode); the unused
+  base.ProtocolHandler is deleted, a Factory registry replaces the switch in
+  main_stable.go, and payloads load per call rather than via shared
+  loader.BaseDir. (6) A runner Dependency interface (Start, Env, ProxyArgs,
+  VerifyAddr, Reset, Stop) registered by type replaces the per-database
+  switches, positional verify ports and bool cleanup guards, with a Sidecar
+  slice and an EnvBuilder with explicit precedence. (7) Migrate PostgreSQL
+  onto pgx pgproto3 first, then MySQL onto go-mysql server, others
+  incrementally.
+
+  Rejected: fixing each bug in place indefinitely, which leaves the class
+  open. Out of scope: record/replay, real-dependency observation, out-of-process
+  plugins (WASM, go-plugin), and framework auto-detection. The near-term bug
+  records for EXPECT_NOT clauses, EXPECT EVENT, migrations, config strictness
+  and dead clauses ship independently first and are prerequisites in spirit.
+constraints:
+  - No DSL syntax breakage for valid existing specs
+  - examples/*-linespecs suites keep passing at every imprint
+  - Migrate protocol by protocol behind the scenes; the codec swap is not user visible
+  - Build a recorded byte-transcript conformance corpus per driver before swapping that driver's codec
+  - The staticcheck and deadcode gate in scripts/go-quality.sh passes at every step
+  - Unconsumed clauses are parse errors for every channel
+  - Matcher never mutates registry-owned mocks
+  - "Out of scope: record/replay, real-dependency observation, out-of-process plugins, framework auto-detection"
+affected_scope:
+  - pkg/dsl/**
+  - pkg/types/**
+  - pkg/registry/**
+  - pkg/verify/**
+  - pkg/proxy/**
+  - pkg/runner/**
+  - pkg/config/**
+  - cmd/linespec/main_stable.go
+  - go.mod
+  - go.sum
+  - LINESPEC.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-a71a796a
+  - prov-2026-919f8621
+  - prov-2026-3168d841
+  - prov-2026-79b59b40
+  - prov-2026-a3105d31
+  - prov-2026-28061661
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - architecture
+  - protocols
+  - registry
+  - proxy
