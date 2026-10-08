@@ -1,6 +1,6 @@
 id: prov-2026-a3105d31
 title: 'Dead semantic clauses: VERIFY_* on legacy table EXPECTs, NO_TRANSACTION, and MongoDB ACCESSING_TABLES/VERIFY_* are parsed but never enforced'
-status: open
+status: implemented
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -34,7 +34,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-28061661
-sealed_at_sha: ""
+sealed_at_sha: 60e5ea7acfa936ac06cca54e8a1a1a08d3304a83
 associated_specs:
   - path: pkg/registry/legacy_verify_enforcement_test.go
     type: unit
