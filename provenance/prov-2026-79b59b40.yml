@@ -34,7 +34,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/strict_config_test.go
     type: unit
-    run_command: go test -count=1 -run TestStrictConfig ./pkg/config/
+    run_command: go test -count=1 -run TestStrictConfig ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
