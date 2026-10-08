@@ -1,6 +1,6 @@
 id: prov-2026-919f8621
 title: 'EXPECT EVENT is never asserted: unhit Event mocks skipped and hit keys collide'
-status: open
+status: implemented
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -40,7 +40,7 @@ extends: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 2bf9e4e6e71d7e3e1c091e2758a78e5625b69564
 associated_specs:
   - path: pkg/registry/expect_event_assertion_test.go
     type: unit
