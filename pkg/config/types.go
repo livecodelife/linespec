@@ -165,6 +165,21 @@ type DatabaseConfig struct {
 	Password   string `yaml:"password"`
 	Host       string `yaml:"host"`            // Host alias the app uses to connect (proxy occupies this alias on the Docker network)
 	Proxy      *bool  `yaml:"proxy,omitempty"` // Whether to use a proxy for this database (enables interception)
+
+	ReadyTimeoutSeconds int `yaml:"ready_timeout_seconds"` // Seconds to wait for the database to accept connections (default 90)
+}
+
+// defaultDBReadyTimeout is how long to wait for a database to accept
+// connections when ready_timeout_seconds is unset.
+const defaultDBReadyTimeout = 90 * time.Second
+
+// ReadyTimeout returns the database readiness timeout, defaulting to 90s when
+// ready_timeout_seconds is unset.
+func (d DatabaseConfig) ReadyTimeout() time.Duration {
+	if d.ReadyTimeoutSeconds <= 0 {
+		return defaultDBReadyTimeout
+	}
+	return time.Duration(d.ReadyTimeoutSeconds) * time.Second
 }
 
 // ContainerNaming defines configurable container and network naming
