@@ -44,10 +44,10 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/registry/expect_event_assertion_test.go
     type: unit
-    run_command: go test -count=1 -run TestExpectEventAsserted ./pkg/registry/
+    run_command: go test -count=1 -run TestExpectEventAsserted ./$(dirname {{path}})
   - path: pkg/proxy/kafka/metadata_response_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestMetadataResponse_Layout|TestProduceResponse_Layout|TestExtractProduceData_V3' ./pkg/proxy/kafka/
+    run_command: go test -count=1 -run 'TestMetadataResponse_Layout|TestProduceResponse_Layout|TestExtractProduceData_V3' ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
