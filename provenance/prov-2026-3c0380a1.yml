@@ -1,0 +1,101 @@
+id: prov-2026-3c0380a1
+title: 'provenance deprecate: auto-commit rejected by the deprecated record''s own scope check'
+status: draft
+created_at: "2026-08-24"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: >
+  Reported against v3.18.0 (d229fa8, 2026-08-19) with `provenance.enforcement: strict`,
+  `commit_on_status_change: true`, `commit_tag_required: true`. `linespec provenance
+  deprecate` cannot complete on any record whose `affected_scope` is non-empty (allowlist
+  mode): `Deprecate` (pkg/provenance/commands.go:1293-1367) saves the record with
+  `status: deprecated` to disk *before* auto-committing, then `Commands.CommitRecord`
+  stages the record's own YAML and runs `git commit`, which triggers the pre-commit
+  hook's `CheckStaged` (pkg/provenance/git.go:515-710). `CheckStaged` only exempts a
+  record's own file from its `affected_scope` allowlist in two cases: (1) status is
+  still `draft` or `open` at read time (git.go:641), or (2) the staged/HEAD diff is
+  specifically an `open` -> `implemented` transition, detected by
+  `isCompletionTransitionBetween` (git.go:657-673, 856+). By the time `CheckStaged` runs,
+  the Loader reads the record's on-disk status as `deprecated` (already saved), so
+  neither exemption matches — draft/open no longer applies, and the transition isn't
+  open->implemented. The file falls through to the generic `record.IsInScope` check
+  (git.go:693), which — in allowlist mode — rejects the record's own path whenever
+  `affected_scope` doesn't happen to also list the provenance directory, exactly as in
+  the reporter's repro (`affected_scope` covered linespecs/scripts, not `provenance/**`).
+  `Commands.Deprecate` then rolls the transition back atomically (commands.go:1343-1356),
+  so the record is left unchanged and the deprecation reason is lost — there is no
+  workaround short of hand-editing the managed `status` field or using `--no-verify`,
+  both of which the reporter correctly ruled out.
+
+  `open` and `complete` aren't affected only because their own transitions each have a
+  dedicated exemption; `deprecate` (and, by the same gap, marking an already-implemented
+  record deprecated) has none. The fix generalizes the record's-own-file exemption in
+  `CheckStaged` (and confirms `CheckCommit`'s already-status-agnostic exemption at
+  git.go:436-459 needs no change) to also recognize a valid deprecation transition
+  (`draft`/`open`/`implemented` -> `deprecated`), gated only by `forbidden_scope` exactly
+  like the existing exemptions — never granting deprecate a free pass into forbidden
+  territory.
+
+  Minor secondary issue from the same report: when `deprecate`'s auto-commit is rejected,
+  the pre-commit hook's own `linespec provenance lint --record <id>` invocation
+  (pkg/provenance/commands.go InstallHooks, the pre-commit heredoc) never passes `--all`,
+  so the `⚠ N warnings` the summary line reports are never actually printed — the only
+  diagnostic available before the rollback is silently withheld. The hook should surface
+  those warnings so a failed transition isn't a dead end for debugging.
+constraints:
+  - >-
+    `linespec provenance deprecate` must succeed (auto-commit and all) on a record whose
+    `affected_scope` is a non-empty allowlist that does not itself list the record's own
+    path or the configured `provenance.dir` — matching how `open` and `complete` already
+    behave for their own transitions.
+  - >-
+    The fix lives in the scope-check exemption logic shared by the pre-commit path
+    (`CommitChecker.CheckStaged`, pkg/provenance/git.go), generalized to recognize a
+    draft/open/implemented -> deprecated transition on the record's own file, the same
+    way `isCompletionTransitionBetween` recognizes open -> implemented. `CheckCommit`
+    (the historical/audit path) already tolerates this because its own-file exemption is
+    status-agnostic (gated only on "not yet implemented before this commit" plus
+    `forbidden_scope`) and must not regress.
+  - >-
+    The exemption must remain conditional on `forbidden_scope`: if the record's own path
+    (or the provenance directory) is explicitly listed in `forbidden_scope`, deprecate
+    must still be rejected by the scope check, exactly as `open`/`complete` already
+    respect `forbidden_scope` for their own transitions.
+  - >-
+    No change to `open`'s or `complete`'s existing exemption behavior, and no relaxation
+    of enforcement for any file other than the record's own YAML — a deprecate commit
+    that touches unrelated out-of-scope files must still be rejected.
+  - >-
+    Deprecating an already-`implemented` record (not just an `open` one) into `deprecated`
+    must also succeed under a non-empty `affected_scope`, since `Deprecate` permits that
+    transition (commands.go:1309-1317) and the same scope-check gap applies to it.
+  - >-
+    The pre-commit hook's lint invocation surfaces its warnings (not just the summary
+    counts) when a transition's commit is about to be evaluated, so a rejected `deprecate`
+    (or any other transition) leaves the `⚠ N warnings` from the summary line visible
+    rather than silently discarded.
+  - "make test passes, including new regression coverage for the CheckStaged deprecate-transition exemption."
+affected_scope:
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
+  - pkg/provenance/commands.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-019
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: go test ./pkg/provenance/... -run 'TestCheckStaged_.*Deprecat.*|TestCheckCommit_.*Deprecat.*' -v
+  - path: provenance/prov-2026-3c0380a1.yml
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - bugfix
+  - git-hooks
+  - scope-validation
+  - deprecate
