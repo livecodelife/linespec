@@ -1,0 +1,59 @@
+id: prov-2026-b7607eaa
+title: Document isolated default container names and orphan cleanup caveat
+status: draft
+created_at: "2026-10-08"
+author: caleb.cowen@linq.com
+intent: >
+  The README and LINESPEC.md container_naming examples still show
+  linespec-shared-db, linespec-shared-net, linespec-shared-kafka,
+  linespec-migrate-{{ .ServiceName }}, app-{{ .SpecName }} and
+  proxy-{{ .Type }}-{{ .SpecName }} as if they were the defaults. Since the
+  concurrent-run fix, the defaults carry a suffix of 6 hex characters of the
+  sha256 of the project root plus a 6 hex per-process token, so two runs never
+  share names. A reader copying the old block gets the collision the fix removed.
+
+  Fix the docs: state the new isolated defaults, mark the example values as
+  explicit overrides used verbatim (per role; unset roles still get the isolated
+  default), and say concurrent runs are now isolated. Document the cost: cleanup
+  only removes resources the run created, so a crashed run's uniquely named
+  containers and network are not swept by later runs and must be removed by
+  hand with docker rm -f and docker network rm. Add a CHANGELOG entry, since
+  this is a user-visible behavior change. Generated docs/*.html and llms*.txt
+  are rebuilt from source and are not edited.
+
+  Rejected: deleting the example block, because users still need to see the
+  override keys and template variables. Rejected: restoring a startup sweep of
+  stale linespec-* resources to avoid the orphan caveat, because that is the
+  behavior that let one run destroy another's network.
+constraints:
+  - README.md and LINESPEC.md no longer present the fixed names as defaults
+  - Docs state the default suffix scheme (project-root hash plus per-process token)
+  - Docs state explicit container_naming values are used verbatim, per role, and that unset roles still get the isolated default
+  - Docs state concurrent runs are isolated
+  - Docs state crashed runs leave orphaned resources that are not swept and must be removed manually
+  - CHANGELOG.md gains an entry following its existing Keep a Changelog format
+  - No hand edits to docs/*.html or docs/llms*.txt
+  - No code changes
+affected_scope:
+  - README.md
+  - LINESPEC.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c3977f44
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/container_naming_docs_test.go
+    type: unit
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - docs
+  - docker
+  - container-naming
+  - concurrency
