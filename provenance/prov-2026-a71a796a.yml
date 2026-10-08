@@ -39,7 +39,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/dsl/expect_not_clauses_test.go
     type: unit
-    run_command: go test -count=1 -run TestExpectNotTrailingClauses ./pkg/dsl/
+    run_command: go test -count=1 -run TestExpectNotTrailingClauses ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
