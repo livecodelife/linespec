@@ -1,0 +1,49 @@
+id: prov-2026-fbc7387f
+title: Build all example app images before the first example suite runs in CI
+status: draft
+created_at: "2026-10-08"
+author: caleb.cowen@linq.com
+intent: >
+  The CI job "Example LineSpec Tests" fails at the user-linespecs suite with
+  "migrations failed for service todo-api: failed to start migration
+  container: No such image: todo-api:latest". The workflow builds each example
+  app image just before its own suite (user-service, test, todo-api, test,
+  order-service, ...), but the runner runs migrations for every service
+  config it discovers, not only the suite's own. Until the migration-failure
+  record made failed migrations fatal, a missing image was swallowed at Debug
+  and the ordering never mattered. CI was relying on that swallowed failure.
+
+  The fix builds every example app image (user-service, todo-api,
+  order-service, order-events-service) before the first example suite runs,
+  leaving suite order and the docker build commands unchanged. The job stops
+  at its first failure, so the later suites have not run yet and may hide the
+  same kind of failure; this also removes the image ordering as a cause.
+
+  Rejected: restoring the swallowed migration error, which is the bug the
+  earlier record fixed. Narrowing the runner to migrate only the suite's own
+  services is a separate behaviour change and a possible follow-up record.
+constraints:
+  - Every example app image is built before the first example suite runs
+  - Suite order and the existing docker build commands are otherwise unchanged
+  - No other workflow changes
+affected_scope:
+  - .github/workflows/ci.yml
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-3168d841
+  - prov-2026-c3977f44
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/ci_example_image_order_test.go
+    type: unit
+    run_command: go test -count=1 -run TestCIBuildsAllExampleImagesBeforeFirstSuite ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - ci
+  - migrations
+  - example-images
