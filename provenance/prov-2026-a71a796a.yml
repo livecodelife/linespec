@@ -1,6 +1,6 @@
 id: prov-2026-a71a796a
 title: EXPECT_NOT drops trailing clauses and following EXPECTs; parser never rejects unconsumed tokens
-status: open
+status: implemented
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -35,7 +35,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-28061661
-sealed_at_sha: ""
+sealed_at_sha: e4031ca379fbf5b1cf908d3f6559898958ecaade
 associated_specs:
   - path: pkg/dsl/expect_not_clauses_test.go
     type: unit
