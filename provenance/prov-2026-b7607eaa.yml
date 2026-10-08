@@ -1,43 +1,56 @@
 id: prov-2026-b7607eaa
-title: Document isolated default container names and orphan cleanup caveat
+title: Docs and release prep for v3.25.0 including isolated container-name defaults
 status: draft
 created_at: "2026-10-08"
 author: caleb.cowen@linq.com
 intent: >
+  Prepare the v3.25.0 release docs together with the container-name docs fix.
   The README and LINESPEC.md container_naming examples still show
-  linespec-shared-db, linespec-shared-net, linespec-shared-kafka,
-  linespec-migrate-{{ .ServiceName }}, app-{{ .SpecName }} and
-  proxy-{{ .Type }}-{{ .SpecName }} as if they were the defaults. Since the
-  concurrent-run fix, the defaults carry a suffix of 6 hex characters of the
-  sha256 of the project root plus a 6 hex per-process token, so two runs never
-  share names. A reader copying the old block gets the collision the fix removed.
+  linespec-shared-db, linespec-shared-net, linespec-shared-kafka and the
+  per-spec app/proxy/migrate names as if they were defaults. Since the
+  concurrent-run fix, defaults carry 6 hex characters of the sha256 of the
+  project root plus a 6 hex per-process token, so two runs never share names.
+  A reader copying the old block gets the collision the fix removed.
 
-  Fix the docs: state the new isolated defaults, mark the example values as
-  explicit overrides used verbatim (per role; unset roles still get the isolated
-  default), and say concurrent runs are now isolated. Document the cost: cleanup
-  only removes resources the run created, so a crashed run's uniquely named
-  containers and network are not swept by later runs and must be removed by
-  hand with docker rm -f and docker network rm. Add a CHANGELOG entry, since
-  this is a user-visible behavior change. Generated docs/*.html and llms*.txt
-  are rebuilt from source and are not edited.
+  Fix the docs: state the isolated defaults, mark the example values as
+  explicit overrides used verbatim per role (unset roles still get the
+  isolated default), say concurrent runs are isolated, and document the cost:
+  cleanup removes only what the run created, so a crashed run's orphaned
+  containers and network must be removed by hand with docker rm -f and docker
+  network rm.
 
-  Rejected: deleting the example block, because users still need to see the
-  override keys and template variables. Rejected: restoring a startup sweep of
-  stale linespec-* resources to avoid the orphan caveat, because that is the
-  behavior that let one run destroy another's network.
+  Release prep: bump 3.24.0 to 3.25.0 with ./scripts/bump-version.sh 3.25.0
+  (edits VERSION, README.md, LINESPEC.md, PROVENANCE_RECORDS.md, including the
+  proxy image tag references). Minor, because sealed work since 3.24.0 made
+  behaviour stricter. Add a CHANGELOG 3.25.0 entry with an Upgrade note
+  (specs that passed only because a clause was ignored can now fail; default
+  Docker names carry a per-run suffix), covering prov-2026-79b59b40, a71a796a,
+  a3105d31, 919f8621, 3168d841 and c3977f44, grouped Changed and Fixed.
+
+  Rejected: deleting the example block, since users need the override keys.
+  Rejected: restoring a startup sweep of stale linespec-* resources, since that
+  let one run destroy another's network. This record creates no tag, push or
+  release; those are separate manual steps.
 constraints:
   - README.md and LINESPEC.md no longer present the fixed names as defaults
   - Docs state the default suffix scheme (project-root hash plus per-process token)
   - Docs state explicit container_naming values are used verbatim, per role, and that unset roles still get the isolated default
   - Docs state concurrent runs are isolated
   - Docs state crashed runs leave orphaned resources that are not swept and must be removed manually
-  - CHANGELOG.md gains an entry following its existing Keep a Changelog format
+  - VERSION reads 3.25.0, produced by ./scripts/bump-version.sh 3.25.0 (also updates README.md, LINESPEC.md, PROVENANCE_RECORDS.md and proxy image tag references)
+  - CHANGELOG.md gains a "## [3.25.0] - 2026-10-08" entry in the existing Keep a Changelog style, entries written as "- **Title** ([prov-id](./provenance/prov-id.yml)) — text", grouped Changed and Fixed
+  - The 3.25.0 entry has an Upgrade note like 3.24.0's: unconsumed EXPECT_NOT trailing clauses and NO TRANSACTION are parse errors; unknown config keys and database types are rejected by strict config decode; EXPECT EVENT is asserted and unhit events no longer skipped; VERIFY_* enforced in legacy FindMock and Mongo ACCESSING_TABLES; migration failures surface and non-MySQL migrations are deferred until their DB is up; Kafka Metadata v1/v2 and Produce v0-v3 responses fixed; default Docker container/network names carry a per-run suffix
+  - The entry covers every sealed record since 3.24.0 (prov-2026-79b59b40, a71a796a, a3105d31, 919f8621, 3168d841, c3977f44), worded from each record's intent
+  - The existing docs test pkg/config/container_naming_docs_test.go is extended by spec-author to also assert the VERSION file reads 3.25.0 and CHANGELOG.md has a "## [3.25.0]" heading (spec-author writes it before this record opens)
+  - No tag, push or release is created by this record
   - No hand edits to docs/*.html or docs/llms*.txt
   - No code changes
 affected_scope:
   - README.md
   - LINESPEC.md
   - CHANGELOG.md
+  - VERSION
+  - PROVENANCE_RECORDS.md
 forbidden_scope: []
 type: bug
 extends: prov-2026-001
@@ -45,6 +58,11 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-c3977f44
+  - prov-2026-79b59b40
+  - prov-2026-a71a796a
+  - prov-2026-a3105d31
+  - prov-2026-919f8621
+  - prov-2026-3168d841
 sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
@@ -53,6 +71,7 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags:
+  - release
   - docs
   - docker
   - container-naming
