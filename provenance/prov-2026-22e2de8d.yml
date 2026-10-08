@@ -28,6 +28,8 @@ constraints:
 affected_scope:
   - pkg/runner/runner.go
   - pkg/config/types.go
+  - LINESPEC.md
+  - CHANGELOG.md
 forbidden_scope: []
 type: bug
 extends: prov-2026-001

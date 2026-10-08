@@ -5,6 +5,12 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Configurable database readiness timeout** ([prov-2026-22e2de8d](./provenance/prov-2026-22e2de8d.yml)) — the MySQL, PostgreSQL and MongoDB readiness waits were fixed at 30s, 30s and 45s. They now use `database.ready_timeout_seconds` (settable per `databases:` entry), default 90s, so a slow-starting database on a loaded Docker host no longer fails setup. The timeout error now states the timeout used, the last connection error, and the config key that raises it.
+
 ## [3.25.0] - 2026-10-08
 
 **Upgrade note.** This release closes a set of silent-pass bugs, so specs and configs that passed only because something was ignored can now fail. Unconsumed `EXPECT_NOT` trailing clauses and `NO TRANSACTION` are now parse errors. Unknown `.linespec.yml` keys and unknown database types are rejected by strict config decode. `EXPECT EVENT` is now asserted and unhit events are no longer skipped. `VERIFY_*` is enforced in the legacy `FindMock` path and for Mongo `ACCESSING_TABLES`. Migration failures now surface, and non-MySQL migrations are deferred until their database is up. Kafka Metadata v1/v2 and Produce v0-v3 response layouts are fixed (Produce v0-v3 are now advertised). Default Docker container and network names now carry a per-run suffix (6 hex of the sha256 of the project root plus a 6 hex per-process token); explicit `container_naming` values are unchanged. Scripts, such as bench-style cleanup, that remove containers by name substring (`linespec-`, `proxy-`, `app-`) can now destroy other concurrent runs' containers and must be scoped to their own names. A crashed run's resources are not swept; remove them by hand with `docker rm -f` and `docker network rm`.
