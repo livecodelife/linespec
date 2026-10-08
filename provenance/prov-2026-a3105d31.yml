@@ -38,7 +38,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/registry/legacy_verify_enforcement_test.go
     type: unit
-    run_command: go test -count=1 -run TestLegacyFindMockEnforcesVerify ./pkg/registry/
+    run_command: go test -count=1 -run TestLegacyFindMockEnforcesVerify ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
