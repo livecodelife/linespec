@@ -277,7 +277,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		// Additional wait for MySQL to fully initialize and accept connections
 		// Use actual MySQL ping to verify readiness instead of fixed delays
 		logger.Debug("Verifying MySQL is ready")
-		if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, dbConfig.Username, dbConfig.Password, dbConfig.Database, 30*time.Second); err != nil {
+		if err := s.waitForMySQL(ctx, "localhost", s.dbHostPort, dbConfig.Username, dbConfig.Password, dbConfig.Database, dbConfig.ReadyTimeout()); err != nil {
 			return fmt.Errorf("MySQL not accepting connections: %w", err)
 		}
 		logger.Debug("MySQL is ready")
@@ -1553,7 +1553,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				if err != nil {
 					return fmt.Errorf("failed to get PostgreSQL host port (%s): %w", db.Host, err)
 				}
-				if err := r.suite.waitForPostgreSQL(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database, 30*time.Second); err != nil {
+				if err := r.suite.waitForPostgreSQL(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database, db.ReadyTimeout()); err != nil {
 					return fmt.Errorf("PostgreSQL not accepting connections (%s): %w", db.Host, err)
 				}
 				logger.Debug("PostgreSQL is ready (host=%s)", db.Host)
@@ -1752,7 +1752,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				if err != nil {
 					return fmt.Errorf("failed to get MongoDB host port (%s): %w", db.Host, err)
 				}
-				if err := r.suite.waitForMongoDB(ctx, "localhost", mongoHostPort, db.Username, db.Password, db.Database, 45*time.Second); err != nil {
+				if err := r.suite.waitForMongoDB(ctx, "localhost", mongoHostPort, db.Username, db.Password, db.Database, db.ReadyTimeout()); err != nil {
 					return fmt.Errorf("MongoDB not accepting connections (%s): %w", db.Host, err)
 				}
 				logger.Debug("MongoDB is ready (host=%s)", db.Host)
@@ -3116,6 +3116,7 @@ func (s *TestSuite) captureContainerLogs(containerName string) string {
 func (s *TestSuite) waitForSQLDB(ctx context.Context, driver, dsn, label, host, port string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var attempt int
+	var lastErr error
 	for time.Now().Before(deadline) {
 		db, err := sql.Open(driver, dsn)
 		if err == nil {
@@ -3127,6 +3128,7 @@ func (s *TestSuite) waitForSQLDB(ctx context.Context, driver, dsn, label, host, 
 				return nil
 			}
 		}
+		lastErr = err
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -3134,7 +3136,15 @@ func (s *TestSuite) waitForSQLDB(ctx context.Context, driver, dsn, label, host, 
 		}
 		attempt++
 	}
-	return fmt.Errorf("timeout waiting for %s at %s:%s", label, host, port)
+	return readyTimeoutError(label, host, port, timeout, lastErr)
+}
+
+// readyTimeoutError builds the actionable timeout error for a database wait: it
+// names the timeout used, the last connection error, and the config key that
+// raises the timeout.
+func readyTimeoutError(label, host, port string, timeout time.Duration, lastErr error) error {
+	return fmt.Errorf("timeout waiting for %s at %s:%s after %ds (last error: %v); raise database.ready_timeout_seconds in .linespec.yml or inspect the database container logs",
+		label, host, port, int(timeout.Seconds()), lastErr)
 }
 
 // waitForMySQL polls until MySQL is accepting connections using actual MySQL driver
@@ -3176,12 +3186,14 @@ func (s *TestSuite) waitForMongoDB(ctx context.Context, host, port, user, passwo
 	deadline := time.Now().Add(timeout)
 	addr := host + ":" + port
 	var attempt int
+	var lastErr error
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
 		if err == nil {
 			conn.Close()
 			return nil
 		}
+		lastErr = err
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -3189,7 +3201,7 @@ func (s *TestSuite) waitForMongoDB(ctx context.Context, host, port, user, passwo
 		}
 		attempt++
 	}
-	return fmt.Errorf("timeout waiting for MongoDB at %s:%s", host, port)
+	return readyTimeoutError("MongoDB", host, port, timeout, lastErr)
 }
 
 // truncateMongoDBCollections drops all non-system collections in the service database.
