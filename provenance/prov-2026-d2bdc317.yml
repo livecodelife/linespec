@@ -1,0 +1,46 @@
+id: prov-2026-d2bdc317
+title: Bump order-service builder image to rust 1.90 for ctutils rustc requirement
+status: draft
+created_at: "2026-10-08"
+author: caleb.cowen@linq.com
+intent: |
+  The "Example LineSpec Tests" CI job fails at `docker build -t order-service:latest
+  examples/order-service/` with "rustc 1.85.1 is not supported ... ctutils@0.4.3
+  requires rustc 1.87". examples/order-service has no committed Cargo.lock, so
+  dependency versions float, and a crate release since main's last green run
+  (2026-09-30) needs a newer compiler. The failure is time-dependent, not caused
+  by branch code; prov-2026-fbc7387f moved all image builds ahead of the first
+  suite, which is why this step is now reached first.
+
+  Fix: change the builder base image in examples/order-service/Dockerfile from
+  rust:1.85-slim-bookworm to rust:1.90-slim-bookworm. Verified in a scratch copy:
+  both order-service and order-events-service images build and
+  `linespec test examples/order-linespecs/` passes 2/2.
+
+  Considered: committing a Cargo.lock. It pins dependencies and is the more
+  durable fix, but a lock generated today would resolve to the same ctutils and
+  still need a toolchain of 1.87 or newer, so the base image must move anyway.
+  The toolchain bump is the smallest change; adding a Cargo.lock is a possible
+  follow-up. Rejected: floating rust:1-slim-bookworm, since an unpinned toolchain
+  makes CI results drift.
+constraints:
+  - The order-service image builds from a clean checkout with no Cargo.lock.
+  - examples/order-linespecs still pass.
+  - No source changes; only the builder base image tag changes.
+affected_scope:
+  - examples/order-service/Dockerfile
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-fbc7387f
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/order_service_toolchain_test.go
+    type: unit
+    run_command: go test -count=1 -run TestOrderServiceBuilderToolchainIsRecentEnough ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags: []
