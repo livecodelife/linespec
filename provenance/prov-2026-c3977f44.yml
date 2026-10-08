@@ -1,6 +1,6 @@
 id: prov-2026-c3977f44
 title: Concurrent linespec runs on one machine destroy each other's shared Docker network, database and Kafka containers
-status: draft
+status: open
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
