@@ -19,8 +19,10 @@ intent: >
   Fix: where the SQL analysis yields written values (INSERT and UPDATE), compare
   the payload's fields to them and fail the spec with a diff on mismatch, for
   both MySQL and PostgreSQL. Where it cannot (DELETE, or a payload with no
-  column match) reject the clause at parse time with a clear error rather than
-  accept it inert. Existing examples whose payloads disagree with the real
+  column match) never accept the clause inert: a DELETE the parser can see
+  (USING_SQL, VERIFY_OPERATION DELETE or the channel-line form) is rejected at
+  parse time with a clear error, and anything else, including a payload with no
+  column matching the write, fails at match time with a diff. Existing examples whose payloads disagree with the real
   write are corrected in the same change. Rejected: removing WITH on WRITE
   outright, as it leaves a documented clause with no replacement and breaks all
   eleven examples at once.
@@ -52,7 +54,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/registry/write_with_enforcement_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses' ./$(dirname {{path}})
+    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses|TestWriteWithPayloadMismatchDiffShowsExpectedAndActual' ./$(dirname {{path}})
   - path: pkg/dsl/write_with_delete_test.go
     type: unit
     run_command: go test -count=1 -run 'TestWriteWithOnDeleteRejected' ./$(dirname {{path}})
