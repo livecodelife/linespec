@@ -36,7 +36,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/runner/migration_failure_test.go
     type: unit
-    run_command: go test -count=1 -run TestMigrationFailureSurfaced ./pkg/runner/
+    run_command: go test -count=1 -run TestMigrationFailureSurfaced ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
