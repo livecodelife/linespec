@@ -1,0 +1,100 @@
+id: prov-2026-14e58ba9
+title: 'Malformed mock setups fail silently: three cases where the harness returns empty results instead of erroring'
+status: draft
+created_at: "2026-08-24"
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+intent: |
+  Issue #214 reports three unrelated defects in the PostgreSQL-proxy test harness that
+  share one failure mode: a malformed or misunderstood setup produces an empty result
+  instead of an error, so a spec reads as a pass while the read/write it depended on
+  never happened as intended.
+
+  (1) Column inference is pinned by the table named in the channel position. `EXPECT
+  READ:POSTGRESQL <table>` and bare `EXPECT READ:POSTGRESQL` both match the triggering
+  statement, but mockTableName() (pkg/proxy/postgresql/proxy.go) resolves a table for
+  schema-based column inference either way, and inferColumnsForTable() returns that
+  table's real schema columns rather than the RETURNS payload's own keys. For simple
+  SELECT * or complex statements (e.g. a `with recursive` CTE whose final SELECT
+  returns a different table's columns than its base case), extractSelectColumns()'s
+  naive first-SELECT/first-FROM string scan fails to recover the true column list, so
+  the schema-derived list is used instead. Since it does not intersect the RETURNS
+  payload's keys, sendDataRowInternal() (pkg/proxy/postgresql/result.go) writes NULL
+  for every field it can't find in the payload row map, and the client decodes zero
+  usable rows without any diagnostic.
+
+  (2) `databases[].init_script` is documented as relative to service_dir, but an
+  absolute path is silently ignored. filepath.Join(serviceDir, absPath) does not
+  special-case an absolute second argument in Go — it concatenates into a nonexistent
+  path, os.Stat fails, and the code falls through to "no init script" with only a
+  logger.Debug line. The container starts with an empty database and the spec runs
+  against it as if nothing were wrong. The same join-then-silently-skip pattern exists
+  at all three call sites (MySQL, PostgreSQL, MongoDB) in pkg/runner/runner.go.
+
+  (3) When no mock matches a statement, it is forwarded upstream. If the upstream
+  rejects it (e.g. "relation does not exist"), the service does not see that
+  rejection — the proxy's upstream response handling does not guarantee the
+  ErrorResponse reaches the client as an error the caller's code treats as a failure;
+  in the reporter's case the calling code logged the forwarded read as `outcome: ok`.
+  Combined with (2), a mis-seeded database can look identical to "nothing matched" and
+  a suite can stay green while every forwarded read silently fails.
+
+  Fix: for each of the three cases, surface the condition instead of swallowing it —
+  fail the spec (or the config validation step) with enough detail to name the
+  mismatch, rather than degrading to an empty/NULL result.
+constraints:
+  - |
+    When a READ:POSTGRESQL RETURNS payload's row keys have no (or only partial)
+    intersection with the column set inferred for the mock (whether inferred from the
+    channel-position table, ACCESSING_TABLES, or a naive SQL column scan), the spec
+    fails with an explicit error naming: the payload's keys, the inferred column set,
+    and the table it was inferred from — not a result with every field NULL.
+  - |
+    A `databases[].init_script` path that is absolute (filepath.IsAbs) fails config
+    validation (pkg/config/parser.go's validate(), alongside the existing
+    Service.DockerCompose IsAbs precedent) with an explicit error naming the offending
+    path and stating it must be relative to service_dir, for all three database types
+    (postgresql, mysql, mongodb) — not a silently empty container.
+  - |
+    When a forwarded (non-mocked) statement's upstream response is an ErrorResponse,
+    that failure is either propagated to the client as the corresponding PostgreSQL
+    ErrorResponse, or — if propagation is not feasible for a given code path —
+    unconditionally logged (not only under -d), so a forwarded failure is never
+    observably identical to an empty successful read.
+  - |
+    No regression to specs that already rely on documented behavior: the bare
+    `EXPECT READ:POSTGRESQL` form with ACCESSING_TABLES-based column inference,
+    relative init_script paths, and successfully-matched forwarded queries all
+    continue to work exactly as before.
+affected_scope:
+  - pkg/dsl/parser.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result.go
+  - pkg/config/parser.go
+  - pkg/config/types.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/channel_table_column_pin_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: pkg/config/init_script_absolute_path_test.go
+    type: go_test
+    run_command: make test # {{path}}
+  - path: pkg/proxy/postgresql/forward_error_response_test.go
+    type: go_test
+    run_command: make test # {{path}}
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - proxy
+  - silent-failure
+  - init-script
+  - column-inference
+  - issue-214
