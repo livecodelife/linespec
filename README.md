@@ -1,6 +1,6 @@
-# LineSpec v3.24.0
+# LineSpec v3.25.0
 
-[![Version](https://img.shields.io/badge/version-3.24.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-3.25.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -13,7 +13,7 @@
 
 LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
 
-As of v3.24.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
+As of v3.25.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
 ---
 
@@ -33,14 +33,14 @@ automatically the first time you run `linespec test`.
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.24.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.25.0
 ```
 
 ### GitHub Releases
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_3.24.0_*` - Full release (Provenance Records + LineSpec Testing)
+- `linespec_3.25.0_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
@@ -284,18 +284,28 @@ infrastructure:
   kafka: false
   grpc: false # Start a gRPC proxy sidecar
   redis: false # Start a Redis proxy sidecar
-  proxy_image: "ghcr.io/livecodelife/linespec:3.24.0" # Override the proxy image (default: local linespec:latest if present, else the published image pinned to your version)
+  proxy_image: "ghcr.io/livecodelife/linespec:3.25.0" # Override the proxy image (default: local linespec:latest if present, else the published image pinned to your version)
 
 # Protobuf descriptor set for gRPC binary protobuf mocks (optional)
 grpc_descriptor_set: proto/workflow.pb
 
 # Container naming configuration (optional)
+# Defaults are isolated per run (see below). The values here are explicit
+# overrides, used verbatim; only set the roles you need.
 container_naming:
   database_container: linespec-shared-db
   network_name: linespec-shared-net
   network_alias: real-db
   migrate_container: linespec-migrate-
 ```
+
+Default container and network names are isolated per run. Each default carries a
+suffix of 6 hex characters of the sha256 of the project root
+plus a 6 hex per-process token, so concurrent runs on one Docker host are isolated and never
+share names. Any `container_naming` value you set is an explicit override and is used verbatim
+for that role; roles you leave unset still get the isolated default. Cleanup removes only
+what the run created, so a crashed run's orphaned containers and network are not swept and
+must be removed by hand with `docker rm -f <name>` and `docker network rm <name>`.
 
 **Framework Support:**
 
@@ -421,4 +431,4 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
-**LineSpec v3.24.0** - Built with Provenance Records
+**LineSpec v3.25.0** - Built with Provenance Records

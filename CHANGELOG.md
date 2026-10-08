@@ -5,6 +5,30 @@ All notable changes to LineSpec will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.25.0] - 2026-10-08
+
+**Upgrade note.** This release closes a set of silent-pass bugs, so specs and configs that passed only because something was ignored can now fail. Unconsumed `EXPECT_NOT` trailing clauses and `NO TRANSACTION` are now parse errors. Unknown `.linespec.yml` keys and unknown database types are rejected by strict config decode. `EXPECT EVENT` is now asserted and unhit events are no longer skipped. `VERIFY_*` is enforced in the legacy `FindMock` path and for Mongo `ACCESSING_TABLES`. Migration failures now surface, and non-MySQL migrations are deferred until their database is up. Kafka Metadata v1/v2 and Produce v0-v3 response layouts are fixed (Produce v0-v3 are now advertised). Default Docker container and network names now carry a per-run suffix (6 hex of the sha256 of the project root plus a 6 hex per-process token); explicit `container_naming` values are unchanged. Scripts, such as bench-style cleanup, that remove containers by name substring (`linespec-`, `proxy-`, `app-`) can now destroy other concurrent runs' containers and must be scoped to their own names. A crashed run's resources are not swept; remove them by hand with `docker rm -f` and `docker network rm`.
+
+### Changed
+
+- **Stricter DSL parsing** ([prov-2026-a71a796a](./provenance/prov-2026-a71a796a.yml), [prov-2026-a3105d31](./provenance/prov-2026-a3105d31.yml)) — `EXPECT_NOT` now accepts the same clause family as `EXPECT` (`USING_SQL`, `ACCESSING_TABLES`, `VERIFY_*`, `DATABASE`), and the parser fails with the token and line on any token left unconsumed at the end of a statement or input. `NO TRANSACTION` is rejected at parse time as unsupported rather than accepted and ignored.
+
+- **Strict config decode** ([prov-2026-79b59b40](./provenance/prov-2026-79b59b40.yml)) — `.linespec.yml` is decoded with unknown fields rejected, naming the key and line, and an unknown database type is a validation error listing the supported types, instead of a Debug log line.
+
+- **Isolated default Docker names** ([prov-2026-c3977f44](./provenance/prov-2026-c3977f44.yml)) — default shared network, database, Kafka, migrate, app and proxy names carry a per-run suffix, and cleanup removes only resources the run created, so concurrent runs no longer destroy each other's infrastructure. Explicit `container_naming` values are used verbatim.
+
+### Fixed
+
+- **`EXPECT EVENT` was never asserted** ([prov-2026-919f8621](./provenance/prov-2026-919f8621.yml)) — unhit Event mocks were skipped, and event hit keys collided (keyed by table, with no distinction between `EXPECT` and `EXPECT_NOT`). Events are now keyed by topic and polarity, an unfired `EXPECT EVENT` fails, a fired `EXPECT_NOT EVENT` fails, and Kafka proxy hits are collected. Kafka Metadata v1/v2 and Produce v0-v3 response layouts are fixed.
+
+- **`VERIFY_*` and Mongo clauses were dead** ([prov-2026-a3105d31](./provenance/prov-2026-a3105d31.yml)) — the legacy table-keyed `FindMock` never checked semantic constraints, and the MongoDB interceptor bypassed them, so `VERIFY_*` and `ACCESSING_TABLES` could not fail a spec. `FindMock` now applies the check and Mongo routes through it.
+
+- **`EXPECT_NOT` dropped trailing clauses and later EXPECTs** ([prov-2026-a71a796a](./provenance/prov-2026-a71a796a.yml)) — with Kafka or Job triggers, the clauses and every following `EXPECT` were silently dropped.
+
+- **Migration failures were swallowed** ([prov-2026-3168d841](./provenance/prov-2026-3168d841.yml)) — failures were logged at Debug and the run continued on an empty schema. They now fail the run with the service name and command output, and PostgreSQL, MongoDB and Oracle migrations run only after their per-spec database is up.
+
+- **Concurrent runs destroyed each other's Docker resources** ([prov-2026-c3977f44](./provenance/prov-2026-c3977f44.yml)) — startup and end-of-run cleanup force-removed the fixed shared names without checking ownership. Debug log streaming also now resolves the app container through the `app_container` template instead of a hardcoded name.
+
 ## [3.24.0] - 2026-09-30
 
 **Upgrade note.** `linespec provenance lint` now rejects two record shapes that were previously accepted: an `extends` that crosses tiers (other than a `bug` extending a `blueprint`), and a `supersedes` whose target still has a live `extends` pointing at it. Existing repos that have either will see new lint errors. Retarget the `extends` at the superseding record, or deprecate it, to clear the second; use `implements` or `related` for the first.
