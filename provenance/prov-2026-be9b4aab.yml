@@ -26,7 +26,9 @@ intent: >
   eleven examples at once.
 constraints:
   - A WRITE with a WITH payload whose value differs from the written value fails the spec
-  - A WITH clause on a WRITE is either asserted or rejected at parse time, never silently ignored
+  - A WITH clause on a DELETE is rejected at parse time with a clear error
+  - A WITH clause on an INSERT or UPDATE is asserted at match time; a payload with no column matching the write fails the spec with a diff rather than being ignored
+  - A WITH clause on a WRITE is never silently ignored
   - Applies to both MySQL and PostgreSQL write paths
   - Example specs that pass today only because WITH was ignored are corrected, not left failing
   - VERIFY_WRITTEN_VALUES behaviour is unchanged
@@ -36,6 +38,8 @@ affected_scope:
   - pkg/proxy/postgresql/proxy.go
   - pkg/dsl/parser.go
   - examples/todo-linespecs/payloads/todo_update.yaml
+  - examples/*-linespecs/payloads/**
+  - examples/*-linespecs/*.linespec
 forbidden_scope: []
 type: bug
 extends: prov-2026-001
@@ -48,7 +52,10 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/registry/write_with_enforcement_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses' ./pkg/registry/
+    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses' ./$(dirname {{path}})
+  - path: pkg/dsl/write_with_delete_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestWriteWithOnDeleteRejected' ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
