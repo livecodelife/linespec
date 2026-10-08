@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/livecodelife/linespec/v3/pkg/interpolate"
+	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
 	"github.com/livecodelife/linespec/v3/pkg/types"
 )
 
@@ -332,7 +333,30 @@ func (p *Parser) parseExpect() (*types.ExpectStatement, error) {
 	if err := p.parseExpectClauses(expect); err != nil {
 		return nil, err
 	}
+	if expect.WithFile != "" && isWriteDelete(expect, literal) {
+		return nil, fmt.Errorf("line %d: WITH is not supported on a DELETE: a DELETE writes no values, so the payload would be asserted against nothing. Remove the WITH clause", token.Line)
+	}
 	return expect, nil
+}
+
+// isWriteDelete reports whether a SQL WRITE expectation is visibly a DELETE:
+// by its USING_SQL / USING_SQL_CONTAINS text, VERIFY_OPERATION, or the MySQL
+// channel-line "DELETE <table>" form.
+func isWriteDelete(expect *types.ExpectStatement, channelLiteral string) bool {
+	if expect.Channel != types.WriteMySQL && expect.Channel != types.WritePostgreSQL {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(expect.VerifyOperation), "DELETE") ||
+		sqlanalysis.Operation(expect.SQL) == "DELETE" ||
+		sqlanalysis.Operation(expect.SQLContains) == "DELETE" {
+		return true
+	}
+	if expect.Channel == types.WriteMySQL {
+		if rest, ok := strings.CutPrefix(strings.ToUpper(channelLiteral), "WRITE:MYSQL "); ok {
+			return strings.HasPrefix(strings.TrimSpace(rest), "DELETE ")
+		}
+	}
+	return false
 }
 
 // parseExpectClauses consumes the trailing clause family shared by EXPECT and EXPECT_NOT.

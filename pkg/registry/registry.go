@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/livecodelife/linespec/v3/pkg/dsl"
+	"github.com/livecodelife/linespec/v3/pkg/interpolate"
 	"github.com/livecodelife/linespec/v3/pkg/logger"
 	"github.com/livecodelife/linespec/v3/pkg/sqlanalysis"
 	"github.com/livecodelife/linespec/v3/pkg/types"
@@ -232,7 +234,9 @@ func (r *MockRegistry) Register(spec *types.TestSpec) {
 	defer r.Unlock()
 
 	for i := range spec.Expects {
-		spec.Expects[i].BaseDir = spec.BaseDir
+		if spec.BaseDir != "" {
+			spec.Expects[i].BaseDir = spec.BaseDir
+		}
 		key := r.getExpectKey(spec.Expects[i])
 		r.mocks[key] = append(r.mocks[key], &spec.Expects[i])
 		r.orderedMocks = append(r.orderedMocks, &spec.Expects[i])
@@ -560,6 +564,7 @@ func (r *MockRegistry) FindMockByTables(
 	}
 
 	r.recordHit(chosen)
+	r.checkWritePayload(chosen, operation, writtenValues)
 	return chosen, true
 }
 
@@ -771,6 +776,78 @@ func skipsLegacyMatch(mock *types.ExpectStatement, key string) bool {
 	return true
 }
 
+// legacyDialect derives the SQL dialect of a legacy mock from its channel; legacy
+// mocks carry no AccessingTables, so the proxy never told the registry.
+func legacyDialect(ch types.ExpectChannel) sqlanalysis.Dialect {
+	switch ch {
+	case types.ReadPostgreSQL, types.WritePostgreSQL:
+		return sqlanalysis.PostgreSQL
+	case types.ReadOracle, types.WriteOracle:
+		return sqlanalysis.Oracle
+	}
+	return sqlanalysis.MySQL
+}
+
+// checkWritePayload asserts a WRITE mock's WITH payload against the values an
+// INSERT or UPDATE wrote, by column name. Payload fields naming a written column
+// must equal it (compared by string form, so YAML ints match string values); a
+// payload naming no written column, or any payload on a DELETE (which writes
+// none), fails. Failures are recorded as VERIFY errors so VerifyAll reports them.
+// The caller must hold the write lock.
+func (r *MockRegistry) checkWritePayload(mock *types.ExpectStatement, operation string, written map[string]string) {
+	if mock.WithFile == "" || (mock.Channel != types.WriteMySQL && mock.Channel != types.WritePostgreSQL) {
+		return
+	}
+	switch operation {
+	case "INSERT", "UPDATE", "DELETE":
+	default:
+		return
+	}
+	fail := func(format string, args ...interface{}) {
+		r.verifyErrors = append(r.verifyErrors, fmt.Sprintf("%s [%s]: WITH %s: %s",
+			channelLabel(mock.Channel), mock.Table, mock.WithFile, fmt.Sprintf(format, args...)))
+	}
+	resolver := interpolate.NewResolver()
+	for k, v := range r.variables {
+		resolver.Variables[k] = v
+	}
+	payload, err := dsl.NewPayloadLoaderWithResolver(mock.BaseDir, resolver).Load(mock.WithFile)
+	if err != nil {
+		fail("failed to load payload: %v", err)
+		return
+	}
+	fields, ok := payload.(map[string]interface{})
+	if !ok {
+		fail("payload must be a map of column names to values, got %T", payload)
+		return
+	}
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var diffs []string
+	matched := 0
+	for _, name := range names {
+		actual, ok := written[name]
+		if !ok {
+			continue
+		}
+		matched++
+		if expected := fmt.Sprintf("%v", fields[name]); expected != actual {
+			diffs = append(diffs, fmt.Sprintf("field %q: expected %q, actual %q", name, expected, actual))
+		}
+	}
+	if matched == 0 {
+		fail("no payload field (%s) matches a column written by this %s (written: %v)",
+			strings.Join(names, ", "), operation, written)
+		return
+	}
+	if len(diffs) > 0 {
+		fail("%s", strings.Join(diffs, "; "))
+	}
+}
+
 // legacyVerifyHolds applies a mock's VERIFY_* clauses to the statement the legacy
 // FindMock path matched. Mocks that declare none are unaffected.
 func legacyVerifyHolds(mock *types.ExpectStatement, query string) (bool, string) {
@@ -783,14 +860,7 @@ func legacyVerifyHolds(mock *types.ExpectStatement, query string) (bool, string)
 		// query; there is no WHERE or written-value information to analyze.
 		return matchesSemanticConstraints(mock, query, nil, nil, nil)
 	}
-	d := sqlanalysis.MySQL
-	switch mock.Channel {
-	case types.ReadPostgreSQL, types.WritePostgreSQL:
-		d = sqlanalysis.PostgreSQL
-	case types.ReadOracle, types.WriteOracle:
-		d = sqlanalysis.Oracle
-	}
-	r := sqlanalysis.Analyze(d, query, sqlanalysis.Binds{})
+	r := sqlanalysis.Analyze(legacyDialect(mock.Channel), query, sqlanalysis.Binds{})
 	return matchesSemanticConstraints(mock, r.Operation, r.WhereColumns, r.WhereValues, r.WrittenValues)
 }
 
@@ -816,6 +886,10 @@ func (r *MockRegistry) FindMock(key string, query string, database ...string) (*
 			return false
 		}
 		r.recordHit(mock)
+		if mock.WithFile != "" {
+			a := sqlanalysis.Analyze(legacyDialect(mock.Channel), query, sqlanalysis.Binds{})
+			r.checkWritePayload(mock, a.Operation, a.WrittenValues)
+		}
 		return true
 	}
 	mock, found := r.findMockLocked(key, query, db, accept)
