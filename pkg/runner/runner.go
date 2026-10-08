@@ -73,6 +73,15 @@ type TestSuite struct {
 	sharedSchemaJSON     []byte                            // Raw JSON schema written to per-test tempDir and passed to MySQL proxies via --schema-file
 	persistentContainers map[string]*persistentServiceContainers
 	persistentMu         sync.Mutex
+	ownedMu              sync.Mutex
+	ownedContainers      []string // shared containers this run created
+	ownedNetwork         string   // shared network this run created ("" if none)
+}
+
+func (s *TestSuite) trackContainer(name string) {
+	s.ownedMu.Lock()
+	s.ownedContainers = append(s.ownedContainers, name)
+	s.ownedMu.Unlock()
 }
 
 func NewTestSuite() (*TestSuite, error) {
@@ -89,17 +98,8 @@ func NewTestSuite() (*TestSuite, error) {
 	}
 
 	// Initialize default container naming
-	containerNaming := &config.ContainerNaming{
-		DatabaseContainer: "linespec-shared-db",
-		NetworkName:       "linespec-shared-net",
-		NetworkAlias:      config.DefaultNetworkAlias,
-		MigrateContainer:  "linespec-migrate-{{ .ServiceName }}",
-		KafkaContainer:    "linespec-shared-kafka",
-		ProxyContainer:    "proxy-{{ .Type }}-{{ .SpecName }}",
-		AppContainer:      "app-{{ .SpecName }}",
-		ProjectMountPath:  "/app/project",
-		RegistryMountPath: "/app/registry",
-	}
+	// Isolated per project root and per run so concurrent runs cannot collide.
+	containerNaming := config.DefaultContainerNaming(cwd)
 
 	return &TestSuite{
 		orch:                 orch,
@@ -220,6 +220,9 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create network: %w", err)
 	}
+	s.ownedMu.Lock()
+	s.ownedNetwork = s.networkName
+	s.ownedMu.Unlock()
 
 	// Only start shared MySQL if there are MySQL services configured
 	if s.hasMySQLServices() {
@@ -256,6 +259,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 		}, &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{s.containerNaming.NetworkAlias}}},
 		}, s.containerNaming.DatabaseContainer)
+		s.trackContainer(s.containerNaming.DatabaseContainer)
 		if err != nil {
 			return fmt.Errorf("failed to start MySQL: %w", err)
 		}
@@ -386,6 +390,7 @@ func (s *TestSuite) SetupSharedInfrastructure(ctx context.Context) error {
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{s.networkName: {Aliases: []string{"kafka"}}},
 	}, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}))
+	s.trackContainer(s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}))
 	if err != nil {
 		return fmt.Errorf("failed to start Kafka: %w", err)
 	}
@@ -1002,8 +1007,17 @@ func removeNetworkWithRetry(ctx context.Context, attempts int, delay time.Durati
 // cleanup before a fresh setup) may ignore the returned error, since the
 // underlying failure is always logged here regardless.
 func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) error {
-	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetKafkaContainer(config.ContainerNameParams{}))
-	_ = s.orch.StopAndRemoveContainer(ctx, s.containerNaming.GetDatabaseContainer(config.ContainerNameParams{}))
+	// Only remove shared resources this run created; names may be shared with
+	// (or reused by) other runs on the same Docker host.
+	s.ownedMu.Lock()
+	ownedContainers := s.ownedContainers
+	ownedNetwork := s.ownedNetwork
+	s.ownedContainers = nil
+	s.ownedNetwork = ""
+	s.ownedMu.Unlock()
+	for _, name := range ownedContainers {
+		_ = s.orch.StopAndRemoveContainer(ctx, name)
+	}
 
 	// Stop all persistent containers (app + proxies kept alive across tests)
 	s.persistentMu.Lock()
@@ -1032,11 +1046,14 @@ func (s *TestSuite) CleanupSharedInfrastructure(ctx context.Context) error {
 	}
 	stopWg.Wait()
 
-	err := removeNetworkWithRetry(ctx, 5, 500*time.Millisecond, func(c context.Context) error {
-		return s.orch.RemoveNetwork(c, s.networkName)
-	})
-	if err != nil {
-		logger.Error("Failed to remove shared network %q after retries: %v — run `docker network rm %s` manually, or the next run's setup will fail with \"network already exists\"", s.networkName, err, s.networkName)
+	var err error
+	if ownedNetwork != "" {
+		err = removeNetworkWithRetry(ctx, 5, 500*time.Millisecond, func(c context.Context) error {
+			return s.orch.RemoveNetwork(c, ownedNetwork)
+		})
+		if err != nil {
+			logger.Error("Failed to remove shared network %q after retries: %v — run `docker network rm %s` manually", ownedNetwork, err, ownedNetwork)
+		}
 	}
 
 	// Note: We don't clean up tempDir here - it's needed for shared schema file
@@ -2486,7 +2503,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		if logger.IsDebug() {
 			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer logCancel()
-			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+			_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name}), os.Stdout, os.Stderr)
 		}
 		return err
 	}
@@ -2681,7 +2698,7 @@ func (r *testRunner) runTestPhase(
 			logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer logCancel()
 			logger.Debug("Fetching app logs for debugging")
-			_ = r.suite.orch.StreamLogs(logCtx, "app-"+spec.Name, os.Stdout, os.Stderr)
+			_ = r.suite.orch.StreamLogs(logCtx, r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name}), os.Stdout, os.Stderr)
 		}
 		return r.withVarContext(err)
 	}

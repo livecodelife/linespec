@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -191,6 +194,44 @@ type ContainerNameParams struct {
 	ServiceName string
 	SpecName    string
 	Type        string // "db", "http", "kafka", etc.
+}
+
+// runToken identifies this linespec process. It is combined with a hash of the
+// project root so that default Docker names are stable within one run and root
+// yet differ across roots and across concurrent runs in the same root.
+var runToken = newRunToken()
+
+func newRunToken() string {
+	b := make([]byte, 3)
+	if _, err := rand.Read(b); err != nil {
+		return "000000"
+	}
+	return hex.EncodeToString(b)
+}
+
+// DefaultNamingSuffix returns the isolation suffix appended to default Docker
+// network and container names: "<6 hex of sha256(root)>-<6 hex per-process token>".
+func DefaultNamingSuffix(root string) string {
+	sum := sha256.Sum256([]byte(root))
+	return hex.EncodeToString(sum[:3]) + "-" + runToken
+}
+
+// DefaultContainerNaming returns the default naming scheme isolated for the
+// given project root and this run. Explicit container_naming values in
+// .linespec.yml replace individual roles verbatim.
+func DefaultContainerNaming(root string) *ContainerNaming {
+	sfx := DefaultNamingSuffix(root)
+	return &ContainerNaming{
+		DatabaseContainer: "linespec-shared-db-" + sfx,
+		NetworkName:       "linespec-shared-net-" + sfx,
+		NetworkAlias:      DefaultNetworkAlias,
+		MigrateContainer:  "linespec-migrate-{{ .ServiceName }}-" + sfx,
+		KafkaContainer:    "linespec-shared-kafka-" + sfx,
+		ProxyContainer:    "proxy-{{ .Type }}-{{ .SpecName }}-" + sfx,
+		AppContainer:      "app-{{ .SpecName }}-" + sfx,
+		ProjectMountPath:  "/app/project",
+		RegistryMountPath: "/app/registry",
+	}
 }
 
 // GetDatabaseContainer returns the database container name with template substitution

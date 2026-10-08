@@ -257,20 +257,21 @@ database:
 		t.Fatal("ContainerNaming should not be nil")
 	}
 
-	if config.ContainerNaming.DatabaseContainer != "linespec-shared-db" {
-		t.Errorf("DatabaseContainer = %q, expected linespec-shared-db", config.ContainerNaming.DatabaseContainer)
+	// Default names carry a per-root/per-run suffix so concurrent runs don't collide.
+	if !strings.HasPrefix(config.ContainerNaming.DatabaseContainer, "linespec-shared-db-") {
+		t.Errorf("DatabaseContainer = %q, expected prefix linespec-shared-db-", config.ContainerNaming.DatabaseContainer)
 	}
 
-	if config.ContainerNaming.NetworkName != "linespec-shared-net" {
-		t.Errorf("NetworkName = %q, expected linespec-shared-net", config.ContainerNaming.NetworkName)
+	if !strings.HasPrefix(config.ContainerNaming.NetworkName, "linespec-shared-net-") {
+		t.Errorf("NetworkName = %q, expected prefix linespec-shared-net-", config.ContainerNaming.NetworkName)
 	}
 
 	if config.ContainerNaming.NetworkAlias != "real-db" {
 		t.Errorf("NetworkAlias = %q, expected real-db", config.ContainerNaming.NetworkAlias)
 	}
 
-	if config.ContainerNaming.MigrateContainer != "linespec-migrate-{{ .ServiceName }}" {
-		t.Errorf("MigrateContainer = %q, expected linespec-migrate-{{ .ServiceName }}", config.ContainerNaming.MigrateContainer)
+	if !strings.HasPrefix(config.ContainerNaming.MigrateContainer, "linespec-migrate-{{ .ServiceName }}-") {
+		t.Errorf("MigrateContainer = %q, expected prefix linespec-migrate-{{ .ServiceName }}-", config.ContainerNaming.MigrateContainer)
 	}
 
 	if config.ContainerNaming.ProjectMountPath != "/app/project" {
