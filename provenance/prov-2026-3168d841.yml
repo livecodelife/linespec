@@ -1,6 +1,6 @@
 id: prov-2026-3168d841
 title: Migration failures are swallowed at Debug level and non-MySQL migrations run before the database exists
-status: open
+status: implemented
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -32,7 +32,7 @@ extends: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related: []
-sealed_at_sha: ""
+sealed_at_sha: a57b9b2d7ada12ff8b0bb3dff526bb092d7f8240
 associated_specs:
   - path: pkg/runner/migration_failure_test.go
     type: unit
