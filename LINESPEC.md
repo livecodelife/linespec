@@ -1555,6 +1555,11 @@ database:
   # Default: true when infrastructure.database is true.
   proxy: true
 
+  # Seconds to wait for the database to accept connections before setup fails.
+  # Applies to MySQL, PostgreSQL and MongoDB; also settable per `databases:` entry.
+  # Default: 90. Raise it on a loaded Docker host where the database starts slowly.
+  ready_timeout_seconds: 90
+
 # Multi-database form — use `databases:` when a service talks to more than
 # one database type at the same time (e.g. MySQL + MongoDB).
 # Each entry gets its own real-DB container and proxy sidecar.
