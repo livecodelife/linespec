@@ -203,3 +203,79 @@ func TestWriteWithPayloadMatchPasses(t *testing.T) {
 		}
 	}
 }
+
+// On the legacy path (FindMock(key, query)) no bind values reach
+// sqlanalysis.Analyze, so a prepared statement's written value is an
+// unresolved placeholder ($n / ?). A payload field whose written value is a
+// placeholder cannot be judged and is skipped; literals are still compared; if
+// nothing could be compared the write does not fail.
+func TestWriteWithPayloadSkipsUnresolvedPlaceholdersOnLegacyPath(t *testing.T) {
+	pass := []writeCase{
+		{
+			name: "postgres_legacy_all_placeholders", channel: types.WritePostgreSQL, dialect: sqlanalysis.PostgreSQL, table: "todos",
+			query:   "UPDATE todos SET description = $1 WHERE id = $2",
+			payload: "description: Milk, eggs, and bread\n",
+		},
+		{
+			name: "mysql_legacy_all_placeholders", channel: types.WriteMySQL, dialect: sqlanalysis.MySQL, table: "todos",
+			query:   "UPDATE `todos` SET `description` = ? WHERE `todos`.`id` = ?",
+			payload: "description: Milk, eggs, and bread\n",
+		},
+		{
+			name: "postgres_legacy_literal_matches_other_placeholder", channel: types.WritePostgreSQL, dialect: sqlanalysis.PostgreSQL, table: "todos",
+			query:   "UPDATE todos SET description = $1, title = 'Buy groceries' WHERE id = $2",
+			payload: "description: anything\ntitle: Buy groceries\n",
+		},
+		{
+			name: "mysql_legacy_literal_matches_other_placeholder", channel: types.WriteMySQL, dialect: sqlanalysis.MySQL, table: "todos",
+			query:   "INSERT INTO `todos` (`title`, `user_id`) VALUES (?, 42)",
+			payload: "title: Buy groceries\nuser_id: 42\n",
+		},
+	}
+	for _, c := range pass {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := runWrite(t, c, false); err != nil {
+				t.Fatalf("an unresolved placeholder must be skipped, not reported as a mismatch; got: %v", err)
+			}
+		})
+	}
+
+	fail := []writeCase{
+		{
+			name: "postgres_legacy_literal_differs_other_placeholder", channel: types.WritePostgreSQL, dialect: sqlanalysis.PostgreSQL, table: "todos",
+			query:   "UPDATE todos SET description = $1, title = 'Buy groceries' WHERE id = $2",
+			payload: "description: anything\ntitle: Walk the dog\n",
+		},
+		{
+			name: "mysql_legacy_literal_differs_other_placeholder", channel: types.WriteMySQL, dialect: sqlanalysis.MySQL, table: "todos",
+			query:   "UPDATE `todos` SET `description` = ?, `title` = 'Buy groceries' WHERE `todos`.`id` = ?",
+			payload: "description: anything\ntitle: Walk the dog\n",
+		},
+	}
+	for _, c := range fail {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := runWrite(t, c, false)
+			if err == nil {
+				t.Fatal("a literal that differs from the payload must still fail even when another field is a placeholder")
+			}
+			if !strings.Contains(err.Error(), "title") || !strings.Contains(err.Error(), "WITH") {
+				t.Fatalf("failure should name the literal field %q and the WITH payload, got: %v", "title", err)
+			}
+			if strings.Contains(err.Error(), "description") {
+				t.Fatalf("the placeholder field %q must not be reported, got: %v", "description", err)
+			}
+		})
+	}
+
+	// A payload matching no written column still fails on the legacy path.
+	t.Run("no_column_match_still_fails", func(t *testing.T) {
+		c := writeCase{
+			name: "legacy_no_match", channel: types.WritePostgreSQL, dialect: sqlanalysis.PostgreSQL, table: "todos",
+			query:   "UPDATE todos SET description = $1 WHERE id = $2",
+			payload: "nonexistent_column: whatever\n",
+		}
+		if _, err := runWrite(t, c, false); err == nil {
+			t.Fatal("a payload with no column matching the write must still fail")
+		}
+	})
+}
