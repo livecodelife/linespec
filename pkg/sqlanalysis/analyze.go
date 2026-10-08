@@ -71,6 +71,10 @@ type Dialect struct {
 	// is recognised.
 	SchemaQualified bool
 
+	// BackslashEscapes is whether a backslash inside a string literal escapes
+	// the next character (MySQL's \'), as opposed to only a doubled quote.
+	BackslashEscapes bool
+
 	// Where is how much of the statement is scanned for conditions.
 	Where WhereScope
 
@@ -90,12 +94,13 @@ var (
 	}
 
 	MySQL = Dialect{
-		Name:            "mysql",
-		Bind:            BindAnonymous,
-		Quote:           "`",
-		SchemaQualified: false,
-		Where:           ScopeAfterWhere,
-		DedupeColumns:   false,
+		Name:             "mysql",
+		Bind:             BindAnonymous,
+		Quote:            "`",
+		SchemaQualified:  false,
+		BackslashEscapes: true,
+		Where:            ScopeAfterWhere,
+		DedupeColumns:    false,
 	}
 
 	Oracle = Dialect{
@@ -168,7 +173,7 @@ func Analyze(d Dialect, query string, binds Binds) Result {
 type patterns struct {
 	whereCondition *regexp.Regexp
 	insertCols     *regexp.Regexp
-	insertVals     *regexp.Regexp
+	valuesKeyword  *regexp.Regexp
 	updateSet      *regexp.Regexp
 	setItem        *regexp.Regexp
 	tableRef       func(table string) *regexp.Regexp
@@ -226,7 +231,7 @@ func buildPatterns(d Dialect) *patterns {
 	return &patterns{
 		whereCondition: regexp.MustCompile(`(?i)\b(?:WHERE|AND|OR)\s+` + ident + `\s*=\s*` + value),
 		insertCols:     regexp.MustCompile(`(?i)INSERT\s+(?:INTO\s+)?` + target + `\s*\(([^)]+)\)`),
-		insertVals:     regexp.MustCompile(`(?i)\bVALUES?\s*\(([^)]+)\)`),
+		valuesKeyword:  regexp.MustCompile(`(?i)\bVALUES?\s*\(`),
 		updateSet:      regexp.MustCompile(`(?i)\bSET\s+(.+?)(?:\s+WHERE\b|$)`),
 		setItem:        regexp.MustCompile(`(?i)` + ident + `\s*=\s*` + value),
 		tableRef: func(table string) *regexp.Regexp {
@@ -288,13 +293,12 @@ func writtenValues(d Dialect, query, operation string, binds Binds) map[string]s
 	switch operation {
 	case "INSERT":
 		cm := p.insertCols.FindStringSubmatch(query)
-		vm := p.insertVals.FindStringSubmatch(query)
-		if cm == nil || vm == nil {
+		vals, ok := firstValuesGroup(d, p, query)
+		if cm == nil || !ok {
 			return result
 		}
 		// cm[1] is the table; the column list is the last group.
 		cols := splitColumns(cm[len(cm)-1], d.Quote)
-		vals := splitValues(vm[1])
 		for i, col := range cols {
 			if i >= len(vals) {
 				break
@@ -401,12 +405,12 @@ func unqualify(raw, quote string) string {
 }
 
 // splitColumns splits an INSERT column list. Column names are folded to lower
-// case so a spec naming a column matches whatever case the statement used.
+// case so a spec naming a column matches whatever case the statement used. A
+// comma inside a quoted identifier does not separate columns.
 func splitColumns(raw, quote string) []string {
-	parts := strings.Split(raw, ",")
+	parts := splitTopLevel(raw, quote, false, false)
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
 		if quote != "" {
 			p = strings.ReplaceAll(p, quote, "")
 		}
@@ -415,14 +419,72 @@ func splitColumns(raw, quote string) []string {
 	return out
 }
 
-// splitValues splits a VALUES list. Values are NOT folded: a literal is data
-// and belongs to the caller exactly as written, and a named bind is looked up
-// by a name that is case-sensitive.
-func splitValues(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		out = append(out, strings.TrimSpace(p))
+// firstValuesGroup returns the split items of the first VALUES (...) group in a
+// statement. The group ends at the parenthesis matching its opening one, so a
+// ')' inside a quoted literal or a nested call does not end it. Later rows of a
+// multi-row INSERT are ignored.
+func firstValuesGroup(d Dialect, p *patterns, query string) ([]string, bool) {
+	loc := p.valuesKeyword.FindStringIndex(query)
+	if loc == nil {
+		return nil, false
 	}
-	return out
+	start := loc[1] // just past the opening '('
+	depth := 1
+	var quoted bool
+	for i := start; i < len(query); i++ {
+		switch c := query[i]; {
+		case quoted && c == '\\' && d.BackslashEscapes:
+			i++
+		case c == '\'':
+			quoted = !quoted
+		case quoted:
+		case c == '(':
+			depth++
+		case c == ')':
+			depth--
+			if depth == 0 {
+				return splitValues(query[start:i], d), true
+			}
+		}
+	}
+	return nil, false
+}
+
+// splitValues splits a VALUES list on top-level commas. Values are NOT folded:
+// a literal is data and belongs to the caller exactly as written, and a named
+// bind is looked up by a name that is case-sensitive.
+func splitValues(raw string, d Dialect) []string {
+	return splitTopLevel(raw, "'", d.BackslashEscapes, true)
+}
+
+// splitTopLevel splits raw on commas that sit outside any run wrapped in one of
+// the quote characters and, when parens is set, outside nested parentheses. A
+// doubled quote re-enters the run it just left, so it needs no special case; a
+// backslash additionally escapes the next character when backslash is set.
+// Each item is trimmed.
+func splitTopLevel(raw, quotes string, backslash, parens bool) []string {
+	var out []string
+	var open rune // the quote character currently open, if any
+	depth, start := 0, 0
+	for i := 0; i < len(raw); i++ {
+		c := rune(raw[i])
+		switch {
+		case open != 0:
+			if c == '\\' && backslash && open == '\'' {
+				i++
+			} else if c == open {
+				open = 0
+			}
+		case strings.ContainsRune(quotes, c):
+			open = c
+		case parens && c == '(':
+			depth++
+		case parens && c == ')':
+			depth--
+		case c == ',' && depth == 0:
+			out = append(out, strings.TrimSpace(raw[start:i]))
+			start = i + 1
+		}
+	}
+	return append(out, strings.TrimSpace(raw[start:]))
 }
