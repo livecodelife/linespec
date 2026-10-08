@@ -1,6 +1,6 @@
 id: prov-2026-d2bdc317
 title: Bump order-service builder image to rust 1.90 for ctutils rustc requirement
-status: open
+status: implemented
 created_at: "2026-10-08"
 author: caleb.cowen@linq.com
 intent: |
@@ -36,7 +36,7 @@ supersedes: ""
 superseded_by: ""
 related:
   - prov-2026-fbc7387f
-sealed_at_sha: ""
+sealed_at_sha: 1cf2b6b9dee6d2ebecb79dcc75069f8bc59cac6a
 associated_specs:
   - path: pkg/config/order_service_toolchain_test.go
     type: unit
