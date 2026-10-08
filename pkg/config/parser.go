@@ -177,26 +177,28 @@ func applyDefaults(config *LineSpecConfig) {
 	if config.ContainerNaming == nil {
 		config.ContainerNaming = &ContainerNaming{}
 	}
-	if config.ContainerNaming.DatabaseContainer == "" {
-		config.ContainerNaming.DatabaseContainer = "linespec-shared-db"
+	def := DefaultContainerNaming(config.BaseDir)
+	cn := config.ContainerNaming
+	if cn.DatabaseContainer == "" {
+		cn.DatabaseContainer = def.DatabaseContainer
 	}
-	if config.ContainerNaming.NetworkName == "" {
-		config.ContainerNaming.NetworkName = "linespec-shared-net"
+	if cn.NetworkName == "" {
+		cn.NetworkName = def.NetworkName
 	}
-	if config.ContainerNaming.NetworkAlias == "" {
-		config.ContainerNaming.NetworkAlias = DefaultNetworkAlias
+	if cn.NetworkAlias == "" {
+		cn.NetworkAlias = def.NetworkAlias
 	}
-	if config.ContainerNaming.MigrateContainer == "" {
-		config.ContainerNaming.MigrateContainer = "linespec-migrate-{{ .ServiceName }}"
+	if cn.MigrateContainer == "" {
+		cn.MigrateContainer = def.MigrateContainer
 	}
-	if config.ContainerNaming.KafkaContainer == "" {
-		config.ContainerNaming.KafkaContainer = "linespec-shared-kafka"
+	if cn.KafkaContainer == "" {
+		cn.KafkaContainer = def.KafkaContainer
 	}
-	if config.ContainerNaming.ProxyContainer == "" {
-		config.ContainerNaming.ProxyContainer = "proxy-{{ .Type }}-{{ .SpecName }}"
+	if cn.ProxyContainer == "" {
+		cn.ProxyContainer = def.ProxyContainer
 	}
-	if config.ContainerNaming.AppContainer == "" {
-		config.ContainerNaming.AppContainer = "app-{{ .SpecName }}"
+	if cn.AppContainer == "" {
+		cn.AppContainer = def.AppContainer
 	}
 	if config.ContainerNaming.ProjectMountPath == "" {
 		config.ContainerNaming.ProjectMountPath = "/app/project"
