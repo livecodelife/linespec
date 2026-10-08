@@ -104,23 +104,25 @@ jobs:
       - name: Build user-service image
         run: docker build -t user-service:latest examples/user-service/
 
-      - name: Test user-linespecs
-        run: ./linespec test examples/user-linespecs/
-
+      # Every suite run migrates every discovered service, so all example app
+      # images must exist before the first suite starts.
       - name: Build todo-api image
         run: docker build -t todo-api:latest examples/todo-api/
-
-      - name: Test todo-linespecs
-        run: ./linespec test examples/todo-linespecs/
 
       - name: Build order-service image
         run: docker build -t order-service:latest examples/order-service/
 
-      - name: Test order-linespecs
-        run: ./linespec test examples/order-linespecs/
-
       - name: Build order-events-service image
         run: docker build -t order-events-service:latest examples/multi-db-service/
+
+      - name: Test user-linespecs
+        run: ./linespec test examples/user-linespecs/
+
+      - name: Test todo-linespecs
+        run: ./linespec test examples/todo-linespecs/
+
+      - name: Test order-linespecs
+        run: ./linespec test examples/order-linespecs/
 
       - name: Test multi-db-linespecs
         run: ./linespec test examples/multi-db-linespecs/
