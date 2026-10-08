@@ -46,10 +46,10 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/container_naming_isolation_test.go
     type: unit
-    run_command: go test -count=1 -run TestContainerNamingDefaultsAreIsolatedPerRun ./pkg/config/
+    run_command: go test -count=1 -run TestContainerNamingDefaultsAreIsolatedPerRun ./$(dirname {{path}})
   - path: pkg/runner/shared_cleanup_ownership_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestCleanupSharedInfrastructureOnlyRemovesOwnResources|TestAppLogStreamUsesAppContainerTemplate' ./pkg/runner/
+    run_command: go test -count=1 -run 'TestCleanupSharedInfrastructureOnlyRemovesOwnResources|TestAppLogStreamUsesAppContainerTemplate' ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
