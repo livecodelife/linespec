@@ -1611,7 +1611,7 @@ infrastructure:
   # resolution (local linespec:latest if present, else the published
   # ghcr.io/livecodelife/linespec pinned to your linespec version). Set it to
   # override both — e.g. a private registry mirror.
-  proxy_image: ghcr.io/livecodelife/linespec:3.24.0
+  proxy_image: ghcr.io/livecodelife/linespec:3.25.0
 
 # ─────────────────────────────────────────────
 # Protobuf descriptor set (optional — gRPC)
@@ -1674,6 +1674,8 @@ provenance:
 # ─────────────────────────────────────────────
 # Container & Network Naming (optional)
 # Template variables: {{ .ServiceName }}, {{ .SpecName }}, {{ .Type }}
+# Defaults are isolated per run (see below). The values here are explicit
+# overrides, used verbatim; set only the roles you need.
 # ─────────────────────────────────────────────
 container_naming:
   database_container: linespec-shared-db
@@ -1723,6 +1725,14 @@ payload:
 timeout_seconds: 60     # Per-test timeout in seconds (default: 180)
 strict_passthrough: false  # true = fail on any unmatched proxy interaction
 ```
+
+Default container and network names are isolated per run. Each default carries a
+suffix of 6 hex characters of the sha256 of the project root
+plus a 6 hex per-process token, so concurrent runs on one Docker host are isolated and never
+share names. Any `container_naming` value you set is an explicit override and is used verbatim
+for that role; roles you leave unset still get the isolated default. Cleanup removes only
+what the run created, so a crashed run's orphaned containers and network are not swept and
+must be removed by hand with `docker rm -f <name>` and `docker network rm <name>`.
 
 ## Framework defaults
 
