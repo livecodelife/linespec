@@ -1,0 +1,58 @@
+id: prov-2026-468bbfbe
+title: INSERT column and VALUES lists are split on every comma, cutting quoted literals apart
+status: draft
+created_at: "2026-10-08"
+author: caleb.cowen@linq.com
+intent: >
+  splitValues and splitColumns in pkg/sqlanalysis/analyze.go split on every
+  comma with strings.Split, so a quoted literal containing a comma is cut
+  apart. INSERT INTO todos (title, description, completed, user_id) VALUES
+  ('Groceries', 'Milk, eggs, and bread', false, 42) yields
+  description="'Milk", completed="eggs", user_id="and bread'". Found by running
+  examples/todo-linespecs/create_todo_success under the WITH enforcement of
+  prov-2026-be9b4aab, which reported a bogus mismatch. The same corrupted map
+  feeds VERIFY_WRITTEN_VALUES, so it can silently match or miss wrongly. Both
+  dialects share the code, so both are affected.
+
+  The same defect exists one step earlier: the insertVals pattern captures
+  "([^)]+)", which ends at the first closing parenthesis, so NOW() or
+  COALESCE(a, b) or a ")" inside a literal truncates the list before it is
+  split. Existing tests do not cover literals with commas, escaped quotes or
+  nested parentheses.
+
+  Fix: extract the VALUES list with a balanced, quote-aware scan and split on
+  top-level commas only, honouring single-quoted strings (doubled-quote escape
+  for both dialects, backslash escape for MySQL), the dialect's identifier
+  quote in the column list, and parenthesis depth. Expressions are kept whole
+  as one value. Not covered: multi-row VALUES (only the first row is read, as
+  today), dollar-quoted strings, and comments. Rejected: a regex special case
+  for the observed shape, which would leave escaped quotes and parentheses
+  broken.
+constraints:
+  - A single-quoted literal containing commas is written as one value
+  - Columns and values stay aligned by position for an INSERT whose literals contain commas
+  - Doubled-quote escapes in both dialects, backslash escapes in MySQL, and parenthesised expressions or a closing parenthesis inside a literal do not split or truncate the value list
+  - Behaviour for statements without commas, quotes or parentheses inside values is unchanged
+  - The fix applies to both the MySQL and PostgreSQL dialects
+affected_scope:
+  - pkg/sqlanalysis/analyze.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-be9b4aab
+  - prov-2026-a3105d31
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/sqlanalysis/quoted_split_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestWrittenValuesQuotedCommas|TestWrittenValuesEscapedQuotesAndParens' ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - sqlanalysis
+  - insert
+  - quoting
+  - written-values
