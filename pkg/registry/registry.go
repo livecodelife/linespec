@@ -834,6 +834,11 @@ func (r *MockRegistry) checkWritePayload(mock *types.ExpectStatement, operation 
 			continue
 		}
 		matched++
+		if actual == sqlanalysis.PresentSentinel {
+			// An unresolved bind placeholder (legacy path passes no binds): the
+			// written value is unknown, so there is nothing to compare.
+			continue
+		}
 		if expected := fmt.Sprintf("%v", fields[name]); expected != actual {
 			diffs = append(diffs, fmt.Sprintf("field %q: expected %q, actual %q", name, expected, actual))
 		}
