@@ -21,7 +21,7 @@ intent: >
   which fixes this host and leaves the next slower one with the same opaque
   failure.
 constraints:
-  - The database readiness timeout is settable in .linespec.yml and the default exceeds 42 seconds
+  - The database readiness timeout is settable in .linespec.yml as database.ready_timeout_seconds and the default (90) exceeds 42 seconds
   - The MySQL, PostgreSQL and MongoDB readiness waits all use the setting
   - The timeout error names the timeout in seconds, the last connection error, and the config key to raise it
   - A healthy database still returns as soon as it answers, not after the full timeout
@@ -39,7 +39,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/runner/db_ready_timeout_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestWaitForSQLDBTimeoutErrorIsActionable|TestDBReadyTimeoutConfigurable' ./pkg/runner/
+    run_command: go test -count=1 -run 'TestWaitForSQLDBTimeoutErrorIsActionable|TestDBReadyTimeoutConfigurable' ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
