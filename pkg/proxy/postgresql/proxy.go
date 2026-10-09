@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -712,7 +714,12 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			}
 
 			// Check if this query is mocked — extract bind params for semantic matching
-			bindParams := p.extractBindParams(payload)
+			// OIDs: Parse message first, then $N::TYPE casts in the query text.
+			bindOIDs := state.stmtParamOIDs[stmtName]
+			if len(bindOIDs) == 0 {
+				bindOIDs = p.extractParameterTypes(query)
+			}
+			bindParams := p.extractBindParams(payload, bindOIDs)
 			p.checkNegativeMocksForQuery(query, bindParams)
 			if mock, found := p.findMock(query, bindParams); found {
 				p.logDebug("  -> Intercepting Bind for mocked statement '%s' (portal '%s')\n", stmtName, portalName)
@@ -1576,7 +1583,11 @@ func (p *Proxy) extractAllTables(query string) []string {
 
 // extractBindParams reads actual parameter values from a PostgreSQL Bind message payload.
 // Returns a slice of strings in $1, $2, … order. NULL params are represented as "".
-func (p *Proxy) extractBindParams(payload []byte) []string {
+// Per-parameter format codes are honoured (none = all text, one = applies to all,
+// otherwise one per parameter); binary values are decoded by paramOIDs[i] via
+// decodeBindParam. paramOIDs may be nil or short; missing OIDs fall back to raw bytes.
+// This frame walk is minimal on purpose; pgproto3 will replace it (prov-2026-167380f0).
+func (p *Proxy) extractBindParams(payload []byte, paramOIDs []uint32) []string {
 	if len(payload) == 0 {
 		return nil
 	}
@@ -1599,7 +1610,15 @@ func (p *Proxy) extractBindParams(payload []byte) []string {
 		return nil
 	}
 	numParamFmts := int(binary.BigEndian.Uint16(payload[pos : pos+2]))
-	pos += 2 + numParamFmts*2
+	pos += 2
+	if pos+numParamFmts*2 > len(payload) {
+		return nil
+	}
+	fmts := make([]int16, numParamFmts)
+	for i := range fmts {
+		fmts[i] = int16(binary.BigEndian.Uint16(payload[pos : pos+2]))
+		pos += 2
+	}
 	if pos+2 > len(payload) {
 		return nil
 	}
@@ -1612,17 +1631,157 @@ func (p *Proxy) extractBindParams(payload []byte) []string {
 		}
 		length := int(int32(binary.BigEndian.Uint32(payload[pos : pos+4])))
 		pos += 4
-		if length == -1 {
+		if length < 0 {
 			params = append(params, "")
 			continue
 		}
 		if pos+length > len(payload) {
 			break
 		}
-		params = append(params, string(payload[pos:pos+length]))
+		var format int16
+		switch {
+		case len(fmts) == 1:
+			format = fmts[0]
+		case i < len(fmts):
+			format = fmts[i]
+		}
+		var oid uint32
+		if i < len(paramOIDs) {
+			oid = paramOIDs[i]
+		}
+		params = append(params, decodeBindParam(oid, format, payload[pos:pos+length]))
 		pos += length
 	}
 	return params
+}
+
+// decodeBindParam converts a Bind parameter into the text form the matcher expects.
+// Pure: text format (0) is always string(data); binary format (1) is decoded by type
+// OID. An unknown OID or a payload whose size does not fit the type falls back to
+// string(data). Never panics.
+func decodeBindParam(oid uint32, format int16, data []byte) string {
+	raw := string(data)
+	if format != 1 {
+		return raw
+	}
+	pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	switch oid {
+	case 21: // int2
+		if len(data) == 2 {
+			return strconv.FormatInt(int64(int16(binary.BigEndian.Uint16(data))), 10)
+		}
+	case 23: // int4
+		if len(data) == 4 {
+			return strconv.FormatInt(int64(int32(binary.BigEndian.Uint32(data))), 10)
+		}
+	case 20: // int8
+		if len(data) == 8 {
+			return strconv.FormatInt(int64(binary.BigEndian.Uint64(data)), 10)
+		}
+	case 16: // bool
+		if len(data) == 1 {
+			if data[0] != 0 {
+				return "true"
+			}
+			return "false"
+		}
+	case 2950: // uuid
+		if len(data) == 16 {
+			h := hex.EncodeToString(data)
+			return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
+		}
+	case 700: // float4
+		if len(data) == 4 {
+			return strconv.FormatFloat(float64(math.Float32frombits(binary.BigEndian.Uint32(data))), 'g', -1, 32)
+		}
+	case 701: // float8
+		if len(data) == 8 {
+			return strconv.FormatFloat(math.Float64frombits(binary.BigEndian.Uint64(data)), 'g', -1, 64)
+		}
+	case 1082: // date
+		if len(data) == 4 {
+			days := int(int32(binary.BigEndian.Uint32(data)))
+			return pgEpoch.AddDate(0, 0, days).Format("2006-01-02")
+		}
+	case 1114, 1184: // timestamp, timestamptz
+		if len(data) == 8 {
+			us := int64(binary.BigEndian.Uint64(data))
+			t := pgEpoch.Add(time.Duration(us) * time.Microsecond).UTC()
+			out := t.Format("2006-01-02 15:04:05.999999")
+			if oid == 1184 {
+				out += "+00"
+			}
+			return out
+		}
+	case 1700: // numeric
+		if s, ok := decodeNumeric(data); ok {
+			return s
+		}
+	}
+	return raw
+}
+
+// decodeNumeric renders a binary numeric (ndigits, weight, sign, dscale, base-10000
+// digits) as plain decimal with dscale fractional digits.
+func decodeNumeric(data []byte) (string, bool) {
+	if len(data) < 8 {
+		return "", false
+	}
+	nd := int(binary.BigEndian.Uint16(data[0:2]))
+	weight := int(int16(binary.BigEndian.Uint16(data[2:4])))
+	sign := binary.BigEndian.Uint16(data[4:6])
+	dscale := int(binary.BigEndian.Uint16(data[6:8]))
+	if len(data) != 8+nd*2 {
+		return "", false
+	}
+	switch sign {
+	case 0xC000:
+		return "NaN", true
+	case 0xD000:
+		return "Infinity", true
+	case 0xF000:
+		return "-Infinity", true
+	case 0x0000, 0x4000:
+	default:
+		return "", false
+	}
+	digit := func(i int) int {
+		if i < 0 || i >= nd {
+			return 0
+		}
+		return int(binary.BigEndian.Uint16(data[8+i*2 : 10+i*2]))
+	}
+	var sb strings.Builder
+	if sign == 0x4000 {
+		sb.WriteByte('-')
+	}
+	if weight < 0 {
+		sb.WriteByte('0')
+	} else {
+		for i := 0; i <= weight; i++ {
+			if i == 0 {
+				sb.WriteString(strconv.Itoa(digit(0)))
+			} else {
+				sb.WriteString(fmt.Sprintf("%04d", digit(i)))
+			}
+		}
+	}
+	if dscale > 0 {
+		sb.WriteByte('.')
+		var frac strings.Builder
+		for i := 0; frac.Len() < dscale; i++ {
+			frac.WriteString(fmt.Sprintf("%04d", digit(weight+1+i)))
+			if i > dscale+nd+weight+8 {
+				break
+			}
+		}
+		sb.WriteString(frac.String()[:dscale])
+	}
+	out := sb.String()
+	if out == "-0" {
+		out = "0"
+	}
+	return out, true
 }
 
 // extractSemanticInfo derives all information needed for FindMockByTables from a
