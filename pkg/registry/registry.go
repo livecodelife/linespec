@@ -839,7 +839,14 @@ func (r *MockRegistry) checkWritePayload(mock *types.ExpectStatement, operation 
 			// written value is unknown, so there is nothing to compare.
 			continue
 		}
-		if expected := fmt.Sprintf("%v", fields[name]); expected != actual {
+		expected := fmt.Sprintf("%v", fields[name])
+		equal := expected == actual
+		if _, isBool := fields[name].(bool); isBool {
+			// Services write the SQL keywords in capitals (FALSE); a YAML boolean
+			// cannot express that, so booleans compare case-insensitively.
+			equal = strings.EqualFold(expected, actual)
+		}
+		if !equal {
 			diffs = append(diffs, fmt.Sprintf("field %q: expected %q, actual %q", name, expected, actual))
 		}
 	}
