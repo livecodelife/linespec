@@ -44,6 +44,7 @@ affected_scope:
   - pkg/config/types.go
 forbidden_scope: []
 type: bug
+extends: prov-2026-001
 supersedes: ""
 superseded_by: ""
 related:
