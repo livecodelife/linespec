@@ -1,0 +1,66 @@
+id: prov-2026-89807218
+title: Release prep for v3.26.1 including binary Bind parameter decoding and configurable discovery schemas
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: >
+  Prepare the v3.26.1 release, an urgent patch for PostgreSQL services whose
+  drivers send binary-format Bind parameters (Npgsql) or whose tables live
+  outside the public schema (CNP). Two sealed records ship in it:
+  prov-2026-1757dc57 decodes binary-format Bind parameters by type OID, so
+  VERIFY_WHERE and VERIFY_WRITTEN_VALUES match on int, bigint, uuid, bool,
+  numeric, float, date, timestamp and timestamptz parameters instead of
+  comparing raw bytes and letting the write fall through to the real database;
+  prov-2026-059ba152 adds schema_discovery.schemas (default [public]), emits
+  schema-qualified and bare table keys, and makes the between-test PostgreSQL
+  reset truncate every configured schema.
+
+
+  Bump 3.26.0 to 3.26.1 with ./scripts/bump-version.sh 3.26.1, which edits only
+  VERSION, README.md, LINESPEC.md and PROVENANCE_RECORDS.md. Then by hand, add a
+  "## [3.26.1] - 2026-10-09" section to CHANGELOG.md under an empty
+  [Unreleased] heading, with a Fixed entry for prov-2026-1757dc57 and a Changed
+  entry for prov-2026-059ba152. The changelog states the known gap: the proxy
+  still resolves schema-qualified queries to the bare table name, so a table
+  name shared by several configured schemas resolves to the first listed schema
+  (tracked in a follow-up record).
+
+
+  Patch rather than minor, because the new config key defaults to the old
+  behaviour and both changes only make previously failing specs pass. This
+  record creates no tag, push or release; those are separate manual steps.
+constraints:
+  - VERSION reads 3.26.1, produced by ./scripts/bump-version.sh 3.26.1
+  - 'CHANGELOG.md has an empty "## [Unreleased]" heading directly above a new "## [3.26.1] - 2026-10-09" entry, in the existing Keep a Changelog style, entries written as "- **Title** ([prov-id](./provenance/prov-id.yml)) — text"'
+  - The 3.26.1 entry covers prov-2026-1757dc57 and prov-2026-059ba152, worded from each record's intent, and states the shared-table-name gap
+  - The existing docs test pkg/config/container_naming_docs_test.go hardcodes 3.26.0 and would fail after the bump; it is updated to 3.26.1 before this record opens
+  - No tag, push or release is created by this record
+  - No hand edits to docs/*.html or docs/llms*.txt
+  - No code changes
+affected_scope:
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-1757dc57
+  - prov-2026-059ba152
+  - prov-2026-22f54779
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/container_naming_docs_test.go
+    type: unit
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - docs
+  - changelog
+  - version-bump
