@@ -1,6 +1,6 @@
 id: prov-2026-be9b4aab
 title: "EXPECT WRITE ... WITH <payload> on SQL channels is parsed and never asserted, so a write with the wrong values passes"
-status: open
+status: implemented
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -50,7 +50,7 @@ superseded_by: ""
 related:
   - prov-2026-a3105d31
   - prov-2026-919f8621
-sealed_at_sha: ""
+sealed_at_sha: fbffacb036213bb878cccbb960ba3282f2c4db88
 associated_specs:
   - path: pkg/registry/write_with_enforcement_test.go
     type: unit
