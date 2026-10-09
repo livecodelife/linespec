@@ -1,6 +1,6 @@
 id: prov-2026-22f54779
 title: Release prep for v3.26.0 including WITH payload assertion and per-spec DB container isolation
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
