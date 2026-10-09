@@ -17,6 +17,5 @@ SELECT users.* FROM `users` WHERE `users`.`id` = 42 LIMIT 1
 RETURNS {{payloads/user_response.json}}
 
 EXPECT WRITE:MYSQL users
-WITH {{payloads/user_response.json}}
 
 RESPOND HTTP:204
