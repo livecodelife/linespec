@@ -22,11 +22,22 @@ intent: |
   container_naming field for these containers, so nothing to override; adding
   one is rejected as out of scope for a bug fix. The suffix is default-only.
 
+  Scope is every Docker resource name the runner builds outside
+  ContainerNaming, so this class of collision does not recur. An audit of
+  runner.go found only the five names above: the http, kafka, grpc, redis
+  and app containers already go through ContainerNaming, "real-<host>" is a
+  network alias inside the already per-run network, and no volumes are
+  named. The fix must still re-check for any other literal linespec-* name.
+  Explicit container_naming overrides stay verbatim and by-name cleanup
+  must keep working.
+
 constraints:
   - PostgreSQL, Oracle (main, seed, reset) and MongoDB per-spec container names end with the same project-root hash and per-run token suffix as the other default names.
   - Two concurrent runs in different project roots with the same spec name and db host produce distinct container names for every one of these containers.
   - Cleanup removes only the containers this run created, by their suffixed names.
   - No container_naming field exists for these containers, so there is no override; the suffixed name is the only default.
+  - No Docker container, network or volume name is built in pkg/runner/runner.go from a hardcoded linespec-* literal outside ContainerNaming; every default carries the suffix.
+  - Explicit container_naming overrides for existing fields remain honoured verbatim, and by-name cleanup of persistent, owned and per-spec database containers keeps working.
   - Names stay Docker-valid after sanitising the spec name, and behaviour of a single run is otherwise unchanged.
 affected_scope:
   - pkg/runner/runner.go
