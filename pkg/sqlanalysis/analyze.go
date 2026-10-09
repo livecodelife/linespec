@@ -220,6 +220,10 @@ func buildPatterns(d Dialect) *patterns {
 	ident := q + `((?:[a-z_][a-z0-9_]*` + q + `\.` + q + `)?[a-z_][a-z0-9_]*)` + q
 	// Anything a column can be compared to: a bind, a quoted literal, a number.
 	value := `(?:` + d.placeholder() + `|'([^']*)'|(\d+(?:\.\d+)?))`
+	// A SET item also accepts the bare keywords TRUE, FALSE and NULL as whole
+	// words. They ride in the number group, which resolve returns as written.
+	// WHERE conditions keep the narrower value above.
+	setValue := `(?:` + d.placeholder() + `|'([^']*)'|(\d+(?:\.\d+)?|(?:TRUE|FALSE|NULL)\b))`
 
 	// A table target, schema-qualified where the dialect allows it. Only the
 	// table half is captured.
@@ -233,7 +237,7 @@ func buildPatterns(d Dialect) *patterns {
 		insertCols:     regexp.MustCompile(`(?i)INSERT\s+(?:INTO\s+)?` + target + `\s*\(([^)]+)\)`),
 		valuesKeyword:  regexp.MustCompile(`(?i)\bVALUES?\s*\(`),
 		updateSet:      regexp.MustCompile(`(?i)\bSET\s+(.+?)(?:\s+WHERE\b|$)`),
-		setItem:        regexp.MustCompile(`(?i)` + ident + `\s*=\s*` + value),
+		setItem:        regexp.MustCompile(`(?i)` + ident + `\s*=\s*` + setValue),
 		tableRef: func(table string) *regexp.Regexp {
 			return regexp.MustCompile(`(?i)(?:^|[^a-z0-9_])` + regexp.QuoteMeta(table) + `(?:[^a-z0-9_]|$)`)
 		},
