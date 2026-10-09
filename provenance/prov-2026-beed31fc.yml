@@ -1,6 +1,6 @@
 id: prov-2026-beed31fc
 title: UPDATE SET extracts no written value for a bare TRUE, FALSE or NULL
-status: open
+status: implemented
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
@@ -42,7 +42,7 @@ superseded_by: ""
 related:
   - prov-2026-be9b4aab
   - prov-2026-468bbfbe
-sealed_at_sha: ""
+sealed_at_sha: cfb28c50580d2a699635aa5ec6bc3f3c245f3cc2
 associated_specs:
   - path: pkg/sqlanalysis/update_bool_test.go
     type: unit
