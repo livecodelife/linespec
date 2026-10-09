@@ -1,0 +1,68 @@
+id: prov-2026-1757dc57
+title: 'PostgreSQL proxy: decode binary-format Bind parameters'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  extractBindParams in the PostgreSQL proxy skips the Bind parameter format codes and
+  returns every parameter as string(bytes). Clients such as Npgsql send int, bigint, uuid,
+  timestamp and bool parameters in binary format (code 1), so the matcher receives raw
+  bytes where it expects text. In 3.26.0 this made VERIFY_WRITTEN_VALUES on an int8
+  column fail with unprintable bytes, let the write fall through to the real database,
+  and made VERIFY_WHERE on non-text parameters never match.
+
+  Decision: honour the per-parameter format codes (zero codes means all text, one code
+  applies to every parameter, otherwise one code per parameter) and decode binary
+  parameters into the text form the matcher already expects, keyed by the parameter type
+  OID. OIDs come from the Parse message, falling back to the ParameterDescription the
+  proxy produced or the schemaCache. Minimum types: int2, int4, int8, bool, uuid, numeric,
+  float4, float8, date, timestamp, timestamptz. An unknown OID, or a payload whose length
+  does not fit the type, falls back to today's string(bytes) behaviour rather than
+  failing the connection.
+
+  This is the inbound-parameter side of work earlier records did on result encoding and
+  OID resolution (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e). Those
+  stay sealed and correct; this record references them and supersedes none. The main
+  rejected option was making clients request text format at the proxy; the proxy cannot
+  rewrite the client's Bind without diverging from what the real server would see.
+
+  Relationship to the planned core refactor (prov-2026-167380f0, draft): that blueprint
+  migrates PostgreSQL onto pgx pgproto3 first, which will replace the hand-rolled frame
+  parsing in extractBindParams. This fix ships independently ahead of it and must not be
+  a dead end: the type-aware decoding is a standalone pure function (type OID, format
+  code, bytes -> matcher text) with no dependency on the Bind frame layout, so it survives
+  the codec swap and is reused by the Interaction Attrs the new Codec produces. Only the
+  thin frame walk in extractBindParams is expected to be thrown away. The unit tests
+  target the decoder directly, and also pin Bind-frame behaviour so they can serve as part
+  of the per-driver conformance corpus that blueprint requires. Npgsql is not yet in that
+  corpus; its recorded Bind bytes from this report should be added to it.
+constraints:
+  - Decoding lives in a pure function with no proxy, connection or schemaCache state, so the pgproto3 migration (prov-2026-167380f0) can reuse it unchanged
+  - Keep the Bind frame walk in extractBindParams minimal; do not invest in refactoring frame parsing, since pgproto3 replaces it
+  - Capture a recorded Npgsql Bind byte transcript as a test fixture for the per-driver conformance corpus
+  - MUST NOT regress the lib/pq, asyncpg or tokio-postgres example suites
+  - MUST add unit tests in pkg/proxy/postgresql covering each listed type in both binary and text format
+  - MUST add unit tests for format-code edge cases - zero codes, a single code applied to all parameters, per-parameter codes, NULL parameters, and truncated payloads
+  - MUST fall back to current string(bytes) behaviour for an unknown OID or a mis-sized binary value, never panic
+  - Done when Npgsql-driven VERIFY_WHERE and VERIFY_WRITTEN_VALUES match on int, bigint, uuid, bool and timestamptz columns
+  - No changes to result-side encoding, the DSL, or the MySQL, HTTP, Kafka and Redis proxies
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/bind_params_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-1aac1dc7
+  - prov-2026-258574ee
+  - prov-2026-cbc8213e
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/bind_params_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/proxy/postgresql/ -run BindParams -count=1
+associated_traces: []
+monitors: []
+tags: []
