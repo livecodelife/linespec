@@ -1,0 +1,53 @@
+id: prov-2026-059ba152
+title: 'Schema discovery: support configurable non-public PostgreSQL schemas'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  In 3.26.0 AutoDiscoverer hardcodes the public schema: DiscoverTables filters pg_tables on schemaname='public' and postgresColumns on table_schema='public'. A database whose tables live elsewhere (CNP: 33 tables in cnp_global, 30 in cnp_ops_<state>, none in public) discovers nothing, so the PostgreSQL proxy's schemaCache (table to column type OIDs) is empty.
+
+  Add schema_discovery.schemas ([]string on SchemaDiscoveryConfig), defaulting to [public] so public-only users are unchanged. Discovery covers every listed schema. Each table is keyed twice: schema-qualified (cnp_global.errors) and bare (errors). When a bare name exists in several listed schemas the first listed schema wins, mirroring search_path order; the qualified key is always unambiguous.
+
+  The between-test reset is public-only too. Checked in pkg/runner: truncatePostgreSQLTables selects from pg_tables WHERE schemaname='public' and truncates unquoted bare names, so tables in other schemas are never reset and state leaks between specs. It becomes schema-aware, truncating quoted, schema-qualified names across the configured schemas. MySQL paths are untouched.
+
+  Relationship to the planned core refactor (prov-2026-167380f0, draft): that blueprint
+  replaces the runner's per-database switches with a Dependency interface (Start, Env,
+  ProxyArgs, VerifyAddr, Reset, Stop). The schema-aware truncation here is the PostgreSQL
+  Reset behaviour that interface will own, so it is written as a self-contained function
+  taking the connection and the schema list, not threaded through the runner's bool
+  guards, and can move behind Dependency.Reset unchanged. schema_discovery.schemas is
+  config the PostgreSQL dependency consumes; it adds no new runner-level switch. This
+  record does not touch the proxy and does not change how interactions are keyed.
+
+  Rejected: discovering every non-system schema. It silently changes behaviour for existing users; an explicit list keeps the default identical. Extends prov-2026-9a74b241 (AutoDiscoverer) and prov-2026-8227b384 (SchemaDiscoveryConfig) without superseding them.
+constraints:
+  - Default behaviour is byte-identical for public-only users, including schema map keys when schemas is unset
+  - MySQL discovery and truncation paths are unaffected
+  - Schema-aware truncation is a self-contained function (connection, schemas) with no new runner-level bool guards or database switches, so it can become Dependency.Reset from prov-2026-167380f0 unchanged
+  - Collision rule is first listed schema wins for the bare name; qualified keys are always emitted
+  - Truncation of non-public schemas uses quoted schema-qualified identifiers and still skips schema_migrations
+  - Unit tests cover the discoverer (multi-schema, collision, default) and config parsing of schema_discovery.schemas
+  - 'Implementation check: confirm the proxy extractTable resolves a schema-qualified query to a schemaCache key; the proxy is out of scope here, so a gap becomes a follow-up record'
+  - 'Non-goal, follow-up for later verification: ACCESSING_TABLES with unqualified ops tables under a non-default search_path'
+  - 'Non-goal, follow-up for later verification: strict_passthrough on undeclared queries'
+  - 'Non-goal, follow-up for later verification: Npgsql Pooling=false behaviour'
+affected_scope:
+  - pkg/schema/auto_discoverer.go
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/runner/runner.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9a74b241
+  - prov-2026-8227b384
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - schema-discovery
