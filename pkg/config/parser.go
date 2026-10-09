@@ -229,6 +229,9 @@ func applyDefaults(config *LineSpecConfig) {
 	if config.SchemaDiscovery.Mode == "" {
 		config.SchemaDiscovery.Mode = "auto"
 	}
+	if len(config.SchemaDiscovery.Schemas) == 0 {
+		config.SchemaDiscovery.Schemas = []string{"public"}
+	}
 
 	// Test timeout default
 	if config.TestTimeoutSeconds == 0 {
