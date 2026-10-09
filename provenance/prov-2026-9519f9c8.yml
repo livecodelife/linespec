@@ -1,0 +1,63 @@
+id: prov-2026-9519f9c8
+title: 'PostgreSQL proxy: resolve schema-qualified tables to schemaCache keys'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  prov-2026-059ba152 made discovery emit both schema-qualified (cnp_global.errors) and
+  bare (errors) keys in the schema map, the bare key going to the first listed schema.
+  The proxy never uses the qualified keys: extractTable matches registered table names
+  with \b<table>\b, and its fallback takes the word after from/into/update/table and
+  strips any schema prefix. A query on cnp_global.errors therefore resolves to bare
+  `errors`, and when the same table exists in several configured schemas a query against
+  a later schema gets the first schema's column names and type OIDs.
+
+  Decision: make table resolution a pure function, (query text, known registry tables,
+  schemaCache keys) -> schemaCache key. When the query's table reference is
+  schema-qualified and the qualified key exists in the schemaCache, return it; otherwise
+  fall back to the bare name. Unqualified references keep resolving to the bare key, which
+  is the first listed schema and mirrors search_path order. Only the schemaCache lookup key
+  changes; registry matching is untouched. Public-only users see no difference, since they
+  have no qualified keys.
+
+  Rejected: making the proxy track the connection's search_path (SET search_path, startup
+  options) to resolve unqualified names precisely. It is the correct long-term answer for
+  CNP's cnp_global plus cnp_ops_<state> setup, but it is stateful per connection and
+  belongs with the core refactor, not this fix.
+
+  Relationship: related to prov-2026-059ba152 (discovery keys) and prov-2026-1757dc57
+  (OID resolution on Bind), and to the planned core refactor prov-2026-167380f0 (draft),
+  whose Interaction model carries a Resources field and which migrates PostgreSQL to
+  pgproto3. This fix ships ahead of it and stays minimal; the resolver is a pure function
+  with no proxy or connection state so the refactor can reuse it to populate Resources.
+constraints:
+  - Table resolution lives in a pure function with no proxy, connection or registry state (known tables and schemaCache keys passed in), so prov-2026-167380f0 can reuse it unchanged
+  - Qualified reference with a qualified schemaCache key resolves to the qualified key; otherwise fall back to the bare name; unqualified references stay bare (first-listed schema)
+  - No change in behaviour for public-only users or when the schemaCache has no qualified keys
+  - Handle quoted identifiers ("cnp_global"."errors") and case folding the way extractTable already does for the bare path
+  - Keep the change minimal; do not add search_path tracking or touch frame parsing, since pgproto3 replaces it
+  - 'Registry matching today (pkg/sqlanalysis.Tables, used by ACCESSING_TABLES): a containment regex (?i)(?:^|[^a-z0-9_])<table>(?:[^a-z0-9_]|$), schema-insensitive. A mock declaring `errors` matches `cnp_global.errors` and `other.errors` alike, because "." is a non-identifier boundary. A mock declaring `cnp_global.errors` matches only the qualified text. Registry and sqlanalysis are left unchanged'
+  - 'OPEN QUESTION: should ACCESSING_TABLES for a bare name distinguish schemas when the same table exists in several? Out of scope here; record the answer or a follow-up record if CNP needs it'
+  - 'OPEN QUESTION: behaviour of unqualified names under a non-default search_path is unverified; this record only mirrors first-listed-schema order and must not claim more'
+  - MUST add unit tests in pkg/proxy/postgresql covering qualified hit, qualified miss falling back to bare, unqualified, quoted and mixed-case identifiers, same table name in two schemas getting distinct OIDs, and public-only unchanged
+  - MUST NOT regress the lib/pq, asyncpg or tokio-postgres example suites
+  - No changes to the DSL, discovery, or the MySQL, HTTP, Kafka, Redis and Oracle proxies
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/table_resolve_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-059ba152
+  - prov-2026-1757dc57
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/table_resolve_test.go
+    type: go-test
+    run_command: go test ./pkg/proxy/postgresql/... -run TestResolveTable
+associated_traces: []
+monitors: []
+tags: []
