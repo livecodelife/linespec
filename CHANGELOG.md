@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.26.0] - 2026-10-09
+
+**Upgrade note.** `EXPECT WRITE ... WITH <payload>` on MySQL and PostgreSQL is now asserted against the values the write used, so specs that passed only because `WITH` was ignored can now fail. INSERT and UPDATE payloads are compared as a subset by column name, booleans compare case-insensitively, and unresolved bind placeholders are skipped on the legacy path. `WITH` on a DELETE is a parse error when the parser can see the DELETE, and otherwise fails at match time. Several example specs were corrected (the todo update payload, the bcrypt digest removed from the user create payload, and `WITH` removed from two DELETE specs). Per-spec PostgreSQL, Oracle and MongoDB database containers now carry the per-run suffix, so parallel runs in different project roots no longer collide; explicit `container_naming` values are unchanged. Scripts that match those container names exactly must be updated, and a crashed run's per-spec containers are not swept, so remove them by hand with `docker rm -f`.
+
 ### Changed
 
+- **`EXPECT WRITE ... WITH` is asserted on SQL writes** ([prov-2026-be9b4aab](./provenance/prov-2026-be9b4aab.yml)) — the payload was parsed and never compared, so a write with the wrong values passed. It now fails the spec with a diff of the payload field against the written value, on both the semantic and legacy match paths; a payload that names no written column fails, and `WITH` on a DELETE is rejected at parse time when visible and otherwise fails at match time.
+
+- **Isolated per-spec database container names** ([prov-2026-06d7d70b](./provenance/prov-2026-06d7d70b.yml)) — per-spec PostgreSQL, Oracle (main, seed and reset) and MongoDB container names now end with the same per-run suffix as the other default names, and cleanup removes only the containers this run created. Explicit `container_naming` values are used verbatim.
+
 - **Configurable database readiness timeout** ([prov-2026-22e2de8d](./provenance/prov-2026-22e2de8d.yml)) — the MySQL, PostgreSQL and MongoDB readiness waits were fixed at 30s, 30s and 45s. They now use `database.ready_timeout_seconds` (settable per `databases:` entry), default 90s, so a slow-starting database on a loaded Docker host no longer fails setup. The timeout error now states the timeout used, the last connection error, and the config key that raises it.
+
+### Fixed
+
+- **INSERT lists were split on every comma** ([prov-2026-468bbfbe](./provenance/prov-2026-468bbfbe.yml)) — a quoted literal containing a comma, such as `'Milk, eggs, and bread'`, was cut apart, and `NOW()` or a `)` inside a literal truncated the VALUES list. Column and VALUES lists now split on top-level commas only, honouring quotes, escapes and parentheses, which also corrects the written values `VERIFY_WRITTEN_VALUES` compares against.
+
+- **UPDATE SET ignored bare `TRUE`, `FALSE` and `NULL`** ([prov-2026-beed31fc](./provenance/prov-2026-beed31fc.yml)) — an UPDATE of a boolean column yielded no written value, so `VERIFY_WRITTEN_VALUES` and `WITH` could not match it. These keywords are now extracted as written.
 
 ## [3.25.0] - 2026-10-08
 
