@@ -9,7 +9,7 @@ import (
 
 // The user-facing docs must not present the old fixed Docker names as
 // defaults (copying them reintroduces the cross-run collision), must describe
-// the isolated per-run defaults, and the 3.25.0 release prep must be in place.
+// the isolated per-run defaults, and the 3.26.0 release prep must be in place.
 
 var oldFixedNames = []string{
 	"linespec-shared-db",
@@ -86,31 +86,54 @@ func TestDocsDoNotPresentFixedContainerNamesAsDefaults(t *testing.T) {
 		})
 	}
 
-	t.Run("VERSION_is_3.25.0", func(t *testing.T) {
-		if got := strings.TrimSpace(readRepoFile(t, "../../VERSION")); got != "3.25.0" {
-			t.Errorf("VERSION = %q, want 3.25.0", got)
+	t.Run("VERSION_is_3.26.0", func(t *testing.T) {
+		if got := strings.TrimSpace(readRepoFile(t, "../../VERSION")); got != "3.26.0" {
+			t.Errorf("VERSION = %q, want 3.26.0", got)
 		}
 	})
 
-	t.Run("CHANGELOG_has_3.25.0_entry", func(t *testing.T) {
+	t.Run("CHANGELOG_has_3.26.0_entry", func(t *testing.T) {
 		cl := readRepoFile(t, "../../CHANGELOG.md")
-		if !regexp.MustCompile(`(?m)^## \[3\.25\.0\]`).MatchString(cl) {
-			t.Fatal("CHANGELOG.md has no \"## [3.25.0]\" heading")
+		if !regexp.MustCompile(`(?m)^## \[3\.26\.0\]`).MatchString(cl) {
+			t.Fatal("CHANGELOG.md has no \"## [3.26.0]\" heading")
 		}
-		idx := strings.Index(cl, "## [3.25.0]")
+		idx := strings.Index(cl, "## [3.26.0]")
 		entry := cl[idx:]
-		if next := strings.Index(entry[len("## [3.25.0]"):], "\n## ["); next >= 0 {
-			entry = entry[:len("## [3.25.0]")+next]
+		if next := strings.Index(entry[len("## [3.26.0]"):], "\n## ["); next >= 0 {
+			entry = entry[:len("## [3.26.0]")+next]
 		}
 		lower := strings.ToLower(entry)
 		if !strings.Contains(lower, "upgrade note") {
-			t.Error("3.25.0 entry has no Upgrade note")
+			t.Error("3.26.0 entry has no Upgrade note")
 		}
 		if !strings.Contains(lower, "per-run suffix") {
-			t.Error("3.25.0 entry does not mention the per-run suffix")
+			t.Error("3.26.0 entry does not mention the per-run suffix")
 		}
-		if !strings.Contains(entry, "NO TRANSACTION") {
-			t.Error("3.25.0 entry does not mention NO TRANSACTION (stricter parsing)")
+		if !strings.Contains(entry, "WITH") {
+			t.Error("3.26.0 entry does not mention WITH (payload assertion)")
+		}
+		// WITH on a DELETE must be described as rejected / failing, on one line.
+		deleteNote := false
+		for _, line := range strings.Split(entry, "\n") {
+			ll := strings.ToLower(line)
+			if strings.Contains(line, "WITH") && strings.Contains(line, "DELETE") &&
+				(strings.Contains(ll, "parse error") || strings.Contains(ll, "reject") || strings.Contains(ll, "fails")) {
+				deleteNote = true
+			}
+		}
+		if !deleteNote {
+			t.Error("3.26.0 entry does not say WITH on a DELETE is rejected or fails")
+		}
+		for _, id := range []string{
+			"prov-2026-22e2de8d", "prov-2026-be9b4aab", "prov-2026-468bbfbe",
+			"prov-2026-beed31fc", "prov-2026-06d7d70b",
+		} {
+			if !strings.Contains(entry, id) {
+				t.Errorf("3.26.0 entry does not cover %s", id)
+			}
+		}
+		if !regexp.MustCompile(`(?s)## \[Unreleased\]\s*\n+## \[3\.26\.0\]`).MatchString(cl) {
+			t.Error("CHANGELOG.md does not have an empty \"## [Unreleased]\" heading directly above the 3.26.0 heading")
 		}
 	})
 }
