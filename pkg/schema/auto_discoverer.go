@@ -12,12 +12,73 @@ type AutoDiscoverer struct {
 	db            *sql.DB
 	dbType        string
 	excludeTables []string
+	schemas       []string // PostgreSQL schemas for DiscoverSchema; empty means public only
 }
 
 // NewAutoDiscoverer creates an AutoDiscoverer backed by an open database connection.
 // The caller is responsible for closing the db when done.
 func NewAutoDiscoverer(db *sql.DB, dbType string, excludeTables []string) *AutoDiscoverer {
 	return &AutoDiscoverer{db: db, dbType: dbType, excludeTables: excludeTables}
+}
+
+// NewAutoDiscovererWithSchemas is like NewAutoDiscoverer but lets DiscoverSchema
+// cover a list of PostgreSQL schemas. nil or empty means public only.
+func NewAutoDiscovererWithSchemas(db *sql.DB, dbType string, excludeTables, schemas []string) *AutoDiscoverer {
+	return &AutoDiscoverer{db: db, dbType: dbType, excludeTables: excludeTables, schemas: schemas}
+}
+
+// DiscoverSchema returns column metadata for every table in the configured
+// schemas. Each table is keyed schema-qualified ("schema.table") and bare
+// ("table"); when a bare name exists in several schemas the first listed wins.
+// For public-only configurations (nil, empty, or ["public"]) only bare keys
+// are emitted.
+func (a *AutoDiscoverer) DiscoverSchema() (map[string][]ColumnInfo, error) {
+	schemas := a.schemas
+	if len(schemas) == 0 {
+		schemas = []string{"public"}
+	}
+	publicOnly := len(schemas) == 1 && schemas[0] == "public"
+	result := make(map[string][]ColumnInfo)
+	for _, sch := range schemas {
+		tables, err := a.discoverPostgresTables(sch)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tables {
+			cols, err := a.postgresColumnsIn(sch, t)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch columns for %s.%s: %w", sch, t, err)
+			}
+			if !publicOnly {
+				result[sch+"."+t] = cols
+			}
+			if _, taken := result[t]; !taken {
+				result[t] = cols
+			}
+		}
+	}
+	return result, nil
+}
+
+func (a *AutoDiscoverer) discoverPostgresTables(schemaName string) ([]string, error) {
+	rows, err := a.db.QueryContext(context.Background(),
+		`SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = $1`, schemaName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tables in schema %s: %w", schemaName, err)
+	}
+	defer rows.Close()
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("failed to scan table name: %w", err)
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating tables: %w", err)
+	}
+	return FilterExcluded(tables, a.excludeTables), nil
 }
 
 // DiscoverTables queries the database for all user tables and returns their names,
@@ -89,9 +150,13 @@ func (a *AutoDiscoverer) mysqlColumns(table string) ([]ColumnInfo, error) {
 }
 
 func (a *AutoDiscoverer) postgresColumns(table string) ([]ColumnInfo, error) {
+	return a.postgresColumnsIn("public", table)
+}
+
+func (a *AutoDiscoverer) postgresColumnsIn(schemaName, table string) ([]ColumnInfo, error) {
 	rows, err := a.db.QueryContext(context.Background(),
-		`SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
-		table)
+		`SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+		schemaName, table)
 	if err != nil {
 		return nil, err
 	}

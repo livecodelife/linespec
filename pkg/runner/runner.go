@@ -659,28 +659,51 @@ func (s *TestSuite) truncatePostgreSQLTables(ctx context.Context, dbConfig *conf
 	}
 	defer db.Close()
 
+	return truncatePostgreSQLSchemas(ctx, db, s.getSchemaDiscoveryConfig().Schemas)
+}
+
+// quotePGIdent quotes a PostgreSQL identifier, doubling embedded quotes.
+func quotePGIdent(id string) string {
+	return `"` + strings.ReplaceAll(id, `"`, `""`) + `"`
+}
+
+// truncatePostgreSQLSchemas truncates every table (except schema_migrations) in
+// each listed schema using quoted, schema-qualified names and CASCADE. Empty
+// schemas means public. Per-table failures are logged and tolerated.
+func truncatePostgreSQLSchemas(ctx context.Context, db *sql.DB, schemas []string) error {
+	if len(schemas) == 0 {
+		schemas = []string{"public"}
+	}
+	for _, sch := range schemas {
+		tables, err := listPostgreSQLTables(ctx, db, sch)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			stmt := fmt.Sprintf("TRUNCATE TABLE %s.%s CASCADE", quotePGIdent(sch), quotePGIdent(table))
+			if _, err := db.ExecContext(ctx, stmt); err != nil {
+				logger.Debug("Failed to truncate PostgreSQL table %s.%s: %v", sch, table, err)
+			}
+		}
+	}
+	return nil
+}
+
+func listPostgreSQLTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, error) {
 	rows, err := db.QueryContext(ctx,
-		"SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations')")
+		"SELECT tablename FROM pg_tables WHERE schemaname = $1 AND tablename NOT IN ('schema_migrations')", schemaName)
 	if err != nil {
-		return fmt.Errorf("failed to list PostgreSQL tables: %w", err)
+		return nil, fmt.Errorf("failed to list PostgreSQL tables in schema %s: %w", schemaName, err)
 	}
 	defer rows.Close()
 	var tables []string
 	for rows.Next() {
 		var t string
-		if err := rows.Scan(&t); err == nil {
+		if err := rows.Scan(&t); err == nil && t != "schema_migrations" {
 			tables = append(tables, t)
 		}
 	}
-	if len(tables) == 0 {
-		return nil
-	}
-	for _, table := range tables {
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table)); err != nil {
-			logger.Debug("Failed to truncate PostgreSQL table %s: %v", table, err)
-		}
-	}
-	return nil
+	return tables, rows.Err()
 }
 
 // prepareForReuse reloads registries on all running proxy sidecars and truncates
@@ -3009,19 +3032,14 @@ func (s *TestSuite) fetchPostgresSchema(ctx context.Context, host, port, user, p
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	discoverer := schema.NewAutoDiscoverer(db, "postgresql", nil)
-	tables, err := discoverer.DiscoverTables()
+	discoverer := schema.NewAutoDiscovererWithSchemas(db, "postgresql", nil, s.getSchemaDiscoveryConfig().Schemas)
+	discovered, err := discoverer.DiscoverSchema()
 	if err != nil {
-		return nil, fmt.Errorf("failed to discover tables: %w", err)
+		return nil, fmt.Errorf("failed to discover schema: %w", err)
 	}
 
-	result := make(map[string][]pgSchemaColumn, len(tables))
-	for _, table := range tables {
-		cols, err := discoverer.GetTableColumns(table)
-		if err != nil {
-			logger.Debug("Failed to fetch PostgreSQL columns for table %s: %v", table, err)
-			continue
-		}
+	result := make(map[string][]pgSchemaColumn, len(discovered))
+	for table, cols := range discovered {
 		pcols := make([]pgSchemaColumn, len(cols))
 		for i, c := range cols {
 			pcols[i] = pgSchemaColumn{Field: c.Name, Type: c.Type}
