@@ -1,6 +1,6 @@
 id: prov-2026-06d7d70b
 title: Per-spec PostgreSQL, Oracle and MongoDB database containers ignore per-run container-name isolation, so parallel runs collide
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
