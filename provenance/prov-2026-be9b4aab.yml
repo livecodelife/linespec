@@ -54,7 +54,7 @@ sealed_at_sha: ""
 associated_specs:
   - path: pkg/registry/write_with_enforcement_test.go
     type: unit
-    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses|TestWriteWithPayloadMismatchDiffShowsExpectedAndActual|TestWriteWithPayloadSkipsUnresolvedPlaceholdersOnLegacyPath' ./$(dirname {{path}})
+    run_command: go test -count=1 -run 'TestWriteWithPayloadMismatchFails|TestWriteWithPayloadMatchPasses|TestWriteWithPayloadMismatchDiffShowsExpectedAndActual|TestWriteWithPayloadSkipsUnresolvedPlaceholdersOnLegacyPath|TestWriteWithPayloadBooleanIsCaseInsensitive' ./$(dirname {{path}})
   - path: pkg/dsl/write_with_delete_test.go
     type: unit
     run_command: go test -count=1 -run 'TestWriteWithOnDeleteRejected' ./$(dirname {{path}})
