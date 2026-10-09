@@ -766,7 +766,7 @@ func (r *testRunner) prepareForReuse(ctx context.Context, pc *persistentServiceC
 					initScriptPath = candidate
 				}
 			}
-			resetName := "linespec-oracle-reset-" + host
+			resetName := config.OracleResetContainerName(r.suite.cwd, host)
 			if err := r.suite.resetOracle(ctx, *dbCfg, "real-"+host, initScriptPath, resetName); err != nil {
 				return fmt.Errorf("failed to reset Oracle (%s): %w", host, err)
 			}
@@ -1377,7 +1377,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 			switch dbType {
 			case "oracle":
 				logger.Debug("Starting Oracle database (host=%s)", db.Host)
-				oracleContainerName := "linespec-oracle-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
+				oracleContainerName := config.PerSpecDatabaseContainerName(r.suite.cwd, "oracle", db.Host, spec.Name)
 
 				initScriptPath := ""
 				if db.InitScript != "" {
@@ -1431,7 +1431,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 				// oracleResetScript. One moment, one code path, and the same container
 				// that replays it between specs.
 				if seedErr := r.suite.resetOracle(ctx, db, realAlias, initScriptPath,
-					"linespec-oracle-seed-"+db.Host); seedErr != nil {
+					config.OracleSeedContainerName(r.suite.cwd, db.Host)); seedErr != nil {
 					return fmt.Errorf("failed to seed Oracle (%s): %w", db.Host, seedErr)
 				}
 
@@ -1498,7 +1498,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			case "postgresql":
 				logger.Debug("Starting PostgreSQL database (host=%s)", db.Host)
-				pgContainerName := "linespec-postgresql-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
+				pgContainerName := config.PerSpecDatabaseContainerName(r.suite.cwd, "postgresql", db.Host, spec.Name)
 
 				var pgBinds []string
 				if db.InitScript != "" {
@@ -1692,7 +1692,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 			case "mongodb":
 				logger.Debug("Starting MongoDB database (host=%s)", db.Host)
-				mongoContainerName := "linespec-mongodb-" + db.Host + "-" + config.SanitizeContainerName(spec.Name)
+				mongoContainerName := config.PerSpecDatabaseContainerName(r.suite.cwd, "mongodb", db.Host, spec.Name)
 
 				var mongoBinds []string
 				if db.InitScript != "" {

@@ -249,6 +249,22 @@ func DefaultContainerNaming(root string) *ContainerNaming {
 	}
 }
 
+// PerSpecDatabaseContainerName returns the per-spec database container name for
+// engine ("postgresql", "oracle", "mongodb"), carrying the per-run isolation suffix.
+func PerSpecDatabaseContainerName(root, engine, host, specName string) string {
+	return "linespec-" + engine + "-" + host + "-" + SanitizeContainerName(specName) + "-" + DefaultNamingSuffix(root)
+}
+
+// OracleSeedContainerName returns the Oracle seed container name for host.
+func OracleSeedContainerName(root, host string) string {
+	return "linespec-oracle-seed-" + host + "-" + DefaultNamingSuffix(root)
+}
+
+// OracleResetContainerName returns the Oracle reset container name for host.
+func OracleResetContainerName(root, host string) string {
+	return "linespec-oracle-reset-" + host + "-" + DefaultNamingSuffix(root)
+}
+
 // GetDatabaseContainer returns the database container name with template substitution
 func (c *ContainerNaming) GetDatabaseContainer(params ContainerNameParams) string {
 	if c.DatabaseContainer == "" {
