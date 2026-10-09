@@ -1,0 +1,46 @@
+id: prov-2026-06d7d70b
+title: Per-spec PostgreSQL, Oracle and MongoDB database containers ignore per-run container-name isolation, so parallel runs collide
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  prov-2026-c3977f44 made the default network, shared db, kafka, migrate,
+  app and proxy names carry a project-root hash plus a per-process token
+  (DefaultNamingSuffix), so concurrent linespec runs stopped force-removing
+  each other's resources. It did not reach the per-spec multi-database
+  containers in pkg/runner/runner.go, which still use fixed names:
+  linespec-postgresql-<host>-<spec>, linespec-oracle-<host>-<spec>,
+  linespec-oracle-seed-<host>, linespec-oracle-reset-<host> and
+  linespec-mongodb-<host>-<spec>. Two runs in different directories with the
+  same spec name and db host therefore collide on one container name.
+
+  Fix: build these names through one config helper that appends the same
+  DefaultNamingSuffix the other defaults use, and call it at every site in
+  the runner. Cleanup already removes containers by the exact recorded names
+  (dbContainers, then StopAndRemoveContainer), so once names are per-run it
+  only touches this run's containers with no further change. There is no
+  container_naming field for these containers, so nothing to override; adding
+  one is rejected as out of scope for a bug fix. The suffix is default-only.
+
+constraints:
+  - PostgreSQL, Oracle (main, seed, reset) and MongoDB per-spec container names end with the same project-root hash and per-run token suffix as the other default names.
+  - Two concurrent runs in different project roots with the same spec name and db host produce distinct container names for every one of these containers.
+  - Cleanup removes only the containers this run created, by their suffixed names.
+  - No container_naming field exists for these containers, so there is no override; the suffixed name is the only default.
+  - Names stay Docker-valid after sanitising the spec name, and behaviour of a single run is otherwise unchanged.
+affected_scope:
+  - pkg/runner/runner.go
+  - pkg/config/types.go
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-c3977f44
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags:
+  - container-naming
+  - parallel-runs
