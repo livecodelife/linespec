@@ -279,3 +279,70 @@ func TestWriteWithPayloadSkipsUnresolvedPlaceholdersOnLegacyPath(t *testing.T) {
 		}
 	})
 }
+
+// A WITH payload value that is a YAML/JSON boolean compares case-insensitively
+// against the written SQL value, because services write the keywords TRUE and
+// FALSE in capitals (payload `completed: false` vs written FALSE). Non-boolean
+// values stay exact (case-sensitive), and a different boolean still fails.
+func TestWriteWithPayloadBooleanIsCaseInsensitive(t *testing.T) {
+	type bc struct {
+		writeCase
+		wantFail bool
+		field    string
+	}
+	var cases []bc
+	for _, d := range []struct {
+		prefix  string
+		channel types.ExpectChannel
+		dialect sqlanalysis.Dialect
+		ins     func(v string) string
+	}{
+		{"mysql", types.WriteMySQL, sqlanalysis.MySQL,
+			func(v string) string { return "INSERT INTO `todos` (`title`, `completed`) VALUES ('Buy', " + v + ")" }},
+		{"postgres", types.WritePostgreSQL, sqlanalysis.PostgreSQL,
+			func(v string) string { return "INSERT INTO todos (title, completed) VALUES ('Buy', " + v + ")" }},
+	} {
+		add := func(name, payload, written string, fail bool) {
+			// UPDATE boolean keywords are covered by a follow-up record.
+			cases = append(cases,
+				bc{writeCase{name: d.prefix + "_insert_" + name, channel: d.channel, dialect: d.dialect, table: "todos",
+					query: d.ins(written), payload: payload}, fail, "completed"})
+		}
+		add("false_vs_FALSE", "completed: false\n", "FALSE", false)
+		add("false_vs_false", "completed: false\n", "false", false)
+		add("true_vs_TRUE", "completed: true\n", "TRUE", false)
+		add("true_vs_true", "completed: true\n", "true", false)
+		add("false_vs_TRUE", "completed: false\n", "TRUE", true)
+		add("true_vs_FALSE", "completed: true\n", "FALSE", true)
+	}
+	// Non-boolean string payloads stay case-sensitive.
+	cases = append(cases,
+		bc{writeCase{name: "mysql_string_case_differs", channel: types.WriteMySQL, dialect: sqlanalysis.MySQL, table: "todos",
+			query: "INSERT INTO `todos` (`title`, `description`) VALUES ('Buy', 'abc')", payload: "description: Abc\n"}, true, "description"},
+		bc{writeCase{name: "postgres_string_case_differs", channel: types.WritePostgreSQL, dialect: sqlanalysis.PostgreSQL, table: "todos",
+			query: "INSERT INTO todos (title, description) VALUES ('Buy', 'abc')", payload: "description: Abc\n"}, true, "description"},
+	)
+	for _, c := range cases {
+		for _, semantic := range []bool{true, false} {
+			path := "legacy"
+			if semantic {
+				path = "semantic"
+			}
+			t.Run(c.name+"/"+path, func(t *testing.T) {
+				_, err := runWrite(t, c.writeCase, semantic)
+				if c.wantFail {
+					if err == nil {
+						t.Fatalf("expected failure for payload %q vs query %q", c.payload, c.query)
+					}
+					if !strings.Contains(err.Error(), c.field) {
+						t.Fatalf("failure should name field %q, got: %v", c.field, err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("boolean payload %q must match written value in %q case-insensitively, got: %v", c.payload, c.query, err)
+				}
+			})
+		}
+	}
+}
