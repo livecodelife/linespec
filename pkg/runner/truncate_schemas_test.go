@@ -34,7 +34,7 @@ type truncFake struct {
 
 type truncConnector struct{ f *truncFake }
 
-func (c truncConnector) Connect(context.Context) (driver.Conn, error) { return truncConn{c.f}, nil }
+func (c truncConnector) Connect(context.Context) (driver.Conn, error) { return truncConn(c), nil }
 func (c truncConnector) Driver() driver.Driver                        { return truncDriver{} }
 
 type truncDriver struct{}

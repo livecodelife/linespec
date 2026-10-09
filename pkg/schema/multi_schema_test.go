@@ -32,13 +32,12 @@ type fakeTable struct {
 }
 
 type fakePG struct {
-	order   []string // schema names, deterministic
 	schemas map[string][]fakeTable
 }
 
 type fakePGConnector struct{ pg *fakePG }
 
-func (c fakePGConnector) Connect(context.Context) (driver.Conn, error) { return fakePGConn{c.pg}, nil }
+func (c fakePGConnector) Connect(context.Context) (driver.Conn, error) { return fakePGConn(c), nil }
 func (c fakePGConnector) Driver() driver.Driver                        { return fakePGDriver{} }
 
 type fakePGDriver struct{}
