@@ -1,0 +1,64 @@
+id: prov-2026-22f54779
+title: Release prep for v3.26.0 including WITH payload assertion and per-spec DB container isolation
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: >
+  Prepare the v3.26.0 release. Sealed work since 3.25.0 made behaviour
+  stricter, so this is a minor bump: EXPECT WRITE ... WITH payloads on
+  MySQL/PostgreSQL are now asserted against written values (prov-2026-be9b4aab),
+  so specs that passed only because WITH was ignored can now fail; per-spec
+  PostgreSQL, Oracle and MongoDB containers now carry the per-run name suffix
+  (prov-2026-06d7d70b); the database readiness timeout is configurable
+  (prov-2026-22e2de8d); and INSERT lists and UPDATE SET extraction were fixed
+  (prov-2026-468bbfbe, prov-2026-beed31fc).
+
+
+  Bump 3.25.0 to 3.26.0 with ./scripts/bump-version.sh 3.26.0, which edits only
+  VERSION, README.md, LINESPEC.md and PROVENANCE_RECORDS.md. Then by hand, move
+  the existing [Unreleased] content into a "## [3.26.0] - 2026-10-09" section of
+  CHANGELOG.md, add an Upgrade note and the entries for the four other records,
+  grouped Changed and Fixed, and leave an empty [Unreleased] heading above it.
+
+
+  Rejected: a patch bump, since the WITH assertion can turn a passing spec into
+  a failing one. This record creates no tag, push or release; those are separate
+  manual steps.
+constraints:
+  - VERSION reads 3.26.0, produced by ./scripts/bump-version.sh 3.26.0 (which also updates README.md, LINESPEC.md, PROVENANCE_RECORDS.md and proxy image tag references)
+  - CHANGELOG.md has an empty "## [Unreleased]" heading above a new "## [3.26.0] - 2026-10-09" entry holding the former Unreleased content, in the existing Keep a Changelog style, entries written as "- **Title** ([prov-id](./provenance/prov-id.yml)) — text", grouped Changed and Fixed
+  - 'The 3.26.0 entry has an Upgrade note covering: EXPECT WRITE ... WITH on MySQL/PostgreSQL INSERT/UPDATE is now asserted (subset by column, booleans compared case-insensitively, unresolved bind placeholders skipped on the legacy path), so specs that passed only because WITH was ignored can now fail; WITH on a DELETE is a parse error when visible and otherwise fails at match time; per-spec PostgreSQL, Oracle and MongoDB container names now carry the per-run suffix while explicit container_naming is unchanged, so scripts that match those container names exactly must be updated'
+  - The entry covers every sealed record since 3.25.0 (prov-2026-22e2de8d, be9b4aab, 468bbfbe, beed31fc, 06d7d70b), worded from each record's intent
+  - The existing docs test pkg/config/container_naming_docs_test.go hardcodes 3.25.0 and would fail after the bump; spec-author updates its VERSION and CHANGELOG subtests to 3.26.0 (heading "## [3.26.0]", Upgrade note, WITH and per-run suffix mentions) before this record opens
+  - No tag, push or release is created by this record
+  - No hand edits to docs/*.html or docs/llms*.txt
+  - No code changes
+affected_scope:
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-22e2de8d
+  - prov-2026-be9b4aab
+  - prov-2026-468bbfbe
+  - prov-2026-beed31fc
+  - prov-2026-06d7d70b
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/config/container_naming_docs_test.go
+    type: unit
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - docs
+  - changelog
+  - version-bump
