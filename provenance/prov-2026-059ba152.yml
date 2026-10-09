@@ -1,6 +1,6 @@
 id: prov-2026-059ba152
 title: 'Schema discovery: support configurable non-public PostgreSQL schemas'
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
@@ -36,6 +36,9 @@ affected_scope:
   - pkg/config/types.go
   - pkg/config/parser.go
   - pkg/runner/runner.go
+  - pkg/schema/multi_schema_test.go
+  - pkg/config/schema_discovery_schemas_test.go
+  - pkg/runner/truncate_schemas_test.go
 forbidden_scope: []
 type: blueprint
 supersedes: ""
@@ -45,7 +48,16 @@ related:
   - prov-2026-8227b384
   - prov-2026-167380f0
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/schema/multi_schema_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/schema -run 'TestDiscoverSchema|TestNewAutoDiscovererStillPublicOnly' -count=1
+  - path: pkg/config/schema_discovery_schemas_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/config -run 'TestSchemaDiscoverySchemas' -count=1
+  - path: pkg/runner/truncate_schemas_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/runner -run 'TestTruncateSchemas' -count=1
 associated_traces: []
 monitors: []
 tags:
