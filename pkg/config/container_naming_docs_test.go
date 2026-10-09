@@ -86,9 +86,29 @@ func TestDocsDoNotPresentFixedContainerNamesAsDefaults(t *testing.T) {
 		})
 	}
 
-	t.Run("VERSION_is_3.26.0", func(t *testing.T) {
-		if got := strings.TrimSpace(readRepoFile(t, "../../VERSION")); got != "3.26.0" {
-			t.Errorf("VERSION = %q, want 3.26.0", got)
+	t.Run("VERSION_is_3.26.1", func(t *testing.T) {
+		if got := strings.TrimSpace(readRepoFile(t, "../../VERSION")); got != "3.26.1" {
+			t.Errorf("VERSION = %q, want 3.26.1", got)
+		}
+	})
+
+	t.Run("CHANGELOG_has_3.26.1_entry", func(t *testing.T) {
+		cl := readRepoFile(t, "../../CHANGELOG.md")
+		if !regexp.MustCompile(`(?m)^## \[3\.26\.1\]`).MatchString(cl) {
+			t.Fatal("CHANGELOG.md has no \"## [3.26.1]\" heading")
+		}
+		idx := strings.Index(cl, "## [3.26.1]")
+		entry := cl[idx:]
+		if next := strings.Index(entry[len("## [3.26.1]"):], "\n## ["); next >= 0 {
+			entry = entry[:len("## [3.26.1]")+next]
+		}
+		for _, id := range []string{"prov-2026-1757dc57", "prov-2026-059ba152"} {
+			if !strings.Contains(entry, id) {
+				t.Errorf("3.26.1 entry does not cover %s", id)
+			}
+		}
+		if !regexp.MustCompile(`(?s)## \[Unreleased\]\s*\n+## \[3\.26\.1\]`).MatchString(cl) {
+			t.Error("CHANGELOG.md does not have an empty \"## [Unreleased]\" heading directly above the 3.26.1 heading")
 		}
 	})
 
@@ -131,9 +151,6 @@ func TestDocsDoNotPresentFixedContainerNamesAsDefaults(t *testing.T) {
 			if !strings.Contains(entry, id) {
 				t.Errorf("3.26.0 entry does not cover %s", id)
 			}
-		}
-		if !regexp.MustCompile(`(?s)## \[Unreleased\]\s*\n+## \[3\.26\.0\]`).MatchString(cl) {
-			t.Error("CHANGELOG.md does not have an empty \"## [Unreleased]\" heading directly above the 3.26.0 heading")
 		}
 	})
 }
