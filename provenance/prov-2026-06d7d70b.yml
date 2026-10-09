@@ -49,7 +49,10 @@ superseded_by: ""
 related:
   - prov-2026-c3977f44
 sealed_at_sha: ""
-associated_specs: []
+associated_specs:
+  - path: pkg/config/per_spec_db_container_naming_test.go
+    type: unit
+    run_command: go test -count=1 -run 'PerSpecDatabaseContainerNames|ExplicitContainerNamingOverridesStayVerbatim|RunnerHasNoHardcodedPerSpecContainerLiterals' ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
