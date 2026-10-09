@@ -1,6 +1,6 @@
 id: prov-2026-89807218
 title: Release prep for v3.26.1 including binary Bind parameter decoding and configurable discovery schemas
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
