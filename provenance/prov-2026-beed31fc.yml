@@ -1,0 +1,56 @@
+id: prov-2026-beed31fc
+title: UPDATE SET extracts no written value for a bare TRUE, FALSE or NULL
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: >
+  writtenValues in pkg/sqlanalysis/analyze.go returns nothing for an UPDATE
+  whose SET value is a bare keyword: UPDATE todos SET completed = FALSE WHERE
+  id = 1 yields an empty map, in both dialects and in any case, while INSERT
+  ... VALUES (..., FALSE) yields "FALSE". Verified in the code: the UPDATE
+  path matches each SET item with setItem, which is ident + "=" + the shared
+  value alternation, and that alternation accepts only a bind, a quoted
+  literal or a number. A bare keyword matches none of them, so the item is
+  skipped. I have not run a failing test; the cause is read from the pattern.
+  Consequence: VERIFY_WRITTEN_VALUES cannot match an UPDATE of a boolean
+  column, and EXPECT WRITE ... WITH enforcement (prov-2026-be9b4aab) reports
+  "no payload field matches a column written by this UPDATE" for a payload
+  naming only such a column.
+
+  Fix: give setItem its own value alternation that also accepts TRUE, FALSE
+  and NULL as whole words (so TRUEISH or a column name is not matched), and
+  return the raw text as written, e.g. "FALSE" or "false", exactly as INSERT
+  does. The shared value pattern is left alone because the WHERE conditions
+  use it and must not change. In scope: TRUE, FALSE, NULL, as literals. Out of
+  scope: CURRENT_TIMESTAMP, NOW() and other function calls or expressions,
+  which are not literals and would need the balanced scan of prov-2026-468bbfbe
+  applied to UPDATE. Rejected: widening the shared value pattern, which would
+  silently change WHERE extraction.
+constraints:
+  - TRUE and FALSE in an UPDATE SET are extracted in both the MySQL and PostgreSQL dialects, with case preserved as written
+  - NULL in an UPDATE SET is extracted as written, matching what INSERT yields for the same keyword
+  - An UPDATE mixing quoted, numeric, bind and boolean values extracts every one of them
+  - Extraction for UPDATE statements without bare keywords is unchanged, and WHERE extraction is unchanged
+  - INSERT extraction is unchanged
+affected_scope:
+  - pkg/sqlanalysis/analyze.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-be9b4aab
+  - prov-2026-468bbfbe
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/sqlanalysis/update_bool_test.go
+    type: unit
+    run_command: go test -count=1 -run 'TestUpdateWrittenValuesBooleanKeywords' ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - sqlanalysis
+  - update
+  - written-values
+  - boolean
