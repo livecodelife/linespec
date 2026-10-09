@@ -1,6 +1,6 @@
 id: prov-2026-1757dc57
 title: 'PostgreSQL proxy: decode binary-format Bind parameters'
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
