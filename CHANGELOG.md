@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.26.1] - 2026-10-09
+
+**Upgrade note.** This patch fixes PostgreSQL specs against drivers that send binary-format parameters (such as Npgsql) and against databases whose tables are not in `public`. Specs that previously fell through to the real database because a binary parameter did not match now match the mock. The new `schema_discovery.schemas` key defaults to `[public]`, so existing configs behave as before. Known gap: the proxy still resolves a schema-qualified query such as `cnp_global.errors` to the bare table name, so when the same table name exists in several configured schemas, a query against a later schema is typed from the first listed schema's columns. This is tracked in a follow-up record.
+
+### Fixed
+
+- **Binary-format Bind parameters are decoded** ([prov-2026-1757dc57](./provenance/prov-2026-1757dc57.yml)) — the PostgreSQL proxy ignored the Bind message's parameter format codes and compared raw bytes. Npgsql sends int, bigint, uuid, timestamp and bool parameters in binary format, so `VERIFY_WRITTEN_VALUES` showed unprintable bytes, `VERIFY_WHERE` never matched, and the write fell through to the real database. The proxy now honours the format codes and decodes int2, int4, int8, bool, uuid, numeric, float4, float8, date, timestamp and timestamptz by type OID into the text the matcher compares. An unknown type or a mis-sized value still falls back to the raw bytes. A parameter whose type OID is not known from the Parse message or a `$N::TYPE` cast is still compared as raw bytes.
+
+### Changed
+
+- **Configurable schemas for PostgreSQL discovery and reset** ([prov-2026-059ba152](./provenance/prov-2026-059ba152.yml)) — schema discovery and the between-test reset only saw the `public` schema, so a database such as CNP (tables in `cnp_global` and `cnp_ops_<state>`) discovered nothing and kept state between specs. `schema_discovery.schemas` (default `[public]`) lists the schemas to introspect. Each table is keyed both schema-qualified and bare, the bare key going to the first listed schema, and the reset now truncates every listed schema.
+
 ## [3.26.0] - 2026-10-09
 
 **Upgrade note.** `EXPECT WRITE ... WITH <payload>` on MySQL and PostgreSQL is now asserted against the values the write used, so specs that passed only because `WITH` was ignored can now fail. INSERT and UPDATE payloads are compared as a subset by column name, booleans compare case-insensitively, and unresolved bind placeholders are skipped on the legacy path. `WITH` on a DELETE is a parse error when the parser can see the DELETE, and otherwise fails at match time. Several example specs were corrected (the todo update payload, the bcrypt digest removed from the user create payload, and `WITH` removed from two DELETE specs). Per-spec PostgreSQL, Oracle and MongoDB database containers now carry the per-run suffix, so parallel runs in different project roots no longer collide; explicit `container_naming` values are unchanged. Scripts that match those container names exactly must be updated, and a crashed run's per-spec containers are not swept, so remove them by hand with `docker rm -f`.
