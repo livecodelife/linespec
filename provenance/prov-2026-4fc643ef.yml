@@ -1,0 +1,56 @@
+id: prov-2026-4fc643ef
+title: 'PostgreSQL proxy: build mock-only RowDescription from the query''s selected columns'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  A mock-only Describe can send a RowDescription wider than the mock row. Npgsql fails with
+  "Row's number of columns (1) differs from the row description's (12)" for
+  `SELECT applicationid FROM applications` (12 columns) and `SELECT errorcode FROM
+  cnp_global.errors` (7). The DescribePortal path builds columns with inferColumnsForTable,
+  i.e. every column of the discovered table, ignoring the select list. The statement-Describe
+  path uses extractSelectColumns, which is also wrong for several shapes: `*` becomes a
+  literal "*" column, and the comma split breaks on function calls with commas. It likely
+  surfaced only now because prov-2026-059ba152 (v3.26.1) lets discovery see non-public
+  tables, so these tables finally have wide schemas.
+
+  Decision: replace both with one pure function, (query, schemaCache) -> []column, where a
+  column is a name plus the discovered type when known. It handles explicit lists, aliases,
+  `*` and `t.*` (expanded from the schema), qualified names, casts, and expressions or
+  aggregates such as count(*), which have no table column and get the implicit name
+  (count, sum, ...) or the alias with the existing name-based OID heuristics. A selected
+  column missing from the schema falls back to those heuristics rather than failing. The
+  function takes no proxy or connection state, so the planned core refactor
+  (prov-2026-167380f0) can reuse it. Both Describe paths call it; Execute already
+  uses the select list, so Describe and DataRow now agree.
+
+  Rejected: truncating the table-wide column list to the mock row's keys. Row key order is
+  not select order and it hides the real query, so the query stays the source of truth.
+constraints:
+  - Column selection is a pure function (query, schemaCache) -> []column with no proxy, connection or registry state, reusable by prov-2026-167380f0
+  - Queries whose RowDescription is already correct must produce byte-identical output; no regression for lib/pq, asyncpg or tokio-postgres (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e)
+  - A selected column that cannot be typed from schemaCache falls back to the existing name and value-based OID heuristics, never an error
+  - The schemaCache lookup key comes from extractTable. prov-2026-9519f9c8 (draft) changes that to resolve schema-qualified keys. This record takes the key as input and does not touch extractTable, so the two do not conflict. Either order merges, but 9519f9c8 should go first so qualified tables like cnp_global.errors are typed from the right schema
+  - 'Unit tests cover each query shape: explicit list, alias, `*`, `t.*`, qualified column, schema-qualified table, cast, count(*), other aggregates and expressions, column missing from schema, RETURNING'
+  - 'OPEN QUESTION (unverified, out of scope): a mock row containing a column not in the discovered schema should arguably be rejected by schema_discovery validation. Investigation found no such validator: SchemaDiscoveryConfig (pkg/config) holds only mode and schemas, and the runner only loads the schema. Needs its own record if wanted'
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-258574ee
+superseded_by: ""
+related:
+  - prov-2026-059ba152
+  - prov-2026-1757dc57
+  - prov-2026-1aac1dc7
+  - prov-2026-cbc8213e
+  - prov-2026-9519f9c8
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/select_columns_test.go
+    type: unit
+    run_command: go test ./pkg/proxy/postgresql/... -run SelectColumns
+associated_traces: []
+monitors: []
+tags: []
