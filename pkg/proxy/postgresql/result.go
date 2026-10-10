@@ -59,6 +59,12 @@ func (r *ResultHandler) SendCommandComplete(conn net.Conn, tag string) error {
 // non-empty, are consulted first to resolve real column OIDs from introspected
 // schema; columns not found there fall back to the oidForColumn heuristic.
 func (r *ResultHandler) SendRowDescription(conn net.Conn, table string, columns []string, schemaCache map[string][]ColumnInfo) error {
+	return r.SendRowDescriptionWithFormats(conn, table, columns, schemaCache, nil)
+}
+
+// SendRowDescriptionWithFormats is SendRowDescription declaring the Bind result
+// formats (resolved by resultFormats) per column; nil declares 0 everywhere.
+func (r *ResultHandler) SendRowDescriptionWithFormats(conn net.Conn, table string, columns []string, schemaCache map[string][]ColumnInfo, bindCodes []int16) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
 	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size
@@ -77,6 +83,7 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, table string, columns 
 	// - Format code (2 bytes) - 0 for text (client may override via Bind)
 
 	oids := columnOIDs(table, columns, nil, schemaCache)
+	fmts := resultFormats(bindCodes, len(columns))
 	for ci, col := range columns {
 		// Field name
 		payload = append(payload, []byte(col)...)
@@ -109,8 +116,8 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, table string, columns 
 		binary.BigEndian.PutUint32(typeMod, 0xFFFFFFFF) // -1 as uint32
 		payload = append(payload, typeMod...)
 
-		// Format code: 0 = text (client specifies actual format in Bind)
-		payload = append(payload, 0, 0)
+		// Format code: 1 for binary columns, 0 for text and legacy columns.
+		payload = appendRowDescFormat(payload, fmts[ci])
 	}
 
 	msg := CreateMessage(MsgRowDescription, payload)
@@ -167,8 +174,14 @@ func columnOIDs(table string, columns []string, sampleRow map[string]interface{}
 // row to refine per-column OID inference. Falls back to SendRowDescription when
 // sampleRow is nil and no schema is cached for table.
 func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, table string, columns []string, sampleRow map[string]interface{}, schemaCache map[string][]ColumnInfo) error {
+	return r.SendRowDescriptionWithHintsAndFormats(conn, table, columns, sampleRow, schemaCache, nil)
+}
+
+// SendRowDescriptionWithHintsAndFormats is SendRowDescriptionWithHints declaring
+// the Bind result formats per column; nil declares 0 everywhere.
+func (r *ResultHandler) SendRowDescriptionWithHintsAndFormats(conn net.Conn, table string, columns []string, sampleRow map[string]interface{}, schemaCache map[string][]ColumnInfo, bindCodes []int16) error {
 	if sampleRow == nil && len(schemaCache[table]) == 0 {
-		return r.SendRowDescription(conn, table, columns, schemaCache)
+		return r.SendRowDescriptionWithFormats(conn, table, columns, schemaCache, bindCodes)
 	}
 
 	fieldCount := uint16(len(columns))
@@ -179,6 +192,7 @@ func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, table string,
 	payload = append(payload, fieldCountBytes...)
 
 	oids := columnOIDs(table, columns, sampleRow, schemaCache)
+	fmts := resultFormats(bindCodes, len(columns))
 	for ci, col := range columns {
 		payload = append(payload, []byte(col)...)
 		payload = append(payload, 0)           // null terminator
@@ -195,7 +209,7 @@ func (r *ResultHandler) SendRowDescriptionWithHints(conn net.Conn, table string,
 		payload = append(payload, typeSizeBuf...)
 
 		payload = append(payload, 0xFF, 0xFF, 0xFF, 0xFF) // type modifier -1
-		payload = append(payload, 0, 0)                   // format code 0 (text default)
+		payload = appendRowDescFormat(payload, fmts[ci])
 	}
 
 	msg := CreateMessage(MsgRowDescription, payload)
@@ -301,19 +315,49 @@ func (r *ResultHandler) SendDataRowWithOIDs(conn net.Conn, columns []string, val
 	return err
 }
 
-// colFormatCode returns the result format code for column index i.
-// Returns -1 to signal "use name-based heuristic", 0 for text, 1 for binary.
-func colFormatCode(codes []int16, i int) int16 {
-	if len(codes) == 0 {
-		return -1
+// resultFormat is a column's resolved result format.
+type resultFormat int
+
+const (
+	// resultFormatLegacy: no Bind codes (simple protocol). RowDescription says 0
+	// and the DataRow uses the name heuristic.
+	resultFormatLegacy resultFormat = iota
+	resultFormatText
+	resultFormatBinary
+)
+
+// resultFormats is the single place Bind result format codes are resolved, for
+// the RowDescription and the DataRow alike. It always returns exactly n entries:
+// nil/empty codes are legacy for every column, one code applies to all columns,
+// N codes apply per column (a short list pads with text, surplus is ignored).
+func resultFormats(bindCodes []int16, n int) []resultFormat {
+	out := make([]resultFormat, n)
+	if len(bindCodes) == 0 {
+		return out // all resultFormatLegacy
 	}
-	if len(codes) == 1 {
-		return codes[0] // single code applies to all columns
+	for i := range out {
+		code := bindCodes[0]
+		if len(bindCodes) > 1 {
+			code = 0
+			if i < len(bindCodes) {
+				code = bindCodes[i]
+			}
+		}
+		if code == 1 {
+			out[i] = resultFormatBinary
+		} else {
+			out[i] = resultFormatText
+		}
 	}
-	if i < len(codes) {
-		return codes[i]
+	return out
+}
+
+// appendRowDescFormat appends the 2-byte RowDescription format code.
+func appendRowDescFormat(payload []byte, f resultFormat) []byte {
+	if f == resultFormatBinary {
+		return append(payload, 0, 1)
 	}
-	return 0
+	return append(payload, 0, 0)
 }
 
 // isUUIDString returns true when s is a standard 36-character UUID
@@ -380,6 +424,7 @@ func encodeDataRow(columns []string, values map[string]interface{}, oids []colOI
 	payload := make([]byte, 2, 2+len(columns)*20)
 	binary.BigEndian.PutUint16(payload, uint16(len(columns)))
 
+	fmts := resultFormats(resultFormatCodes, len(columns))
 	for i, col := range columns {
 		val, ok := values[col]
 		if !ok || val == nil {
@@ -387,11 +432,10 @@ func encodeDataRow(columns []string, values map[string]interface{}, oids []colOI
 			continue
 		}
 
-		fmtCode := colFormatCode(resultFormatCodes, i)
 		colLower := strings.ToLower(col)
 
 		switch {
-		case fmtCode == 1:
+		case fmts[i] == resultFormatBinary:
 			if i < len(oids) {
 				if enc, handled := encodeBinaryForOID(oids[i].OID, val); handled {
 					if enc != nil {
@@ -403,7 +447,7 @@ func encodeDataRow(columns []string, values map[string]interface{}, oids []colOI
 				}
 			}
 			payload = appendLegacyBinary(payload, col, colLower, val)
-		case fmtCode == 0:
+		case fmts[i] == resultFormatText:
 			payload = appendField(payload, dataRowText(val))
 		default:
 			// No explicit format codes: legacy name-based heuristics.
