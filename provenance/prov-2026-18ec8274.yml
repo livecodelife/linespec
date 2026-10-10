@@ -1,0 +1,63 @@
+id: prov-2026-18ec8274
+title: 'PostgreSQL proxy: declare the Bind result format codes in the mock RowDescription so it agrees with the DataRow encoding'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  After prov-2026-7e08a3cb a mocked bigint applicationid carries OID 20 in both the
+  RowDescription and the DataRow, yet Npgsql still hands the app raw bytes. Both
+  RowDescription builders hardcode format code 0 (text) for every column, while the DataRow
+  is encoded per the client's Bind result format codes. A client that asked for binary is
+  told text, so it reads the 8 binary bytes as a string. Text columns pass only because the
+  text and binary encodings of text are identical.
+
+  Decision: one pure function, (Bind result format codes, column count) -> per-column format,
+  is the only place format codes are resolved (none = all text, one code = all columns, N codes
+  = per column, a short list pads with text). The RowDescription writes that format for every
+  column it builds, both on Describe Portal (Bind has already arrived, so the portal's formats
+  are known) and on the Execute-time RowDescription when no Describe ran; DataRow encoding
+  reads the same function. Describe Statement answers before Bind, so formats are unknown and
+  it keeps declaring 0 for every column, which is what PostgreSQL itself does; the client's
+  Bind-time formats govern the DataRow. The function takes no proxy state so
+  prov-2026-167380f0 can reuse it.
+
+  The simple protocol and a Bind with no codes keep today's exact bytes: RowDescription
+  format 0, and the legacy name heuristic (binary for id/_id/*_at/*time) in the DataRow. The
+  function reports "legacy" for that case and the RowDescription writes 0 for it. Declaring
+  the heuristic's real format would change output for lib/pq, asyncpg and tokio-postgres paths
+  that work today, so the hazard stays recorded, not fixed.
+
+  Rejected: only patching the Describe Portal builder. The Execute-time RowDescription has the
+  same defect and would leave a second path where the two disagree.
+constraints:
+  - Per-column result format is resolved by one pure function of (Bind result format codes, column count) with no proxy, connection or registry state; RowDescription and DataRow both use it
+  - 'Where RowDescription and DataRow already agree (text format, Describe Statement, simple protocol, nil codes) output is byte-identical; no regression for lib/pq, asyncpg or tokio-postgres (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e)'
+  - 'Unit tests for each combination (no codes, one code, per-column codes, mixed) assert the RowDescription per-column format code equals the format used to encode the DataRow, including applicationid bigint with binary result format: RowDescription OID 20 AND format code 1, DataRow 00 00 00 08 00 00 00 00 00 00 00 0b'
+  - 'Verified by reading, not on the wire: both RowDescription builders write 0 unconditionally; Bind result formats are captured by extractBindResultFormats into the mocked portal and reach DataRow encoding; the mock-only Describe Statement path runs before Bind and marks the statement described so Execute skips RowDescription; the Describe Portal path has the portal formats available but ignores them; the Execute-time RowDescription (no prior Describe) declares 0 while encoding per Bind. NOT verified: a live Npgsql session, which Describe variant Npgsql sends for unprepared versus prepared commands, and whether Npgsql ever trusts a Describe Statement RowDescription format over its Bind-time formats'
+  - 'Known remaining disagreements, not fixed here: the simple protocol and nil-format-code Bind keep the legacy binary heuristic under a declared format 0; a non-mock-only Describe Statement forwards the upstream RowDescription, whose OIDs come from upstream while the mock DataRow uses columnOIDs; Describe-time columns (describeInputs) and Execute-time columns (selectColumnKeys) are computed separately and could differ in count'
+  - 'DECIDED (human, 2026-10-09): the legacy nil-codes case (simple protocol and a Bind with no result format codes) stays byte-identical, RowDescription format 0 with the name heuristic in the DataRow. Declaring the heuristic''s real format is rejected because it changes bytes on paths that work today and it is unknown which of lib/pq, asyncpg and tokio-postgres depend on it'
+affected_scope:
+  - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result_format_agreement_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-258574ee
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-7e08a3cb
+  - prov-2026-4fc643ef
+  - prov-2026-1757dc57
+  - prov-2026-1aac1dc7
+  - prov-2026-258574ee
+  - prov-2026-cbc8213e
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/result_format_agreement_test.go
+    type: unit
+    run_command: go test ./pkg/proxy/postgresql/... -run FormatAgreement
+associated_traces: []
+monitors: []
+tags: []
