@@ -33,8 +33,10 @@ constraints:
   - The schemaCache lookup key comes from extractTable. prov-2026-9519f9c8 (draft) changes that to resolve schema-qualified keys. This record takes the key as input and does not touch extractTable, so the two do not conflict. Either order merges, but 9519f9c8 should go first so qualified tables like cnp_global.errors are typed from the right schema
   - 'Unit tests cover each query shape: explicit list, alias, `*`, `t.*`, qualified column, schema-qualified table, cast, count(*), other aggregates and expressions, column missing from schema, RETURNING'
   - 'OPEN QUESTION (unverified, out of scope): a mock row containing a column not in the discovered schema should arguably be rejected by schema_discovery validation. Investigation found no such validator: SchemaDiscoveryConfig (pkg/config) holds only mode and schemas, and the runner only loads the schema. Needs its own record if wanted'
+  - 'Decided with the implementation (conservative choices): SELECT * on a table with no discovered schema never emits a literal "*" and falls back to the mock row''s own sorted columns; a cast column is named after the underlying column with an empty Type; a bare t.* over joined tables expands only that table''s schema and falls back as above when t is unresolved or has no schema. Known gap left for a later record: simple-protocol ReturnsEmpty still sends the whole table''s columns in its RowDescription, and a cast column is still typed by name through the table schema'
 affected_scope:
   - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/select_columns_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-258574ee
