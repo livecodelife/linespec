@@ -1,6 +1,6 @@
 id: prov-2026-fa19c7ff
 title: Release prep for v3.27.0 including Npgsql proxy fixes and schema_discovery.validate
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
