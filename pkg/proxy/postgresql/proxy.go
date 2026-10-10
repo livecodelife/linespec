@@ -1237,12 +1237,17 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 		}
 	}
 
+	// Per-column OIDs are recomputed here from the same inputs the Describe used
+	// (schema type wins over the sample row), so RowDescription and DataRow agree
+	// whether or not Describe already ran.
+	var sampleRow map[string]interface{}
+	if len(rows) > 0 {
+		sampleRow = rows[0]
+	}
+	oids := columnOIDs(table, columns, sampleRow, p.schemaCache)
+
 	// Send RowDescription unless the client already received it via a forwarded Describe.
 	if !skipRowDescription {
-		var sampleRow map[string]interface{}
-		if len(rows) > 0 {
-			sampleRow = rows[0]
-		}
 		if err := p.result.SendRowDescriptionWithHints(conn, table, columns, sampleRow, p.schemaCache); err != nil {
 			return fmt.Errorf("error sending RowDescription: %w", err)
 		}
@@ -1254,7 +1259,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 	// from the client's Bind message (0=text, 1=binary).  When resultFormatCodes
 	// is nil and we own the RowDescription we fall back to name-based heuristics.
 	for _, row := range rows {
-		if err := p.result.SendDataRowWithFormats(conn, columns, row, resultFormatCodes); err != nil {
+		if err := p.result.SendDataRowWithOIDs(conn, columns, row, oids, resultFormatCodes); err != nil {
 			return fmt.Errorf("error sending DataRow: %w", err)
 		}
 	}
