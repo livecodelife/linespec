@@ -1,6 +1,6 @@
 id: prov-2026-9519f9c8
 title: 'PostgreSQL proxy: resolve schema-qualified tables to schemaCache keys'
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
