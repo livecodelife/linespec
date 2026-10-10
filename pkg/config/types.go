@@ -19,6 +19,7 @@ type SchemaDiscoveryConfig struct {
 	ExcludeTables []string `yaml:"exclude_tables"` // tables to ignore in auto mode
 	CacheFile     string   `yaml:"cache_file"`     // path to cache discovered schema
 	Schemas       []string `yaml:"schemas"`        // PostgreSQL schemas to discover (default: [public])
+	Validate      string   `yaml:"validate"`       // validate spec mocks against the discovered schema: off (default), warn, error
 }
 
 // PayloadConfig defines payload loading and parsing configuration
