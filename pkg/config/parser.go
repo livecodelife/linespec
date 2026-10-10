@@ -229,6 +229,9 @@ func applyDefaults(config *LineSpecConfig) {
 	if config.SchemaDiscovery.Mode == "" {
 		config.SchemaDiscovery.Mode = "auto"
 	}
+	if config.SchemaDiscovery.Validate == "" {
+		config.SchemaDiscovery.Validate = "off"
+	}
 	if len(config.SchemaDiscovery.Schemas) == 0 {
 		config.SchemaDiscovery.Schemas = []string{"public"}
 	}
@@ -263,6 +266,13 @@ func validate(config *LineSpecConfig) error {
 	}
 	if config.Service.Port == 0 {
 		return fmt.Errorf("service.port is required")
+	}
+	if config.SchemaDiscovery != nil {
+		switch config.SchemaDiscovery.Validate {
+		case "", "off", "warn", "error":
+		default:
+			return fmt.Errorf("schema_discovery.validate %q is invalid; use off, warn or error", config.SchemaDiscovery.Validate)
+		}
 	}
 	for i, db := range config.Databases {
 		if !supportedDatabaseTypes[db.Type] {

@@ -1586,7 +1586,18 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 					pgProxyCmd := []string{"proxy", "postgresql", "0.0.0.0:" + dbPort, realAlias + ":" + dbPort, r.suite.containerNaming.GetRegistryMountPath() + "/registry-" + spec.Name + ".json", "--db-name", db.Database}
 					if pgSchema, err := r.suite.fetchPostgresSchema(ctx, "localhost", postgresHostPort, db.Username, db.Password, db.Database); err != nil {
 						logger.Debug("Failed to fetch PostgreSQL schema for OID resolution (host=%s): %v", db.Host, err)
-					} else if len(pgSchema) > 0 {
+						// No schema: validatePostgresMocks logs the single skip note (no-op when validate is off).
+						if verr := r.validatePostgresMocks(spec, nil); verr != nil {
+							return verr
+						}
+					} else if len(pgSchema) == 0 {
+						if verr := r.validatePostgresMocks(spec, pgSchema); verr != nil {
+							return verr
+						}
+					} else {
+						if verr := r.validatePostgresMocks(spec, pgSchema); verr != nil {
+							return verr
+						}
 						if schemaData, merr := json.Marshal(pgSchema); merr != nil {
 							logger.Debug("Failed to marshal PostgreSQL schema (host=%s): %v", db.Host, merr)
 						} else {
@@ -3047,6 +3058,94 @@ func (s *TestSuite) fetchPostgresSchema(ctx context.Context, host, port, user, p
 		result[table] = pcols
 	}
 	return result, nil
+}
+
+// validatePostgresMocks runs schema_discovery.validate for the spec's PostgreSQL
+// mocks against the schema just discovered. RETURNS payloads are loaded with the
+// same loader (BaseDir and variable interpolation) the PostgreSQL proxy uses.
+func (r *testRunner) validatePostgresMocks(spec *types.TestSpec, pgSchema map[string][]pgSchemaColumn) error {
+	cfg := r.suite.getSchemaDiscoveryConfig()
+	if cfg == nil || cfg.Validate == "" || cfg.Validate == "off" {
+		return nil
+	}
+	discovered := make(map[string][]schema.ColumnInfo, len(pgSchema))
+	for table, cols := range pgSchema {
+		ci := make([]schema.ColumnInfo, len(cols))
+		for i, c := range cols {
+			ci[i] = schema.ColumnInfo{Name: c.Field, Type: c.Type}
+		}
+		discovered[table] = ci
+	}
+	load := func(e types.ExpectStatement) ([]map[string]interface{}, error) {
+		// Only READ payloads are result rows; WRITE payloads carry metadata
+		// such as affected_rows.
+		if e.Channel != types.ReadPostgreSQL {
+			return nil, nil
+		}
+		payload, err := dsl.NewPayloadLoaderWithResolver(e.BaseDir, r.resolver).Load(e.ReturnsFile)
+		if err != nil {
+			return nil, err
+		}
+		return payloadRows(payload), nil
+	}
+	return validateSpecMocks(cfg, []types.TestSpec{*spec}, discovered, load, func(format string, args ...interface{}) {
+		log.Printf("schema_discovery.validate: "+format, args...)
+	})
+}
+
+// payloadRows extracts result rows from a RETURNS payload (same shapes as the
+// PostgreSQL proxy accepts: a list of rows, {rows: [...]}, or a single row).
+func payloadRows(payload interface{}) []map[string]interface{} {
+	var rows []map[string]interface{}
+	add := func(items []interface{}) {
+		for _, item := range items {
+			if m, ok := item.(map[string]interface{}); ok {
+				rows = append(rows, m)
+			}
+		}
+	}
+	switch data := payload.(type) {
+	case []interface{}:
+		add(data)
+	case map[string]interface{}:
+		if raw, ok := data["rows"].([]interface{}); ok {
+			add(raw)
+		} else {
+			rows = append(rows, data)
+		}
+	}
+	return rows
+}
+
+// validateSpecMocks checks spec mocks against the discovered PostgreSQL schema
+// according to cfg.Validate (off|warn|error).
+func validateSpecMocks(cfg *config.SchemaDiscoveryConfig, specs []types.TestSpec, discovered map[string][]schema.ColumnInfo, load schema.RowLoader, logf func(format string, args ...interface{})) error {
+	if cfg == nil || cfg.Validate == "" || cfg.Validate == "off" {
+		return nil
+	}
+	if len(discovered) == 0 {
+		logf("no schema discovered; skipping mock validation")
+		return nil
+	}
+	mocks := make([]schema.MockSpec, len(specs))
+	for i, sp := range specs {
+		mocks[i] = schema.MockSpec{File: sp.FilePath, Expects: sp.Expects}
+	}
+	errs := schema.ValidateMocks(mocks, discovered, load)
+	if len(errs) == 0 {
+		return nil
+	}
+	if cfg.Validate == "warn" {
+		for _, e := range errs {
+			logf("%v", e)
+		}
+		return nil
+	}
+	msgs := make([]string, len(errs))
+	for i, e := range errs {
+		msgs[i] = e.Error()
+	}
+	return fmt.Errorf("schema_discovery.validate: %d spec mock error(s):\n%s", len(errs), strings.Join(msgs, "\n"))
 }
 
 // expBackoff returns the next retry delay using exponential backoff, capped at max.
