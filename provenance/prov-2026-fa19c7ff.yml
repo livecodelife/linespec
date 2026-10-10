@@ -53,6 +53,7 @@ affected_scope:
   - LINESPEC.md
   - PROVENANCE_RECORDS.md
   - CHANGELOG.md
+  - pkg/config/container_naming_docs_test.go
 forbidden_scope: []
 type: bug
 extends: prov-2026-001
