@@ -1,6 +1,6 @@
 id: prov-2026-7e08a3cb
 title: 'PostgreSQL proxy: encode mock DataRow values with the same per-column OID as the RowDescription'
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
