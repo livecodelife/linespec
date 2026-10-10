@@ -678,7 +678,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 									cols = p.inferColumnsForTable(mockTable)
 								}
 							}
-							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, hints, descCache); err != nil {
+							if err := p.result.SendRowDescriptionWithHintsAndFormats(clientConn, mockTable, cols, hints, descCache, mp.ResultFormatCodes); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -1248,7 +1248,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 
 	// Send RowDescription unless the client already received it via a forwarded Describe.
 	if !skipRowDescription {
-		if err := p.result.SendRowDescriptionWithHints(conn, table, columns, sampleRow, p.schemaCache); err != nil {
+		if err := p.result.SendRowDescriptionWithHintsAndFormats(conn, table, columns, sampleRow, p.schemaCache, resultFormatCodes); err != nil {
 			return fmt.Errorf("error sending RowDescription: %w", err)
 		}
 	} else {
