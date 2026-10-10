@@ -1,0 +1,56 @@
+id: prov-2026-e0174ee3
+title: Run schema_discovery.validate for every spec, not only the first of a reused database setup
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  A tester's retest of prov-2026-ad21b28e showed schema_discovery.validate fires only for the
+  first spec of a run. Alone, the bad-column spec fails with the schema error; behind another
+  spec in the same directory it runs and fails on its response body instead. RunTest builds a
+  fresh testRunner per spec, and run() returns early on the persistent-container reuse path
+  (prepareForReuse then runTestPhase) before the database setup block, so fetchPostgresSchema
+  and validatePostgresMocks run only for the spec that starts the containers.
+
+  Decision: cache the discovered schema on the TestSuite, keyed by db.Host, with a mutex, when
+  fetchPostgresSchema runs (a failed or empty discovery is cached as "attempted, none").
+  run() validates the spec against that cache before the reuse branch, so the 2nd and later
+  specs are checked even though no setup or fetch happens; the existing call after the fetch
+  covers the spec that populates the cache, and a per-spec flag prevents validating twice when
+  a failed reuse falls back to a fresh start. The "no schema discovered; skipping" note is
+  logged once per run, not per spec (the earlier decision in prov-2026-ad21b28e). Warn mode
+  logs each spec's own errors; error mode fails only the offending spec. The cmd loop already
+  counts each RunTest error as one failed spec and continues, which is how other per-spec
+  setup errors are reported. Off stays a no-op.
+
+  Rejected: validating all specs up front in one pass. It reports every error together and
+  fails fast, but the schema comes from the live database, so the first container must start
+  before any validation, and it needs a new whole-run phase the cmd loop does not have.
+  Per-spec validation reuses the existing seam and error reporting.
+constraints:
+  - 'Default behaviour unchanged: validate off runs nothing and logs nothing; MySQL discovery and expects are untouched'
+  - 'Every spec in a run is validated against the discovered schema, including specs that reuse persistent database/proxy containers and skip the setup block and fetchPostgresSchema'
+  - 'The discovered schema is cached on TestSuite keyed by db.Host and guarded by a mutex (testRunner is created per spec); the cache is filled by the existing fetch and never triggers a new discovery or changes container start timing (prov-2026-ad21b28e)'
+  - 'The "no schema discovered; skipping" note is logged once per run, not per spec; a spec is never validated twice, even when reuse falls back to a fresh start'
+  - 'warn mode logs each spec''s own errors; error mode fails only the spec with errors and the run continues with the next spec (DECIDED by the human, 2026-10-09; aborting the whole run is rejected because it needs a new code path and the cmd loop already counts each RunTest error as one failed spec)'
+  - 'validateSpecMocks and the tests of prov-2026-ad21b28e are unchanged; the new tests live in a separate file'
+  - 'Unit tests in pkg/runner cover: validation runs for the 2nd and later specs when setup is reused, warn logs per spec, error fails the bad spec only, the skip note appears once per run, off is a no-op'
+affected_scope:
+  - pkg/runner/runner.go
+  - pkg/runner/schema_validation_reuse_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-059ba152
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-ad21b28e
+  - prov-2026-059ba152
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/runner/schema_validation_reuse_test.go
+    type: unit
+    run_command: go test ./pkg/runner/... -run SchemaValidationReuse
+associated_traces: []
+monitors: []
+tags: []
