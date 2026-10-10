@@ -1,0 +1,72 @@
+id: prov-2026-ad21b28e
+title: Validate spec mocks against the discovered PostgreSQL schema (schema_discovery.validate)
+status: implemented
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  A tester's bad-column spec with an unknown `nosuchcolumn` raised no schema error and
+  proceeded to response comparison. Nothing checks spec mocks against the discovered schema:
+  schema_discovery.mode (auto|static|none) only picks which tables are loaded, and for
+  PostgreSQL the runner just writes the discovered map to the proxy's --schema-file for OID
+  resolution. A typo'd column or table becomes a silent pass or a late, confusing mismatch.
+
+  Decision: add a pure function, ValidateMocks(specs, schema map) -> []error, in pkg/schema.
+  It checks, for READ/WRITE:POSTGRESQL expects only, ACCESSING_TABLES names, the table of each
+  RETURNS payload's row keys, VERIFY_WRITTEN_VALUES and VERIFY_WHERE keys, and
+  VERIFY_WHERE_COLUMNS entries. Table lookup is case-insensitive and tries the name as written
+  then the bare name, matching how prov-2026-059ba152 keys both `schema.table` and bare, and
+  prov-2026-9519f9c8 resolves qualified lookups. Columns compare case-insensitively. Errors name
+  spec file, table and column plus the known columns. A table that cannot be resolved or has no
+  schema is skipped, never an error; RETURNS rows may carry a subset of the table's columns
+  (the query's select list decides, per prov-2026-4fc643ef), so only extra keys are errors.
+  The runner calls it right after fetchPostgresSchema, before the proxy starts, only when a
+  schema was discovered, and otherwise logs one note that validation was skipped.
+
+  A new knob schema_discovery.validate (off|warn|error) controls it, default off so existing
+  users are unchanged; warn logs the errors, error fails the spec run. Rejected: a validator on
+  the tester's side against pinned migrations. It works but every team rebuilds the same
+  parser of LineSpec files and drifts from the schema LineSpec actually discovers; the check
+  belongs where the schema and parsed specs already meet. MySQL discovery is untouched.
+constraints:
+  - 'Default behaviour unchanged, so validate defaults to off; with it off no validation runs and no new output appears'
+  - 'The validator is a pure function (specs, schema map) -> []error with no runner, proxy or config state, so prov-2026-167380f0 (parser-typed Predicates, per-channel allowed clauses, ProtocolSpec) can call it on typed predicates later'
+  - 'The new `validate` field is added to SchemaDiscoveryConfig, which is decoded with KnownFields(true) (prov-2026-79b59b40); an unknown value other than off, warn or error is a config error at load, not a silent fallback'
+  - 'No discovered schema (mode none, no proxy, discovery failed or empty) skips validation with a note; an unresolvable or schema-less table is skipped, never a false error'
+  - 'MySQL discovery and MySQL expects are not validated or changed in this record'
+  - 'Unit tests cover: unknown column, unknown table, schema-qualified table (qualified and bare keys), case differences in table and column, RETURNS subset of columns accepted, no schema discovered, validate off/warn/error handling and the invalid-value config error'
+  - 'DECIDED (human, 2026-10-09): validate defaults to off in this release; warn may become the default in a later release and error only at a major version. The tester opts into error in their own config now'
+  - 'DECIDED (human, 2026-10-09): validate does not trigger or force schema discovery. PostgreSQL discovery keeps running only when the database has proxy: true, and with no discovered schema validation is skipped with one note, so no container start timing changes'
+affected_scope:
+  - pkg/schema/validate_mocks.go
+  - pkg/schema/validate_mocks_test.go
+  - pkg/config/types.go
+  - pkg/config/parser.go
+  - pkg/config/schema_discovery_validate_test.go
+  - pkg/runner/runner.go
+  - pkg/runner/schema_validation_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-059ba152
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-059ba152
+  - prov-2026-8227b384
+  - prov-2026-9a74b241
+  - prov-2026-9519f9c8
+  - prov-2026-4fc643ef
+  - prov-2026-167380f0
+sealed_at_sha: d93b32d3908e44a0748829757d7384b2e3724c48
+associated_specs:
+  - path: pkg/schema/validate_mocks_test.go
+    type: unit
+    run_command: go test ./pkg/schema/... -run ValidateMocks
+  - path: pkg/config/schema_discovery_validate_test.go
+    type: unit
+    run_command: go test ./pkg/config/... -run SchemaDiscoveryValidate
+  - path: pkg/runner/schema_validation_test.go
+    type: unit
+    run_command: go test ./pkg/runner/... -run SchemaValidation
+associated_traces: []
+monitors: []
+tags: []

@@ -1,0 +1,83 @@
+id: prov-2026-fa19c7ff
+title: Release prep for v3.27.0 including Npgsql proxy fixes and schema_discovery.validate
+status: implemented
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: >
+  Prepare the v3.27.0 release. Eight sealed records since v3.26.1 make the PostgreSQL
+  proxy work with Npgsql end to end, and add one config key, so this is a minor bump:
+  prov-2026-9519f9c8 resolves schema-qualified tables to the right schemaCache key;
+  prov-2026-4fc643ef builds the mock RowDescription from the query's selected columns;
+  prov-2026-becc5d88 answers Parse locally for value-level VERIFY mocks so a pipelined
+  Bind stays ordered, and an unmatched Bind on such a statement now returns an
+  ErrorResponse instead of falling through to the real database;
+  prov-2026-545e4690 records PostgreSQL passthrough so strict_passthrough is enforced;
+  prov-2026-7e08a3cb encodes DataRow values with the same per-column OID as the
+  RowDescription; prov-2026-18ec8274 declares the Bind result format codes in the
+  RowDescription so binary columns are read as binary; prov-2026-ad21b28e adds
+  schema_discovery.validate (off, warn, error; default off) to check spec mocks against
+  the discovered PostgreSQL schema; prov-2026-e0174ee3 runs that check for every spec,
+  not only the first of a reused database setup.
+
+
+  Bump 3.26.1 to 3.27.0 with ./scripts/bump-version.sh 3.27.0, which edits only VERSION,
+  README.md, LINESPEC.md and PROVENANCE_RECORDS.md. Then by hand: move the empty
+  [Unreleased] heading above a new "## [3.27.0] - 2026-10-09" section of CHANGELOG.md
+  with an Upgrade note, Changed and Fixed entries for the eight records, and the known
+  gaps; and document schema_discovery.schemas and schema_discovery.validate in the
+  schema_discovery block of LINESPEC.md. The upgrade note states the behaviour changes:
+  an unmatched Bind on a locally answered statement is now an error, binary-format
+  columns are typed and encoded from the schema, and PostgreSQL passthrough is now
+  recorded, so under strict_passthrough an app that runs DDL or catalog queries through
+  the proxy at startup (for example SQLAlchemy create_all or select current_schema())
+  is reported, and without strict_passthrough those queries print passthrough warnings.
+
+
+  Minor rather than patch because it adds a documented config key and changes
+  observable behaviour. This record creates no tag, push or release; those are separate
+  manual steps.
+constraints:
+  - VERSION reads 3.27.0, produced by ./scripts/bump-version.sh 3.27.0
+  - 'CHANGELOG.md has an empty "## [Unreleased]" heading directly above a new "## [3.27.0] - 2026-10-09" entry above the 3.26.1 entry, in the existing Keep a Changelog style, entries written as "- **Title** ([prov-id](./provenance/prov-id.yml)) — text", grouped Changed and Fixed'
+  - The 3.27.0 entry has an Upgrade note covering the unmatched-Bind error, binary column typing and encoding, and PostgreSQL passthrough recording under strict_passthrough
+  - The 3.27.0 entry covers every sealed record since 3.26.1 (prov-2026-9519f9c8, 4fc643ef, becc5d88, 545e4690, 7e08a3cb, ad21b28e, 18ec8274, e0174ee3), worded from each record's intent
+  - The 3.27.0 entry lists the known gaps - the mock-only Describe sample row is value-blind, a cast column is typed by its underlying column, simple-protocol ReturnsEmpty sends whole-table columns, a table name shared by several schemas in a join resolves to the first match, validate checks a spec against only the first PostgreSQL proxy database with a cached schema, and whether Npgsql still needs Pooling=false is unverified
+  - LINESPEC.md documents schema_discovery.schemas (default [public]) and schema_discovery.validate (off, warn, error; default off; requires proxy true on the database; column checks apply to expects with a single accessing table; RETURNS rows may omit columns but extra keys are errors; MySQL is not validated) in the schema_discovery block
+  - The existing docs test pkg/config/container_naming_docs_test.go hardcodes 3.26.1 and would fail after the bump; it is updated to 3.27.0 before this record opens
+  - No tag, push or release is created by this record
+  - No hand edits to docs/*.html or docs/llms*.txt
+  - No code changes
+affected_scope:
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+  - pkg/config/container_naming_docs_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-001
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-9519f9c8
+  - prov-2026-4fc643ef
+  - prov-2026-becc5d88
+  - prov-2026-545e4690
+  - prov-2026-7e08a3cb
+  - prov-2026-ad21b28e
+  - prov-2026-18ec8274
+  - prov-2026-e0174ee3
+  - prov-2026-89807218
+sealed_at_sha: cb14f01914921b0c3ef8b5c0b29ae97ed0522f58
+associated_specs:
+  - path: pkg/config/container_naming_docs_test.go
+    type: unit
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - docs
+  - changelog
+  - version-bump

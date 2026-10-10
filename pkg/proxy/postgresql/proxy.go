@@ -84,6 +84,7 @@ type ConnectionState struct {
 	mockOnlyStatements  map[string]bool          // statements handled locally (never forwarded to upstream)
 	stmtParamOIDs       map[string][]uint32      // statement name -> OIDs declared in Parse message
 	inTransaction       bool                     // true between BEGIN and COMMIT/ROLLBACK
+	swallowUntilSync    bool                     // after a local Bind error: drop Describe/Execute, answer Sync with ReadyForQuery
 }
 
 // txStatus returns the PostgreSQL transaction status byte for ReadyForQuery.
@@ -491,6 +492,23 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		logger.Debug("PostgreSQL Proxy: Received message type %c", msgType)
 		p.logDebug("Received message type %c\n", msgType)
 
+		// After a locally answered Bind error, upstream never saw this statement or
+		// portal: swallow the rest of the pipeline and close it out at Sync.
+		if state.swallowUntilSync {
+			switch msgType {
+			case MsgDescribe, MsgExecute:
+				p.logDebug("  -> Swallowing message type %c after unmatched Bind\n", msgType)
+				continue
+			case MsgSync:
+				state.swallowUntilSync = false
+				if err := p.sendReadyForQuery(clientConn, state.txStatus()); err != nil {
+					p.logDebug("  -> Error sending ReadyForQuery: %v\n", err)
+					return
+				}
+				continue
+			}
+		}
+
 		// Handle based on message type
 		switch msgType {
 		case MsgParse:
@@ -525,9 +543,9 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// the server returns OID=0 (unspecified), tokio-postgres calls typeinfo(0) which
 			// looks up OID 0 in pg_catalog, finds no rows, and raises "unexpected message".
 			if query != "" {
-				if _, mocked := p.peekMock(query, nil); mocked {
+				if _, mocked := p.peekMockShape(query); mocked {
 					canResolveOIDs := len(paramOIDs) > 0 || len(p.extractParameterTypes(query)) > 0 || countSQLParams(query) == 0
-					if canResolveOIDs {
+					if parseDisposition(true, canResolveOIDs) == parseActionLocal {
 						state.mockOnlyStatements[stmtName] = true
 						p.logDebug("  -> Mock-only Parse for '%s': sending local ParseComplete\n", stmtName)
 						if err := p.writeMessage(clientConn, MsgParseComplete, nil); err != nil {
@@ -588,18 +606,13 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 						// SELECT and any query with RETURNING expect RowDescription so the client
 						// can set up the row scanner. Pure writes without RETURNING get NoData.
 						if queryReturnsRows(query) {
-							cols := p.extractSelectColumns(query)
-							if len(cols) == 0 {
-								cols = []string{"id"}
-							}
-							p.logDebug("  -> Mock-only Describe '%s': sending RowDescription %v\n", stmtName, cols)
 							// Load the mock payload to use value-based OID hints (e.g. UUID-valued
 							// id columns must be declared as OID 2950 so typed clients like
 							// tokio-postgres accept the value without a type-mismatch error).
 							var sampleRow map[string]interface{}
 							var mockTable string
 							if mock, found := p.peekMock(query, nil); found {
-								mockTable = mockTableName(mock)
+								mockTable = p.schemaTable(mockTableName(mock), query)
 								if mock.ReturnsFile != "" {
 									p.loader.BaseDir = mock.BaseDir
 									if pld, err := p.loader.Load(mock.ReturnsFile); err == nil {
@@ -609,7 +622,15 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 									}
 								}
 							}
-							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, sampleRow, p.schemaCache); err != nil {
+							cols, hints, descCache := describeInputs(selectColumns(query, p.schemaCache), mockTable, sampleRow, p.schemaCache)
+							if len(cols) == 0 {
+								// Unexpandable "*" or unparseable list: use the mock row's own columns.
+								if cols = sortedRowKeys(sampleRow); len(cols) == 0 {
+									cols = []string{"id"}
+								}
+							}
+							p.logDebug("  -> Mock-only Describe '%s': sending RowDescription %v\n", stmtName, cols)
+							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, hints, descCache); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -641,8 +662,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 							// READ mock: send RowDescription so Execute can skip it.
 							// Use value-based hints so UUID-valued id columns are declared
 							// as OID 2950 rather than INT4.
-							mockTable := mockTableName(mp.Mock)
-							cols := p.inferColumnsForTable(mockTable)
+							mockTable := p.schemaTable(mockTableName(mp.Mock), mp.Query)
 							var sampleRow map[string]interface{}
 							if mp.Mock.ReturnsFile != "" {
 								p.loader.BaseDir = mp.Mock.BaseDir
@@ -652,7 +672,13 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 									}
 								}
 							}
-							if err := p.result.SendRowDescriptionWithHints(clientConn, mockTable, cols, sampleRow, p.schemaCache); err != nil {
+							cols, hints, descCache := describeInputs(selectColumns(mp.Query, p.schemaCache), mockTable, sampleRow, p.schemaCache)
+							if len(cols) == 0 {
+								if cols = sortedRowKeys(sampleRow); len(cols) == 0 {
+									cols = p.inferColumnsForTable(mockTable)
+								}
+							}
+							if err := p.result.SendRowDescriptionWithHintsAndFormats(clientConn, mockTable, cols, hints, descCache, mp.ResultFormatCodes); err != nil {
 								p.logDebug("  -> Error sending RowDescription: %v\n", err)
 								return
 							}
@@ -750,8 +776,18 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 					return
 				}
 				p.logDebug("  -> Sent BindComplete for mocked portal (hit count incremented)\n")
+			} else if state.mockOnlyStatements[stmtName] {
+				// Parse was answered locally, so upstream has no such statement:
+				// fail loudly instead of forwarding the Bind.
+				p.logDebug("  -> Bind values matched no mock for locally parsed '%s'\n", stmtName)
+				if err := p.sendErrorResponse(clientConn, fmt.Sprintf("no mock matched bind values for statement %q: %s", stmtName, query)); err != nil {
+					p.logDebug("  -> Error sending Bind error response: %v\n", err)
+					return
+				}
+				state.swallowUntilSync = true
 			} else {
 				p.logDebug("  -> Bind for non-mocked statement '%s', forwarding\n", stmtName)
+				p.recordPassthroughQuery(query)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 					p.logDebug("  -> Error forwarding Bind: %v\n", err)
 					return
@@ -820,6 +856,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				}
 			} else {
 				p.logDebug("  -> Forwarding simple query\n")
+				p.recordPassthroughQuery(query)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 					p.logDebug("  -> Error forwarding Query: %v\n", err)
 					return
@@ -835,6 +872,53 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			}
 		}
 	}
+}
+
+// recordPassthroughQuery records a strict-passthrough entry for a query that
+// is forwarded upstream without matching any mock, unless it is housekeeping.
+func (p *Proxy) recordPassthroughQuery(query string) {
+	if isHousekeepingQuery(query) {
+		return
+	}
+	q := strings.TrimRight(query, "\x00")
+	p.registry.RecordPassthrough("PostgreSQL query: " + q[:min(80, len(q))])
+}
+
+var housekeepingKeywords = map[string]bool{
+	"SET": true, "SHOW": true, "BEGIN": true, "COMMIT": true, "ROLLBACK": true,
+	"SAVEPOINT": true, "RELEASE": true, "DISCARD": true, "DEALLOCATE": true, "RESET": true,
+}
+
+var housekeepingCatalogMarkers = []string{
+	"pg_catalog", "pg_type", "pg_namespace", "pg_class", "pg_attribute", "pg_settings", "information_schema",
+}
+
+// isHousekeepingQuery reports whether a query is driver/session housekeeping
+// that never needs a mock (SET/SHOW/transaction control, SELECT 1,
+// SELECT version(), catalog introspection). DDL is not housekeeping.
+func isHousekeepingQuery(query string) bool {
+	q := strings.ToLower(strings.TrimSpace(strings.Trim(query, "\x00 \t\r\n;")))
+	if q == "" {
+		return false
+	}
+	fields := strings.Fields(q)
+	first := strings.TrimRight(fields[0], ";(")
+	if housekeepingKeywords[strings.ToUpper(first)] {
+		return true
+	}
+	if first == "start" && len(fields) > 1 && strings.TrimRight(fields[1], ";") == "transaction" {
+		return true
+	}
+	norm := strings.Join(fields, " ")
+	if norm == "select 1" || norm == "select version()" {
+		return true
+	}
+	for _, m := range housekeepingCatalogMarkers {
+		if strings.Contains(q, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsReadyForQuery scans data for a PostgreSQL ReadyForQuery message
@@ -882,6 +966,9 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStatement, query string, txStatus byte) error {
 	// Determine columns
 	table := mockTableName(mock)
+	if table != "" {
+		table = p.schemaTable(table, query)
+	}
 	columns := []string{"id", "name", "email"}
 	if table != "" {
 		columns = p.inferColumnsForTable(table)
@@ -921,9 +1008,10 @@ func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStat
 			// This ensures RowDescription and DataRow have matching column orders
 			// (same logic as the extended query path in sendMockResultSetForExtended)
 			if query != "" {
-				sqlColumns := p.extractSelectColumns(query)
-				if len(sqlColumns) > 0 {
+				if sqlColumns := selectColumnKeys(query, p.schemaCache); len(sqlColumns) > 0 {
 					columns = sqlColumns
+				} else if len(rows) > 0 {
+					columns = sortedRowKeys(rows[0])
 				}
 			} else if len(rows) > 0 {
 				columns = make([]string, 0, len(rows[0]))
@@ -1059,6 +1147,9 @@ func (p *Proxy) sendErrorResponseWithCode(conn net.Conn, sqlState, message strin
 func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectStatement, actualQuery string, skipRowDescription bool, resultFormatCodes []int16) error {
 	// Determine columns from mock or use defaults
 	table := mockTableName(mock)
+	if table != "" {
+		table = p.schemaTable(table, actualQuery)
+	}
 	columns := []string{"id", "name", "email"}
 	if table != "" {
 		columns = p.inferColumnsForTable(table)
@@ -1083,7 +1174,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 		}
 		if mock.ReturnsEmpty {
 			if actualQuery != "" {
-				if sqlColumns := p.extractSelectColumns(actualQuery); len(sqlColumns) > 0 {
+				if sqlColumns := selectColumnKeys(actualQuery, p.schemaCache); len(sqlColumns) > 0 {
 					columns = sqlColumns
 				}
 			}
@@ -1102,10 +1193,12 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 			// Extract columns from SQL SELECT clause to maintain consistent order
 			// This ensures RowDescription and DataRow have matching column orders
 			if actualQuery != "" {
-				sqlColumns := p.extractSelectColumns(actualQuery)
+				sqlColumns := selectColumnKeys(actualQuery, p.schemaCache)
 				p.logDebug("  -> Extracted columns from SQL: %v (query: %s)\n", sqlColumns, actualQuery[:min(100, len(actualQuery))])
 				if len(sqlColumns) > 0 {
 					columns = sqlColumns
+				} else if len(rows) > 0 {
+					columns = sortedRowKeys(rows[0])
 				}
 			}
 			p.logDebug("  -> Final columns: %v\n", columns)
@@ -1144,13 +1237,18 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 		}
 	}
 
+	// Per-column OIDs are recomputed here from the same inputs the Describe used
+	// (schema type wins over the sample row), so RowDescription and DataRow agree
+	// whether or not Describe already ran.
+	var sampleRow map[string]interface{}
+	if len(rows) > 0 {
+		sampleRow = rows[0]
+	}
+	oids := columnOIDs(table, columns, sampleRow, p.schemaCache)
+
 	// Send RowDescription unless the client already received it via a forwarded Describe.
 	if !skipRowDescription {
-		var sampleRow map[string]interface{}
-		if len(rows) > 0 {
-			sampleRow = rows[0]
-		}
-		if err := p.result.SendRowDescriptionWithHints(conn, table, columns, sampleRow, p.schemaCache); err != nil {
+		if err := p.result.SendRowDescriptionWithHintsAndFormats(conn, table, columns, sampleRow, p.schemaCache, resultFormatCodes); err != nil {
 			return fmt.Errorf("error sending RowDescription: %w", err)
 		}
 	} else {
@@ -1161,7 +1259,7 @@ func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectSt
 	// from the client's Bind message (0=text, 1=binary).  When resultFormatCodes
 	// is nil and we own the RowDescription we fall back to name-based heuristics.
 	for _, row := range rows {
-		if err := p.result.SendDataRowWithFormats(conn, columns, row, resultFormatCodes); err != nil {
+		if err := p.result.SendDataRowWithOIDs(conn, columns, row, oids, resultFormatCodes); err != nil {
 			return fmt.Errorf("error sending DataRow: %w", err)
 		}
 	}
@@ -1260,44 +1358,114 @@ func (p *Proxy) inferColumnsForTable(table string) []string {
 	return []string{"id", "created_at", "updated_at"}
 }
 
-// extractTable extracts table name from SQL query
+// extractTable extracts table name from SQL query. It returns the bare,
+// registry-facing table name (never schema-qualified); schemaCache lookups that
+// need the qualified key go through resolveTable.
 func (p *Proxy) extractTable(query string) string {
-	q := strings.ToLower(strings.TrimSpace(query))
-	q = strings.ReplaceAll(q, "`", " ")
-	q = strings.ReplaceAll(q, "\"", " ")
-	q = strings.ReplaceAll(q, "'", " ")
+	return resolveTable(query, p.registry.GetTables(), nil)
+}
 
-	// Get dynamic table list from registry (from EXPECT statements)
-	// This allows any table name from .linespec files to be recognized
-	knownTables := p.registry.GetTables()
+// schemaTable returns the schemaCache key for a mock's table. The mock-derived
+// table is kept unless the query names a schema-qualified table that has a
+// qualified key in the schemaCache, so same-named tables in several schemas get
+// their own column types.
+func (p *Proxy) schemaTable(table, query string) string {
+	if query == "" || len(p.schemaCache) == 0 {
+		return table
+	}
+	if key := resolveTable(query, p.registry.GetTables(), p.schemaCache); strings.Contains(key, ".") {
+		return key
+	}
+	return table
+}
 
+// splitTableRef splits a (lower-cased) table reference word into schema and
+// table, honouring double-quoted identifiers ("a"."b", "a".b, a."b"). Unquoted
+// references split on the first ".", as extractTable always did.
+func splitTableRef(word string) (schema, table string) {
+	if !strings.Contains(word, `"`) {
+		if idx := strings.Index(word, "."); idx != -1 {
+			return word[:idx], strings.Trim(word[idx+1:], "`'")
+		}
+		return "", strings.Trim(word, "`'")
+	}
+	var segs []string
+	var cur strings.Builder
+	inQuote := false
+	for _, r := range word {
+		switch {
+		case r == '"':
+			inQuote = !inQuote
+		case r == '.' && !inQuote:
+			segs = append(segs, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	segs = append(segs, cur.String())
+	table = strings.Trim(segs[len(segs)-1], "`'")
+	if len(segs) > 1 {
+		schema = segs[len(segs)-2]
+	}
+	return schema, table
+}
+
+// resolveTable is a pure function from a query, the registry's known table names
+// and the schemaCache to the lower-cased schemaCache lookup key. A schema-qualified
+// reference resolves to "schema.table" when that key exists in schemaCache, and to
+// the bare table name otherwise; unqualified references resolve to the bare name.
+// Only schemaCache keys are consulted; pass nil to get the bare name.
+func resolveTable(query string, knownTables []string, schemaCache map[string][]ColumnInfo) string {
+	lowered := strings.ToLower(strings.TrimSpace(query))
+	lowered = strings.ReplaceAll(lowered, "`", " ")
+	lowered = strings.ReplaceAll(lowered, "'", " ")
+	q := strings.ReplaceAll(lowered, "\"", " ")
+
+	bare := ""
 	// Check each registered table to see if it appears in the query
 	for _, table := range knownTables {
-		// Escape special regex characters in table names
-		escapedTable := regexp.QuoteMeta(table)
-		re := regexp.MustCompile(`\b` + escapedTable + `\b`)
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(table) + `\b`)
 		if re.MatchString(q) {
-			return table
+			bare = table
+			break
 		}
 	}
 
 	// Fallback: Try to extract from SQL keywords (FROM, INTO, UPDATE)
-	// This handles tables that weren't explicitly registered in EXPECT statements
-	words := strings.Fields(q)
-	for i, word := range words {
-		if word == "from" || word == "into" || word == "update" || word == "table" {
-			if i+1 < len(words) {
-				table := words[i+1]
-				if idx := strings.Index(table, "."); idx != -1 {
-					table = table[idx+1:]
+	words := strings.Fields(lowered)
+	if bare == "" {
+		bare = "unknown"
+		for i, word := range words {
+			if word == "from" || word == "into" || word == "update" || word == "table" {
+				if i+1 < len(words) {
+					_, bare = splitTableRef(words[i+1])
+					break
 				}
-				table = strings.Trim(table, "`\"'")
-				return table
 			}
 		}
 	}
 
-	return "unknown"
+	if len(schemaCache) == 0 {
+		return bare
+	}
+	for i, word := range words {
+		if i+1 >= len(words) || (word != "from" && word != "into" && word != "update" && word != "table" && word != "join") {
+			continue
+		}
+		ref := words[i+1]
+		if cut := strings.IndexAny(ref, "(;,"); cut != -1 {
+			ref = ref[:cut]
+		}
+		schema, table := splitTableRef(ref)
+		if schema == "" || table != bare && table != strings.TrimRight(bare, "(;,") {
+			continue
+		}
+		if key := schema + "." + table; len(schemaCache[key]) > 0 {
+			return key
+		}
+	}
+	return bare
 }
 
 // logDebug writes a debug message to stderr when debug mode is enabled.
@@ -1830,6 +1998,37 @@ func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatem
 	)
 }
 
+// parseAction is the disposition of a client Parse message.
+type parseAction int
+
+const (
+	parseActionLocal   parseAction = iota // answer ParseComplete locally, mark mock-only
+	parseActionForward                    // forward Parse upstream
+)
+
+// parseDisposition decides how to handle Parse from query shape alone: local
+// iff some mock could match the shape and parameter OIDs can be resolved
+// locally (otherwise tokio-postgres needs the real ParameterDescription).
+func parseDisposition(shapeMatchable, canResolveOIDs bool) parseAction {
+	if shapeMatchable && canResolveOIDs {
+		return parseActionLocal
+	}
+	return parseActionForward
+}
+
+// peekMockShape reports whether any mock could match query ignoring bind
+// values (value-level VERIFY is checked later, at Bind). It consumes no hit.
+func (p *Proxy) peekMockShape(query string) (*types.ExpectStatement, bool) {
+	db := p.dbConfig.GetDatabaseName()
+	tables, op, whereCols, _, _ := p.extractSemanticInfo(query, nil)
+	if len(tables) > 0 {
+		if mock, found := p.registry.PeekMockByTablesShape(db, tables, op, whereCols); found {
+			return mock, true
+		}
+	}
+	return p.registry.PeekMock(p.extractTable(query), query, db)
+}
+
 // peekMock is like findMock but does not increment hit counts.
 func (p *Proxy) peekMock(query string, bindParams []string) (*types.ExpectStatement, bool) {
 	db := p.dbConfig.GetDatabaseName()
@@ -2048,113 +2247,338 @@ func (p *Proxy) sendMockExecuteResponse(clientConn net.Conn, mock *types.ExpectS
 	return nil
 }
 
-// extractSelectColumns extracts column names from a SELECT clause in SQL query
-// This ensures RowDescription and DataRow have consistent column ordering
-func (p *Proxy) extractSelectColumns(sql string) []string {
-	if sql == "" {
-		return nil
-	}
-
-	// Convert to uppercase for case-insensitive matching
-	upperSQL := strings.ToUpper(sql)
-
-	// Find SELECT and FROM positions (in the uppercase version)
-	selectIdx := strings.Index(upperSQL, "SELECT")
-	fromIdx := strings.Index(upperSQL, "FROM")
-
-	// For INSERT/UPDATE/DELETE ... RETURNING, extract columns after RETURNING.
-	if selectIdx == -1 || fromIdx == -1 || fromIdx <= selectIdx {
-		returningIdx := strings.Index(upperSQL, " RETURNING ")
-		if returningIdx == -1 {
-			return nil
-		}
-		columnsPart := strings.TrimSpace(sql[returningIdx+len(" RETURNING "):])
-		p.logDebug("  -> Extracted RETURNING columns part: %s\n", columnsPart)
-		return splitColumns(columnsPart)
-	}
-
-	// Extract the columns part (between SELECT and FROM) from the original SQL
-	// Use the same indices since SELECT and FROM are the same in both cases
-	columnsPart := sql[selectIdx+6 : fromIdx] // +6 to skip "SELECT"
-	columnsPart = strings.TrimSpace(columnsPart)
-	p.logDebug("  -> Extracted columns part: %s\n", columnsPart)
-
-	// Handle DISTINCT keyword
-	if strings.HasPrefix(strings.ToUpper(columnsPart), "DISTINCT ") {
-		columnsPart = strings.TrimPrefix(columnsPart, "DISTINCT ")
-		columnsPart = strings.TrimPrefix(columnsPart, "distinct ")
-		columnsPart = strings.TrimSpace(columnsPart)
-	}
-
-	// Split by comma and extract column names
-	columnNames := []string{}
-	columns := strings.Split(columnsPart, ",")
-
-	for _, col := range columns {
-		col = strings.TrimSpace(col)
-		if col == "" {
-			continue
-		}
-
-		// Handle qualified column names (e.g., "notifications.id")
-		// Extract just the column name after the last dot
-		if dotIdx := strings.LastIndex(col, "."); dotIdx != -1 {
-			col = col[dotIdx+1:]
-		}
-
-		// Handle column aliases (e.g., "id AS notification_id")
-		// Take just the first part before AS
-		upperCol := strings.ToUpper(col)
-		if asIdx := strings.Index(upperCol, " AS "); asIdx != -1 {
-			col = strings.TrimSpace(col[:asIdx])
-		}
-
-		// Remove any type casts (e.g., "::INTEGER")
-		if castIdx := strings.Index(col, "::"); castIdx != -1 {
-			col = col[:castIdx]
-		}
-
-		// Normalize aggregate function calls to their implicit result column name.
-		// PostgreSQL names COUNT(*) -> "count", SUM(x) -> "sum", etc. (lowercase
-		// function name, no arguments). Aliases defined above take precedence.
-		if parenIdx := strings.Index(col, "("); parenIdx != -1 {
-			col = strings.ToLower(strings.TrimSpace(col[:parenIdx]))
-		}
-
-		col = strings.TrimSpace(col)
-		if col != "" {
-			columnNames = append(columnNames, col)
-		}
-	}
-
-	p.logDebug("  -> Extracted columns: %v\n", columnNames)
-	return columnNames
+// selectColumn is one column of a query's result set, as selectColumns derives it.
+type selectColumn struct {
+	Name string // RowDescription label: the alias if present, else the implicit name
+	Type string // discovered information_schema type; "" when it cannot be typed
+	Key  string // name before aliasing; the key looked up in mock rows
 }
 
-// splitColumns parses a comma-separated column list (SELECT or RETURNING clause),
-// stripping qualified names, aliases, and type casts.
-func splitColumns(columnsPart string) []string {
-	columnNames := []string{}
-	for _, col := range strings.Split(columnsPart, ",") {
-		col = strings.TrimSpace(col)
-		if col == "" {
-			continue
-		}
-		if dotIdx := strings.LastIndex(col, "."); dotIdx != -1 {
-			col = col[dotIdx+1:]
-		}
-		if asIdx := strings.Index(strings.ToUpper(col), " AS "); asIdx != -1 {
-			col = strings.TrimSpace(col[:asIdx])
-		}
-		if castIdx := strings.Index(col, "::"); castIdx != -1 {
-			col = col[:castIdx]
-		}
-		col = strings.TrimSpace(col)
-		if col != "" {
-			columnNames = append(columnNames, col)
+type selectTableRef struct{ alias, table, key string }
+
+var (
+	selTableRefRe  = regexp.MustCompile(`\b(?:from|join|into|update)\s+`)
+	selRefWordRe   = regexp.MustCompile(`^((?:"[^"]+"|[\w$]+)(?:\.(?:"[^"]+"|[\w$]+))?)(?:\s+(?:as\s+)?("[^"]+"|[\w$]+))?`)
+	selAsAliasRe   = regexp.MustCompile(`(?i)\s+as\s+("x*"|[\w$]+)\s*$`)
+	selBareAliasRe = regexp.MustCompile(`^(\S+)\s+("x*"|[A-Za-z_][\w$]*)$`)
+	selColumnRefRe = regexp.MustCompile(`^(?:"x*"|[A-Za-z_][\w$]*)(?:\.(?:"x*"|[A-Za-z_][\w$]*)){0,2}$`)
+	selStarRe      = regexp.MustCompile(`^(?:"x*"|[A-Za-z_][\w$]*)\.\*$`)
+	selFuncRe      = regexp.MustCompile(`^([A-Za-z_][\w$.]*)\s*\(x*\)$`)
+	selDistinctRe  = regexp.MustCompile(`^\s*(?:distinct\s+on\s*\(x*\)|distinct\b|all\b)`)
+
+	// Words that cannot be a table or column alias.
+	selReserved = map[string]bool{
+		"where": true, "join": true, "inner": true, "left": true, "right": true, "full": true,
+		"cross": true, "natural": true, "outer": true, "on": true, "using": true, "set": true,
+		"group": true, "order": true, "limit": true, "offset": true, "having": true, "union": true,
+		"except": true, "intersect": true, "values": true, "returning": true, "select": true,
+		"for": true, "window": true, "lateral": true, "from": true, "not": true, "null": true,
+		"end": true, "true": true, "false": true, "asc": true, "desc": true, "and": true, "or": true,
+	}
+)
+
+// maskSQL returns sql with every byte inside quotes or parentheses replaced by
+// 'x' (the delimiters themselves are kept), so top-level keywords, commas and
+// dots can be found with plain string and regexp operations on the same offsets.
+func maskSQL(sql string) string {
+	b := []byte(sql)
+	depth := 0
+	var quote byte
+	for i, c := range b {
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+				if depth > 0 {
+					b[i] = 'x'
+				}
+			} else {
+				b[i] = 'x'
+			}
+		case c == '\'' || c == '"':
+			quote = c
+			if depth > 0 {
+				b[i] = 'x'
+			}
+		case c == '(':
+			if depth > 0 {
+				b[i] = 'x'
+			}
+			depth++
+		case c == ')':
+			if depth > 0 {
+				depth--
+			}
+			if depth > 0 {
+				b[i] = 'x'
+			}
+		case depth > 0:
+			b[i] = 'x'
 		}
 	}
-	return columnNames
+	return string(b)
+}
+
+// findSQLWord returns the index of the first whole-word kw in lm at or after
+// from, or -1. lm must be lower-cased and masked.
+func findSQLWord(lm, kw string, from int) int {
+	for i := from; i+len(kw) <= len(lm); i++ {
+		if lm[i:i+len(kw)] != kw {
+			continue
+		}
+		isWord := func(c byte) bool {
+			return c == '_' || c == '$' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z'
+		}
+		if (i > 0 && isWord(lm[i-1])) || (i+len(kw) < len(lm) && isWord(lm[i+len(kw)])) {
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+// selectColumns is a pure function from a query and the schemaCache to the
+// result columns in select order. Name is the alias, else the implicit name
+// (function name for calls/aggregates, "?column?" for other expressions, the
+// bare column name otherwise). Type is the discovered type when the column maps
+// to a table column and is not cast; "" otherwise, in which case the caller uses
+// the name/value-based OID heuristics. `*` and `t.*` are expanded from the
+// schemaCache; if any cannot be (no discovered schema) it returns nil so the
+// caller can fall back to the mock row's own columns. Handles SELECT and
+// RETURNING lists; returns nil for anything else.
+func selectColumns(query string, schemaCache map[string][]ColumnInfo) []selectColumn {
+	q := strings.TrimSpace(query)
+	q = strings.TrimSpace(strings.TrimRight(q, ";"))
+	m := maskSQL(q)
+	lm := strings.ToLower(m)
+
+	var list, ml, rest string
+	returning := false
+	if i := findSQLWord(lm, "select", 0); i >= 0 {
+		end := findSQLWord(lm, "from", i+6)
+		if end < 0 {
+			end = len(q)
+		}
+		list, ml, rest = q[i+6:end], m[i+6:end], lm[end:]
+	} else if i := findSQLWord(lm, "returning", 0); i >= 0 {
+		list, ml, rest, returning = q[i+9:], m[i+9:], lm, true
+	} else {
+		return nil
+	}
+	if loc := selDistinctRe.FindStringIndex(strings.ToLower(ml)); loc != nil {
+		list, ml = list[loc[1]:], ml[loc[1]:]
+	}
+
+	primary := resolveTable(q, nil, schemaCache)
+	refs := selectTableRefs(q, lm, rest, schemaCache)
+	if returning || len(refs) == 0 {
+		refs = []selectTableRef{{alias: primary, table: primary, key: primary}}
+	}
+	typeOf := func(qualifier, name string) string {
+		keys := []string{primary}
+		for _, r := range refs {
+			if qualifier == "" {
+				keys = append(keys, r.key)
+			} else if r.alias == qualifier || r.table == qualifier {
+				keys = []string{r.key}
+				break
+			}
+		}
+		for _, k := range keys {
+			for _, c := range schemaCache[k] {
+				if strings.EqualFold(c.Field, name) {
+					return c.Type
+				}
+			}
+		}
+		return ""
+	}
+	expand := func(r selectTableRef) []selectColumn {
+		out := make([]selectColumn, 0, len(schemaCache[r.key]))
+		for _, c := range schemaCache[r.key] {
+			out = append(out, selectColumn{Name: c.Field, Type: c.Type, Key: c.Field})
+		}
+		return out
+	}
+
+	var out []selectColumn
+	off := 0
+	for _, mi := range strings.Split(ml, ",") {
+		oi := list[off : off+len(mi)]
+		off += len(mi) + 1
+		l := len(mi) - len(strings.TrimLeft(mi, " \t\r\n"))
+		r := len(strings.TrimRight(mi, " \t\r\n"))
+		if r <= l {
+			continue
+		}
+		o, mm := oi[l:r], mi[l:r]
+
+		switch {
+		case mm == "*":
+			var cols []selectColumn
+			for _, r := range refs {
+				cols = append(cols, expand(r)...)
+				if len(schemaCache[r.key]) == 0 {
+					return nil
+				}
+			}
+			out = append(out, cols...)
+			continue
+		case selStarRe.MatchString(mm):
+			qual := strings.ToLower(strings.Trim(o[:len(o)-2], `"`))
+			found := false
+			for _, r := range refs {
+				if r.alias == qual || r.table == qual {
+					found = true
+					if len(schemaCache[r.key]) == 0 {
+						return nil
+					}
+					out = append(out, expand(r)...)
+					break
+				}
+			}
+			if !found {
+				return nil
+			}
+			continue
+		}
+
+		alias := ""
+		if loc := selAsAliasRe.FindStringSubmatchIndex(mm); loc != nil {
+			alias = strings.Trim(o[loc[2]:loc[3]], `"`)
+			o, mm = o[:loc[0]], mm[:loc[0]]
+		} else if !strings.Contains(mm, "::") {
+			if loc := selBareAliasRe.FindStringSubmatchIndex(mm); loc != nil &&
+				!selReserved[strings.ToLower(o[loc[4]:loc[5]])] && !selReserved[strings.ToLower(o[loc[2]:loc[3]])] &&
+				!strings.ContainsAny(o[loc[3]-1:loc[3]], "+-*/<>=|&%") {
+				alias = strings.Trim(o[loc[4]:loc[5]], `"`)
+				o, mm = o[:loc[3]], mm[:loc[3]]
+			}
+		}
+
+		cast := false
+		if idx := strings.Index(mm, "::"); idx >= 0 {
+			cast = true
+			o, mm = o[:idx], mm[:idx]
+		}
+		o, mm = strings.TrimSpace(o), strings.TrimSpace(mm)
+
+		col := selectColumn{Name: "?column?"}
+		switch {
+		case selColumnRefRe.MatchString(mm):
+			segs := strings.Split(o, ".")
+			col.Name = strings.Trim(segs[len(segs)-1], `"`)
+			if !cast {
+				qual := ""
+				if len(segs) > 1 {
+					qual = strings.ToLower(strings.Trim(segs[len(segs)-2], `"`))
+				}
+				col.Type = typeOf(qual, col.Name)
+			}
+		case selFuncRe.MatchString(mm):
+			name := strings.ToLower(selFuncRe.FindStringSubmatch(mm)[1])
+			name = name[strings.LastIndex(name, ".")+1:]
+			col.Name = name
+			if name == "cast" {
+				// CAST(col AS type) is named after col; the type is not pinned.
+				inner := o[strings.Index(o, "(")+1 : len(o)-1]
+				if i := strings.LastIndex(strings.ToLower(inner), " as "); i >= 0 {
+					if in := strings.TrimSpace(inner[:i]); selColumnRefRe.MatchString(in) {
+						col.Name = strings.Trim(in[strings.LastIndex(in, ".")+1:], `"`)
+					}
+				}
+			}
+		}
+		col.Key = col.Name
+		if alias != "" {
+			col.Name = alias
+		}
+		out = append(out, col)
+	}
+	return out
+}
+
+// selectTableRefs lists the tables named after FROM/JOIN/INTO/UPDATE in the
+// (masked, lower-cased) rest of the query, with their aliases and schemaCache keys.
+func selectTableRefs(q, lm, rest string, schemaCache map[string][]ColumnInfo) []selectTableRef {
+	base := len(lm) - len(rest)
+	var refs []selectTableRef
+	for _, loc := range selTableRefRe.FindAllStringIndex(rest, -1) {
+		mt := selRefWordRe.FindStringSubmatch(strings.ToLower(q[base+loc[1]:]))
+		if mt == nil {
+			continue
+		}
+		schema, table := splitTableRef(mt[1])
+		key := table
+		if schema != "" && len(schemaCache[schema+"."+table]) > 0 {
+			key = schema + "." + table
+		}
+		alias := strings.ToLower(strings.Trim(mt[2], `"`))
+		if alias == "" || selReserved[alias] {
+			alias = table
+		}
+		refs = append(refs, selectTableRef{alias: alias, table: table, key: key})
+	}
+	return refs
+}
+
+// selectColumnKeys returns the mock-row keys of the selected columns, which is
+// what DataRows are built from (an aliased column's row key is its underlying
+// name). Nil when selectColumns cannot determine the columns.
+func selectColumnKeys(query string, schemaCache map[string][]ColumnInfo) []string {
+	var keys []string
+	for _, c := range selectColumns(query, schemaCache) {
+		keys = append(keys, c.Key)
+	}
+	return keys
+}
+
+// describeInputs adapts selected columns for SendRowDescriptionWithHints: the
+// labels, a sample row re-keyed by label (so value hints still apply to aliased
+// columns) and a schemaCache in which aliased columns of a known type are typed
+// under their label. With no aliases the inputs come back unchanged.
+func describeInputs(cols []selectColumn, table string, sample map[string]interface{}, cache map[string][]ColumnInfo) ([]string, map[string]interface{}, map[string][]ColumnInfo) {
+	names := make([]string, len(cols))
+	var extra []ColumnInfo
+	hints, copied := sample, false
+	for i, c := range cols {
+		names[i] = c.Name
+		if c.Name == c.Key {
+			continue
+		}
+		if c.Type != "" && table != "" {
+			extra = append(extra, ColumnInfo{Field: c.Name, Type: c.Type})
+		}
+		if v, ok := sample[c.Key]; ok {
+			if !copied {
+				hints, copied = make(map[string]interface{}, len(sample)+1), true
+				for k, sv := range sample {
+					hints[k] = sv
+				}
+			}
+			hints[c.Name] = v
+		}
+	}
+	if len(extra) > 0 {
+		merged := make(map[string][]ColumnInfo, len(cache))
+		for k, v := range cache {
+			merged[k] = v
+		}
+		merged[table] = append(append([]ColumnInfo{}, cache[table]...), extra...)
+		cache = merged
+	}
+	return names, hints, cache
+}
+
+// sortedRowKeys returns a mock row's keys in sorted order; the fallback column
+// list when a query's own columns cannot be determined.
+func sortedRowKeys(row map[string]interface{}) []string {
+	keys := make([]string, 0, len(row))
+	for k := range row {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // min returns the minimum of two integers

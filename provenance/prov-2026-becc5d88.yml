@@ -1,0 +1,72 @@
+id: prov-2026-becc5d88
+title: 'PostgreSQL proxy: answer Parse locally when a value-level VERIFY mock could match, so pipelined Bind stays ordered'
+status: implemented
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  At Parse time the proxy decides whether to answer locally with peekMock(query, nil).
+  A mock with value-level VERIFY (VERIFY_WHERE <col>: <val>, VERIFY_WRITTEN_VALUES)
+  cannot match without bind values, so the peek misses and Parse is forwarded upstream.
+  At Bind, the values are present, findMock matches, and the proxy answers BindComplete
+  itself. Npgsql pipelines P/B/D/E/S without waiting, so the client reads the proxy's
+  local BindComplete before the upstream's ParseComplete (which arrives later through the
+  unframed upstream relay) and fails with "Received BindComplete while expecting
+  ParseCompleteMessage"; the app returns 500. The same write spec without the VERIFY
+  block passes. This surfaced only now because prov-2026-1757dc57 (binary Bind decoding)
+  made value-level VERIFY matchable for Npgsql at all.
+
+  Decision: decide Parse disposition on query shape, not values. Add a pure function,
+  (shape-matchable bool, canResolveOIDs bool) -> {local ParseComplete, forward}, and a
+  shape-only check that ignores value-level predicates (where values, written values)
+  while still honouring table, operation and columns. If any mock could match the shape,
+  Parse is answered locally (ParseComplete, mock-only statement) exactly as for
+  non-value mocks today, and value checks happen at Bind. The existing OID-resolution
+  exception (forward Parse so tokio-postgres gets a real ParameterDescription) is kept.
+  Rejected: emitting a local ParseComplete ahead of BindComplete while still forwarding
+  Parse. Upstream would then also send ParseComplete, giving the client a duplicate, and
+  the proxy cannot swallow it because upstream frames are relayed raw. That would need
+  the shared serialized writer from the core refactor.
+
+  Bind miss on a locally parsed statement: upstream never saw Parse, so forwarding Bind
+  would fail there with a missing-statement error. Interim behaviour is stated in the
+  open question below. Survival: the single serialized client writer in prov-2026-167380f0
+  (draft; shared runtime, Codec, PostgreSQL moved to pgx pgproto3) is the structural fix,
+  since upstream and mock frames can then never interleave and a deferred Parse can be
+  replayed with its ParseComplete suppressed. This record is the targeted interim; the
+  disposition function and the recorded transcript are reusable as-is in that refactor's
+  per-driver conformance corpus.
+constraints:
+  - 'Ordering/decision logic lives in pure functions (Parse disposition from shape-match and OID-resolvability; frame sequence for a pipelined P/B/D/E/S) with no connection state, so it can be unit tested and reused by prov-2026-167380f0'
+  - 'Unit tests replay a recorded Npgsql-style pipelined P/B/D/E/S byte transcript through the proxy loop (or the extracted decision functions) and assert the client sees ParseComplete before BindComplete'
+  - 'No regression for lib/pq, asyncpg or tokio-postgres suites; the tokio-postgres forward-Parse-when-OIDs-unresolvable exception is preserved'
+  - 'Mocks without value-level VERIFY behave exactly as today'
+  - 'No change to the DSL or frame parsing; keep the fix minimal because pgproto3 replaces the framing. AMENDED while open (2026-10-09): the registry gains exactly one read-only method, PeekMockByTablesShape(database, tables, operation, whereColumns), which skips the VerifyWhere and VerifyWrittenValues blocks, shares its matching code with PeekMockByTables so the two cannot drift, consumes no hit, and changes no existing registry behaviour. Reason: the registry keeps mocks, hits and matchesSemanticConstraints private and has no exported listing, so the proxy cannot build a shape-only peek without duplicating that logic'
+  - 'After the unmatched-Bind ErrorResponse the connection stays consistent: the later Describe and Execute for that portal are swallowed rather than forwarded upstream (which never saw Parse or Bind), and the pipeline Sync is answered locally with ReadyForQuery carrying the current transaction status, so the client sees E then Z'
+  - 'DECIDED (human, 2026-10-09): when Bind values fail to match any mock for a statement already answered locally, upstream never saw Parse, so the proxy returns an ErrorResponse with a clear "no mock matched bind values" message and does not forward the Bind. This fails loudly like VERIFY failures and changes the old fall-through to the real database. Option (b), replaying Parse to upstream and swallowing its ParseComplete, needs upstream framing and is deferred to prov-2026-167380f0'
+  - 'The ErrorResponse on an unmatched Bind is covered by a unit test, and the unmatched-Bind change is called out in the changelog as a behaviour change'
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/parse_ordering_test.go
+  - pkg/registry/registry.go
+  - pkg/registry/peek_shape_test.go
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-1757dc57
+  - prov-2026-059ba152
+  - prov-2026-1aac1dc7
+  - prov-2026-167380f0
+  - prov-2026-9519f9c8
+sealed_at_sha: 6bbcac4f871bc3d214b45ad0e35f4c4f1505cd80
+associated_specs:
+  - path: pkg/proxy/postgresql/parse_ordering_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/proxy/postgresql/ -run TestParseOrdering -count=1
+  - path: pkg/registry/peek_shape_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/registry/ -run TestPeekMockByTablesShape -count=1
+associated_traces: []
+monitors: []
+tags: []

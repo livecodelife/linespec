@@ -400,6 +400,15 @@ func matchesSemanticConstraints(
 	whereValues map[string]string,
 	writtenValues map[string]string,
 ) (bool, string) {
+	if ok, reason := matchesShapeConstraints(mock, operation, whereColumns); !ok {
+		return false, reason
+	}
+	return matchesValueConstraints(mock, whereValues, writtenValues)
+}
+
+// matchesShapeConstraints checks the value-independent constraints: READ/WRITE
+// direction, VERIFY_OPERATION and VERIFY_WHERE_COLUMNS.
+func matchesShapeConstraints(mock *types.ExpectStatement, operation string, whereColumns []string) (bool, string) {
 	if want := channelDirection(mock.Channel); want != "" {
 		if got := operationDirection(operation); got != "" && got != want {
 			return false, fmt.Sprintf("%s direction declared on EXPECT line, but the matched query performed %s (operation=%s)", want, got, operation)
@@ -419,6 +428,12 @@ func matchesSemanticConstraints(
 			}
 		}
 	}
+	return true, ""
+}
+
+// matchesValueConstraints checks the value-level constraints: VERIFY_WHERE and
+// VERIFY_WRITTEN_VALUES (including PRESENT).
+func matchesValueConstraints(mock *types.ExpectStatement, whereValues, writtenValues map[string]string) (bool, string) {
 	if len(mock.VerifyWhere) > 0 {
 		for col, expectedVal := range mock.VerifyWhere {
 			colKey := strings.ToLower(col)
@@ -577,6 +592,30 @@ func (r *MockRegistry) PeekMockByTables(
 	whereValues map[string]string,
 	writtenValues map[string]string,
 ) (*types.ExpectStatement, bool) {
+	return r.peekMockByTables(database, tables, operation, whereColumns, whereValues, writtenValues, false)
+}
+
+// PeekMockByTablesShape is a read-only peek that ignores value-level predicates
+// (VERIFY_WHERE values, VERIFY_WRITTEN_VALUES) while still honouring table set,
+// database, direction, operation and WHERE columns. It consumes no hit.
+func (r *MockRegistry) PeekMockByTablesShape(
+	database string,
+	tables []string,
+	operation string,
+	whereColumns []string,
+) (*types.ExpectStatement, bool) {
+	return r.peekMockByTables(database, tables, operation, whereColumns, nil, nil, true)
+}
+
+func (r *MockRegistry) peekMockByTables(
+	database string,
+	tables []string,
+	operation string,
+	whereColumns []string,
+	whereValues map[string]string,
+	writtenValues map[string]string,
+	shapeOnly bool,
+) (*types.ExpectStatement, bool) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -595,7 +634,13 @@ func (r *MockRegistry) PeekMockByTables(
 		if mock.Negative || r.hits[mock] > 0 || len(mock.AccessingTables) == 0 || !mockMatchesDatabase(mock, database) {
 			continue
 		}
-		if ok, _ := matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues); !ok {
+		var ok bool
+		if shapeOnly {
+			ok, _ = matchesShapeConstraints(mock, operation, whereColumns)
+		} else {
+			ok, _ = matchesSemanticConstraints(mock, operation, whereColumns, whereValues, writtenValues)
+		}
+		if !ok {
 			continue
 		}
 		candidates = append(candidates, candidate{mock, semanticSpecificity(mock)})

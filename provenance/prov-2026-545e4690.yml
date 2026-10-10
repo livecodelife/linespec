@@ -1,0 +1,48 @@
+id: prov-2026-545e4690
+title: 'PostgreSQL proxy: record passthrough for undeclared queries so strict_passthrough is enforced'
+status: implemented
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  strict_passthrough has no effect on PostgreSQL. The redis, grpc, http, kafka, mongodb and mysql proxies call registry.RecordPassthrough when traffic bypasses the mock layer, and the runner fails the spec under strict_passthrough: true. The PostgreSQL proxy never calls it, so an undeclared SELECT count(*) FROM sponsors reached the real database and the spec passed. Writes-are-strict, undeclared-queries-fail is not enforced.
+
+  Decision: record a passthrough in the PostgreSQL proxy at the point a statement is resolved against the mocks and found to have none. For the simple protocol that is MsgQuery when findMock fails. For the extended protocol it is MsgBind, after bind parameters are decoded and findMock(query, bindParams) fails. Never at Parse: Parse is forwarded upstream whenever peekMock(query, nil) cannot match, which includes a value-level VERIFY mock that only matches once parameters exist, and that is not an undeclared query. Bind resolves with parameters, so those cases stay unrecorded, and one Bind yields at most one record. Parse/Describe with no Bind executes nothing and records nothing.
+
+  Housekeeping is exempt, mirroring mysql's isWhitelisted: SET, SHOW, BEGIN, START TRANSACTION, COMMIT, ROLLBACK, SAVEPOINT, RELEASE, DISCARD, DEALLOCATE, RESET, plus SELECT 1, SELECT version(), and any query touching pg_catalog, pg_type, pg_namespace, pg_class, pg_attribute, pg_settings or information_schema (Npgsql, tokio-postgres and asyncpg type loading). Startup and auth never reach this loop. Use a small local predicate and the existing registry helper; prov-2026-167380f0 will move passthrough accounting into pkg/proxy/base later.
+
+  Rejected: recording at Parse (false positives above) and exempting only by exact string (drivers vary the text).
+constraints:
+  - Default behaviour is unchanged when strict_passthrough is off; passthroughs are only reported as warnings
+  - Record at MsgQuery and at MsgBind resolution only, never at Parse, so a VERIFY mock that falls through at Parse is not flagged
+  - Record at most once per Bind and never for a Bind on an unknown statement
+  - Housekeeping exemptions are the explicit list in the intent, kept in one predicate
+  - Keep the code thin; use existing registry.RecordPassthrough and no new base abstractions
+  - MUST add unit tests that a declared query is not recorded, an undeclared SELECT is, each housekeeping exemption is not, and a Parse-time miss resolved by a value-level VERIFY mock at Bind is not
+  - MUST NOT regress the lib/pq, asyncpg or tokio-postgres example suites
+  - No changes to mock matching, VERIFY, result encoding, the DSL or other protocols' proxies
+  - 'DECIDED (human, 2026-10-09): DDL (CREATE, ALTER, DROP) is NOT exempt, so an undeclared migration through the proxy under strict_passthrough is flagged; MUST add a unit test for it'
+  - 'DECIDED (human, 2026-10-09): the catalog exemption is a substring match on the listed pg_* names and information_schema, accepting that a user query naming them is exempt, in preference to matching driver-specific type-loading query shapes that break across driver versions'
+  - 'Non-goal, follow-up for later verification: whether Npgsql still needs Pooling=false through the proxy'
+  - 'Sibling ordering: shares proxy.go with other open PostgreSQL proxy defects; land after any fix that changes what Parse or Bind matches, then re-check the Bind-time recording point'
+affected_scope:
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/strict_passthrough_test.go
+forbidden_scope: []
+type: bug
+supersedes: ""
+superseded_by: ""
+extends: prov-2026-1757dc57
+related:
+  - prov-2026-1757dc57
+  - prov-2026-059ba152
+  - prov-2026-167380f0
+sealed_at_sha: d53d660a6539dd777eaed6a5ea046d0d7f47f73f
+associated_specs:
+  - path: pkg/proxy/postgresql/strict_passthrough_test.go
+    type: go
+    run_command: test -f {{path}} && go test ./pkg/proxy/postgresql/ -run StrictPassthrough -count=1
+associated_traces: []
+monitors: []
+tags:
+  - postgresql
+  - strict-passthrough
