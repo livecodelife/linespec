@@ -1,6 +1,6 @@
 id: prov-2026-e0174ee3
 title: Run schema_discovery.validate for every spec, not only the first of a reused database setup
-status: draft
+status: open
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: |
