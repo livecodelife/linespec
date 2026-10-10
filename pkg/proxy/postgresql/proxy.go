@@ -84,6 +84,7 @@ type ConnectionState struct {
 	mockOnlyStatements  map[string]bool          // statements handled locally (never forwarded to upstream)
 	stmtParamOIDs       map[string][]uint32      // statement name -> OIDs declared in Parse message
 	inTransaction       bool                     // true between BEGIN and COMMIT/ROLLBACK
+	swallowUntilSync    bool                     // after a local Bind error: drop Describe/Execute, answer Sync with ReadyForQuery
 }
 
 // txStatus returns the PostgreSQL transaction status byte for ReadyForQuery.
@@ -491,6 +492,23 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 		logger.Debug("PostgreSQL Proxy: Received message type %c", msgType)
 		p.logDebug("Received message type %c\n", msgType)
 
+		// After a locally answered Bind error, upstream never saw this statement or
+		// portal: swallow the rest of the pipeline and close it out at Sync.
+		if state.swallowUntilSync {
+			switch msgType {
+			case MsgDescribe, MsgExecute:
+				p.logDebug("  -> Swallowing message type %c after unmatched Bind\n", msgType)
+				continue
+			case MsgSync:
+				state.swallowUntilSync = false
+				if err := p.sendReadyForQuery(clientConn, state.txStatus()); err != nil {
+					p.logDebug("  -> Error sending ReadyForQuery: %v\n", err)
+					return
+				}
+				continue
+			}
+		}
+
 		// Handle based on message type
 		switch msgType {
 		case MsgParse:
@@ -525,9 +543,9 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			// the server returns OID=0 (unspecified), tokio-postgres calls typeinfo(0) which
 			// looks up OID 0 in pg_catalog, finds no rows, and raises "unexpected message".
 			if query != "" {
-				if _, mocked := p.peekMock(query, nil); mocked {
+				if _, mocked := p.peekMockShape(query); mocked {
 					canResolveOIDs := len(paramOIDs) > 0 || len(p.extractParameterTypes(query)) > 0 || countSQLParams(query) == 0
-					if canResolveOIDs {
+					if parseDisposition(true, canResolveOIDs) == parseActionLocal {
 						state.mockOnlyStatements[stmtName] = true
 						p.logDebug("  -> Mock-only Parse for '%s': sending local ParseComplete\n", stmtName)
 						if err := p.writeMessage(clientConn, MsgParseComplete, nil); err != nil {
@@ -758,6 +776,15 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 					return
 				}
 				p.logDebug("  -> Sent BindComplete for mocked portal (hit count incremented)\n")
+			} else if state.mockOnlyStatements[stmtName] {
+				// Parse was answered locally, so upstream has no such statement:
+				// fail loudly instead of forwarding the Bind.
+				p.logDebug("  -> Bind values matched no mock for locally parsed '%s'\n", stmtName)
+				if err := p.sendErrorResponse(clientConn, fmt.Sprintf("no mock matched bind values for statement %q: %s", stmtName, query)); err != nil {
+					p.logDebug("  -> Error sending Bind error response: %v\n", err)
+					return
+				}
+				state.swallowUntilSync = true
 			} else {
 				p.logDebug("  -> Bind for non-mocked statement '%s', forwarding\n", stmtName)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
@@ -1915,6 +1942,37 @@ func (p *Proxy) findMock(query string, bindParams []string) (*types.ExpectStatem
 			return p.registry.FindMock(key, query, db)
 		},
 	)
+}
+
+// parseAction is the disposition of a client Parse message.
+type parseAction int
+
+const (
+	parseActionLocal   parseAction = iota // answer ParseComplete locally, mark mock-only
+	parseActionForward                    // forward Parse upstream
+)
+
+// parseDisposition decides how to handle Parse from query shape alone: local
+// iff some mock could match the shape and parameter OIDs can be resolved
+// locally (otherwise tokio-postgres needs the real ParameterDescription).
+func parseDisposition(shapeMatchable, canResolveOIDs bool) parseAction {
+	if shapeMatchable && canResolveOIDs {
+		return parseActionLocal
+	}
+	return parseActionForward
+}
+
+// peekMockShape reports whether any mock could match query ignoring bind
+// values (value-level VERIFY is checked later, at Bind). It consumes no hit.
+func (p *Proxy) peekMockShape(query string) (*types.ExpectStatement, bool) {
+	db := p.dbConfig.GetDatabaseName()
+	tables, op, whereCols, _, _ := p.extractSemanticInfo(query, nil)
+	if len(tables) > 0 {
+		if mock, found := p.registry.PeekMockByTablesShape(db, tables, op, whereCols); found {
+			return mock, true
+		}
+	}
+	return p.registry.PeekMock(p.extractTable(query), query, db)
 }
 
 // peekMock is like findMock but does not increment hit counts.
