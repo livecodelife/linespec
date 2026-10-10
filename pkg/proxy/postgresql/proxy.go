@@ -599,7 +599,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 							var sampleRow map[string]interface{}
 							var mockTable string
 							if mock, found := p.peekMock(query, nil); found {
-								mockTable = mockTableName(mock)
+								mockTable = p.schemaTable(mockTableName(mock), query)
 								if mock.ReturnsFile != "" {
 									p.loader.BaseDir = mock.BaseDir
 									if pld, err := p.loader.Load(mock.ReturnsFile); err == nil {
@@ -641,7 +641,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 							// READ mock: send RowDescription so Execute can skip it.
 							// Use value-based hints so UUID-valued id columns are declared
 							// as OID 2950 rather than INT4.
-							mockTable := mockTableName(mp.Mock)
+							mockTable := p.schemaTable(mockTableName(mp.Mock), mp.Query)
 							cols := p.inferColumnsForTable(mockTable)
 							var sampleRow map[string]interface{}
 							if mp.Mock.ReturnsFile != "" {
@@ -882,6 +882,9 @@ func (p *Proxy) sendMockResponse(clientConn net.Conn, mock *types.ExpectStatemen
 func (p *Proxy) sendMockResultSimple(clientConn net.Conn, mock *types.ExpectStatement, query string, txStatus byte) error {
 	// Determine columns
 	table := mockTableName(mock)
+	if table != "" {
+		table = p.schemaTable(table, query)
+	}
 	columns := []string{"id", "name", "email"}
 	if table != "" {
 		columns = p.inferColumnsForTable(table)
@@ -1059,6 +1062,9 @@ func (p *Proxy) sendErrorResponseWithCode(conn net.Conn, sqlState, message strin
 func (p *Proxy) sendMockResultSetForExtended(conn net.Conn, mock *types.ExpectStatement, actualQuery string, skipRowDescription bool, resultFormatCodes []int16) error {
 	// Determine columns from mock or use defaults
 	table := mockTableName(mock)
+	if table != "" {
+		table = p.schemaTable(table, actualQuery)
+	}
 	columns := []string{"id", "name", "email"}
 	if table != "" {
 		columns = p.inferColumnsForTable(table)
@@ -1260,44 +1266,114 @@ func (p *Proxy) inferColumnsForTable(table string) []string {
 	return []string{"id", "created_at", "updated_at"}
 }
 
-// extractTable extracts table name from SQL query
+// extractTable extracts table name from SQL query. It returns the bare,
+// registry-facing table name (never schema-qualified); schemaCache lookups that
+// need the qualified key go through resolveTable.
 func (p *Proxy) extractTable(query string) string {
-	q := strings.ToLower(strings.TrimSpace(query))
-	q = strings.ReplaceAll(q, "`", " ")
-	q = strings.ReplaceAll(q, "\"", " ")
-	q = strings.ReplaceAll(q, "'", " ")
+	return resolveTable(query, p.registry.GetTables(), nil)
+}
 
-	// Get dynamic table list from registry (from EXPECT statements)
-	// This allows any table name from .linespec files to be recognized
-	knownTables := p.registry.GetTables()
+// schemaTable returns the schemaCache key for a mock's table. The mock-derived
+// table is kept unless the query names a schema-qualified table that has a
+// qualified key in the schemaCache, so same-named tables in several schemas get
+// their own column types.
+func (p *Proxy) schemaTable(table, query string) string {
+	if query == "" || len(p.schemaCache) == 0 {
+		return table
+	}
+	if key := resolveTable(query, p.registry.GetTables(), p.schemaCache); strings.Contains(key, ".") {
+		return key
+	}
+	return table
+}
 
+// splitTableRef splits a (lower-cased) table reference word into schema and
+// table, honouring double-quoted identifiers ("a"."b", "a".b, a."b"). Unquoted
+// references split on the first ".", as extractTable always did.
+func splitTableRef(word string) (schema, table string) {
+	if !strings.Contains(word, `"`) {
+		if idx := strings.Index(word, "."); idx != -1 {
+			return word[:idx], strings.Trim(word[idx+1:], "`'")
+		}
+		return "", strings.Trim(word, "`'")
+	}
+	var segs []string
+	var cur strings.Builder
+	inQuote := false
+	for _, r := range word {
+		switch {
+		case r == '"':
+			inQuote = !inQuote
+		case r == '.' && !inQuote:
+			segs = append(segs, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	segs = append(segs, cur.String())
+	table = strings.Trim(segs[len(segs)-1], "`'")
+	if len(segs) > 1 {
+		schema = segs[len(segs)-2]
+	}
+	return schema, table
+}
+
+// resolveTable is a pure function from a query, the registry's known table names
+// and the schemaCache to the lower-cased schemaCache lookup key. A schema-qualified
+// reference resolves to "schema.table" when that key exists in schemaCache, and to
+// the bare table name otherwise; unqualified references resolve to the bare name.
+// Only schemaCache keys are consulted; pass nil to get the bare name.
+func resolveTable(query string, knownTables []string, schemaCache map[string][]ColumnInfo) string {
+	lowered := strings.ToLower(strings.TrimSpace(query))
+	lowered = strings.ReplaceAll(lowered, "`", " ")
+	lowered = strings.ReplaceAll(lowered, "'", " ")
+	q := strings.ReplaceAll(lowered, "\"", " ")
+
+	bare := ""
 	// Check each registered table to see if it appears in the query
 	for _, table := range knownTables {
-		// Escape special regex characters in table names
-		escapedTable := regexp.QuoteMeta(table)
-		re := regexp.MustCompile(`\b` + escapedTable + `\b`)
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(table) + `\b`)
 		if re.MatchString(q) {
-			return table
+			bare = table
+			break
 		}
 	}
 
 	// Fallback: Try to extract from SQL keywords (FROM, INTO, UPDATE)
-	// This handles tables that weren't explicitly registered in EXPECT statements
-	words := strings.Fields(q)
-	for i, word := range words {
-		if word == "from" || word == "into" || word == "update" || word == "table" {
-			if i+1 < len(words) {
-				table := words[i+1]
-				if idx := strings.Index(table, "."); idx != -1 {
-					table = table[idx+1:]
+	words := strings.Fields(lowered)
+	if bare == "" {
+		bare = "unknown"
+		for i, word := range words {
+			if word == "from" || word == "into" || word == "update" || word == "table" {
+				if i+1 < len(words) {
+					_, bare = splitTableRef(words[i+1])
+					break
 				}
-				table = strings.Trim(table, "`\"'")
-				return table
 			}
 		}
 	}
 
-	return "unknown"
+	if len(schemaCache) == 0 {
+		return bare
+	}
+	for i, word := range words {
+		if i+1 >= len(words) || (word != "from" && word != "into" && word != "update" && word != "table" && word != "join") {
+			continue
+		}
+		ref := words[i+1]
+		if cut := strings.IndexAny(ref, "(;,"); cut != -1 {
+			ref = ref[:cut]
+		}
+		schema, table := splitTableRef(ref)
+		if schema == "" || table != bare && table != strings.TrimRight(bare, "(;,") {
+			continue
+		}
+		if key := schema + "." + table; len(schemaCache[key]) > 0 {
+			return key
+		}
+	}
+	return bare
 }
 
 // logDebug writes a debug message to stderr when debug mode is enabled.
