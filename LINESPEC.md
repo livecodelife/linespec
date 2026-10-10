@@ -1616,7 +1616,7 @@ infrastructure:
   # resolution (local linespec:latest if present, else the published
   # ghcr.io/livecodelife/linespec pinned to your linespec version). Set it to
   # override both — e.g. a private registry mirror.
-  proxy_image: ghcr.io/livecodelife/linespec:3.26.1
+  proxy_image: ghcr.io/livecodelife/linespec:3.27.0
 
 # ─────────────────────────────────────────────
 # Protobuf descriptor set (optional — gRPC)
@@ -1714,6 +1714,21 @@ schema_discovery:
     - schema_migrations
     - ar_internal_metadata
   cache_file: .linespec/schema-cache.json
+  schemas:              # PostgreSQL schemas to introspect (default: [public])
+    - public            # e.g. [cnp_global, cnp_ops_demo]; each table is keyed
+                        # both schema-qualified (cnp_global.errors) and bare
+                        # (errors, the first listed schema wins); the
+                        # between-test reset truncates every listed schema
+  validate: off         # off | warn | error (default: off). Checks PostgreSQL
+                        # spec mocks against the discovered schema before the
+                        # proxy starts: unknown tables and columns in
+                        # ACCESSING_TABLES, RETURNS rows, VERIFY_WRITTEN_VALUES,
+                        # VERIFY_WHERE and VERIFY_WHERE_COLUMNS. warn logs and
+                        # continues; error fails the offending spec. Requires
+                        # `proxy: true` on the database. Column checks apply to
+                        # expects with a single accessing table. RETURNS rows
+                        # may omit columns, but extra keys are errors. MySQL is
+                        # not validated.
 
 # ─────────────────────────────────────────────
 # Payload Loading (optional)
