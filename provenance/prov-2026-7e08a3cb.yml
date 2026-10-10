@@ -1,0 +1,65 @@
+id: prov-2026-7e08a3cb
+title: 'PostgreSQL proxy: encode mock DataRow values with the same per-column OID as the RowDescription'
+status: draft
+created_at: "2026-10-09"
+author: caleb.cowen@linq.com
+intent: |
+  Npgsql reads a mocked non-text column as garbage (a bigint applicationid of 11 arrives as
+  raw bytes) while text columns are fine. Since prov-2026-4fc643ef the mock-only
+  RowDescription types each column from the discovered schema (bigint -> OID 20), but the
+  DataRow encoder (sendDataRowInternal) never sees the schema. When the client asks for
+  binary results it picks the width from the column NAME via oidForColumn: applicationid is
+  not id/_id/count, so it is "text, size -1", the default branch calls toInt32, and 4 bytes
+  go out under an int8 column. Booleans, numerics, dates and floats fall to the same branch
+  and either error into text or get int-sized, so they are wrong too. This is a width
+  mismatch in binary mode. In text mode the bytes are right but only by accident of
+  fmt.Sprintf. A separate hazard: with no Bind format codes (simple query, or a Bind with
+  zero codes) the encoder emits binary for id/_id and *_at/*time columns, which is not
+  valid for the simple protocol; that legacy behaviour is kept byte-identical here.
+
+  Decision: one pure function, (table, columns, sampleRow, schemaCache) -> per-column
+  (OID, size), built once per statement and used both to write the RowDescription and to
+  encode each DataRow, so the two can never disagree. It is the existing columnOID logic
+  (schema, then UUID-shaped value, then name heuristic) lifted out so it takes no proxy or
+  connection state, and prov-2026-167380f0 can reuse it. The encoder dispatches binary
+  encoding on the OID (int2/int4/int8, bool, float4/float8, numeric, date, timestamp,
+  timestamptz, uuid) and falls back to the current name heuristic when a column has no
+  OID. Text-format and unknown-OID output is unchanged.
+
+  Rejected: widening the name heuristic with more column names. The schema already knows
+  the type, and a heuristic can never be right for names like applicationid.
+constraints:
+  - Per-column OID is computed once per statement by a pure function with no proxy, connection or registry state, and the same result feeds RowDescription and DataRow
+  - Text columns, text-format results, and every shape already correct today produce byte-identical RowDescription and DataRow output; no regression for lib/pq, asyncpg or tokio-postgres (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e)
+  - A column missing from the schema, or with an unmapped type, falls back to the existing columnOID heuristics, never an error
+  - A value that cannot be encoded for its OID falls back to text encoding as today, not a dropped row
+  - 'Unit tests per type (int2, int4, int8, bool, numeric, date, timestamp, timestamptz, uuid, float4, float8) in both text and binary result format, including the exact applicationid bigint value 11 asserted as the 8-byte big-endian wire bytes 00 00 00 08 00 00 00 00 00 00 00 0b when the client asked for binary'
+  - 'Verified by reading, not on the wire: the width mismatch above, the Describe paths (statement and portal) building the RowDescription with schema OIDs and sample-row hints, and Execute after a mock Describe (skipRowDescription) encoding with name heuristics only. NOT verified: a live Npgsql session; whether Npgsql requests binary for every type listed; exact binary layout for numeric (base-10000 digits) which must be checked against the PostgreSQL send format'
+  - 'Known related gaps, not fixed here: a cast column is still typed by its underlying column name through the table schema (prov-2026-4fc643ef), and the mock-only Describe uses the value-blind peekMock sample row, so a Describe-time and Execute-time sample row can differ for UUID-shaped strings. Passing the Describe-time OIDs through to Execute would close this and is the design question below'
+  - 'DECIDED (human, 2026-10-09): Execute recomputes the OIDs from the same inputs rather than carrying them on portal state, and a column whose type comes from the schema always wins over the sample row, so a value-blind Describe-time sample row can never make the Describe-time and Execute-time OIDs disagree for a schema-typed column. The sample row only influences columns the schema does not know'
+  - 'MUST add a test that a schema-typed column gets the identical OID from the Describe-time and the Execute-time computation even when the two sample rows differ'
+affected_scope:
+  - pkg/proxy/postgresql/result.go
+  - pkg/proxy/postgresql/proxy.go
+  - pkg/proxy/postgresql/result_encoding_test.go
+forbidden_scope: []
+type: bug
+extends: prov-2026-258574ee
+supersedes: ""
+superseded_by: ""
+related:
+  - prov-2026-4fc643ef
+  - prov-2026-059ba152
+  - prov-2026-1757dc57
+  - prov-2026-1aac1dc7
+  - prov-2026-258574ee
+  - prov-2026-cbc8213e
+  - prov-2026-167380f0
+sealed_at_sha: ""
+associated_specs:
+  - path: pkg/proxy/postgresql/result_encoding_test.go
+    type: unit
+    run_command: go test ./pkg/proxy/postgresql/... -run ResultEncoding
+associated_traces: []
+monitors: []
+tags: []
