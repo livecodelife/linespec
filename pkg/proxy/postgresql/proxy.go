@@ -787,6 +787,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				state.swallowUntilSync = true
 			} else {
 				p.logDebug("  -> Bind for non-mocked statement '%s', forwarding\n", stmtName)
+				p.recordPassthroughQuery(query)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 					p.logDebug("  -> Error forwarding Bind: %v\n", err)
 					return
@@ -855,6 +856,7 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 				}
 			} else {
 				p.logDebug("  -> Forwarding simple query\n")
+				p.recordPassthroughQuery(query)
 				if err := p.forwardMessage(upstreamConn, msgType, lengthBuf, payload); err != nil {
 					p.logDebug("  -> Error forwarding Query: %v\n", err)
 					return
@@ -870,6 +872,53 @@ func (p *Proxy) handleClientMessagesWithInterception(clientReader io.Reader, ups
 			}
 		}
 	}
+}
+
+// recordPassthroughQuery records a strict-passthrough entry for a query that
+// is forwarded upstream without matching any mock, unless it is housekeeping.
+func (p *Proxy) recordPassthroughQuery(query string) {
+	if isHousekeepingQuery(query) {
+		return
+	}
+	q := strings.TrimRight(query, "\x00")
+	p.registry.RecordPassthrough("PostgreSQL query: " + q[:min(80, len(q))])
+}
+
+var housekeepingKeywords = map[string]bool{
+	"SET": true, "SHOW": true, "BEGIN": true, "COMMIT": true, "ROLLBACK": true,
+	"SAVEPOINT": true, "RELEASE": true, "DISCARD": true, "DEALLOCATE": true, "RESET": true,
+}
+
+var housekeepingCatalogMarkers = []string{
+	"pg_catalog", "pg_type", "pg_namespace", "pg_class", "pg_attribute", "pg_settings", "information_schema",
+}
+
+// isHousekeepingQuery reports whether a query is driver/session housekeeping
+// that never needs a mock (SET/SHOW/transaction control, SELECT 1,
+// SELECT version(), catalog introspection). DDL is not housekeeping.
+func isHousekeepingQuery(query string) bool {
+	q := strings.ToLower(strings.TrimSpace(strings.Trim(query, "\x00 \t\r\n;")))
+	if q == "" {
+		return false
+	}
+	fields := strings.Fields(q)
+	first := strings.TrimRight(fields[0], ";(")
+	if housekeepingKeywords[strings.ToUpper(first)] {
+		return true
+	}
+	if first == "start" && len(fields) > 1 && strings.TrimRight(fields[1], ";") == "transaction" {
+		return true
+	}
+	norm := strings.Join(fields, " ")
+	if norm == "select 1" || norm == "select version()" {
+		return true
+	}
+	for _, m := range housekeepingCatalogMarkers {
+		if strings.Contains(q, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsReadyForQuery scans data for a PostgreSQL ReadyForQuery message
