@@ -1,6 +1,6 @@
 id: prov-2026-d3b3320b
 title: Remove size arithmetic from PostgreSQL message allocations flagged by CodeQL
-status: draft
+status: open
 created_at: "2026-10-12"
 author: caleb.cowen@linq.com
 intent: >
