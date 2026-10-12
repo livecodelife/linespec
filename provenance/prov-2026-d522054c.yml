@@ -19,6 +19,7 @@ affected_scope:
   - pkg/proxy/postgresql/result.go
 forbidden_scope: []
 type: bug
+extends: prov-2026-001
 related:
   - prov-2026-7e08a3cb
   - prov-2026-fa19c7ff
