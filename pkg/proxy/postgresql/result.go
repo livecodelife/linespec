@@ -67,7 +67,7 @@ func (r *ResultHandler) SendRowDescription(conn net.Conn, table string, columns 
 func (r *ResultHandler) SendRowDescriptionWithFormats(conn net.Conn, table string, columns []string, schemaCache map[string][]ColumnInfo, bindCodes []int16) error {
 	// Field count (2 bytes)
 	fieldCount := uint16(len(columns))
-	payload := make([]byte, 0, 2+len(columns)*20) // Estimate size
+	payload := make([]byte, 0, 64)
 
 	fieldCountBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(fieldCountBytes, fieldCount)
@@ -185,7 +185,7 @@ func (r *ResultHandler) SendRowDescriptionWithHintsAndFormats(conn net.Conn, tab
 	}
 
 	fieldCount := uint16(len(columns))
-	payload := make([]byte, 0, 2+len(columns)*20)
+	payload := make([]byte, 0, 64)
 
 	fieldCountBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(fieldCountBytes, fieldCount)
