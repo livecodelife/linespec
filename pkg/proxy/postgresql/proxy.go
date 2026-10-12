@@ -1511,21 +1511,20 @@ func countSQLParams(sql string) int {
 // buildParameterDescription returns a ParameterDescription payload for n unspecified-type params.
 // PostgreSQL format: Int16 count, then n Int32 OIDs (0 = unspecified).
 func buildParameterDescription(n int) []byte {
-	buf := make([]byte, 2+n*4)
-	buf[0] = byte(n >> 8)
-	buf[1] = byte(n)
-	// OIDs are 0 (unspecified), already zeroed
+	buf := []byte{byte(n >> 8), byte(n)}
+	// OIDs are 0 (unspecified)
+	for i := 0; i < n; i++ {
+		buf = append(buf, 0, 0, 0, 0)
+	}
 	return buf
 }
 
 // buildParameterDescriptionFromOIDs encodes a ParameterDescription from explicit type OIDs.
 func buildParameterDescriptionFromOIDs(oids []uint32) []byte {
 	n := len(oids)
-	buf := make([]byte, 2+n*4)
-	buf[0] = byte(n >> 8)
-	buf[1] = byte(n)
-	for i, oid := range oids {
-		binary.BigEndian.PutUint32(buf[2+i*4:], oid)
+	buf := []byte{byte(n >> 8), byte(n)}
+	for _, oid := range oids {
+		buf = binary.BigEndian.AppendUint32(buf, oid)
 	}
 	return buf
 }
@@ -1679,7 +1678,7 @@ func (p *Proxy) sendReadyForQuery(conn net.Conn, txStatus byte) error {
 
 // forwardMessage forwards a message to upstream
 func (p *Proxy) forwardMessage(upstreamConn net.Conn, msgType byte, lengthBuf, payload []byte) error {
-	msgBytes := make([]byte, 0, 1+4+len(payload))
+	msgBytes := make([]byte, 0, 5)
 	msgBytes = append(msgBytes, msgType)
 	msgBytes = append(msgBytes, lengthBuf...)
 	msgBytes = append(msgBytes, payload...)

@@ -76,7 +76,7 @@ func CreateCommandComplete(tag string) []byte {
 // CreateMessage creates a message with given type and payload
 func CreateMessage(msgType byte, payload []byte) []byte {
 	length := uint32(len(payload) + 4)
-	msg := make([]byte, 0, 1+4+len(payload))
+	msg := make([]byte, 0, 5)
 	msg = append(msg, msgType)
 
 	lengthBytes := make([]byte, 4)
