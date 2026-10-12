@@ -421,8 +421,8 @@ func appendField(payload, field []byte) []byte {
 // that cannot be encoded for its OID falls back to text. oids may be nil, in
 // which case only the name heuristics are used.
 func encodeDataRow(columns []string, values map[string]interface{}, oids []colOID, resultFormatCodes []int16) []byte {
-	payload := make([]byte, 2, 2+len(columns)*20)
-	binary.BigEndian.PutUint16(payload, uint16(len(columns)))
+	payload := make([]byte, 2)
+	binary.BigEndian.PutUint16(payload, uint16(min(len(columns), math.MaxUint16)))
 
 	fmts := resultFormats(resultFormatCodes, len(columns))
 	for i, col := range columns {
@@ -524,12 +524,18 @@ func encodeBinaryForOID(oid uint32, val interface{}) (enc []byte, handled bool) 
 		if err != nil {
 			return nil, true
 		}
+		if n < math.MinInt16 || n > math.MaxInt16 {
+			return nil, true
+		}
 		b := make([]byte, 2)
 		binary.BigEndian.PutUint16(b, uint16(n))
 		return b, true
 	case 23:
 		n, err := strictInt(val, 32)
 		if err != nil {
+			return nil, true
+		}
+		if n < math.MinInt32 || n > math.MaxInt32 {
 			return nil, true
 		}
 		return be32(uint32(n)), true
@@ -736,12 +742,12 @@ func encodeNumericBinary(val interface{}) ([]byte, error) {
 	}
 	var digits []int16
 	for i := 0; i < len(intPart); i += 4 {
-		n, _ := strconv.Atoi(intPart[i : i+4])
+		n, _ := strconv.ParseInt(intPart[i:i+4], 10, 16)
 		digits = append(digits, int16(n))
 	}
 	weight := len(digits) - 1
 	for i := 0; i < len(frac); i += 4 {
-		n, _ := strconv.Atoi(frac[i : i+4])
+		n, _ := strconv.ParseInt(frac[i:i+4], 10, 16)
 		digits = append(digits, int16(n))
 	}
 	for len(digits) > 0 && digits[0] == 0 {
