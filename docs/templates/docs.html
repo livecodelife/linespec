@@ -147,7 +147,7 @@
 
                 <section class="docs-section">
                     <h2>What is LineSpec?</h2>
-                    <p>LineSpec is a tool for managing <strong>Provenance Records</strong> — structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.</p>
+                    <p>LineSpec is a tool for managing <strong>Provenance Records</strong> — structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. Records are managed by the standalone <code>provenance</code> CLI; <code>linespec provenance</code> forwards to it and is deprecated.</p>
                     
                     <p>As of v__VERSION__, both <strong>Provenance Records</strong> and <strong>LineSpec Testing</strong> are stable and included in the default installation.</p>
 
@@ -187,8 +187,9 @@
                                 <li><a href="provenance.html#core-concepts">Core Concepts</a> - ID format, status lifecycle</li>
                                 <li><a href="provenance.html#schema-reference">Schema Reference</a> - Complete field reference</li>
                                 <li><a href="provenance.html#cli-commands">CLI Commands</a> - All available commands</li>
-                                <li><a href="provenance.html#configuration">Configuration</a> - .linespec.yml options</li>
+                                <li><a href="provenance.html#configuration">Configuration</a> - .provenance.yml options</li>
                                 <li><a href="provenance.html#git-integration">Git Integration</a> - Hooks and validation</li>
+                                <li><a href="provenance.html#migrating-from-linespec-provenance">Migrating</a> - From <code>linespec provenance</code> (v1 records)</li>
                                 <li><a href="provenance.html#examples">Examples</a> - Real-world examples</li>
                             </ul>
                         </div>

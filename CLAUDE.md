@@ -23,7 +23,7 @@ go test ./pkg/proxy/postgresql/... -v
 go test -tags integration ./pkg/proxy/postgresql/... -v
 
 # Lint
-make lint                # Runs: ./linespec provenance lint
+make lint                # Runs: provenance lint (the standalone CLI; install it first, see below)
 
 # Code quality (Go)
 make quality             # staticcheck (hard) + deadcode (hard) + dupl (warn)
@@ -58,66 +58,77 @@ deadcode to warn-only), `QUALITY_SKIP_DUPL=1` (skip duplication),
 
 ## Provenance Records
 
-Every change must be documented by a provenance record. Records live in `provenance/` as YAML files using the format `prov-YYYY-XXXXXXXX.yml` (crypto-random hex, not sequential).
+Every change must be documented by a provenance record. Records live in `provenance/` as YAML files using the format `prov-YYYY-XXXXXXXX.yml` (crypto-random hex, not sequential). They are managed by the standalone **`provenance` CLI** ([github.com/livecodelife/provenance](https://github.com/livecodelife/provenance)), configured by `.provenance.yml`. Install it pinned to the full commit SHA that CI uses (see `PROVENANCE_SHA` in `.github/workflows/ci.yml`):
 
-**Record lifecycle:** `draft` → `open` → `implemented` → `superseded|deprecated`
+```bash
+go install github.com/livecodelife/provenance/cmd/provenance@<commit-sha>
+provenance hooks install   # once per clone/worktree; keeps existing hooks as .bak
+```
+
+`linespec provenance <command>` still forwards to the `provenance` binary (with a deprecation notice), but use `provenance` directly. `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks` have no v2 counterpart and do not work on this (migrated) repo.
+
+**Record lifecycle:** `draft` → `open` → `implemented` → `deprecated`. There is no `superseded` status and no `bug` type: a change to a record is a new **version** of it (`provenance revise` / `edit`, with a `--reason`), and a fix is a version marked `--fix`.
 
 ### Workflow
 
 **1. Investigate first.** Before writing any code, check existing records:
 ```bash
-linespec provenance search "<query>"        # semantic search (requires embeddings)
-linespec provenance context -f <file>       # which records govern a file
-linespec provenance next --plan <file>      # the computed next action for files you'll change
+provenance search "<query>"        # offline lexical search
+provenance context <file>          # which records govern a file
+provenance next <file>             # the computed next action for files you'll change
 ```
-`next` renders the correct next step (create / open / add spec / commit / complete) with record IDs filled in — touching a governed file does **not** require superseding it. `govern --files <file>` lists just the active (open + implemented) records governing a file. Both are cache-backed (`.linespec/scope-index.json`).
+`next` renders the correct next step (create / open / add spec / commit / complete) with record IDs filled in — touching a governed file does **not** require a new record or a new version. `govern <file>` lists just the active (open + implemented) records governing a file.
 
 **2. Create a blueprint record (draft).** This captures scope and success criteria:
 ```bash
-linespec provenance create --title "..." --type blueprint --no-edit
+provenance create --title "..." --type blueprint --no-edit
 ```
 Fill in `intent`, `constraints`, and `affected_scope` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning. Commit the draft standalone, then **present it to the user and wait for confirmation** before writing any code.
 
 **3. Open the blueprint (after user confirms).** Once the user approves:
 ```bash
-linespec provenance open --record prov-YYYY-XXXXXXXX
+provenance open --record prov-YYYY-XXXXXXXX
 ```
-Add `affected_scope` and `associated_specs` now. Commit the open transition standalone.
+Add `associated_specs` before opening (a record cannot open without one; give `type: code`/`go_test` specs a `run_command` such as `make test`, or they are skipped silently). Change an open record with `provenance edit <id> --reason "..." [--add-scope ... --add-spec path:cmd]`. Commit the open transition standalone.
 
 **4. Implement with imprint records.** Create `imprint` records as you work to log micro-decisions, trade-offs, pivots, and learnings:
 ```bash
-linespec provenance create --title "..." --type imprint --no-edit
-# Set in the YAML: implements: prov-YYYY-XXXXXXXX  (the blueprint ID)
+provenance create --title "..." --type imprint --implements prov-YYYY-XXXXXXXX --no-edit
 ```
-Imprints can be freely opened, implemented, superseded, and deprecated as work evolves. **All imprints must be implemented before the blueprint can be completed.**
+`--implements` pins the blueprint's current version. An imprint's scope must stay inside the blueprint's (PROV023). **All imprints must be implemented before the blueprint can be completed.**
 
 **5. Show proof and ask to complete.** Before completing the blueprint, verify all imprints are implemented, then show the user the proof (test output, lint, working commands). **Ask the user explicitly** before completing. Then complete in a standalone commit:
 ```bash
-linespec provenance complete --record prov-YYYY-XXXXXXXX
+provenance complete --record prov-YYYY-XXXXXXXX
 ```
+
+**When a decision changes**, revise the record instead of creating a new one, and tag the commit with the new version: `provenance revise <id> --reason "..."` → `[prov-YYYY-XXXXXXXX@2]`. After a parent changes, `provenance stale` lists children whose `implements_version` is behind; revise each or `provenance repin <id> --reason "..."`.
 
 ### Commit Rules
 
-- Every implementation commit must include the governing record ID: `[prov-YYYY-XXXXXXXX]`
+- Every implementation commit must include the governing record ID: `[prov-YYYY-XXXXXXXX]` (or with the version: `[prov-YYYY-XXXXXXXX@N]`)
 - Create, open, and complete operations must each be standalone commits
-- Before any provenance management commit: `linespec provenance lint && linespec provenance check`
-- Before each implementation commit: `linespec provenance check --staged`
+- Before any provenance management commit: `provenance lint && provenance check`
+- Before each implementation commit: `provenance check --staged`
 - **Never use `--no-verify`** to skip git hooks
 - Draft records are for planning — freely edit all fields including `affected_scope` in draft mode
+- Never hand-edit `status`, `version`, `sealed_at_sha`, `provenance/.versions/`, or `.provenance/versions.jsonl`; `provenance compile` rebuilds the manifest
 
-**Completion-time overlap teeth.** When a record is completed, the sealed records whose scope it actually touches have their `associated_specs` run. `overlap_specs_on_complete` in `.linespec.yml` sets severity — `block` (default; roll back on failure), `warn` (failure is a non-blocking FYI), or `off` (skip). This repo runs `warn` because completing files like `commands.go`/`main_*.go` pulls in the whole `examples/*-linespecs` Docker matrix, which is environmentally fragile. `complete --force` does not bypass the teeth.
+**Completion-time overlap teeth.** When a record is completed, the sealed records whose scope it actually touches have their `associated_specs` run. `overlap_specs_on_complete` in `.provenance.yml` sets severity — `block` (roll back on failure), `warn` (failure is a non-blocking FYI), or `off` (skip). This repo runs `warn` because completing files like `commands.go`/`main_*.go` pulls in the whole `examples/*-linespecs` Docker matrix, which is environmentally fragile. `complete --force` does not bypass the teeth.
 
-**Claude Code plugin.** `linespec provenance install-plugin` installs hooks that render this guidance in-loop (session-start `next`, per-edit `govern`, commit-rejection remediation) plus a `/provenance-next` command. See `plugins/provenance/`.
+**Claude Code plugin.** `provenance install-plugin` installs hooks that render this guidance in-loop (session-start `next`, per-edit `govern`, commit-rejection remediation) plus a `/provenance-next` command. The plugin and skill in `plugins/provenance/` and `skills/provenance/` are copies of the `assets/` of the pinned provenance commit.
 
 ## Architecture
 
 LineSpec has two subsystems, both included in the default build (as of v2.0.0):
 
-**Provenance Records** (`cmd/linespec/main_stable.go`): the provenance CLI.
+**Provenance Records** (`cmd/linespec/provenance_forward.go`): the standalone `provenance` CLI owns them; linespec only forwards `linespec provenance <command>` to it and still carries the v1 implementation (`pkg/provenance/`) for the commands that have no v2 counterpart.
 
 **LineSpec Testing** (`cmd/linespec/main_beta.go`): a protocol-level integration testing DSL for containerized services — no modifications required to the service under test. The `beta` build tag and `main_beta.go` filename are legacy: `make build` includes LineSpec Testing, and `make build-beta` is an identical alias.
 
-### Provenance Records (`pkg/provenance/`)
+### Legacy v1 Provenance Records (`pkg/provenance/`)
+
+Still built, but only reached for `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks`, which read v1 records and so do not work on this repo.
 
 - `commands.go` — All CLI operations (create, lint, status, graph, check, complete, deprecate, search, audit, index)
 - `loader.go` — Reads `.yml` records from the configured directory
@@ -149,7 +160,7 @@ The PostgreSQL proxy connects upstream **first** (before any client communicatio
 
 **DSL** (`pkg/dsl/`) — lexer/parser for `.linespec` files. Channels: `READ:POSTGRESQL`, `WRITE:POSTGRESQL`, `HTTP:GET`, `EVENT:kafka-topic`. Payloads loaded from YAML/JSON files via `{{payload.yaml}}` syntax.
 
-**Configuration** (`pkg/config/`) — loaded from `.linespec.yml`. Key sections: `service` (framework, port, start_command, health_endpoint), `database` (type, host, credentials), `infrastructure`, `container_naming` (Go template strings), `provenance`.
+**Configuration** (`pkg/config/`) — loaded from `.linespec.yml`. Key sections: `service` (framework, port, start_command, health_endpoint), `database` (type, host, credentials), `infrastructure`, `container_naming` (Go template strings). Provenance settings live in `.provenance.yml`, not here.
 
 ## Updating the Docs Site
 

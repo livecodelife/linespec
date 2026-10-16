@@ -1,5 +1,7 @@
 # `linespec provenance discover` — Command Summary
 
+> **Not available on migrated repositories.** `discover` is not part of the standalone `provenance` CLI. It still runs in-process in `linespec`, reads the v1 `.linespec.yml` configuration and writes schema 1 draft records. Run it before `provenance migrate` (the drafts then migrate with everything else), or in a scratch checkout. It is not forwarded to the `provenance` binary, so it prints no deprecation notice.
+
 ## Purpose
 
 Bootstrap provenance records and LineSpec spec stubs for an existing codebase by statically analyzing source code and git history. Solves the cold-start problem when adopting LineSpec/Provenance on a legacy project: instead of starting from a blank page, teams run one command and get a draft provenance graph to review and refine.

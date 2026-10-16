@@ -11,7 +11,7 @@
 
 ## Overview
 
-LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes. It includes a powerful CLI for creating, validating, and enforcing these records.
+LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes - and for **LineSpec Testing**. Provenance Records are managed by the standalone [`provenance`](https://github.com/livecodelife/provenance) CLI; `linespec provenance <command>` forwards to it and is deprecated.
 
 As of v3.27.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
@@ -47,26 +47,33 @@ Download pre-built binaries from the [releases page](https://github.com/livecode
 ## Quick Start - Provenance Records (Stable)
 
 ```bash
-# 1. Install LineSpec
-brew tap livecodelife/linespec
-brew install linespec
+# 1. Install the provenance CLI (pin to a full commit SHA; there is no release tag yet)
+go install github.com/livecodelife/provenance/cmd/provenance@<commit-sha>
 
-# 2. Create your first provenance record
-linespec provenance create --title "Add user authentication"
+# 2. Set up your repo: config, records directory, git hooks
+provenance init
+provenance hooks install
 
-# 3. View the decision graph
-linespec provenance graph
+# 3. Ask what to do next, then create your first provenance record
+provenance next
+provenance create --title "Add user authentication" --type blueprint --no-edit
 
-# 4. Validate all records
-linespec provenance lint
+# 4. View the record graph
+provenance graph
+
+# 5. Validate all records
+provenance lint
 ```
+
+Upgrading a repo that has v1 records (`.linespec.yml` with a `provenance:` block)? Run `provenance migrate --plan`, then `provenance migrate`; see [Migrating from `linespec provenance`](./PROVENANCE_RECORDS.md#migrating-from-linespec-provenance).
 
 ### Example Provenance Record
 
 ```yaml
-id: prov-2026-001
+id: prov-2026-1a2b3c4d
 title: "Use PostgreSQL for primary data store"
 status: open
+version: 1
 created_at: "2026-03-15"
 author: "dev@example.com"
 
@@ -110,48 +117,47 @@ tags:
 
 ```bash
 # Record management
-linespec provenance create          # Create new record
-linespec provenance discover        # Bootstrap draft records + spec stubs from existing source
-linespec provenance lint            # Validate records
-linespec provenance status          # View status
-linespec provenance graph           # Render decision graph
+provenance create            # Create new record (always pass --no-edit in scripts)
+provenance open              # draft -> open: start enforcement
+provenance edit / revise     # Change a record: a new version with a reason
+provenance lint              # Validate records
+provenance status            # View status
+provenance graph             # Render the record graph
+provenance history / diff    # Read a record's versions
 
 # Agent guidance
-linespec provenance next            # Compute the correct next provenance action
-linespec provenance govern          # List the active records governing given files
-linespec provenance context         # Show which records govern given files
-
-# Semantic search (requires embedding configuration)
-linespec provenance search          # Search by semantic similarity
-linespec provenance audit           # Audit changes against history
-linespec provenance index           # Index records for search
+provenance next              # Compute the correct next provenance action
+provenance govern            # List the active records governing given files
+provenance context           # Show which records govern given files
+provenance search            # Offline lexical search over records
 
 # Git integration
-linespec provenance check           # Check commits for violations
-linespec provenance install-hooks   # Install git hooks
-linespec provenance install-skills  # Install all Claude Code skills (provenance + linespec-testing)
-linespec provenance install-plugin  # Install the Claude Code provenance plugin (hooks + slash command)
+provenance check             # Check commits for violations
+provenance hooks install     # Install git hooks
+provenance install-skills    # Install the Claude Code provenance skill
+provenance install-plugin    # Install the Claude Code provenance plugin (hooks + slash command)
 
 # Lifecycle management
-linespec provenance lock-scope      # Lock scope to allowlist
-linespec provenance complete        # Mark as implemented
-linespec provenance deprecate       # Mark as deprecated
+provenance complete          # Mark as implemented (runs specs, records evidence)
+provenance stale / repin     # Find and confirm records behind their parent
+provenance deprecate         # Mark as deprecated
 
-# Manifest distribution
-linespec provenance publish         # Package records into a versioned manifest artifact
-linespec clone <manifest-url>       # Bootstrap a project from a published manifest
-linespec import <manifest-url>      # Import provenance records from a published manifest
+# Shared repos and upkeep
+provenance sync              # Fetch records of shared repos
+provenance migrate           # Convert v1 records to v2
 
 # Output formats
-linespec provenance lint --format json     # JSON output for CI
-linespec provenance lint --format sarif    # SARIF output for GitHub Code Scanning
+provenance lint --format json     # JSON output for CI
+provenance lint --format sarif    # SARIF output for GitHub Code Scanning
 ```
+
+`linespec provenance <command>` still works for each command above: it forwards to the `provenance` binary with a deprecation notice. `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks` have no v2 counterpart yet; they stay in `linespec` and do not work on a migrated repository. `linespec clone` and `linespec import` are unchanged.
 
 ### Key Features
 
 - **Structured YAML format** - Clear, version-controlled decision records
-- **Codebase discovery** - `provenance discover` bootstraps draft records and `.linespec` stubs from an existing Chi/Rails/Sinatra project ([details](./PROVENANCE_RECORDS.md#discover))
-- **Path exemptions** - `exclude_paths` exempts generated/vendored files from governance ([details](./PROVENANCE_RECORDS.md#exclude_paths))
+- **Versioned records** - a change is a new version with a reason; imprints pin the parent version they implement, and `provenance stale` flags the ones that fell behind ([details](./PROVENANCE_RECORDS.md#core-concepts))
+- **Path exemptions** - `exclude_paths` exempts generated/vendored files from governance ([details](./PROVENANCE_RECORDS.md#configuration))
 - **Scope enforcement** - Automatic validation of what files can be modified
 - **Git integration** - Pre-commit hooks and commit message validation
 - **Graph visualization** - Query and visualize decision relationships
@@ -161,15 +167,15 @@ linespec provenance lint --format sarif    # SARIF output for GitHub Code Scanni
 
 ### SARIF Output for GitHub Code Scanning
 
-LineSpec can emit lint results in SARIF (Static Analysis Results Interchange Format) 2.1.0 format for integration with GitHub Code Scanning:
+`provenance` can emit lint results in SARIF (Static Analysis Results Interchange Format) 2.1.0 format for integration with GitHub Code Scanning:
 
 ```bash
 # Generate SARIF output
-linespec provenance lint --format sarif > provenance-results.sarif
+provenance lint --format sarif > provenance-results.sarif
 
 # Upload to GitHub Code Scanning (in your CI workflow)
 - name: Lint provenance records
-  run: linespec provenance lint --format sarif > provenance-results.sarif
+  run: provenance lint --format sarif > provenance-results.sarif
   continue-on-error: true
 
 - name: Upload to Code Scanning
@@ -180,7 +186,7 @@ linespec provenance lint --format sarif > provenance-results.sarif
 ```
 
 The SARIF output includes:
-- **19 stable rule IDs** (PROV001-PROV019) for consistent alerting
+- **Stable rule IDs** (PROV001 onward) for consistent alerting
 - **File hashes** for GitHub's deduplication
 - **%SRCROOT% base** for proper path resolution
 - **Severity mapping** (error→error, warning→warning, hint→note)
@@ -189,6 +195,7 @@ The SARIF output includes:
 
 - **[PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md)** - Complete reference guide
 - **[CLAUDE.md](./CLAUDE.md)** - Guidelines for AI agents using LineSpec
+- **[github.com/livecodelife/provenance](https://github.com/livecodelife/provenance)** - The `provenance` CLI
 
 ---
 
@@ -238,28 +245,9 @@ NOISE
 
 ## Configuration
 
-Create a `.linespec.yml` in your repository root:
+Create a `.linespec.yml` in your repository root for LineSpec Testing. Provenance Records are configured separately, in `.provenance.yml` (see [Configuration](./PROVENANCE_RECORDS.md#configuration)):
 
 ```yaml
-# Provenance Records configuration
-provenance:
-  dir: provenance                    # Records directory
-  enforcement: warn                  # none|warn|strict
-  commit_tag_required: false         # Require IDs in commits
-  auto_affected_scope: true           # Auto-populate from git
-  run_associated_specs_on_complete: false  # Run associated_specs on completion
-  overlap_specs_on_complete: block   # Overlap teeth severity: block|warn|off
-  shared_repos: []                    # Additional directories (monorepos)
-  
-  # Semantic search configuration (optional - supports voyage or openai)
-  embedding:
-    provider: voyage                 # Embedding provider: voyage or openai
-    index_model: voyage-4-large     # Model for indexing (2048 dims for voyage)
-    query_model: voyage-4-lite      # Model for queries (2048 dims for voyage)
-    api_key: ${VOYAGE_API_KEY}      # API key from environment
-    similarity_threshold: 0.50        # Minimum similarity for results
-    index_on_complete: true         # Auto-index on complete
-
 # LineSpec Testing configuration
 service:
   name: my-service
@@ -410,7 +398,7 @@ LineSpec doesn't generate YAML files. Provenance Records are the authoritative s
 1. Check for an existing provenance record covering your work
 2. If none exists, create a new record describing your decision
 3. Make your changes
-4. Run the linter: `linespec provenance lint`
+4. Run the linter: `make lint` (`provenance lint`)
 5. Submit a pull request
 
 See [CLAUDE.md](./CLAUDE.md) for detailed guidelines.
