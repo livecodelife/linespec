@@ -1647,34 +1647,12 @@ dependencies:
   grpc_descriptor_set: proto/workflow.pb # Optional: overrides service-level default
 
 # ─────────────────────────────────────────────
-# Provenance (optional — enables git hooks)
+# Provenance
 # ─────────────────────────────────────────────
-provenance:
-  dir: provenance/
-  enforcement: warn        # none | warn | strict
-  commit_tag_required: true              # require a record ID in commit messages
-  auto_affected_scope: true              # auto-populate affected_scope from git diffs
-  run_associated_specs_on_complete: true # run associated_specs on the open→implemented transition
-  overlap_specs_on_complete: block       # completion-time overlap teeth severity: block | warn | off
-  commit_on_status_change: true          # auto-commit after open/complete/deprecate transitions
-  manifest_url: ""                       # source manifest URL (set automatically by `linespec clone`)
-
-  # Cross-repo provenance resolution (monorepos / shared product repos)
-  cache_ttl_minutes: 60                  # shared_repos cache freshness TTL (default: 60)
-  shared_repos:                          # named remote repositories for cross-repo records
-    - name: product
-      url: https://github.com/acme/product-provenance
-      ref: main                          # branch or tag (default: main)
-      dir: provenance                    # subdirectory containing the records (default: provenance)
-
-  # Voyage AI embeddings for semantic search
-  embedding:
-    provider: voyage
-    index_model: voyage-4-large
-    query_model: voyage-4-lite
-    api_key: "${VOYAGE_API_KEY}"
-    similarity_threshold: 0.50
-    index_on_complete: true
+# Provenance Records are configured in .provenance.yml, not here (see
+# PROVENANCE_RECORDS.md#configuration). A `provenance:` block in this file is the
+# v1 location: the legacy in-process `linespec provenance` commands still read it,
+# and `provenance migrate` moves it to .provenance.yml.
 
 # ─────────────────────────────────────────────
 # Container & Network Naming (optional)

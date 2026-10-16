@@ -114,7 +114,7 @@ func TestDocsDoNotPresentFixedContainerNamesAsDefaults(t *testing.T) {
 				t.Errorf("3.27.0 entry does not cover %s", id)
 			}
 		}
-		if !regexp.MustCompile(`(?s)## \[Unreleased\]\s*\n+## \[3\.27\.0\]`).MatchString(cl) {
+		if !regexp.MustCompile(`(?s)## \[Unreleased\]\s*\n+(## \[3\.28\.0\].*?)?## \[3\.27\.0\]`).MatchString(cl) {
 			t.Error("CHANGELOG.md does not have an empty \"## [Unreleased]\" heading directly above the 3.27.0 heading")
 		}
 	})
