@@ -7,8 +7,8 @@ package plugin
 import "embed"
 
 // Files is the embedded plugin tree: the manifest/marketplace under .claude-plugin,
-// the hook config and scripts under hooks, and the slash command under commands.
+// the hook config and scripts under hooks, the slash command under commands and the skills under skills.
 // The `all:` prefix is required to include the dot-prefixed .claude-plugin directory.
 //
-//go:embed all:.claude-plugin hooks commands
+//go:embed all:.claude-plugin hooks commands skills
 var Files embed.FS
