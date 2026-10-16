@@ -33,7 +33,7 @@ jobs:
 
       # Pinned to a full commit SHA of github.com/livecodelife/provenance (no release tag yet).
       - name: Install provenance CLI
-        run: go install github.com/livecodelife/provenance/cmd/provenance@1d7f589617cff73720500c2f5f89b8882ce29bef
+        run: go install github.com/livecodelife/provenance/cmd/provenance@f3088a41a2846302d8d8c9f31fc480a92ec92948
 
       - name: Configure git for shared repo access
         run: git config --global url."https://x-access-token:${{ secrets.SHARED_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
