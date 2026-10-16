@@ -202,8 +202,11 @@ func provCmds(configFile string) *provenance.Commands {
 func newProvenanceCmd() *cobra.Command {
 	prov := &cobra.Command{
 		Use:   "provenance",
-		Short: "Manage provenance records (alias: -p)",
-		Long:  "Manage provenance records (alias: -p)",
+		Short: "Manage provenance records (alias: -p; deprecated, moving to the provenance CLI)",
+		Long: "Manage provenance records (alias: -p).\n\n" +
+			"Deprecated: provenance now has its own CLI. The commands it implements (" + forwardedList() + ") " +
+			"run in the `provenance` binary (found via $PROVENANCE or PATH) and are removed from linespec after " +
+			"two linespec minor releases. The other subcommands still run here until they are ported.",
 	}
 	prov.AddCommand(
 		newProvCreateCmd(),
