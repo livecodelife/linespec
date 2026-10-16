@@ -39,6 +39,8 @@ affected_scope:
   - PROVENANCE_PROJECT_MANAGEMENT.md
   - PROVENANCE_RECORD_SCHEMA.md
   - LINESPEC_DISCOVER.md
+  - LINESPEC.md
+  - pkg/config/container_naming_docs_test.go
   - CLAUDE.md
   - CHANGELOG.md
   - docs/templates/**
