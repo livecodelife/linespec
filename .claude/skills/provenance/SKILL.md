@@ -21,7 +21,7 @@ Follow these rules precisely whenever you work with provenance records or change
 
 A record is one file with a version. A change to what a record says (intent, constraints, scope, specs) is a **new version**, never a new "superseding" record:
 
-- `provenance revise <id> --reason "..."` opens `$EDITOR`; `provenance edit <id> --reason "..." [--intent ... --add-constraint ... --add-scope ... --remove-scope ... --set-spec old=new ...]` changes fields without an editor. A reason is required for a new version.
+- **Use `provenance edit <id> --reason "..." [--intent ... --add-constraint ... --add-scope ... --remove-scope ... --add-spec path[:cmd] --remove-spec path --set-spec old=new ...]`.** It changes fields without an editor. `provenance revise` opens `$EDITOR` and hangs without a TTY, so leave it to humans. A reason is required for a new version.
 - Revising an `implemented` record reopens it. Tag the commit with the new version: `[prov-YYYY-XXXXXXXX@2]`.
 - A spec file whose content changed on disk moves the record's content hash. Record that with `provenance edit <id> --refresh-specs --reason "..."` (a new version).
 - Title and tag edits do not change behaviour, so they save in place without a version.
@@ -78,9 +78,9 @@ With `run_associated_specs_on_complete: true` this runs the associated specs and
 
 Every commit except standalone provenance bookkeeping carries the governing record in square brackets: `Short description [prov-YYYY-XXXXXXXX]` or with the version `[prov-YYYY-XXXXXXXX@N]`. The commit-msg hook enforces it when `commit_tag_required: true`. A commit that changes an implemented record's own file must be a new version (revise first). Merge commits are checked only for paths that differ from both parents.
 
-## Pre-commit checks
+## Hooks
 
-Before create, open or complete commits run `provenance lint`. Before each implementation commit run `provenance check --staged`. Install the hooks once with `provenance hooks install` (`pre-commit`, `commit-msg`, and an opt-in `pre-push` that runs `pre_push_command` in a clean checkout of every pushed commit).
+Install them once with `provenance hooks install`: `pre-commit` (lints staged records), `commit-msg` (`check --staged`) and an opt-in `pre-push` (runs `pre_push_command` in a clean checkout of every pushed commit). Run `provenance lint` or `provenance check --staged` yourself to see a failure before committing.
 
 ## Scope enforcement and when you are blocked
 
@@ -92,7 +92,7 @@ The commit check validates your changed files **only against the record you tag*
 | Message | Do this |
 |---------|---------|
 | `Commit tag required but no provenance ID found` | Tag the commit with your record `[prov-YYYY-XXXXXXXX]`. |
-| `<id> is implemented: run 'provenance revise <id>'` | Revise the record (a new version), then tag the commit with that version. |
+| `<id> is implemented: run 'provenance revise <id>'` | Start a new version with `provenance edit <id> --reason "..."`, then tag the commit with that version. |
 | `forbids changes to <file>` | Add `<file>` to your tagged record's `affected_scope`. |
 | `No associated specs (open)` | Create the proof file, add it to `associated_specs`, then `provenance edit <id> --refresh-specs --reason "..."` if the record is already open. |
 | `Version manifest says version N ...` (PROV026) | Run `provenance compile`. |
@@ -120,17 +120,14 @@ Each entry has a required `path` (must exist), an optional `type`, and an option
 - `imprint` is an implementation record and implements exactly one tier up.
 - `implements` resolves locally or through the cached `shared_repos` (`provenance sync` refreshes the cache; remote records are read-only).
 
-## Multi-config repos and `-c`
-
-With several `.provenance.yml` files, always pass `-c <path>` to target the right config.
-
 ## Hard rules
 
 - Never use `--no-verify`. If a hook fails, fix the cause.
 - Never relax `enforcement` (`strict` to `warn`/`none`) to get unblocked: that is a maintainer decision.
 - Never complete the blueprint without user confirmation.
 - Never hand-edit managed fields (see "Records are versioned").
-- Records are named `prov-YYYY-XXXXXXXX.yml` with random hex.
+- With several `.provenance.yml` files, pass `-c <path>` to target the right one.
+- To move a v1 (linespec) repository to v2, use the `/provenance:migrate` skill (`provenance migrate --plan` first); never run `provenance migrate` unasked.
 
 ## Useful commands
 
@@ -139,14 +136,14 @@ provenance next [files...] [--json]
 provenance status [--record <id>] | history <id> | diff <id> <v1> <v2> | stale
 provenance create --title "..." --type <tier> --no-edit [--implements <id>]
 provenance open --record <id>
-provenance revise <id> --reason "..." | edit <id> --reason "..." [flags]
+provenance edit <id> --reason "..." [flags]      # revise <id> opens $EDITOR: humans only
 provenance add-scope --record <id> [--dry-run]
 provenance complete --record <id> [--force]
 provenance deprecate --record <id> --reason "..."
 provenance repin <id> --reason "..." [--to N]
 provenance lint [--record <id>] [--warn|--info|--all] | check --staged | check --commit <sha> | check --range a..b | check --evidence
-provenance evidence refresh <id> | --all
+provenance evidence refresh <id> | --all [--reason "..."]
 provenance run-specs --record <id>
 provenance reconcile [--dry-run] | compile | sync [--force]
-provenance hooks install | install-skills | install-plugin | migrate [--plan]
+provenance hooks install | install-skills | install-plugin | init | migrate --plan
 ```

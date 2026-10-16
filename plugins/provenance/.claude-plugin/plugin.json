@@ -1,6 +1,6 @@
 {
   "name": "provenance",
-  "description": "Surfaces provenance guidance in the agent loop: an ambient next-action at session start, advisory context on the first edit of a file that needs a record, and the engine's exact remediation when a commit is rejected. Every hook renders from `provenance next`; none duplicates its logic.",
-  "version": "0.1.0",
+  "description": "Surfaces provenance guidance in the agent loop: an ambient next-action at session start, advisory context on the first edit of a file that needs a record, and the engine's exact remediation when a commit is rejected. Every hook renders from `provenance next`; none duplicates its logic. Also adds /provenance:migrate to move a v1 repository to v2.",
+  "version": "0.2.0",
   "keywords": ["provenance", "governance"]
 }
