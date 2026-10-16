@@ -11,13 +11,13 @@ import (
 
 // hooks_test.go verifies two things for the fswrite blueprint (prov-2026-8d2f5f2a):
 //   - the embedded plugin tree (Files) actually ships hooks/session-start.sh as
-//     a thin renderer of `linespec provenance next --json`, so what gets
+//     a thin renderer of `provenance next --json`, so what gets
 //     installed matches source;
 //   - the session-start.sh hook, run as a real subprocess, faithfully surfaces
 //     whatever `next --json` reports. Enforcement must not depend on this hook
 //     being installed at all — reconcile runs unconditionally inside `next`
 //     itself (see pkg/provenance/commands.go's Next), not gated behind
-//     anything this script sets. A stub `linespec` on PATH always answers with
+//     anything this script sets. A stub `provenance` on PATH always answers with
 //     a reason, so these tests exercise relaying, not gating.
 
 // --- embedded plugin tree ------------------------------------------------------
@@ -28,8 +28,8 @@ func TestFiles_EmbedsSessionStartNextWiring(t *testing.T) {
 		t.Fatalf("ReadFile hooks/session-start.sh: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, "linespec provenance next --json") {
-		t.Errorf("embedded session-start.sh should call `linespec provenance next --json`, got:\n%s", content)
+	if !strings.Contains(content, "provenance next --json") {
+		t.Errorf("embedded session-start.sh should call `provenance next --json`, got:\n%s", content)
 	}
 	if strings.Contains(content, "LINESPEC_PROVENANCE_RECONCILE") {
 		t.Errorf("embedded session-start.sh must not depend on an env var to trigger reconcile — reconcile runs "+
@@ -93,27 +93,27 @@ func TestFiles_ManifestHooksDoesNotShadowAutoloadedHooksJSON(t *testing.T) {
 
 // --- session-start.sh subprocess behavior --------------------------------------
 
-// linespecStub is a shell script that answers `linespec provenance next
+// provenanceStub is a shell script that answers `provenance next
 // --json` unconditionally — session-start.sh no longer needs to set any env
 // var for a real `next` call to reconcile (that now happens inside `next`
 // itself), so this stub only needs to prove the hook relays the command's
 // output faithfully.
-const linespecStub = `#!/usr/bin/env bash
-if [ "$1" = "provenance" ] && [ "$2" = "next" ] && [ "$3" = "--json" ]; then
-  echo '{"primary":{"reason":"stub next reason","command":"linespec provenance open --record prov-2026-stub"}}'
+const provenanceStub = `#!/usr/bin/env bash
+if [ "$1" = "next" ] && [ "$2" = "--json" ]; then
+  echo '{"actions":[{"reason":"stub next reason","command":"provenance open --record prov-2026-stub"}]}'
   exit 0
 fi
 exit 1
 `
 
 // runSessionStart runs the real hooks/session-start.sh as a subprocess with cwd
-// as the hook's reported .cwd, a stub `linespec` on PATH (jq is the real one —
+// as the hook's reported .cwd, a stub `provenance` on PATH (jq is the real one —
 // it must already be on the ambient PATH), and returns stdout.
 func runSessionStart(t *testing.T, cwd string) string {
 	t.Helper()
 	binDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(binDir, "linespec"), []byte(linespecStub), 0o755); err != nil {
-		t.Fatalf("write linespec stub: %v", err)
+	if err := os.WriteFile(filepath.Join(binDir, "provenance"), []byte(provenanceStub), 0o755); err != nil {
+		t.Fatalf("write provenance stub: %v", err)
 	}
 
 	scriptPath, err := filepath.Abs("hooks/session-start.sh")
@@ -136,8 +136,8 @@ func runSessionStart(t *testing.T, cwd string) string {
 
 func TestSessionStartHook_SurfacesNextReason(t *testing.T) {
 	repo := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repo, ".linespec.yml"), []byte("service:\n  name: test\n"), 0o644); err != nil {
-		t.Fatalf("write .linespec.yml: %v", err)
+	if err := os.WriteFile(filepath.Join(repo, ".provenance.yml"), []byte("enforcement: strict\n"), 0o644); err != nil {
+		t.Fatalf("write .provenance.yml: %v", err)
 	}
 
 	out := runSessionStart(t, repo)
@@ -159,7 +159,7 @@ func TestSessionStartHook_SurfacesNextReason(t *testing.T) {
 }
 
 func TestSessionStartHook_SilentOutsideProvenanceRepo(t *testing.T) {
-	// No .linespec.yml here — the hook must degrade silently (prov-2026-8d2f5f2a
+	// No .provenance.yml here — the hook must degrade silently (prov-2026-8d2f5f2a
 	// doesn't change this contract, only what happens once inside a real repo).
 	repo := t.TempDir()
 	out := runSessionStart(t, repo)

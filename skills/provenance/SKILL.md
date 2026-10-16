@@ -1,292 +1,152 @@
 ---
 name: provenance
-description: Provenance record workflow rules for LineSpec. Governs how to create, complete, and supersede provenance records, and how to include record IDs in commits.
-when_to_use: "When starting any new work, modifying files covered by provenance records, completing a feature, superseding or deprecating records, or when asked about the provenance workflow."
+description: Provenance record workflow rules. Governs how to create, open, revise, complete and repin versioned provenance records, and how to tag commits with record IDs and versions.
+when_to_use: "When starting any new work, modifying files covered by provenance records, completing a feature, revising or deprecating records, or when asked about the provenance workflow."
 ---
 
 # Provenance Record Workflow
 
-Follow these rules precisely whenever working with provenance records or making code changes in this repo.
+Follow these rules precisely whenever you work with provenance records or change code in a repo that has a `.provenance.yml`.
 
-## TL;DR — the happy path
+## TL;DR: the happy path
 
-Before touching anything, follow this sequence and you will not get stuck on enforcement:
+1. **Ask `next`.** `provenance next [files...]` computes the single correct next action, with record IDs filled in. Start here, not with a manual read of the records.
+2. **Create one record:** `provenance create --type blueprint --no-edit --title "..."` (an imprint for one unit of work: `--type imprint --implements <blueprint-id>`).
+3. **Set `affected_scope`** to exactly the files you will change, and create your proof file.
+4. **Reference the proof** in `associated_specs`, then `provenance open --record <id>`.
+5. **Make changes and commit**, tagged `[prov-YYYY-XXXXXXXX]` or `[prov-YYYY-XXXXXXXX@N]` (N is the record's current version).
+6. **Show proof, then `provenance complete --record <id>`.**
 
-1. **Investigate.** Run `linespec provenance next --plan <file>...` for every file you plan to change. It computes the single correct next action — with record IDs already filled in — so start here, not with a manual read of the graph. (Governing records `next` surfaces do **not** need to be superseded — see below.)
-2. **Create one record:** `linespec provenance create --type blueprint --no-edit --title "…"`.
-3. **Set its `affected_scope`** to exactly the files you will change.
-4. **Create your proof artifact, then `open`** the record with that spec referenced in `associated_specs`.
-5. **Make changes; commit** tagged with the record ID `[prov-YYYY-XXXXXXXX]`.
-6. **Show proof, then `complete`.**
+## Records are versioned
 
-## Step 1 — Investigate Before Creating
+A record is one file with a version. A change to what a record says (intent, constraints, scope, specs) is a **new version**, never a new "superseding" record:
 
-**Always investigate existing provenance context before writing a single line of code or creating a new record.** Records capture design decisions, scope constraints, and rationale that aren't in the code — and grep/find/cat cannot see any of it: they can't tell you which records govern a file, whether a file is exempted, what the ancestry of a decision is, or whether two open records conflict over the same file. **Always use `linespec provenance` commands for provenance investigation; never fall back to raw bash grep/find/cat to infer governance.**
+- `provenance revise <id> --reason "..."` opens `$EDITOR`; `provenance edit <id> --reason "..." [--intent ... --add-constraint ... --add-scope ... --remove-scope ... --set-spec old=new ...]` changes fields without an editor. A reason is required for a new version.
+- Revising an `implemented` record reopens it. Tag the commit with the new version: `[prov-YYYY-XXXXXXXX@2]`.
+- A spec file whose content changed on disk moves the record's content hash. Record that with `provenance edit <id> --refresh-specs --reason "..."` (a new version).
+- Title and tag edits do not change behaviour, so they save in place without a version.
+- Never hand-edit `status`, `version`, `sealed_at_sha`, snapshot files under `provenance/.versions/`, or `.provenance/versions.jsonl`. `provenance compile` rebuilds the manifest if it is wrong.
 
-**Start with `next`** — it computes the single correct next provenance action for the files you're about to touch, with record IDs already filled in, so you don't have to manually reason through the state machine:
-
-```bash
-linespec provenance next --plan <file>... [-c <config>]   # or: next [files...]
-```
-
-It tells you, precisely: create a new record, open an existing draft, add specs before opening, commit under an existing ID, or complete — with the exact command to run next. Run this before you write a line of code or create a record.
-
-For a lighter-weight lookup — just the active records currently governing a set of files, without the full graph context — use `govern`:
+## Step 1: investigate with `next`
 
 ```bash
-linespec provenance govern --files <file>... [-c <config>]   # or: govern [files...]
+provenance next [files...] [--json] [-c <config>]
 ```
 
-`govern` returns only **open + implemented** records (cache-backed, like `next`). Reach for it when you already know what you're doing and just need to confirm what currently governs the files you're about to change.
-
-For the full picture — all statuses, ancestry, and any cross-record conflicts on your files — use `context`:
+It says: create a record, open a draft, widen scope (`add_scope`), add a proof (`add_spec`), commit under an ID, complete, finish a pending imprint, or **revise** an implemented record that governs your files. Other lookups:
 
 ```bash
-linespec provenance context <file>... [-c <config>]
+provenance status [--record <id>]      # list records, or one record in detail
+provenance history <id>                # versions with reasons and commits
+provenance diff <id> <v1> <v2>         # what a version changed
+provenance stale                       # records behind their parent
 ```
 
-If embeddings are configured, search semantically:
+Governing records that `next` surfaces do not each need a new version. Create one record for your change, or revise the one record you are deliberately changing.
+
+## Step 2: create a draft
 
 ```bash
-linespec provenance search --query "<description of the work or feature area>" [-c <config>]
+provenance create --title "..." --type blueprint --no-edit
 ```
 
-Look up a record by ID with `status --record` (this also finds remote records from the shared_repos cache):
+**Always pass `--no-edit`**: omitting it opens an interactive editor that hangs without a TTY. Valid types: `brief`, `blueprint`, `imprint`. Fill in `intent`, `constraints` and `affected_scope`; a draft is free to edit. Commit the draft on its own, then present it to the user. Do not write implementation code until the user confirms.
+
+## Step 3: open (after the user confirms)
 
 ```bash
-linespec provenance status --record prov-YYYY-XXXXXXXX [-c <config>]
+provenance open --record <id>
 ```
 
-**Important:** discovering that several records govern your files does NOT mean you must supersede them. The scope check only validates the record you tag. You will create one new record covering your files (Step 2). See "Scope Enforcement & When You're Blocked" below.
+Create the proof files first, reference them in `associated_specs`, then open. Opening writes version 1 and starts enforcement.
 
-### Bootstrapping provenance on an existing codebase — `discover`
+## Step 4: implement with imprints
 
-`discover` scans a codebase with tree-sitter and generates **draft** blueprint records plus `.linespec` stubs, so you don't hand-author provenance from a blank page for code that predates it:
+Create `imprint` records (`--implements <blueprint-id>`) for units of work and decisions. Write and commit the imprint **before** the code it documents. Imprints must be implemented before their blueprint is completed. An imprint's `implements_version` pins the parent version it was written against.
+
+## Step 5: show proof, then complete
+
+Show the user the proof (test output, working commands) and ask before completing:
 
 ```bash
-linespec provenance discover [--dir <path>] [--lang <lang>] [--framework <name>] [--dry-run] [--enrich] [--format table|json] [-c <config>]
+provenance complete --record <id>
 ```
 
-- `--dir` — scope the scan to a subdirectory instead of the repo root (useful in monorepos).
-- `--lang` / `--framework` — override auto-detection when the codebase's dependency manifests don't make it obvious.
-- `--dry-run` — print what would be generated (routes, boundaries, records) without writing any files; pair with `--format json` for machine-readable output.
-- `--enrich` — populate `intent` fields from git history instead of leaving them as placeholders.
-- Supported frameworks: Chi (Go), and Rails/Sinatra (Ruby).
+With `run_associated_specs_on_complete: true` this runs the associated specs and records **evidence** (hashes of the content, specs and code, plus the result). Without it, complete warns that it recorded none.
 
-It emits **draft** blueprint records under `provenance/` and skeleton `.linespec` files under `linespecs/` — a starting point, not finished output. Review and refine every generated record and spec (fill in real `intent`/`constraints`, correct any misdetected routes) before opening them; `discover` never overwrites existing records or specs.
+## Commit messages
 
-## Step 2 — Create a Blueprint Record (Draft)
+Every commit except standalone provenance bookkeeping carries the governing record in square brackets: `Short description [prov-YYYY-XXXXXXXX]` or with the version `[prov-YYYY-XXXXXXXX@N]`. The commit-msg hook enforces it when `commit_tag_required: true`. A commit that changes an implemented record's own file must be a new version (revise first). Merge commits are checked only for paths that differ from both parents.
 
-Create a `blueprint` record to capture the scope and success criteria **before writing any code**:
+## Pre-commit checks
 
-```bash
-linespec provenance create --title "..." --type blueprint --no-edit [-c <config>]
-```
+Before create, open or complete commits run `provenance lint`. Before each implementation commit run `provenance check --staged`. Install the hooks once with `provenance hooks install` (`pre-commit`, `commit-msg`, and an opt-in `pre-push` that runs `pre_push_command` in a clean checkout of every pushed commit).
 
-Valid types: `brief`, `blueprint`, `bug`, `imprint`.
+## Scope enforcement and when you are blocked
 
-**Always pass `--no-edit`.** Omitting it opens an interactive editor that hangs in non-TTY environments.
+The commit check validates your changed files **only against the record you tag**. Other records that happen to govern the files do not block you.
 
-Fill in `intent`, `constraints`, and `affected_scope` as needed. Draft mode is flexible — add, remove, and adjust fields freely while planning with the user. Commit the draft in a standalone commit, then **present it to the user for review.** Do not write implementation code until the user confirms.
-
-## Step 3 — Open the Blueprint (After User Confirmation)
-
-```bash
-linespec provenance open --record prov-YYYY-XXXXXXXX [-c <config>]
-```
-
-Add `affected_scope` and `associated_specs` at this point (create the proof files first — see associated_specs below). Commit the open transition as a standalone commit.
-
-## Step 4 — Implement with Imprint Records
-
-As you work, create `imprint` records to log micro-decisions, trade-offs, pivots, and learnings. An imprint must set `implements` pointing at the parent blueprint:
-
-```yaml
-type: imprint
-implements: prov-YYYY-XXXXXXXX   # the blueprint ID
-```
-
-**Write and commit the imprint BEFORE writing the code it documents, not after.** An imprint captures the decision you're about to make — the trade-off, the pivot, the reasoning — so it must exist before the commit that acts on it, the same way the blueprint must exist before any implementation code. Retroactively writing an imprint after the fact turns it into a summary instead of a record of the decision, and defeats the purpose of provenance as a decision log.
-
-**All imprints must be implemented before the blueprint can be completed.** Tag every implementation commit with the relevant record ID.
-
-## Step 5 — Show Proof and Complete the Blueprint
-
-Verify all imprints are implemented, **show the user the proof** (test/lint output, working commands), and **ask for explicit permission before completing.** Then:
-
-```bash
-linespec provenance complete --record prov-YYYY-XXXXXXXX [-c <config>]
-```
-
-## Commit Message Format
-
-Every commit (except standalone provenance management commits) must include the governing record ID in square brackets:
-
-```
-Short description of what changed [prov-YYYY-XXXXXXXX]
-```
-
-The pre-commit hook enforces this when `commit_tag_required: true` is set in `.linespec.yml`.
-
-## Pre-Commit Checks
-
-Before any create, open, or complete commit: `linespec provenance lint` and `linespec provenance check`. Before each implementation commit: `linespec provenance check --staged`. Always include `-c <path>` when the relevant `.linespec.yml` is not at the repo root.
-
-## Scope Enforcement & When You're Blocked
-
-**The single most important rule:** the pre-commit scope check validates your changed files **only against the record you tag** in the commit message. It does **not** consult other records that happen to govern those files. So implemented/sealed records whose `affected_scope` overlaps your files do **not** block your commit and do **not** need to be superseded. Create **one** new record covering exactly your files, open it, and tag your commits with it. Supersede a record *only* when you are deliberately revising the decision it captured.
-
-### Scope modes
-
-- A record with an **empty `affected_scope`** is **observed** — its check permits any file (except `forbidden_scope`).
-- A record with a **non-empty `affected_scope`** is **allowlist** — it permits only files matching that scope. So a "scope violation" on *your tagged record* means its `affected_scope` is missing one of your changed files → widen that record's scope (free to edit while `draft`), don't touch other records.
-- `lock-scope` auto-populates a record's `affected_scope` from the files it changed in git. `lock-layer` creates a `locked` governance record — advanced and uncommon; only when locked records exist can an overlapping open record hard-fail lint.
-
-### When you're blocked — decision tree
+- Empty `affected_scope` = **observed**: any file is allowed except `forbidden_scope`. Non-empty = **allowlist**: only matching files.
+- A "scope violation" on your tagged record means its `affected_scope` misses one of your files. Widen that record: `provenance edit <id> --add-scope <file> --reason "..."`, or `provenance add-scope --record <id>` for files already committed under it.
 
 | Message | Do this |
 |---------|---------|
-| `Commit tag required but no provenance ID found` | Tag the commit with your record ID `[prov-YYYY-XXXXXXXX]`. |
-| `X is already implemented - cannot commit with this ID` | Implemented records are immutable. Create **one new record** covering your files and tag that — do **not** supersede the records that govern the files. |
-| `forbids changes to <file>` / scope violation | Add `<file>` to **your tagged record's** `affected_scope` (editable in draft). |
-| `No associated specs (open) [strict]` | Add `associated_specs` (proof) to the open record before committing/completing. |
-| `overlaps with locked record Y` | A deliberate governance gate (only if locked layers exist). **Stop and ask the maintainer** — do not blindly supersede multiple records. |
-| `permission denied` writing/creating a source file | Not a bug — the filesystem write-access lock (see below) keeps ungoverned files read-only on disk. Declare the file in an `open` record's `affected_scope` (open a draft that covers it, or `add-scope` an already-open record) and it unlocks. Never `chmod` to force it. |
+| `Commit tag required but no provenance ID found` | Tag the commit with your record `[prov-YYYY-XXXXXXXX]`. |
+| `<id> is implemented: run 'provenance revise <id>'` | Revise the record (a new version), then tag the commit with that version. |
+| `forbids changes to <file>` | Add `<file>` to your tagged record's `affected_scope`. |
+| `No associated specs (open)` | Create the proof file, add it to `associated_specs`, then `provenance edit <id> --refresh-specs --reason "..."` if the record is already open. |
+| `Version manifest says version N ...` (PROV026) | Run `provenance compile`. |
+| `Content changed since version N without a version bump` (PROV024) | A spec file changed: `provenance edit <id> --refresh-specs --reason "..."`. |
+| `permission denied` writing a source file | Not a bug: see the write lock below. Never `chmod`. |
 
-> **Stale-scope warnings are non-blocking.** When you edit a file governed by an *implemented* record you may see a warning that the file "is governed by implemented record … create a superseding record." This is informational only — the commit still succeeds, no action is required, and it is **not** a reason to supersede anything. Proceed under your own new record.
+### Filesystem write lock
 
-### Filesystem write-access lock — why a file is read-only
+Enforcement also runs at the filesystem. Tracked files are read-only unless an **open** record's `affected_scope` covers them. The provenance directory, `.provenance.yml`, `.provenance/`, `exclude_paths` and every record's `associated_specs` paths are always writable; snapshot files under `provenance/.versions/<id>/*.yml` are always read-only. A blocked write means "declare this file in an open record". `provenance reconcile [--dry-run]` re-derives the permissions on demand; `open`, `complete`, `deprecate`, `revise` and `edit` run it for you. `write_restriction: false` in `.provenance.yml` turns it off.
 
-Enforcement also runs at the **filesystem boundary**, so it holds even when git hooks are absent and regardless of which agent (or none) is driving. The governed tree defaults to **non-writable**: a source file is writable **only while an `open`, allowlist-mode record declares it** in `affected_scope`. That is why an edit can fail with `permission denied` *before* you ever commit — the path simply isn't covered by open work yet. It is the system telling you to declare your scope, not a bug to route around with `chmod`.
+## Staleness and evidence
 
-- **Unlock by declaring the path.** `open` a draft whose `affected_scope` covers the file, or `add-scope --record <id>` to widen an already-open record. Declaration and write permission are granted in the same atomic step.
-- **Always writable, never locked:** the provenance directory, `.linespec.yml`, LineSpec's own `.linespec/` state dir, and every record's `associated_specs` paths — so authoring records and their proof files is never blocked.
-- **Re-locked on `complete`/`deprecate`,** unless another still-open record also covers the path.
-- **Self-healing.** `linespec provenance next` re-derives the write bits on every run, and `linespec provenance reconcile` does it on demand (a fresh clone, or bits that drifted). Running `next --plan <file>` first (Step 1) both tells you the correct action and unlocks what your declared work needs — you rarely call `reconcile` by hand.
+- A child record is **stale** when its `implements_version` is behind its parent's version. `provenance stale` lists them; `provenance repin <id> --reason "..."` confirms a child against the newer parent version without a new version.
+- `provenance check --evidence` reports, per implemented record, whether its evidence is fresh, stale (and why: content, specs, code, parent), unknown (code hash not available) or missing.
+- If only the **code** moved (a regeneration), `provenance evidence refresh <id>` re-runs the specs and appends fresh evidence with no new version. It refuses when the record's own text or a spec changed: revise those.
 
-The loop never changes: **investigate with `next`, declare your scope, and the files you may touch become writable.** A blocked write means "declare this file in an open record," never "bypass enforcement."
+## associated_specs: proof artifacts
 
-**Hard rules:** Never use `--no-verify`. Never relax enforcement (`strict` → `warn`/`none`) to get unblocked — that is a maintainer + settings-level decision, not yours. When a wall is genuinely a governance call, stop and ask rather than brute-forcing.
+Each entry has a required `path` (must exist), an optional `type`, and an optional `run_command` (run as `<run_command> <path>`, or with `{{path}}` substituted). Create the proof file first, reference it, then open. Pick a **stable** proof file: a spec that is a mutable config file (`.gitignore`, `.provenance.yml`) drifts the record every time it is edited. Give each record its own spec file where practical; a spec file shared by several records drifts all of them when it changes. Change a spec path with `provenance edit <id> --set-spec old=new[:run_command] --reason "..."`.
 
-## Use Commands, Not Manual YAML Edits
+## Tier rules (enforced by lint)
 
-Let the CLI update records — hand-editing managed fields corrupts the graph.
+- `brief` is top-level intent and cannot use `implements`.
+- `blueprint` is a design decision and may implement a brief.
+- `imprint` is an implementation record and implements exactly one tier up.
+- `implements` resolves locally or through the cached `shared_repos` (`provenance sync` refreshes the cache; remote records are read-only).
 
-| Instead of manually editing… | Use |
-|------------------------------|-----|
-| `supersedes` + the old record's `superseded_by` + `status: superseded` | `create --supersedes <old-id>` (sets all of it and stages both files) |
-| `status: open` | `open --record <id>` |
-| `status: implemented` + `sealed_at_sha` | `complete --record <id>` |
-| `status: deprecated` | `deprecate --record <id> --reason "…"` |
-| listing changed files into `affected_scope` | `lock-scope --record <id>` (auto-populates from git) |
-| the hash manifest | `compile` |
+## Multi-config repos and `-c`
 
-Never hand-edit `status`, `superseded_by`, `sealed_at_sha`, or the hash manifest.
+With several `.provenance.yml` files, always pass `-c <path>` to target the right config.
 
-### Superseding records
+## Hard rules
 
-To supersede an existing record, run `create --supersedes`:
+- Never use `--no-verify`. If a hook fails, fix the cause.
+- Never relax `enforcement` (`strict` to `warn`/`none`) to get unblocked: that is a maintainer decision.
+- Never complete the blueprint without user confirmation.
+- Never hand-edit managed fields (see "Records are versioned").
+- Records are named `prov-YYYY-XXXXXXXX.yml` with random hex.
 
-```bash
-linespec provenance create --title "Better approach" --supersedes prov-YYYY-XXXXXXXX --no-edit
-```
-
-This sets `supersedes` on the new record AND automatically updates the old record's `superseded_by` and `status: superseded`, staging both files together. Do **not** edit those fields by hand.
-
-## associated_specs — Proof Artifacts
-
-`associated_specs` attach proof that a record's constraints are met. Each entry:
-
-- **`path`** — required. Must point to a file that *exists* (lint fails otherwise). Any file type: a test, a `.linespec`, a config, a doc, a screenshot, a log.
-- **`type`** — optional. These auto-run with no `run_command`: `linespec` → `linespec test <path>`, `rspec` → `bundle exec rspec <path>`, `pytest` → `pytest <path>`, `jest` → `npx jest <path>`. Any other type with no `run_command` is recorded as proof but **skipped** (not executed).
-- **`run_command`** — optional; overrides `type`. Runs as `<run_command> <path>` (path appended) **unless** the command contains `{{path}}`, which is substituted instead.
-
-**Strict order of operations:** under strict enforcement an open record with no `associated_specs` is a hard error, and a referenced spec path that does not exist also fails lint — so create the proof file *first*, then reference it, then `open`:
-
-```yaml
-# 1. write the proof file first (e.g. spec/models/user_spec.rb)
-# 2. reference it:
-associated_specs:
-  - path: spec/models/user_spec.rb   # must already exist
-    type: rspec                       # auto-runs `bundle exec rspec <path>`
-  - path: linespecs/create_user.linespec
-    type: linespec                    # auto-runs `linespec test <path>`
-  - path: docs/architecture.md
-    run_command: test -f {{path}}     # non-test proof: just assert it exists
-# 3. then `linespec provenance open --record <id>`
-```
-
-To author the `.linespec` files that back `type: linespec` specs, use the **linespec-testing** skill (`/linespec-testing`).
-
-## Tier Hierarchy Rules (Enforced by Linter)
-
-- `brief` → top-level intent, cannot use `implements`
-- `blueprint` → design decision, may `implements` a brief
-- `bug` → defect/regression record, uses `extends` or `supersedes` (not `implements`)
-- `imprint` → implementation record, must `implements` a blueprint
-- `supersedes` must stay within the same tier (exception: `bug` may supersede a `blueprint`) — PROV020
-- `implements` must point exactly one tier up — PROV021
-- `implements` must resolve locally or via configured shared_repos cache — PROV022
-- `extends` is only valid on `bug` records; target must be a `blueprint` or `bug`
-- `bug` must have exactly one of `supersedes` or `extends`
-
-## Cross-Repo Provenance (shared_repos)
-
-When `.linespec.yml` configures `shared_repos`, records in those remote repositories are available for cross-repo relationships. Resolution: local `provenance/` first, then each shared repo cache in order; first match wins. Remote records are **read-only**. Sync the cache before working: `linespec provenance sync`. The linter warns if the cache is older than `cache_ttl_minutes` (default 60).
-
-## Multi-Pack Projects and the `-c` Flag
-
-In monorepos with multiple `.linespec.yml` files, **always use `-c <path>`** to target the correct config for the service you are working on. Without it, commands default to the repo-root config and may report records, scope, and enforcement from the wrong service.
-
-## Hard Rules
-
-- **Never use `--no-verify`** to skip git hooks. If a hook fails, fix the issue.
-- **Never relax enforcement** (`strict` → `warn`/`none`) to get unblocked — that is a maintainer + settings-level decision.
-- **Never complete the blueprint without user confirmation.**
-- **Never hand-edit** `status`, `superseded_by`, `sealed_at_sha`, or the hash manifest — use the command that manages them.
-- Records are named `prov-YYYY-XXXXXXXX.yml` using crypto-random hex (not sequential).
-- Draft records are for planning — freely edit all fields including `affected_scope`.
-
-## Useful Commands
+## Useful commands
 
 ```bash
-# Investigation
-linespec provenance next --plan <file>... [-c <config>]    # the single correct next action (start here)
-linespec provenance govern --files <file>... [-c <config>] # active (open+implemented) records governing files
-linespec provenance status [--record <id>] [-c <config>]   # list records / detail
-linespec provenance search --query "<query>" [-c <config>] # semantic search
-linespec provenance context <file>... [-c <config>]        # full context: which records govern a file
-linespec provenance discover [--dir <path>] [--dry-run]    # bootstrap draft records + .linespec stubs
-linespec provenance audit [-c <config>]                    # audit recent changes
-linespec provenance graph [--root <id>] [-c <config>]      # render the graph
-
-# Record lifecycle (these update state for you — don't hand-edit YAML)
-linespec provenance create --title "..." --type <tier> --no-edit [-c <config>]
-linespec provenance create --supersedes <old-id> --title "..." --no-edit  # supersede correctly
-linespec provenance open --record <id> [-c <config>]       # draft → open
-linespec provenance complete --record <id> [-c <config>]   # open → implemented (+ seals SHA)
-linespec provenance deprecate --record <id> --reason "..." [-c <config>]
-
-# Validation and enforcement
-linespec provenance lint [--warn|--info|--all] [-c <config>]  # validate; filter output
-linespec provenance check [--staged] [-c <config>]            # check commits for violations
-linespec provenance run-specs --record <id> [-c <config>]     # run a record's associated_specs
-linespec provenance lock-scope --record <id> [-c <config>]    # freeze affected_scope from git
-linespec provenance add-scope --record <id> [--dry-run]       # widen an open record's scope (unlocks those paths on disk)
-linespec provenance reconcile [--json] [-c <config>]          # re-derive filesystem write-locks from open records
-linespec provenance lock-layer --title "..." --no-edit        # create a locked governance layer
-
-# Cross-repo and maintenance
-linespec provenance sync [--force]                         # refresh shared_repos cache
-linespec provenance index [-c <config>]                    # index records for semantic search
-linespec provenance compile [-c <config>]                  # rebuild the hash manifest
-linespec provenance generate [--record <id>]               # generate a behavioral spec doc
-
-# Setup, distribution, and tooling
-linespec init                                              # bootstrap a .linespec.yml
-linespec provenance install-hooks                          # install pre-commit + commit-msg hooks
-linespec provenance install-skills                         # install the Claude Code skills
-linespec provenance publish [-c <config>]                  # package records into a manifest
-linespec import <manifest-url>                             # import records from a manifest
-linespec clone <manifest-url>                              # bootstrap a project from a manifest
+provenance next [files...] [--json]
+provenance status [--record <id>] | history <id> | diff <id> <v1> <v2> | stale
+provenance create --title "..." --type <tier> --no-edit [--implements <id>]
+provenance open --record <id>
+provenance revise <id> --reason "..." | edit <id> --reason "..." [flags]
+provenance add-scope --record <id> [--dry-run]
+provenance complete --record <id> [--force]
+provenance deprecate --record <id> --reason "..."
+provenance repin <id> --reason "..." [--to N]
+provenance lint [--record <id>] [--warn|--info|--all] | check --staged | check --commit <sha> | check --range a..b | check --evidence
+provenance evidence refresh <id> | --all
+provenance run-specs --record <id>
+provenance reconcile [--dry-run] | compile | sync [--force]
+provenance hooks install | install-skills | install-plugin | migrate [--plan]
 ```
