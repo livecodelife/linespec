@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.28.0] - 2026-10-16
+
+**Upgrade note.** Provenance Records move to the standalone `provenance` CLI ([github.com/livecodelife/provenance](https://github.com/livecodelife/provenance)) and to record model v2. Four things change. First, this repository's records are migrated in place with `provenance migrate`: a chain of superseding records becomes versions of one record, old ids stay resolvable as `aliases`, the config moves from the `provenance:` block of `.linespec.yml` to `.provenance.yml`, and `.linespec/hash_manifest.json` is replaced by `.provenance/versions.jsonl` plus snapshots under `provenance/.versions/`. Second, `linespec provenance <command>` now forwards every command the `provenance` CLI implements (`add-scope`, `check`, `compile`, `complete`, `context`, `create`, `deprecate`, `diff`, `edit`, `evidence`, `govern`, `graph`, `history`, `hooks`, `init`, `install-plugin`, `install-skills`, `lint`, `migrate`, `next`, `open`, `reconcile`, `repin`, `revise`, `run-specs`, `search`, `stale`, `status`, `sync`) to that binary, found via `$PROVENANCE` or `PATH`. It prints a deprecation notice on stderr (silence it with `LINESPEC_NO_DEPRECATION_WARNING=1`) and exits 127 with the install command when the binary is missing. The forwarder is removed after two linespec minor releases, so move scripts to `provenance <command>`. Third, `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks` have no v2 counterpart yet. They still run in `linespec` but read v1 records, so they do not work on a migrated repository; use `provenance hooks install` in place of `install-hooks`. Fourth, there is no `superseded` status and no `bug` type any more: a change is a new version (`provenance revise`, `provenance edit`), and a fix is a version marked `--fix`.
+
+To migrate your own repository: `provenance migrate --plan`, then `provenance migrate`, then `provenance hooks install`, `provenance sync` and `provenance lint`. To roll back, revert the migration commits and use a linespec release older than 3.28.0; see [PROVENANCE_RECORDS.md](./PROVENANCE_RECORDS.md#migrating-from-linespec-provenance).
+
+### Changed
+
+- **CI and the Makefile run the standalone CLI** ([prov-2026-9c8105ed](./provenance/prov-2026-9c8105ed.yml)) — the provenance lint job and the SARIF workflow install `provenance` pinned to a full commit SHA, run `provenance sync` and `provenance lint`, and on pull requests run `provenance check --range`. `make lint` runs `provenance lint`. The index-provenance workflow is removed because `index` is parked.
+
+- **The plugin and skill come from the provenance CLI** ([prov-2026-d11e8de6](./provenance/prov-2026-d11e8de6.yml)) — `plugins/provenance` and `skills/provenance` are copies of the provenance repository's `assets/` at the pinned commit, so `provenance next` drives the session-start, pre-edit and post-commit hooks.
+
+- **Documentation for record model v2** ([prov-2026-f140a64a](./provenance/prov-2026-f140a64a.yml)) — PROVENANCE_RECORDS.md, PROVENANCE_RECORD_SCHEMA.md, README.md, CLAUDE.md and the site templates describe versions, pins, `stale`/`repin`, `.provenance.yml`, the forwarder and the migration. The landing page drops the semantic-search section.
+
+### Added
+
+- **`linespec provenance` forwarder** ([prov-2026-a7434583](./provenance/prov-2026-a7434583.yml)) — see the upgrade note. Tests that run git clear every `GIT_*` variable and isolate `HOME`, since linespec's hooks export `GIT_DIR` and `GIT_INDEX_FILE`.
+
+- **Migration to provenance v2** ([prov-2026-dfb51160](./provenance/prov-2026-dfb51160.yml)) — the blueprint for this release's record migration, CI switch and docs.
+
 ## [3.27.0] - 2026-10-09
 
 **Upgrade note.** This release makes the PostgreSQL proxy work end to end with Npgsql and other drivers that pipeline the extended protocol and request binary results, and it adds one config key, `schema_discovery.validate`, which defaults to `off`. Three behaviours change. First, when a statement was answered locally from a mock and its Bind values then match no mock, the proxy now returns an ErrorResponse ("no mock matched bind values") instead of letting the Bind fall through to the real database. Second, mocked rows are now encoded with the column types from the discovered schema, so binary-format columns such as bigint, uuid, bool, numeric, date and timestamptz arrive as the correct type rather than as raw bytes. Third, PostgreSQL passthrough is now recorded like the other protocols. Without `strict_passthrough` this prints `WARNING: passthrough` lines for queries that bypass the mocks, including an app's own startup queries such as `select current_schema()` or SQLAlchemy's `CREATE TABLE`. With `strict_passthrough: true` those queries now fail the spec, and DDL is not exempt, so an app that creates its schema through the proxy at startup must have that traffic declared or move it out of the proxied path. Housekeeping statements (SET, SHOW, BEGIN, COMMIT, ROLLBACK, SAVEPOINT, RELEASE, DISCARD, DEALLOCATE, RESET, `SELECT 1`, `SELECT version()`) and catalog or information_schema queries are exempt.
