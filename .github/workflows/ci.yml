@@ -49,6 +49,10 @@ jobs:
   provenance-lint:
     name: Provenance Lint
     runs-on: ubuntu-latest
+    env:
+      # The provenance CLI is pinned to a full commit SHA of github.com/livecodelife/provenance
+      # (no release tag exists yet). Bump it deliberately, in its own PR.
+      PROVENANCE_SHA: 42605bc8a0c7eafa585b0852a39e7bd3111030bd
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,8 +65,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build LineSpec
-        run: go build -o linespec ./cmd/linespec
+      - name: Install provenance CLI
+        run: go install github.com/livecodelife/provenance/cmd/provenance@${{ env.PROVENANCE_SHA }}
 
       - name: Configure git for shared repo access
         if: env.SHARED_REPO_TOKEN != ''
@@ -72,13 +76,21 @@ jobs:
 
       - name: Sync shared provenance repos
         if: env.SHARED_REPO_TOKEN != ''
-        run: ./linespec provenance sync
+        run: provenance sync
         continue-on-error: true
         env:
           SHARED_REPO_TOKEN: ${{ secrets.SHARED_REPO_TOKEN }}
 
       - name: Lint provenance records
-        run: ./linespec provenance lint -c .linespec.yml --enforcement strict
+        run: provenance lint --enforcement strict
+
+      - name: Stale pins
+        run: provenance stale
+
+      # Every commit on the PR must stay inside the scope of the record it is tagged with.
+      - name: Check commits against their records
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        run: provenance check --range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
   example-tests:
     name: Example LineSpec Tests

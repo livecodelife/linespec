@@ -29,22 +29,23 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-      
-      - name: Build LineSpec
-        run: go build -o linespec ./cmd/linespec
-  
+          go-version-file: go.mod
+
+      # Pinned to a full commit SHA of github.com/livecodelife/provenance (no release tag yet).
+      - name: Install provenance CLI
+        run: go install github.com/livecodelife/provenance/cmd/provenance@42605bc8a0c7eafa585b0852a39e7bd3111030bd
+
       - name: Configure git for shared repo access
         run: git config --global url."https://x-access-token:${{ secrets.SHARED_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
-  
-      - name: Sync LineSpec provenance
-        run: ./linespec provenance sync
-      
+
+      - name: Sync shared provenance repos
+        run: provenance sync
+
       - name: Lint provenance records and generate SARIF
-        run: ./linespec provenance lint -c .linespec.yml --format sarif > provenance-results.sarif
+        run: provenance lint --format sarif > provenance-results.sarif
         # Continue even if lint fails so we can upload the findings to Code Scanning
         continue-on-error: true
-      
+
       - name: Upload provenance lint results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v4
         with:
@@ -55,5 +56,4 @@ jobs:
         run: |
           # Run lint again without SARIF to get a non-zero exit on errors.
           # SARIF is already uploaded above, so this step is purely the gate.
-          # PROV-IMM (content hash mismatch) is reported as an error here.
-          ./linespec provenance lint -c .linespec.yml --enforcement strict
+          provenance lint --enforcement strict
