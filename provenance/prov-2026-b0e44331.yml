@@ -1,8 +1,20 @@
 id: prov-2026-b0e44331
 title: Fix git hooks to allow supersession transition commits
 status: implemented
+version: 2
+reason: |-
+  The supersession transition exception in isSupersessionTransitionBetween checks
+  beforeRecord.Status != StatusOpen and returns false for anything else, including
+  StatusImplemented. This means the git hook scope bypass only fires when superseding
+  an open record. But open records are still mutable — a valid supersession should only
+  target records that are fully implemented (not superseded or deprecated). The fix
+  changes the guard to require StatusImplemented, which is the only valid state a
+  record should be in before it can be superseded.
+reason_kind: fix
 created_at: "2026-04-24"
 author: noreply@anthropic.com
+aliases:
+  - prov-2026-382ea200
 intent: |
   When a new provenance record is created with --supersedes <old-id>, the old record
   is updated with superseded_by and status:superseded on disk. Both files get staged
@@ -18,16 +30,21 @@ constraints:
   - The exception must verify bidirectional consistency between supersedes and superseded_by
   - The transition check must read before/after versions from git (HEAD vs staged for CheckStaged, commit^ vs commit for CheckCommit)
   - The exception only applies when before-status is open and after-status is superseded
+  - isSupersessionTransitionBetween must check beforeRecord.Status == StatusImplemented (not StatusOpen)
+  - The same fix must be applied to both CheckStaged and CheckCommit paths (both call isSupersessionTransitionBetween)
+  - make test must pass
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/git_test.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-006
-sealed_at_sha: 55c6ab5e294544dbb8bc84fe8129d271cc80b3bb
-associated_specs: []
+sealed_at_sha: 365de6b9608d1e87e8d0eb4cf2bc1f1ce8025594
+associated_specs:
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

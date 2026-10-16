@@ -1,6 +1,7 @@
 id: prov-2026-d11e8de6
 title: Install the v2 plugin, skills and hooks from provenance assets
 status: open
+version: 1
 created_at: "2026-10-16"
 author: calebcowen@gmail.com
 intent: |
@@ -16,9 +17,8 @@ affected_scope:
   - .claude/skills/provenance/**
 forbidden_scope: []
 implements: prov-2026-dfb51160
+implements_version: 1
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:

@@ -1,0 +1,29 @@
+id: prov-2026-9d212b39
+version: 1
+content_hash: sha256:06cd827bfed1f52e181f415a4879de8cc9e29d6903bcbe4713c4108540d4035a
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-06-22T19:27:30Z"
+spec_hashes:
+  - sha256:8c00c7c5b2d056158b3dec30b5f9f9ebb03dbfe6e8682647bbc34209d49e2f4e
+content:
+  id: prov-2026-9d212b39
+  title: Add per-record progress logging to --enrich phase
+  type: imprint
+  created_at: "2026-06-12"
+  author: calebcowen@gmail.com
+  intent: |
+    Adds a Progress func(string) field to enrich.Input. EnrichWithBaseURL calls it
+    at each stage: collecting git history, calling LLM, and on completion (intent
+    written, skipped, or error). runDiscoverEnrich wires it up to print per-record
+    lines to stdout so the user can see activity during long enrichment runs.
+  affected_scope:
+    - pkg/discover/enrich/enrich.go
+    - pkg/discover/enrich/enrich_test.go
+    - cmd/linespec/main_stable.go
+  implements: prov-2026-a18e2104
+  implements_version: 1
+  associated_specs:
+    - path: pkg/discover/enrich/enrich_test.go
+      type: go_test

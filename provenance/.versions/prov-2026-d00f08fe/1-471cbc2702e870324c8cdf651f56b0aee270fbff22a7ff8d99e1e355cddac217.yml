@@ -1,0 +1,26 @@
+id: prov-2026-d00f08fe
+version: 1
+content_hash: sha256:471cbc2702e870324c8cdf651f56b0aee270fbff22a7ff8d99e1e355cddac217
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-14T16:13:24Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+content:
+  id: prov-2026-d00f08fe
+  title: Fix HTTP proxy sidecar port conflict when dep port is 8081
+  type: blueprint
+  created_at: "2026-04-14"
+  author: calebcowen@gmail.com
+  intent: The HTTP proxy verification sidecar hardcodes port 8081. When a dependency is configured with port 8081, the HTTP interceptor and the sidecar both attempt to bind the same port inside the proxy container. The sidecar loses, never starts, and the runner reports every HTTP mock as uncalled. Fix by adding a --sidecar-port flag to the proxy command (defaulting to 8081) and always passing port 19081 from the runner so the sidecar never conflicts with any realistic service dependency port.
+  constraints:
+    - HTTP proxy sidecar must not bind port 8081 when the dep proxy port is also 8081
+    - Runner must pass --sidecar-port to the HTTP proxy container so the port is always distinct from the interceptor port
+    - Sidecar port 19081 must be used consistently across proxy command args, container port bindings, and container inspection
+  affected_scope:
+    - cmd/linespec/main_beta.go
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: test

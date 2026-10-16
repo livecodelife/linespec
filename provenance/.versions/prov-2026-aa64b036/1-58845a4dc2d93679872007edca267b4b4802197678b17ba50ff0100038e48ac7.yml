@@ -1,0 +1,34 @@
+id: prov-2026-aa64b036
+version: 1
+content_hash: sha256:58845a4dc2d93679872007edca267b4b4802197678b17ba50ff0100038e48ac7
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T17:55:01Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:efdb2710d014cefb0cd958f806c0e7b00cb25ef4bf157b7e3a4bea59c62eeb01
+content:
+  id: prov-2026-aa64b036
+  title: 'P2-F: Unify proxy behavior between database types'
+  type: blueprint
+  created_at: "2026-04-01"
+  author: calebcowen@gmail.com
+  intent: 'Unify proxy startup behavior so both PostgreSQL and MySQL default to proxied mode. Remove the asymmetry where PostgreSQL always starts a proxy and MySQL requires explicit proxy: true. Add proxy: false opt-out for both database types with a warning that mock matching will not work.'
+  constraints:
+    - Must not break existing example test suites
+    - 'proxy: false opt-out must log a clear warning'
+    - All database containers must still start regardless of proxy flag
+  affected_scope:
+    - pkg/config/parser.go
+    - pkg/runner/runner.go
+    - examples/user-linespecs/.linespec.yml
+    - examples/user-service/.linespec.yml
+    - examples/todo-linespecs/.linespec.yml
+    - examples/todo-api/.linespec.yml
+    - examples/notification-linespecs/.linespec.yml
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/authenticate_user_success.linespec
+      type: linespec

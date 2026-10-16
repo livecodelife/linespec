@@ -1,0 +1,137 @@
+id: prov-2026-258574ee
+version: 5
+content_hash: sha256:92fb2b0bb3c2d65f4dfd93964046af189475de65a46c25f109d979255e135105
+parent_hash: sha256:e67655d8f4a591034f2ee384d1fedc8d70a9f0d7e634bfabe3c9e467d97904fe
+reason: |-
+  A mock-only Describe can send a RowDescription wider than the mock row. Npgsql fails with
+  "Row's number of columns (1) differs from the row description's (12)" for
+  `SELECT applicationid FROM applications` (12 columns) and `SELECT errorcode FROM
+  cnp_global.errors` (7). The DescribePortal path builds columns with inferColumnsForTable,
+  i.e. every column of the discovered table, ignoring the select list. The statement-Describe
+  path uses extractSelectColumns, which is also wrong for several shapes: `*` becomes a
+  literal "*" column, and the comma split breaks on function calls with commas. It likely
+  surfaced only now because prov-2026-059ba152 (v3.26.1) lets discovery see non-public
+  tables, so these tables finally have wide schemas.
+
+  Decision: replace both with one pure function, (query, schemaCache) -> []column, where a
+  column is a name plus the discovered type when known. It handles explicit lists, aliases,
+  `*` and `t.*` (expanded from the schema), qualified names, casts, and expressions or
+  aggregates such as count(*), which have no table column and get the implicit name
+  (count, sum, ...) or the alias with the existing name-based OID heuristics. A selected
+  column missing from the schema falls back to those heuristics rather than failing. The
+  function takes no proxy or connection state, so the planned core refactor
+  (prov-2026-167380f0) can reuse it. Both Describe paths call it; Execute already
+  uses the select list, so Describe and DataRow now agree.
+
+  Rejected: truncating the table-wide column list to the mock row's keys. Row key order is
+  not select order and it hides the real query, so the query stays the source of truth.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-12T17:32:12Z"
+spec_hashes:
+  - sha256:305959e5091fec9196264cf1aa02878e650a1fbae846cbba8463d66f7d13de24
+  - sha256:bf378857dc11baa890d92f171f7636f004b8a5914351c3af44c9d2699808e3d1
+  - sha256:f1be5fcbf953dfb05146b2ccc9e7596abb67be0fb5680a4729c4c5cc2acb7628
+  - sha256:fc7d91b58165af1af8c6f385dace905676ee5798cab23af8b5840c4288f4643f
+  - sha256:2ae6876a8fe28940d4a9baf1463f3f70513d954d305eeacbbb0d603d9e5c74a4
+  - sha256:6e72be5c6f34209fbe0862df40c54ba96fba8e932c33b5a3ef4400e6d4b37e9b
+  - sha256:1218ee9f11eb11a02b933f03bb1ccd01c0e9255da672799983fc25784207609d
+  - sha256:039c3932d106b93f8eee2e8681b26e2b7a9162cc4a906d8168848dd67520b6d5
+content:
+  id: prov-2026-258574ee
+  title: Fix PostgreSQL proxy binary encoding for integer types and COUNT(*)
+  type: blueprint
+  created_at: "2026-05-27"
+  author: calebcowen@gmail.com
+  intent: |
+    The PostgreSQL proxy does not correctly honour the result format codes that clients
+    supply in their Bind messages for integer types. The root cause is two related gaps:
+
+    1. oidForColumn returns TEXT (OID 25) for count-like column names (e.g. "count",
+       "total", "num_rows"). When a client like lib/pq reads OID 25 in the RowDescription
+       it requests text format in its Bind — so the proxy and client agree on text, but
+       the result does not match what real PostgreSQL sends for COUNT(*) (which has OID 20,
+       INT8). The OID mismatch means COUNT(*) values scanned into int64 work via text
+       parsing but any client that drives format selection from the OID gets the wrong type.
+
+    2. The binary encoding path in sendDataRowInternal (fmtCode == 1, default branch)
+       calls toInt32, which encodes all integers as 4-byte big-endian INT4. INT8 columns
+       (OID 20, 8 bytes) require 8-byte big-endian encoding. When lib/pq (or any client)
+       requests binary format for an int8 column it expects 8 bytes; receiving 4 bytes
+       causes a decode error or silent data corruption.
+
+    Fix oidForColumn to return INT8 (OID 20, size 8) for count/aggregate column names,
+    and fix sendDataRowInternal to encode integers as int64 (8 bytes) when the client
+    requests binary format for a column whose OID is INT8.
+
+    Add a COUNT(*) test case to the asynq-worker example suite so the fix has a
+    regression harness.
+  constraints:
+    - oidForColumn must return OID 20 (INT8, size 8) for column names "count", "total", and names with prefix "num_" or suffix "_count"
+    - sendDataRowInternal binary path must encode integer values as int64 (8 bytes big-endian) when the column OID is INT8; INT4 columns (OID 23) continue to use 4-byte encoding
+    - The OID-to-size mapping must be consistent between oidForColumn (RowDescription) and the binary encoding in sendDataRowInternal (DataRow)
+    - All existing example test suites must continue to pass (make test + all 4 example suites)
+    - No changes to the DSL, MySQL proxy, HTTP proxy, Kafka proxy, or Redis proxy
+    - |
+      Regenerate examples/asynq-worker/go.sum with `go mod tidy` so it contains complete
+      entries (both h1: and /go.mod hashes) for github.com/lib/pq v1.10.9 and
+      github.com/redis/go-redis/v9 v9.7.3 plus their transitive dependencies.
+    - |
+      go.sum must be consistent with examples/asynq-worker/go.mod (no module additions or
+      removals as part of this fix); `cd examples/asynq-worker && go build ./...` must
+      succeed against the committed go.sum.
+    - |
+      No source, proxy, runner, or linespec changes — this is purely the missing build
+      artifact.
+    - |
+      Add the `// indirect` require block for github.com/cespare/xxhash/v2 v2.2.0 and
+      github.com/dgryski/go-rendezvous (the go-redis v9 transitive deps) to
+      examples/asynq-worker/go.mod, exactly as produced by `go mod tidy`.
+    - |
+      `cd examples/asynq-worker && GOFLAGS=-mod=readonly go build ./...` must succeed against
+      the committed go.mod + go.sum (no on-the-fly module updates).
+    - |
+      go.sum is already committed (prov-2026-0714ca9d) and is not modified here; no source,
+      proxy, runner, or linespec changes.
+    - Per-column result format is resolved by one pure function of (Bind result format codes, column count) with no proxy, connection or registry state; RowDescription and DataRow both use it
+    - Where RowDescription and DataRow already agree (text format, Describe Statement, simple protocol, nil codes) output is byte-identical; no regression for lib/pq, asyncpg or tokio-postgres (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e)
+    - 'Unit tests for each combination (no codes, one code, per-column codes, mixed) assert the RowDescription per-column format code equals the format used to encode the DataRow, including applicationid bigint with binary result format: RowDescription OID 20 AND format code 1, DataRow 00 00 00 08 00 00 00 00 00 00 00 0b'
+    - 'Verified by reading, not on the wire: both RowDescription builders write 0 unconditionally; Bind result formats are captured by extractBindResultFormats into the mocked portal and reach DataRow encoding; the mock-only Describe Statement path runs before Bind and marks the statement described so Execute skips RowDescription; the Describe Portal path has the portal formats available but ignores them; the Execute-time RowDescription (no prior Describe) declares 0 while encoding per Bind. NOT verified: a live Npgsql session, which Describe variant Npgsql sends for unprepared versus prepared commands, and whether Npgsql ever trusts a Describe Statement RowDescription format over its Bind-time formats'
+    - 'Known remaining disagreements, not fixed here: the simple protocol and nil-format-code Bind keep the legacy binary heuristic under a declared format 0; a non-mock-only Describe Statement forwards the upstream RowDescription, whose OIDs come from upstream while the mock DataRow uses columnOIDs; Describe-time columns (describeInputs) and Execute-time columns (selectColumnKeys) are computed separately and could differ in count'
+    - 'DECIDED (human, 2026-10-09, wording corrected after the spec was written): the legacy nil-codes case stays byte-identical, RowDescription format 0 with the name heuristic in the DataRow. It is reached only through the simple protocol; a Bind with zero result format codes is already all-text via extractBindResultFormats returning []int16{0} and must keep passing that, so a zero-code Bind yields RowDescription 0 and an all-text DataRow, exactly as today. Declaring the heuristic''s real format is rejected because it changes bytes on paths that work today and it is unknown which of lib/pq, asyncpg and tokio-postgres depend on it'
+    - Column selection is a pure function (query, schemaCache) -> []column with no proxy, connection or registry state, reusable by prov-2026-167380f0
+    - Queries whose RowDescription is already correct must produce byte-identical output; no regression for lib/pq, asyncpg or tokio-postgres (prov-2026-1aac1dc7, prov-2026-258574ee, prov-2026-cbc8213e)
+    - A selected column that cannot be typed from schemaCache falls back to the existing name and value-based OID heuristics, never an error
+    - The schemaCache lookup key comes from extractTable. prov-2026-9519f9c8 (draft) changes that to resolve schema-qualified keys. This record takes the key as input and does not touch extractTable, so the two do not conflict. Either order merges, but 9519f9c8 should go first so qualified tables like cnp_global.errors are typed from the right schema
+    - 'Unit tests cover each query shape: explicit list, alias, `*`, `t.*`, qualified column, schema-qualified table, cast, count(*), other aggregates and expressions, column missing from schema, RETURNING'
+    - 'OPEN QUESTION (unverified, out of scope): a mock row containing a column not in the discovered schema should arguably be rejected by schema_discovery validation. Investigation found no such validator: SchemaDiscoveryConfig (pkg/config) holds only mode and schemas, and the runner only loads the schema. Needs its own record if wanted'
+    - 'Decided with the implementation (conservative choices): SELECT * on a table with no discovered schema never emits a literal "*" and falls back to the mock row''s own sorted columns; a cast column is named after the underlying column with an empty Type; a bare t.* over joined tables expands only that table''s schema and falls back as above when t is unresolved or has no schema. Known gap left for a later record: simple-protocol ReturnsEmpty still sends the whole table''s columns in its RowDescription, and a cast column is still typed by name through the table schema'
+  affected_scope:
+    - pkg/proxy/postgresql/result.go
+    - pkg/proxy/postgresql/proxy.go
+    - examples/asynq-worker/main.go
+    - examples/asynq-worker/linespecs/**
+    - examples/asynq-worker/go.sum
+    - examples/asynq-worker/go.mod
+    - pkg/proxy/postgresql/result_format_agreement_test.go
+    - pkg/proxy/postgresql/select_columns_test.go
+  related:
+    - prov-2026-1aac1dc7
+    - prov-2026-6165b458
+  associated_specs:
+    - path: pkg/proxy/postgresql/result.go
+      type: code
+    - path: examples/asynq-worker/linespecs/process_email_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/process_report_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/count_users.linespec
+      type: linespec
+    - path: examples/asynq-worker/go.sum
+      type: code
+    - path: examples/asynq-worker/go.mod
+      type: code
+    - path: pkg/proxy/postgresql/result_format_agreement_test.go
+      type: unit
+    - path: pkg/proxy/postgresql/select_columns_test.go
+      type: unit

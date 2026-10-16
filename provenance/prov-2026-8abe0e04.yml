@@ -1,6 +1,7 @@
 id: prov-2026-8abe0e04
 title: Fix gRPC proxy response framing for empty-body and error responses
 status: implemented
+version: 1
 created_at: "2026-04-23"
 author: calebcowen@gmail.com
 intent: >
@@ -49,8 +50,6 @@ forbidden_scope:
   - pkg/proxy/redis/**
   - pkg/proxy/mongodb/**
   - pkg/provenance/**
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: aed2646be459fdb965b3d49095406ad1206db1f4
 associated_specs:
@@ -61,3 +60,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

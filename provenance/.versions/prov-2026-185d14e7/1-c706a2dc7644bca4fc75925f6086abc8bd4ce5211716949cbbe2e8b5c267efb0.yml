@@ -1,0 +1,28 @@
+id: prov-2026-185d14e7
+version: 1
+content_hash: sha256:c706a2dc7644bca4fc75925f6086abc8bd4ce5211716949cbbe2e8b5c267efb0
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T09:26:00Z"
+spec_hashes:
+  - sha256:f59c883a3e36c32dbb599ac6e2d2f39353c2ae5b8e0d110a142259fc17db0f78
+content:
+  id: prov-2026-185d14e7
+  title: 'Imprint: add Implements and Implemented-by sections to status --record'
+  type: imprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    Add two new display sections to FormatStatusDetailed: "Implements" showing the parent record ID and title (or dash if unset), and "Implemented by" showing all records in the loader whose implements field points to this record's ID, with their type and title. The implemented-by list is derived by scanning loader records at render time.
+  constraints:
+    - Implements section shows parent ID and title when implements is set, dash otherwise
+    - Implemented by section shows each child's ID, type, and title; shows dash when none
+    - Implemented-by derivation must scan loader.Records at render time, not stored state
+  affected_scope:
+    - pkg/provenance/formatter.go
+  implements: prov-2026-1dd4ba4a
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/formatter_test.go
+      type: code

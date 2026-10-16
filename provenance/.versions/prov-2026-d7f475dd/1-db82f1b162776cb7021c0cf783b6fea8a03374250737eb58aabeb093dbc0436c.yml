@@ -1,0 +1,46 @@
+id: prov-2026-d7f475dd
+version: 1
+content_hash: sha256:db82f1b162776cb7021c0cf783b6fea8a03374250737eb58aabeb093dbc0436c
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-08T16:39:56Z"
+spec_hashes:
+  - sha256:8a9798d110bc393961fc7ff43721480efe167bfedcb45495f9843456d7d4df2e
+content:
+  id: prov-2026-d7f475dd
+  title: init command for interactive LineSpec project setup
+  type: blueprint
+  created_at: "2026-05-08"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement a top-level `linespec init` command that guides a user through interactive setup of a new `.linespec.yml` configuration file. The command scans the project directory to infer sensible defaults for framework, database, and port, then walks the user through a series of prompts before writing the config file. No external prompt libraries are introduced — stdin readline-style prompting is used throughout to stay consistent with the existing codebase conventions.
+  constraints:
+    - Command is `linespec init` (top-level, not a provenance subcommand).
+    - Must prompt for project path (default current dir) and scan it before further prompts.
+    - Must prompt for feature mode — testing only, provenance only, or both.
+    - Must prompt for output path for the .linespec.yml file; defaults to project root.
+    - Must prompt for framework; auto-detects default from project scan (Gemfile=rails, package.json=express, go.mod=chi, manage.py=django, requirements.txt=fastapi).
+    - Must prompt for database type; auto-detects default from project scan (database.yml=mysql, docker-compose.yml image match).
+    - Must prompt for service name; defaults to basename of the project dir.
+    - Must write a valid .linespec.yml using DefaultConfig() as the base and the config YAML marshaller.
+    - Must not overwrite an existing .linespec.yml without an explicit --force flag or user confirmation.
+    - Must work in both stable and beta builds (wired in both main_stable.go and main_beta.go).
+    - No external dependencies added for prompting — use bufio.Scanner over os.Stdin.
+    - Interactive prompts must support empty input to accept the default.
+  affected_scope:
+    - pkg/initcmd/*.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-85259a41
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/initcmd/init_test.go
+      type: go_test
+  tags:
+    - command
+    - feature
+    - user-experience
+    - setup
+    - init

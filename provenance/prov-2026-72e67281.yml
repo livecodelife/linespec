@@ -1,6 +1,7 @@
 id: prov-2026-72e67281
 title: Add WRITE RETURNS interpolation example to update_user_success linespec
 status: implemented
+version: 1
 created_at: "2026-04-16"
 author: calebcowen@gmail.com
 intent: "Demonstrate that ${VAR} interpolation works in WRITE RETURNS payload files by adding a RETURNS clause to the update_user_success example spec."
@@ -10,8 +11,6 @@ constraints:
 affected_scope:
   - examples/user-linespecs/update_user_success.linespec
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: da1249e03a28236da7cd390404bdb962cde2806d
 associated_specs:
@@ -20,3 +19,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

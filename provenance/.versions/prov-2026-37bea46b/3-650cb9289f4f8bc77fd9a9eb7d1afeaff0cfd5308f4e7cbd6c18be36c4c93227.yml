@@ -1,0 +1,128 @@
+id: prov-2026-37bea46b
+version: 3
+content_hash: sha256:650cb9289f4f8bc77fd9a9eb7d1afeaff0cfd5308f4e7cbd6c18be36c4c93227
+parent_hash: sha256:f2fb9a31e46fe93ed815cd37dd47705fbe203509b1af81f35c637e898187bc3b
+reason: |-
+  `linespec provenance compile` is documented as an idempotent recovery tool —
+  PROVENANCE_RECORDS.md says "Runs idempotently: if every record's hash already
+  matches the stored manifest, no file is written" and recommends it for
+  recovering from a corrupted .linespec/hash_manifest.json. On this repo it is
+  neither idempotent nor safe: run against a manifest that `lint` reports as
+  100% clean (0 errors, all 411 implemented records sealed), it rewrote the
+  manifest from 438 entries to 443.
+
+  Root cause: Hasher.CompileManifest (pkg/provenance/hasher.go:217) hashes
+  every record in c.Loader.Records with no status filter and then assigns
+  wholesale: `m.Records = freshHashes`. But sealing is supposed to be a
+  property of completion — `complete` seals exactly one record's line at
+  transition time. The loader's record set is much broader than the set of
+  records that should ever be sealed, so compile sweeps in:
+
+    - draft records: prov-2026-2f2bf9c3, prov-2026-3ee1f3c3,
+      prov-2026-8d5c9376, prov-2026-c65450b6 — all four are live work opened
+      2026-08-12 against issues #173/#176/#177, still being edited
+    - open records: prov-2026-f05161eb
+    - shared-repo records: prov-2026-e8fb1e96, which has no file in this repo
+      at all. It is resolved through the `shared_repos` config from
+      livecodelife/linespec-provenance and cached under ~/.linespec/cache/.
+      compile rewrote its stored hash from ee931e7a... to ae327780..., i.e. it
+      re-sealed a remote record against whatever the local cache happened to
+      hold.
+
+  Because drafts and open records are still being edited by definition,
+  sealing them writes hashes that are guaranteed to go stale. The damage is
+  currently latent — lint's PROV-IMM check only compares implemented records,
+  and `complete` overwrites the record's line when it eventually seals — but
+  the manifest carries entries that assert immutability for records that are
+  not immutable, and it silently commits a remote record's content hash into
+  this repo's manifest. Given a full compile also *drops* any manifest entry
+  whose record is no longer loadable, the wholesale assignment is the wrong
+  shape for a recovery tool.
+
+  Fix: restrict CompileManifest to the records that are legitimately sealed —
+  those whose status is implemented, superseded, or deprecated (matching what
+  `complete` seals and what lint verifies) — and confine it to records owned by
+  the resolved config, excluding shared_repos-resolved records that this repo
+  does not own. Merge into the existing manifest rather than replacing it, so a
+  compile cannot silently drop entries.
+
+  With that fix, compile on this repo becomes genuinely idempotent and can be
+  used as the integrity check the docs claim it is. Until then, the safe
+  integrity check is `lint -c .linespec.yml`.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-08-13T16:51:09Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+  - sha256:8470ad9ae809a68ebe3289c668cb54a9bca33a0fa62885a82ad65fb7fd76e2ed
+  - sha256:934c67c648a5a95c73deba2f2f227435ebf07ba81380fa44fb584dd416e59819
+content:
+  id: prov-2026-37bea46b
+  title: Add provenance compile command to regenerate hash manifest
+  type: blueprint
+  created_at: "2026-05-14"
+  author: test@example.com
+  intent: |
+    Add a `linespec provenance compile` command that walks all provenance records and
+    rebuilds the hash manifest from scratch. The command must be idempotent — if every
+    record's hash already matches what is stored in the manifest, no file is written and
+    the exit code is 0. This gives operators a first-class way to recover from a deleted
+    or corrupted manifest without needing to trigger an unrelated provenance write.
+  constraints:
+    - Command is exposed as `linespec provenance compile` with a `-c` flag consistent with all other provenance subcommands
+    - Running compile when the manifest is already up-to-date produces no changes to .linespec/hash_manifest.json
+    - Running compile when the manifest is missing or stale writes the full manifest covering every record
+    - FullGraphHash and ActiveSubsetHash are recomputed and correct after compile
+    - All per-record hashes in the manifest match a fresh HashRecord() call for each record after compile
+    - Command exits 0 on success; non-zero on I/O or parse errors
+    - Subsequent `provenance lint` passes with no integrity errors after compile
+    - Two branches that each seal a different record (each adding one entry to the manifest's records map and recomputing the two aggregate hashes) must be able to rebase/merge onto a common base without a text conflict in the hash-manifest artifact — the steady-state case described in the issue (one package, 265 records, several concurrent provenance PRs) must not conflict.
+    - The resolution mechanism must never silently drop a sealed record's hash the way the compile-as-merge-driver approach does today; if git invokes any merge/resolution step before all branches' record YAML files are present in the worktree, that step must not treat a record it cannot see as absent from the graph.
+    - Any aggregate/summary hash that is kept (e.g. a full-graph or active-subset hash) must be one both sides of a merge can reproduce or verify without a hand-merge step, or must be moved to be computed at verify/compile time instead of stored and merged.
+    - linespec provenance lint and linespec provenance check must report an error (not pass silently) when an implemented record has no entry in an otherwise non-empty hash manifest, so a hash a bad merge dropped becomes a CI-visible failure instead of a silently disabled immutability check. A manifest that does not exist at all (pre-manifest repos) must continue to be treated as "nothing to check yet."
+    - Existing sealed-record immutability detection (the PROV-IMM content-hash-mismatch check) must continue to work unchanged for every record that does have a manifest entry — no regression to tamper detection.
+    - The manifest path used by seal/compile/verify must be derived from the resolved provenance config actually in effect (respecting `-c <path>/.linespec.yml`), not unconditionally from repoRoot, so compiling one package's config in a multi-package repo does not overwrite another package's (or the root's) manifest with a partial record set.
+    - '`linespec provenance compile` on an up-to-date manifest remains a no-op (existing idempotent short-circuit in CompileManifest) for single-package repos with no config-path override.'
+    - |
+      CompileManifest must only seal records that are in a sealed lifecycle state
+      (implemented, superseded, deprecated). Draft and open records must never
+      receive a manifest entry, and an existing spurious entry for a draft/open
+      record must be removed by a compile rather than refreshed.
+    - |
+      Records resolved from shared_repos must not be sealed into this repo's
+      manifest. The manifest describes records this config owns; a remote
+      record's hash is the remote repo's responsibility.
+    - |
+      Running `compile` twice in a row must write the file at most once: the
+      second run must report "up to date" and leave the file byte-identical.
+      Running `compile` on this repo's current, lint-clean manifest must be a
+      no-op.
+    - |
+      Compile must not drop a manifest entry for a record that is merely not
+      loadable in the current invocation (e.g. a package-scoped run). Prefer
+      merging over wholesale reassignment of m.Records.
+    - |
+      lint must continue to pass with 0 errors before and after a compile, and
+      the existing hasher tests (TestCompileManifest_Idempotent,
+      TestCompileManifest_StaleEntry, TestCompileManifest_MissingManifest) must
+      still pass, updated only where they encode the wholesale-replace behavior.
+    - |
+      Update PROVENANCE_RECORDS.md so the documented behavior matches: state
+      which lifecycle states are sealed and that shared-repo records are excluded.
+  affected_scope:
+    - pkg/provenance/hasher.go
+    - pkg/provenance/commands.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - pkg/provenance/hasher_test.go
+    - pkg/provenance/hash_manifest_conflict_test.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/linter_test.go
+    - cmd/linespec/cli.go
+    - PROVENANCE_RECORDS.md
+    - .gitattributes
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code
+    - path: pkg/provenance/hash_manifest_conflict_test.go
+    - path: pkg/provenance/hasher_test.go

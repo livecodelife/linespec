@@ -1,0 +1,37 @@
+id: prov-2026-d522054c
+version: 1
+content_hash: sha256:6fe7a69a5f1ceb9c97f742330bd003e5a138c10c62f8532b5f0d7eb58860500d
+parent_hash: ""
+reason: 'CodeQL flagged five alerts on PR 238 in pkg/proxy/postgresql/result.go: an allocation size computed from len(columns)*20, uint16/uint32 conversions of values parsed with a wider bit size, and int16 conversions of strconv.Atoi results in the numeric encoder. Make each bound explicit so the alerts clear without changing encoded output for valid values.'
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-12T17:32:12Z"
+spec_hashes:
+  - sha256:31214faaa6531435e69c869634fa067469a66ec3ff115ca6be9a44decfc7fcde
+content:
+  id: prov-2026-d522054c
+  title: Resolve CodeQL integer-conversion and allocation alerts in PostgreSQL result encoding
+  type: imprint
+  created_at: "2026-10-12"
+  author: caleb.cowen@linq.com
+  intent: |
+    CodeQL flagged five alerts on PR 238 in pkg/proxy/postgresql/result.go: an allocation size computed from len(columns)*20, uint16/uint32 conversions of values parsed with a wider bit size, and int16 conversions of strconv.Atoi results in the numeric encoder. Make each bound explicit so the alerts clear without changing encoded output for valid values.
+  constraints:
+    - encodeDataRow allocates without size arithmetic on the column count
+    - int2 and int4 binary encoding reject out-of-range values (falling back to text) before converting
+    - numeric digit groups are parsed with ParseInt(…, 10, 16)
+    - Encoded bytes for in-range values are unchanged
+    - No other files change
+  affected_scope:
+    - pkg/proxy/postgresql/result.go
+  implements: prov-2026-001
+  implements_version: 1
+  related:
+    - prov-2026-7e08a3cb
+    - prov-2026-fa19c7ff
+  associated_specs:
+    - path: pkg/proxy/postgresql/result_encoding_test.go
+      type: unit
+  tags:
+    - security
+    - codeql

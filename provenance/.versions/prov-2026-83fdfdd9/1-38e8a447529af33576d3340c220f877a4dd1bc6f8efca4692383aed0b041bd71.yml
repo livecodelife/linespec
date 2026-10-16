@@ -1,0 +1,31 @@
+id: prov-2026-83fdfdd9
+version: 1
+content_hash: sha256:38e8a447529af33576d3340c220f877a4dd1bc6f8efca4692383aed0b041bd71
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T17:55:01Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+  - sha256:d3d666bbd661a50a896c5bac8554581b72fa07ae83bc287861c0f15845458661
+content:
+  id: prov-2026-83fdfdd9
+  title: Remove hardcoded framework structs, make framework support data-driven (P2-B)
+  type: blueprint
+  created_at: "2026-04-01"
+  author: calebcowen@gmail.com
+  intent: |
+    Remove the four hardcoded framework structs (RailsFrameworkConfig, FastAPIFrameworkConfig, DjangoFrameworkConfig, ExpressFrameworkConfig) that ignore all YAML override parameters. Replace with a data-driven defaults map so that framework: <name> in .linespec.yml expands to sensible defaults but every field remains overridable. Supporting a new framework should require only a .linespec.yml change, not a code change.
+  constraints:
+    - framework field must remain optional and backward-compatible as a shorthand
+    - All existing example projects (todo-api, user-service, notification-service, order-service) must continue working
+    - No runner logic may branch on framework name
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/config/framework_config_test.go
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+    - path: examples/order-linespecs/create_order_success.linespec
+    - path: examples/notification-linespecs/list_notifications_success.linespec

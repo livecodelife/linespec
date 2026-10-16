@@ -1,0 +1,26 @@
+id: prov-2026-ff23779d
+version: 1
+content_hash: sha256:ed71b5a1db1bab48f8f248a9cd0a9ee1caf01ac6ce34fab3c3f4d3f14044f23f
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-18T22:09:34Z"
+spec_hashes:
+  - sha256:7f7c4e7efaebf09e9053a57bb15f67e0306776400fa442a0b45cf85032f7ab46
+content:
+  id: prov-2026-ff23779d
+  title: Build example service images in CI before each test suite
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    Each linespec test suite starts the service under test as a Docker container using an image named after the service (e.g. user-service:latest). These images are not pulled from Docker Hub — they must be built from the Dockerfiles in the examples/ directory. Add a docker build step immediately before each test suite step so the correct image is available when the tests run.
+  constraints:
+    - Each service image must be built immediately before its corresponding test suite step
+    - Image tag must match the service name field in the suite's .linespec.yml
+    - multi-db-service Dockerfile produces the order-events-service image
+  affected_scope:
+    - .github/workflows/ci.yml
+  associated_specs:
+    - path: .github/workflows/ci.yml
+      type: code

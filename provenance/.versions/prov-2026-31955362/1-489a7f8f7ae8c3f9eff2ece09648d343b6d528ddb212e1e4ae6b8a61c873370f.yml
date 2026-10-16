@@ -1,0 +1,36 @@
+id: prov-2026-31955362
+version: 1
+content_hash: sha256:489a7f8f7ae8c3f9eff2ece09648d343b6d528ddb212e1e4ae6b8a61c873370f
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-10T14:58:19Z"
+spec_hashes:
+  - sha256:c5f7956c15a015451c3e22e483a75b87954c0af1dc05e9b91d3f331754ade3d4
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-31955362
+  title: 'Fix staticcheck findings: unused vars, deprecated API, error strings, simplifications'
+  type: imprint
+  created_at: "2026-06-04"
+  author: test@example.com
+  intent: |
+    Apply all staticcheck fixes outside the proxy packages: remove unused commit/date vars in main_stable.go, update deprecated types.ImagePullOptions to image.PullOptions, lowercase 6 capitalized error strings in parser.go and runner.go, simplify 6 conditional strings.Replace calls in linter.go to unconditional, fix struct-literal type conversion in formatter.go, remove unused loadStagedRecord in git.go, remove unused exists value in loader.go, remove unnecessary fmt.Sprintf in runner.go, and remove unused defaultDBConfig field and extractTableNamesFromSpec function in runner.go.
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - pkg/docker/orchestrator.go
+    - pkg/dsl/parser.go
+    - pkg/dsl/dsl_test.go
+    - pkg/provenance/formatter.go
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/loader.go
+    - pkg/runner/runner.go
+  implements: prov-2026-53a12672
+  implements_version: 1
+  associated_specs:
+    - path: pkg/dsl/dsl_test.go
+      type: go_test
+    - path: pkg/provenance/linter_test.go
+      type: go_test

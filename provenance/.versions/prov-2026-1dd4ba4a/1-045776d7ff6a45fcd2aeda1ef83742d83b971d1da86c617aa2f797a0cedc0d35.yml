@@ -1,0 +1,36 @@
+id: prov-2026-1dd4ba4a
+version: 1
+content_hash: sha256:045776d7ff6a45fcd2aeda1ef83742d83b971d1da86c617aa2f797a0cedc0d35
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T04:09:50Z"
+spec_hashes:
+  - sha256:f59c883a3e36c32dbb599ac6e2d2f39353c2ae5b8e0d110a142259fc17db0f78
+content:
+  id: prov-2026-1dd4ba4a
+  title: 'Provenance hierarchy chunk 3: status and graph output for implements'
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    Update `linespec provenance status` and `linespec provenance graph` to display and traverse `implements` relationships introduced in Chunk 1. The status command gains two new sections showing the parent record a given record implements and the child records that implement it. The graph command gains a second structural dimension showing the implements hierarchy as an indented tree, visually distinct from the supersession chain. The --root flag is wired up to actually filter the graph output starting from a given record, traversing both upward (one level to the parent Brief) and downward (Blueprints and Imprints). JSON graph output gains an implements edge type so the visualization layer can treat it differently from supersedes and related edges.
+  constraints:
+    - status --record must show an Implements section (parent record ID and title, or dash if unset) and an Implemented by section (list of child records with type and title)
+    - Implemented-by derivation must scan all loader records at render time, not stored explicitly
+    - graph must render implements relationships as parent-child indentation, visually distinct from supersession chain (horizontal evolution within a tier)
+    - '--root on graph must traverse: if root is a Brief, show full downward tree of Blueprints and Imprints; if root is a Blueprint, show its parent Brief (one level up) and its child Imprints'
+    - JSON graph output must include implements edge type distinct from supersedes and related
+    - All output must degrade gracefully when implements relationships are absent, matching current behavior exactly
+    - The --root flag is currently parsed but not passed through to FormatGraph — this must be wired up
+  affected_scope:
+    - pkg/provenance/formatter.go
+    - pkg/provenance/commands.go
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+  related:
+    - prov-2026-cd41b067
+    - prov-2026-53e3e311
+  associated_specs:
+    - path: pkg/provenance/formatter_test.go
+      type: code

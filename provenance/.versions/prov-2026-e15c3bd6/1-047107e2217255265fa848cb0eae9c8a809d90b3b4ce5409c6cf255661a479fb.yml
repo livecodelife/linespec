@@ -1,0 +1,53 @@
+id: prov-2026-e15c3bd6
+version: 1
+content_hash: sha256:047107e2217255265fa848cb0eae9c8a809d90b3b4ce5409c6cf255661a479fb
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-06-22T16:40:35Z"
+spec_hashes:
+  - sha256:04a3ab5f6715d3bce9ce94799bca947bd8a6e2d2dae5c6fb22a146ff41dfc93b
+  - sha256:703d30c50d29eb362e54141b95a78969edede9a380292344a4bd2d6b2f8d3c07
+content:
+  id: prov-2026-e15c3bd6
+  title: Share JSON body matcher between HTTP and Kafka interceptors
+  type: imprint
+  created_at: "2026-06-11"
+  author: calebcowen@gmail.com
+  intent: |
+    The HTTP interceptor's makeBodyMatcher and the Kafka interceptor's inline
+    bodyMatcher closure were identical: empty WithFile -> match-any, else load the
+    payload via dsl.NewPayloadLoaderWithResolver, unmarshal the actual body as
+    JSON, and compare with verify.CompareJSON.
+
+    Lift a single exported helper into pkg/verify (new file bodymatch.go):
+
+      MakeJSONBodyMatcher(actualBody, sourceLabel string, resolver *interpolate.Resolver) func(withFile, baseDir string) bool
+
+    sourceLabel preserves the distinct debug message per channel
+    ("request body" for HTTP, "Kafka message value" for Kafka). HTTP's
+    makeBodyMatcher delegates to it; Kafka replaces its inline closure with a call.
+    pkg/verify gains imports on dsl/interpolate/logger; confirmed no import cycle
+    (none of those packages import pkg/verify).
+  constraints:
+    - Debug messages preserved exactly via sourceLabel - "failed to parse request body as JSON" and "failed to parse Kafka message value as JSON"
+    - Empty withFile short-circuits to true; load failure and unmarshal failure both return false
+    - Helper lives in pkg/verify so http and kafka avoid a proxy-to-proxy import
+    - No behavior change; http and kafka interceptor tests pass unmodified
+  affected_scope:
+    - pkg/verify/bodymatch.go
+    - pkg/proxy/http/interceptor.go
+    - pkg/proxy/kafka/interceptor.go
+  implements: prov-2026-23ab1db8
+  implements_version: 1
+  related:
+    - prov-2026-875617fa
+  associated_specs:
+    - path: pkg/proxy/http/interceptor_test.go
+      type: go_test
+    - path: pkg/proxy/kafka/interceptor_test.go
+      type: go_test
+  tags:
+    - verify
+    - proxy
+    - dupl

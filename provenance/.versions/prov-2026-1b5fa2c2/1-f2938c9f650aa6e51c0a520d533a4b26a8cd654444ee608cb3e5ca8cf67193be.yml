@@ -1,0 +1,43 @@
+id: prov-2026-1b5fa2c2
+version: 1
+content_hash: sha256:f2938c9f650aa6e51c0a520d533a4b26a8cd654444ee608cb3e5ca8cf67193be
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-06-22T21:22:13Z"
+spec_hashes:
+  - sha256:fceca88c82e38f94c4a60f31e6e86c2f257ec93c3c0150f4b831a95dd7268f44
+  - sha256:3dcdc9da316232e1201c7459d0b70489679a08457a5ff43aad7978bae0ab5661
+content:
+  id: prov-2026-1b5fa2c2
+  title: Add exclude_paths config to exempt files from provenance rules
+  type: blueprint
+  created_at: "2026-06-22"
+  author: calebcowen@gmail.com
+  intent: 'Engineers often maintain generated files, documentation, migration scripts, or tooling configs that should not require provenance governance. This adds an exclude_paths list to the provenance section of .linespec.yml that accepts glob patterns, full file paths, directory prefixes, and regex patterns. Any file matching at least one entry is fully exempt: the linter skips it, the commit checker skips both scope-enforcement and the commit-tag requirement, and the context command surfaces the exemption status explicitly rather than silently omitting it.'
+  constraints:
+    - The .linespec.yml provenance section must accept an exclude_paths field as a list of strings; each entry may be a full file path, a glob, a directory path (matched as prefix), or a regex (recognized by leading/trailing slash, e.g. /.*_gen\.go$/).
+    - Matching must be evaluated before any other provenance rule — an excluded file cannot trigger a scope violation, a missing-commit-tag violation, or any linter warning.
+    - The context command must report that a file is exempt from provenance rules when the queried file matches exclude_paths, in addition to any historical record context.
+    - The git hooks (pre-commit scope check and commit-msg tag check) must both skip excluded files entirely.
+    - Draft and open records are not affected by this exemption mechanism — exclude_paths is a path-level bypass, not a record-level bypass.
+    - The ProvenanceConfig struct in both pkg/config/types.go and pkg/provenance/commands.go must expose ExcludePaths []string so the field flows from YAML parsing through to all enforcement sites.
+    - All new behavior must be covered by unit tests in the provenance and config packages.
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/config/exclude_paths_test.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/git.go
+    - pkg/provenance/types.go
+    - pkg/provenance/formatter.go
+    - pkg/provenance/exclude.go
+    - pkg/provenance/exclude_paths_test.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-bb380f4b
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/exclude_paths_test.go
+    - path: pkg/config/exclude_paths_test.go

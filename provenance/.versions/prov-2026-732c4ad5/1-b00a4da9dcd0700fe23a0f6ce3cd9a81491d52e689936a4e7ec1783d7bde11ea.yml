@@ -1,0 +1,74 @@
+id: prov-2026-732c4ad5
+version: 1
+content_hash: sha256:b00a4da9dcd0700fe23a0f6ce3cd9a81491d52e689936a4e7ec1783d7bde11ea
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-15T13:14:00Z"
+spec_hashes:
+  - sha256:aab340ab995e09dba65f8501483f0e0825d95079aa0053220211cf511b564470
+  - sha256:62327ef0592f4885194460628e3d08f8b24c07b28e9ac02fec84eaf8138eb494
+  - sha256:5ef2bcd5763b3cdc78950af8d04d0086899537178dadea89c477d52820214041
+  - sha256:ea24575d9c52d56fce7a05a9d8f39db7fb0a1a3b1f5ca6923042fd8dbed78ae5
+content:
+  id: prov-2026-732c4ad5
+  title: Add MongoDB wire protocol proxy for LineSpec Testing
+  type: blueprint
+  created_at: "2026-04-14"
+  author: calebcowen@gmail.com
+  intent: |
+    Add MongoDB as a supported database type in LineSpec Testing. Services that use MongoDB
+    should be able to declare READ:MONGODB and WRITE:MONGODB expectations in .linespec DSL
+    files, with the proxy intercepting the MongoDB wire protocol (OP_MSG) to match queries
+    against mock payloads and synthesize BSON responses.
+
+    The implementation follows the same pattern as the existing PostgreSQL and MySQL proxies:
+    a sidecar container intercepts TCP traffic on port 27017, forwards unmatched traffic to
+    a real mongo:7 container, and serves synthetic responses for matched mocks. After the
+    test, the /verify endpoint confirms which mocks were hit.
+
+    Containers are reused across tests within a suite (matching the container reuse
+    architecture introduced in prov-2026-c3f1db08). Between tests, MongoDB collections are
+    truncated via prepareForReuse rather than destroying and recreating containers.
+  constraints:
+    - Must use go.mongodb.org/mongo-driver/bson for BSON encoding/decoding rather than a hand-rolled parser
+    - OP_QUERY messages (used for legacy hello/isMaster handshakes) must be forwarded transparently without interception
+    - Synthetic find responses must set cursor.id = 0 so drivers do not issue getMore requests
+    - No schema discovery is needed — MongoDB is schemaless; payloads are loaded as raw BSON/JSON
+    - Initial implementation matches mocks by collection name only (no USING_FILTER exact-match); consistent with Kafka topic-name-only matching
+    - All host port bindings must use HostPort "0" (ephemeral) for both the forwarding port and the sidecar port 8081 — never bind a fixed host port; this is required to avoid conflicts with persistent containers (lesson from prov-2026-44f64a16)
+    - Must not break existing MySQL, PostgreSQL, HTTP, Kafka, Redis, or gRPC proxy behavior
+  affected_scope:
+    - pkg/proxy/mongodb/interceptor.go
+    - pkg/types/types.go
+    - pkg/dsl/parser.go
+    - pkg/registry/registry.go
+    - pkg/config/parser.go
+    - pkg/runner/runner.go
+    - cmd/linespec/main_beta.go
+    - go.mod
+    - go.sum
+    - examples/catalog-service/**
+    - examples/catalog-linespecs/**
+  forbidden_scope:
+    - pkg/proxy/postgresql/**
+    - pkg/proxy/mysql/**
+    - pkg/proxy/http/**
+    - pkg/proxy/kafka/**
+    - cmd/linespec/main_stable.go
+  related:
+    - prov-2026-c3f1db08
+    - prov-2026-44f64a16
+  associated_specs:
+    - path: examples/catalog-linespecs/create_product_success.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/get_product_success.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/get_product_not_found.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/list_products_success.linespec
+      type: linespec
+  tags:
+    - beta
+    - proxy
+    - mongodb

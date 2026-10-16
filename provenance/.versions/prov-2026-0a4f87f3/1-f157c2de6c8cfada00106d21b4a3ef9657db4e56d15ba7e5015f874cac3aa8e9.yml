@@ -1,0 +1,49 @@
+id: prov-2026-0a4f87f3
+version: 1
+content_hash: sha256:f157c2de6c8cfada00106d21b4a3ef9657db4e56d15ba7e5015f874cac3aa8e9
+parent_hash: ""
+reason: ""
+author: caleb.cowen@linq.com
+created_at: "2026-09-09T05:59:55Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-0a4f87f3
+  title: Release 3.22.0
+  type: blueprint
+  created_at: "2026-09-09"
+  author: caleb.cowen@linq.com
+  intent: |
+    Release 3.22.0: lock-layer works. Until now it created a record and then
+    failed to complete it, so no repo using LineSpec could produce a locked
+    record at all — the enforcement half was sound and had nothing to enforce
+    against.
+
+    A minor rather than a patch, because the fix adds `--intent` and `--scope`.
+    They are not conveniences: a locked record is sealed the moment it is
+    created, and SaveRecord's formatting-preserving path writes only status,
+    sealed_at_sha and superseded_by, so creation is the one point at which those
+    values can reach disk. `--no-edit` now requires `--intent` and refuses
+    before writing anything. That is a behaviour change to a documented flag
+    combination, and it can break nothing, because that combination has never
+    produced a usable record.
+
+    Shipping alone rather than waiting for company. Bench is blocked on it: its
+    first migration has been applied and there is no working mechanism stopping
+    a regeneration from rewriting it.
+  constraints:
+    - The CHANGELOG names the version, its date, and the record behind each entry.
+    - A version string in a tracked source states the released version.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-54d2b3f1
+  associated_specs:
+    - path: CHANGELOG.md
+  tags:
+    - release

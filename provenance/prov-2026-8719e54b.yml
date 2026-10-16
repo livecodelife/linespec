@@ -1,6 +1,7 @@
 id: prov-2026-8719e54b
 title: 'P4-C: Make PostgreSQL proxy debug logging opt-in with no-op fast path'
 status: implemented
+version: 1
 created_at: "2026-04-07"
 author: calebcowen@gmail.com
 intent: |
@@ -21,8 +22,6 @@ affected_scope:
   - pkg/proxy/postgresql/proxy.go
   - pkg/proxy/postgresql/proxy_startup_test.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: ece80c8c211636ffc3c2fd16c2e8f08f3e0b6393
 associated_specs:
@@ -35,3 +34,4 @@ monitors: []
 tags:
   - performance
   - postgresql-proxy
+type: blueprint

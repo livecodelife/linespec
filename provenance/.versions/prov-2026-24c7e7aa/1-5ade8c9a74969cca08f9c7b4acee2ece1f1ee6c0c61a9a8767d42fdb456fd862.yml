@@ -1,0 +1,45 @@
+id: prov-2026-24c7e7aa
+version: 1
+content_hash: sha256:5ade8c9a74969cca08f9c7b4acee2ece1f1ee6c0c61a9a8767d42fdb456fd862
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T17:55:01Z"
+spec_hashes:
+  - sha256:105303586f3a9f3ff6ec77ae78c0dcd5fae0f9a37b82b7d4e73373875ca90713
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+  - sha256:84feb17b215ae6ae4dd6d946eebec8f3e47ac51bbaccaf8dd3ceb295fb934da4
+content:
+  id: prov-2026-24c7e7aa
+  title: Remove Rails-flavored credential defaults, fix init script path, remove MySQL proxy hardcoded db name (P2-C, P2-D, P2-E)
+  type: blueprint
+  created_at: "2026-04-01"
+  author: calebcowen@gmail.com
+  intent: |
+    Remove three language-coupling violations that make LineSpec unusable for non-Rails projects:
+    P2-C: Remove Rails-flavored database credential defaults (_development/_user/_password suffixes).
+    Require database, username, and password to be explicit in .linespec.yml with a clear error if missing.
+    P2-D: Fix FindInitScript to honor database.init_script from config instead of searching by filename.
+    Remove the examples/user-service/init.sql fallback path.
+    P2-E: Remove the hardcoded "todo_api_development" database name from the MySQL proxy.
+    The proxy must receive the database name via --db-name argument and fail on startup if not provided.
+  constraints:
+    - All four example suites (user-linespecs, todo-linespecs, order-linespecs, notification-linespecs) must pass after changes
+    - Example .linespec.yml files already have explicit credentials and init_script fields — no changes needed there
+    - MySQL proxy CLI arg structure must remain backward-compatible for all non-db-name args
+  affected_scope:
+    - pkg/config/parser.go
+    - pkg/config/database_config_test.go
+    - pkg/runner/runner.go
+    - pkg/proxy/mysql/proxy.go
+    - pkg/proxy/mysql/proxy_dbname_test.go
+    - cmd/linespec/main_beta.go
+    - pkg/proxy/postgresql/proxy.go
+    - examples/user-linespecs/.linespec.yml
+    - examples/todo-linespecs/.linespec.yml
+  associated_specs:
+    - path: examples/user-linespecs/create_user_success.linespec
+    - path: examples/todo-linespecs/create_todo_success.linespec
+    - path: examples/order-linespecs/create_order_success.linespec
+    - path: examples/notification-linespecs/process_todo_created_event.linespec

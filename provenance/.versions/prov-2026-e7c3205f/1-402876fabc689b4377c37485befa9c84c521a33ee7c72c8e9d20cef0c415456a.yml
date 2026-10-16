@@ -1,0 +1,17 @@
+id: prov-2026-e7c3205f
+version: 1
+content_hash: sha256:402876fabc689b4377c37485befa9c84c521a33ee7c72c8e9d20cef0c415456a
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T13:48:52Z"
+spec_hashes: []
+content:
+  id: prov-2026-e7c3205f
+  title: 'Config type: SharedRepoConfig struct and CacheTTLMinutes field'
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: Replace SharedRepos []string with []SharedRepoConfig in both config and provenance packages. Add CacheTTLMinutes to ProvenanceConfig.
+  implements: prov-2026-e7d88140
+  implements_version: 1

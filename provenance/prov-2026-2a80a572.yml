@@ -1,6 +1,7 @@
 id: prov-2026-2a80a572
 title: extends is a same-tier additive edge on every record type, not a bug-only field
 status: implemented
+version: 1
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: >
@@ -27,8 +28,6 @@ affected_scope:
   - PROVENANCE_RECORD_SCHEMA.md
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 27e8aaca2eced3acf140145263037d79a798052b
 associated_specs:

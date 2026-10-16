@@ -1,6 +1,11 @@
 id: prov-2026-919f8621
 title: 'EXPECT EVENT is never asserted: unhit Event mocks skipped and hit keys collide'
 status: implemented
+version: 1
+reason: |-
+  The registry's unmet-expectation sweep skips Event mocks under a stale comment saying Kafka cannot be intercepted. A Kafka interceptor now exists, so an EXPECT EVENT that never fires still passes. Two further defects hide behind that skip. mockHitKey's default arm keys EVENT mocks by Table rather than Topic, so every EVENT expectation collides on one key. Negative is in no key arm, so EXPECT_NOT EVENT and EXPECT EVENT share a key. Separately, the Kafka proxy exposes no verify port, is absent from the runner's proxy waits, and its hits are not collected.
+  The fix keys EVENT by Topic and Negative, stops skipping Event mocks, and wires the Kafka proxy into hit collection like the other proxies so an unfired EXPECT EVENT fails and a fired EXPECT_NOT EVENT fails. Keeping the skip and documenting EVENT as unasserted was rejected: the DSL presents it as an assertion. If the Kafka verify wiring proves large it may be split from the key fix at implementation time.
+reason_kind: fix
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -35,10 +40,7 @@ affected_scope:
   - pkg/runner/runner.go
   - cmd/linespec/main_stable.go
 forbidden_scope: []
-type: bug
-extends: prov-2026-001
-supersedes: ""
-superseded_by: ""
+type: imprint
 related: []
 sealed_at_sha: 2bf9e4e6e71d7e3e1c091e2758a78e5625b69564
 associated_specs:
@@ -54,3 +56,5 @@ tags:
   - kafka
   - registry
   - silent-pass
+implements: prov-2026-001
+implements_version: 1

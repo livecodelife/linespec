@@ -1,0 +1,275 @@
+id: prov-2026-8d2f5f2a
+version: 6
+content_hash: sha256:1c058af67127b3cea3973321d0603c53d4a041e67460e175cf28b6ccf33def81
+parent_hash: sha256:2d8bd610c3e259693606a77dfa9c8d54a7807a0a16c5c43d2e9a0e1e6e88c068
+reason: |-
+  Record-internal paths (affected_scope, forbidden_scope, associated_specs) are
+  interpreted inconsistently with provenance.dir. `dir` is resolved relative to
+  the directory holding the `.linespec.yml` that declares it (loadProvenanceConfigFromFile,
+  cmd/linespec/main_stable.go: `cfg.Dir = filepath.Join(configDir, fullConfig.Provenance.Dir)`,
+  then made absolute against the "repoRoot" passed into
+  provenance.NewCommandsWithEmbedder). Record-internal paths are not resolved
+  against that same base at all — pkg/provenance/linter.go calls os.Stat,
+  filepath.Glob, and filepath.Walk(".") directly on the raw stored path
+  (validateExactPath, validateGlobPattern, validateRegexPattern,
+  checkDeadRecords/patternHasMatches, validateAssociatedSpecs), which the OS
+  resolves against the process's current working directory. Our own records
+  store repo-root-relative paths (e.g. "pkg/provenance/linter.go"), matching
+  what auto_affected_scope writes, so linting from the repo root happens to be
+  correct by coincidence — cwd == repo root. Linting (or opening) from inside a
+  subdirectory is not: a stored path like "pkg_a/app/a.rb" resolves via the OS
+  as cwd-relative, so from inside pkg_a it becomes pkg_a/pkg_a/app/a.rb, a path
+  that does not exist. The record is found (dir resolved correctly) but every
+  scope/spec path inside it then reports as missing.
+
+  This isn't confined to lint output. The same double-join affects an actual
+  filesystem side effect: pkg/provenance/commands.go passes `c.RepoRoot` (which
+  is `os.Getwd()` at CLI startup — see cmd/linespec/cli.go provSetup, despite
+  the misleading name) into fswrite.go's MaterializeScope/materializeTargets,
+  which do `filepath.Join(repoRoot, rel)` on each affected_scope path. Run from
+  inside a package with write_restriction: true, `open` unlocks the wrong
+  parent directory for a declared-but-not-yet-existing path. commands.go's
+  Complete also os.Stat()s each associated_specs path directly (the "Proof
+  artifact does not exist" check), hitting the same cwd-relative resolution.
+
+  Two of the linter's misresolved messages are actively misleading rather than
+  merely noisy: "Dead record: all governed files have been deleted. Consider
+  deprecating this record" (checkDeadRecords) reports a live record as dead
+  purely because of invocation directory, and following its advice deprecates
+  a record that governs files that still exist. "Scope path does not exist
+  yet — declared for creation; opening unlocks its parent directory" pairs
+  with the MaterializeScope bug above to unlock the wrong directory under
+  write_restriction: true.
+
+  Fix: resolve every record-internal path (affected_scope, forbidden_scope,
+  associated_specs) against the same base, consistently, regardless of the
+  invoking process's cwd. Per the issue's own analysis, resolving against
+  provenance.dir's own base (the directory holding the declaring .linespec.yml)
+  is a breaking change for repos — including this one — whose records store
+  paths relative to the git repository root rather than the config file's
+  directory. The no-migration alternative is to resolve record-internal paths
+  against the git repository root instead of cwd. That is the base this fix
+  must use: it makes every affected command's result invocation-independent
+  without invalidating any existing record in this repo or others that already
+  follow the auto_affected_scope convention.
+
+  Related: issue #163 (already fixed, prov-2026-3687be46) was the inverse
+  problem for the hash manifest — a path that ignored `-c` and always landed at
+  <repoRoot>/.linespec/ regardless of the resolved config. Same underlying
+  question of what a path in this tool is relative to, opposite symptom.
+reason_kind: fix
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+created_at: "2026-08-13T16:02:58Z"
+spec_hashes:
+  - sha256:333e39509ac7156dbd82417ecc945bcbf392e92d8e4a310c085636b2e08802e8
+  - sha256:fa03c20a3be7ca4bfa6bfdbd1b79700aac8776b6fd5863757f5b06493dc0d803
+  - sha256:21d1fe49eb3a29a96b3aec89e9d9e675ec2194be892c631bbeedfc8d09bf7623
+  - sha256:2fe67d538e892be2ce3ca54b62101119605111a6ffcbe693df6597edaed9abac
+  - sha256:2b275d8ce01dcd510ea88b051dc25356cb5320355be96026fd7f4d7fe8da04f6
+  - sha256:8b9e0dba0309d55891beca0e4a8a00b8587a5d97705616c7871c5b2042b4d544
+content:
+  id: prov-2026-8d2f5f2a
+  title: Enforce provenance-before-code via filesystem write permissions
+  type: blueprint
+  created_at: "2026-07-10"
+  author: calebcowen@gmail.com
+  intent: |-
+    Move provenance-before-code enforcement from the commit boundary to the
+    filesystem write boundary, so an agent cannot write source first and author
+    the governing record afterward to satisfy a commit-time check. The governed
+    tree defaults to non-writable; a source path becomes writable only when an
+    open, allowlist-mode record (affected_scope non-empty) declares it. File
+    permissions become a pure projection of the current set of open records'
+    scopes: `linespec provenance open` (and scope widening on an already-open
+    record) materialize write access as part of the same atomic operation that
+    declares it, and a `reconcile` operation re-derives the entire write-bit
+    state from current record state so it can be run idempotently at agent
+    session start. Because the filesystem itself performs the enforcement, this
+    holds regardless of which agent harness is driving and remains in effect
+    even when git hooks are absent or bypassed.
+  constraints:
+    - The governed tree MUST default to non-writable. A source path becomes writable only when covered by the affected_scope of an open, allowlist-mode record.
+    - Writability MUST be a pure projection of the current set of open records' scopes. Enforcement state changes MUST occur only at discrete CLI command boundaries (`open`, `add-scope`, `complete`, `deprecate`, `reconcile`), never via a resident watching process.
+    - '`linespec provenance open` MUST materialize write permissions for the record''s affected_scope as part of the same operation that transitions the record to open. Declaration and permission MUST move together atomically, reusing the existing snapshot/rollback machinery (snapshotFiles/restoreFiles) so a rejected transition leaves permissions untouched.'
+    - Adding a path to an already-open record's affected_scope MUST go through a dedicated `linespec provenance add-scope` CLI verb (not overloaded onto `lock-scope`) and MUST materialize that path's write permission in the same atomic operation.
+    - A dedicated `linespec provenance reconcile` CLI verb MUST re-derive the entire write-bit state from the current set of open records' scopes (sourced from the existing scope-index cache), unlocking covered paths and re-locking uncovered ones, and MUST be idempotent. Enforcement MUST NOT depend on the Claude Code plugin hooks being installed, since a user may not have them set up — `linespec provenance next` MUST therefore also trigger reconcile unconditionally on every invocation (not gated behind an env var only a hook script sets), so work always begins against correctly projected permissions regardless of which harness — if any — is driving. `plugins/provenance/hooks/session-start.sh` may still call `next`, but only as a thin renderer of its output, never as the sole trigger for reconcile.
+    - The always-writable set MUST be derived, not separately hand-maintained. It is the union of the existing provenance.exclude_paths whitelist (pkg/provenance/exclude.go) and the authoring coop (the configured provenance.dir, .linespec.yml, and associated_specs paths).
+    - The configured provenance directory MUST be treated as unconditionally writable, reusing the existing provenance.dir configuration. No path under it may ever be locked, so the Brief-to-Blueprint-to-Imprint authoring chain can never block its own creation.
+    - Unlocking a directory to permit creation of a not-yet-existing declared path MUST NOT alter the permission bits of files already present in that directory. Already-locked files MUST remain locked.
+    - Cold-start posture MUST default to warn-until-first-record for hand-initialized projects (no records yet), deferring enforcement until the first record exists. A project created via `linespec clone` MUST default to strict-deny, since it arrives pre-seeded with open records to enforce against.
+    - '`linespec provenance next` MUST incorporate this workflow: when a source path is blocked or the agent is uncertain how to proceed, `next` MUST surface the corrective action — opening a governing record, or adding the path to an existing open record''s scope — as the guided next step.'
+    - |
+      Add LineSpec's managed .linespec/ state files to the always-writable set in
+      AlwaysWritablePaths (pkg/provenance/fswrite.go) — at minimum .linespec/embeddings.bin and
+      .linespec/hash_manifest.json, preferably the managed-state paths as a group — mirroring the
+      existing always-writable treatment of the provenance dir and .linespec.yml, so reconcile
+      never locks state LineSpec itself regenerates.
+    - |
+      After the fix, running `reconcile` (directly, or via `next`) in a repo that tracks
+      .linespec/embeddings.bin and/or .linespec/hash_manifest.json leaves both writable, and a
+      subsequent `provenance index` succeeds instead of failing with "permission denied".
+    - |
+      Projection semantics for genuine source are unchanged: out-of-scope tracked source files
+      still lock, and files covered by an open allowlist record's affected_scope stay writable.
+    - |
+      Consider surfacing rather than swallowing scope-index cache write failures
+      (refreshScopeIndexCache in pkg/provenance/scope_index.go) so an unwritable cache is
+      visible instead of silently stale. Secondary to the always-writable fix.
+    - |
+      Opening a record MUST NOT be blocked solely because a declared
+      affected_scope path does not yet exist on disk, so that reconcile can unlock
+      the parent directory and the declared file can then be created. This is the
+      not-yet-existing-path handling fswrite.go Reconcile (~L371-385) already
+      intends to support — but which is currently unreachable because `open`
+      rejects the declaration first.
+    - |
+      The relaxation MUST be scoped to the missing-path (existence) check only. It
+      MUST NOT weaken other open-time validations (e.g. forbidden_scope handling,
+      associated_specs-required-under-strict, or matching a path that resolves to
+      an excluded location). A scope path that exists but is a directory, or other
+      genuinely invalid patterns, must keep their current severity.
+    - |
+      The fix MUST cover ALL pattern kinds, not just the exact path. Today an
+      exact path ("Scope path does not exist"), a glob ("Glob pattern matches no
+      files"), and a regex (no walked match) that each name only not-yet-existing
+      files ALL fail at `open` — none is a working escape hatch. Whatever
+      relaxation is applied MUST let all three be opened when they name
+      declared-but-not-yet-existing paths; do not merely align the exact path to a
+      (mistakenly assumed) already-working glob.
+    - |
+      Because the glob case spans two layers, the fix MUST also address reconcile:
+      fswrite.go Reconcile's not-yet-existing-path dir-unlock loop currently skips
+      glob patterns (`containsGlobMeta`), so a glob naming a new file in an
+      otherwise-empty directory would still not get its parent unlocked even after
+      `open` accepts it. Opening a not-yet-existing glob/regex scope MUST result in
+      a usable (unlocked) parent directory for the declared file.
+    - |
+      make test must pass, and regression tests MUST assert that opening a record
+      whose affected_scope names a not-yet-existing path succeeds — covering the
+      exact path, a glob into an otherwise-empty directory, and a regex with no
+      existing match — and that reconcile then unlocks each declared path's parent
+      directory so the file can be created, guarding all three failures reproduced
+      above (the empty-directory glob case is the one the earlier draft wrongly
+      assumed already worked).
+    - |
+      The existing test TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing
+      (pkg/provenance/fswrite_transitions_test.go:84) currently encodes the pre-fix
+      behavior as correct — it asserts Open MUST fail, and MUST NOT unlock the
+      parent directory, when a declared scope path is missing. This is exactly the
+      behavior the fix inverts, so the implementer MUST rewrite (not merely
+      supplement) that test: the missing-declared-path case flips to success +
+      parent-dir unlock. The test's OTHER guarantee — that a genuinely-invalid
+      Open (e.g. a real validation failure, or the commit-rejection rollback
+      covered by TestOpen_RollsBackPermissionsOnCommitRejection) leaves
+      permissions untouched with no side effects — MUST be preserved, retargeted
+      onto a still-invalid case rather than deleted.
+    - Write access restriction must only apply to the closest parent directory of a linespec config file.
+    - The configuration of a directory specific linespec config file must take precedence for that directory over a higher directory linespec config file.
+    - When the reconcile command is run without specifying a linespec config file, it must run per config file to apply the write restrictions correctly for each directory containing a config file.
+    - AlwaysWritablePaths must include the reconciling config's own .linespec.yml
+    - at its actual repo-relative path (derived from config.ConfigFileDir, joined
+    - with the ".linespec.yml" filename), not just the bare literal
+    - '".linespec.yml" — so a nested package''s config is exempted at its own path,'
+    - the same way a repo-root config already is.
+    - A nil config or one with an empty/unset ConfigFileDir must still exempt the
+    - repo-root ".linespec.yml" exactly as before — no regression to existing
+    - root-level behavior or to the existing AlwaysWritablePaths tests.
+    - The exemption stays scoped to the reconciling config's own .linespec.yml
+    - only. A sibling or unrelated package's .linespec.yml (outside this config's
+    - ConfigFileDir) must remain governed like any other undeclared file — this
+    - is not a change to reconcile's directory-boundary behavior
+    - (prov-2026-bde50f4d), only to which literal path counts as "the config
+    - file" for the always-writable set.
+    - After the fix, `linespec provenance reconcile -c pkg_a/.linespec.yml` in a
+    - package with write_restriction enabled leaves pkg_a/.linespec.yml writable,
+    - and it stays writable across repeated reconcile runs (no chmod workaround
+    - needed). Declaring .linespec.yml in some record's affected_scope must not
+    - become necessary to edit it.
+    - Update TestCommandsReconcile_BothPassesTogetherPartitionTheWholeTree
+    - (pkg/provenance/reconcile_scope_test.go), which currently pins the buggy
+    - behavior (asserts pkg/foo/.linespec.yml stays locked), to assert it is
+    - writable after both reconcile passes, and remove or correct its comment
+    - documenting the old exemption gap.
+    - linespec provenance lint (and any other command that validates or matches
+    - affected_scope, forbidden_scope, or associated_specs paths against the
+    - filesystem — including open's scope-existence check, checkDeadRecords, and
+    - complete's associated-specs existence check) MUST produce identical results
+    - for the same config + records regardless of the directory the command is
+    - invoked from. Reproduce the issue's repro (a record with
+    - affected_scope/associated_specs paths stored relative to the repo root,
+    - linted once from the repo root and once from a subdirectory with the
+    - equivalent -c/config resolution) and assert both invocations report the
+    - same pass/warning/error counts and the same per-path status.
+    - The resolution base for record-internal paths MUST be the git repository
+    - root, not the current working directory and not provenance.dir's own base
+    - directory — the latter would be a breaking change for this repo and any
+    - other repo whose records store repo-root-relative paths (the
+    - auto_affected_scope-written convention documented in PROVENANCE_RECORDS.md).
+    - Every one of this repo's existing records MUST continue to validate
+    - identically after the fix (no mass-migration of existing affected_scope /
+    - associated_specs values).
+    - The fix MUST cover every call site that resolves a record-internal path
+    - against the filesystem via the process cwd, not just the lint command's
+    - 'exact-path check: pkg/provenance/linter.go''s validateExactPath,'
+    - validateGlobPattern, validateRegexPattern, checkDeadRecords /
+    - patternHasMatches, and validateAssociatedSpecs; and
+    - pkg/provenance/commands.go's associated-specs existence check inside
+    - Complete. A partial fix that corrects lint's headline message but leaves
+    - checkDeadRecords or Complete's spec check cwd-relative does not close the
+    - issue.
+    - pkg/provenance/fswrite.go's MaterializeScope / materializeTargets take a
+    - repoRoot parameter and already do `filepath.Join(repoRoot, rel)` correctly
+    - in isolation — the bug is that pkg/provenance/commands.go and
+    - cmd/linespec/cli.go currently thread the process's cwd
+    - (os.Getwd(), confusingly named "repoRoot") into that parameter instead of
+    - the actual git repository root. The fix MUST supply the true git repo root
+    - here too, so `open`/`next` invoked from inside a subdirectory under
+    - 'write_restriction: true unlock the correct parent directory for a'
+    - declared-but-not-yet-existing affected_scope path, not a doubled path like
+    - pkg_a/pkg_a/app/.
+    - The multi-pack pre-commit/commit-msg git hooks (git.go, which already pass
+    - '`-c <nearest config>` and always run from the repo root because git invokes'
+    - hooks there) MUST continue to behave exactly as before — this bug does not
+    - reach them, and the fix must not change hook-invoked enforcement behavior.
+    - PROVENANCE_RECORDS.md's `dir` documentation (Configuration section, near
+    - the `dir` config option table/description) MUST state, next to `dir`, what
+    - base record-internal paths (affected_scope, forbidden_scope,
+    - associated_specs) resolve against — since today the two behaving
+    - differently is undocumented and unguessable, per the issue.
+    - make test must pass, and a regression test MUST demonstrate the
+    - 'cwd-independence property directly: construct a temp repo with a nested'
+    - package directory (its own .linespec.yml + provenance dir) whose record
+    - stores affected_scope/associated_specs paths relative to the repo root,
+    - then assert that linting (or whichever entry point the implementation
+    - centralizes on) produces the same result whether invoked with cwd at the
+    - repo root or cwd inside the nested package directory.
+  affected_scope:
+    - pkg/provenance/fswrite.go
+    - pkg/provenance/fswrite_test.go
+    - pkg/provenance/fswrite_transitions_test.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/exclude.go
+    - pkg/provenance/scope_index.go
+    - pkg/provenance/next.go
+    - pkg/config/types.go
+    - plugins/provenance/hooks/session-start.sh
+    - plugins/provenance/hooks_test.go
+    - cmd/linespec/cli.go
+    - PROVENANCE_RECORDS.md
+    - pkg/provenance/linter.go
+    - pkg/provenance/reconcile_scope_test.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/reconcile_test.go
+    - pkg/provenance/scope_path_cwd_test.go
+  implements: prov-2026-e8fb1e96
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/fswrite_test.go
+    - path: pkg/provenance/fswrite_transitions_test.go
+    - path: plugins/provenance/hooks_test.go
+    - path: pkg/provenance/reconcile_scope_test.go
+      type: go_test
+    - path: cmd/linespec/reconcile_test.go
+      type: go_test
+    - path: pkg/provenance/scope_path_cwd_test.go

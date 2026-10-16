@@ -1,0 +1,138 @@
+id: prov-2026-4bf54660
+version: 4
+content_hash: sha256:56e683af36b02f3e1cc434c198d5ef0d5bf61d6b1c4fd229ae5bc1f84b1961b9
+parent_hash: sha256:0053167e39e760afa22fe722918ae10b8218f33922a845a5860b2e1a4d658cac
+reason: |-
+  When running the order-linespecs test suite, the runner reuses Docker containers
+  between tests (persistent container optimization). Between tests, /reload-registry
+  is called, which invokes ResetConnections() to close all active proxy connections
+  for test isolation. This kills the example service's single tokio-postgres Client.
+  The service has no reconnect logic, so subsequent DB calls in create_order_success
+  fail with a closed-connection error, returning HTTP 500.
+
+  The fix: add automatic reconnection to the example order-service. Wrap the
+  Client in a Mutex so it can be replaced when a closed-connection error is detected,
+  and retry each DB operation once after reconnecting.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-05-28T19:20:52Z"
+spec_hashes:
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+  - sha256:d55f861b07d61206795fbd24cf1125e059ccddd8fb756696c884d34a3588a778
+  - sha256:8b0e24c535a04fb8e3e620541001a99de4a859f0fbee9d2f91a0795c48b094fc
+content:
+  id: prov-2026-4bf54660
+  title: Fix PostgreSQL proxy startup architecture and create shared connection manager
+  type: blueprint
+  created_at: "2026-03-19"
+  author: calebcowen@gmail.com
+  intent: |
+    Fix the PostgreSQL proxy's broken startup architecture that causes connection failures
+    during integration tests. The current implementation sends fake authentication responses
+    to the client before connecting to upstream, then tries to forward real responses,
+    causing protocol conflicts.
+
+    Additionally, refactor both MySQL and PostgreSQL proxies to share common connection
+    management logic through a base connection manager, reducing code duplication and
+    making future database proxy implementations easier.
+
+    This work includes:
+    1. Fixing CommandComplete tag generation for INSERT/UPDATE/DELETE operations
+    2. Fixing NoData handling for WRITE operations without RETURNING clause
+    3. Making table extraction dynamic based on DSL/linespec files (not hardcoded)
+    4. Creating shared connection manager in pkg/proxy/base/connection.go
+    5. Refactoring both proxies to use the shared connection manager
+    6. Refactoring PostgreSQL proxy to single-threaded message processing (like MySQL)
+       to eliminate race conditions between goroutines competing for the buffered reader
+
+    - PostgreSQL proxy connects upstream FIRST before any client communication
+    - Uses pure bidirectional io.Copy for transparent relay during startup
+    - Both directions are properly coordinated with channel-based synchronization
+    - Service successfully connects: "Connected to database successfully"
+    - Queries are being executed through the proxy
+  constraints:
+    - MUST fix the PostgreSQL proxy startup to connect upstream FIRST before any client communication
+    - MUST use pure transparent io.Copy relay during startup (no message inspection)
+    - MUST properly coordinate bidirectional relay with channel synchronization
+    - MUST wait for both relay directions to complete before closing connections
+    - MUST maintain MySQL proxy functionality while refactoring to use shared code
+    - MUST generate correct PostgreSQL CommandComplete tags (INSERT 0 N, UPDATE N, DELETE N, SELECT N)
+    - MUST handle WRITE operations without RETURNING clause correctly (no NoData message)
+    - MUST use dynamic table extraction from registry (not hardcoded table lists)
+    - MUST NOT break existing MySQL proxy tests
+    - MUST pass all unit tests after refactoring
+    - MUST pass order-linespecs/create_order_success.linespec test
+    - MUST pass all other database-dependent linespec tests
+    - |
+      Add `if pgProxy != nil { pgProxy.ResetConnections() }` after reg.ClearState() in the
+      /reload-registry handler in cmd/linespec/main_stable.go. The pgProxy variable is already
+      declared in the enclosing scope and captured by the closure; no structural changes needed.
+    - |
+      Do not modify pkg/proxy/postgresql/proxy.go — ResetConnections() already exists and is
+      correct. The fix is purely in the call site.
+    - |
+      The fix must apply only when pType == "postgresql". The nil guard on pgProxy handles this
+      since pgProxy is only set in that branch of the switch.
+    - |
+      Add oidForColumnWithValueHint(col string, val interface{}) (uint32, int) to
+      result.go. If val is a string matching isUUIDString, return OID 2950 (UUID).
+      Otherwise delegate to oidForColumn. This preserves existing behaviour for
+      integer-valued id columns.
+    - |
+      Add SendRowDescriptionWithHints(conn, columns, sampleRow) to ResultHandler.
+      When sampleRow is non-nil, use oidForColumnWithValueHint per column.
+      Fall back to SendRowDescription when sampleRow is nil.
+    - |
+      Apply SendRowDescriptionWithHints in three call sites in proxy.go:
+      (1) the mock-only Describe handler (extended protocol — critical, this is
+      what tokio-postgres uses to decide Bind format codes);
+      (2) the DescribePortal handler (direct portal describe);
+      (3) sendMockResultSetForExtended when skipRowDescription is false
+      (simple query protocol path).
+    - |
+      Do not change oidForColumn itself — it is used by asyncpg-facing services
+      where INT4 for integer id columns is correct. The value hint is only applied
+      when sample row data is available.
+    - |
+      Change AppState.db from Arc<Client> to Arc<tokio::sync::Mutex<Client>> and add
+      database_url: Arc<String> so the service can reconnect.
+    - |
+      Add execute, query_one, and query helper methods on AppState that detect
+      closed-connection errors (e.is_closed()) and reconnect + retry once before
+      propagating the error.
+    - |
+      Update all handlers (create_order, cancel_order, get_order, list_orders) to use
+      the new helper methods instead of state.db.execute/query_one/query directly.
+    - |
+      Do not change the test linespecs, proxy code, or runner; only the example
+      service needs to change.
+  affected_scope:
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/postgresql/startup.go
+    - pkg/proxy/mysql/proxy.go
+    - pkg/proxy/base/*.go
+    - pkg/registry/registry.go
+    - examples/order-linespecs/**
+    - pkg/proxy/postgresql/command_complete_test.go
+    - linespec-beta
+    - cmd/linespec/main_stable.go
+    - pkg/proxy/postgresql/result.go
+    - examples/order-service/src/main.rs
+    - examples/order-linespecs/cancel_order_success.linespec
+    - examples/order-linespecs/payloads/cancelled_order.json
+    - examples/order-linespecs/payloads/pending_order.json
+  associated_specs:
+    - path: examples/order-linespecs/create_order_success.linespec
+      type: linespec
+    - path: pkg/proxy/postgresql/proxy_startup_test.go
+      type: go_test
+    - path: examples/order-service/src/main.rs
+      type: code
+  tags:
+    - bugfix
+    - postgresql
+    - proxy
+    - architecture
+    - testing
+    - integration
+    - refactoring

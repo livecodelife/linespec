@@ -1,0 +1,28 @@
+id: prov-2026-70332d7c
+version: 1
+content_hash: sha256:5227dfd48c7300cde2128e0b320e86454aa03966ca2a89ab3722a6a8551012a6
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-27T19:37:39Z"
+spec_hashes:
+  - sha256:7f13400fbdfd62105411355b4aac9a4986f3a5da64302c17a9db816e9502af20
+content:
+  id: prov-2026-70332d7c
+  title: Replace dummy NULL row with SendEmptyResultSet on both query protocol paths
+  type: imprint
+  created_at: "2026-05-27"
+  author: calebcowen@gmail.com
+  intent: |
+    In sendMockResultSet (simple query path) and sendMockResultSetForExtended (extended query
+    protocol path), replace the dummy-NULL-row block with a call to SendEmptyResultSet. The
+    column list is still extracted from the SQL SELECT clause so RowDescription has correct
+    column names. No new protocol logic needed — SendEmptyResultSet already sends the correct
+    RowDescription + CommandComplete "SELECT 0" + ReadyForQuery sequence.
+  affected_scope:
+    - pkg/proxy/postgresql/proxy.go
+  implements: prov-2026-9041ccc5
+  implements_version: 1
+  associated_specs:
+    - path: examples/notification-linespecs/get_notification_not_found.linespec
+      type: linespec

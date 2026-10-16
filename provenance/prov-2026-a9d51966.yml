@@ -1,6 +1,7 @@
 id: prov-2026-a9d51966
 title: Fix gRPC descriptor load failure to be non-fatal in stable and beta
 status: implemented
+version: 1
 created_at: "2026-04-27"
 author: noreply@anthropic.com
 intent: |
@@ -17,6 +18,7 @@ constraints:
   - Must only skip SetDescriptor call when load fails; otherwise behavior is unchanged
   - Protobuf decoding remains available when descriptor loads successfully
 implements: prov-2026-9e052576
+implements_version: 2
 affected_scope:
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
@@ -24,8 +26,6 @@ affected_scope:
   - examples/todo-api/Gemfile.lock
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: c7df9d7229faa30911fb8cc042d54cd63a94e045
 associated_specs: []

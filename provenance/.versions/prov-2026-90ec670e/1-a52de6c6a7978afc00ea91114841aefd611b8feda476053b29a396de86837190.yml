@@ -1,0 +1,68 @@
+id: prov-2026-90ec670e
+version: 1
+content_hash: sha256:a52de6c6a7978afc00ea91114841aefd611b8feda476053b29a396de86837190
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T15:45:14Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-90ec670e
+  title: Cross-repo reference resolution for implements and related
+  type: blueprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Wire the cache infrastructure from prov-2026-e7d88140 into the lint and graph commands so that
+    `implements` and `related` references pointing to records in configured shared repos
+    resolve correctly.
+
+    Extend the record resolver — the function the CLI uses to look up a record by ID — to check
+    the local cache for each configured shared repo when a record is not found locally. Resolution
+    order: local provenance directory first, then each configured shared repo's cache in the order
+    declared in `.linespec.yml`. First match wins.
+
+    When a record is resolved from cache it must be treated identically to a local record for read
+    purposes (fields available, type checkable, title displayable). Write commands (complete,
+    deprecate, open) must reject cache-sourced records with a clear error explaining the record is
+    owned by a remote repository.
+
+    Update the lint warning introduced in prov-2026-53e3e311 that currently skips cross-repo
+    `implements` references — those references should now resolve correctly if the referenced repo
+    is configured. If not configured, the warning must be precise and actionable.
+
+    Update graph traversal from prov-2026-1dd4ba4a to follow `implements` edges across repo
+    boundaries using the resolver. A Brief in a shared repo with Blueprints implementing it in a
+    service repo should render as a single connected tree in `linespec provenance graph`.
+
+    Add a stale cache warning surfaced by `linespec provenance lint` when the cache for any
+    configured shared repo is older than the configured TTL, suggesting `linespec provenance sync`.
+  constraints:
+    - 'Resolution order is always: local first, then shared_repos in declaration order. First match wins.'
+    - Cache-sourced records are read-only. Write commands (complete, deprecate, open) must reject them with a clear error.
+    - If the referenced repo is not configured, the lint error must name the record ID and suggest adding the repo to shared_repos in .linespec.yml.
+    - A stale cache (older than cache_ttl_minutes) must produce a lint warning, not a lint error.
+    - Graph traversal must follow implements edges across repo boundaries using the unified resolver.
+    - All existing local-only behavior must be preserved — no regressions when shared_repos is empty.
+    - The resolver must not re-fetch from remote; it reads only from the on-disk cache populated by linespec provenance sync.
+  affected_scope:
+    - provenance/*.yml
+    - pkg/provenance/commands.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/cache.go
+    - pkg/provenance/loader.go
+  implements: prov-2026-95cb8b3d
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  related:
+    - prov-2026-53e3e311
+    - prov-2026-1dd4ba4a
+    - prov-2026-e7d88140
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code
+  tags:
+    - provenance
+    - cross-repo
+    - cache

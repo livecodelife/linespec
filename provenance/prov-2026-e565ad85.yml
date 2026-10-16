@@ -1,6 +1,7 @@
 id: prov-2026-e565ad85
 title: 'Phase 2: boundaries package — Tracer, Hit type, call graph walker'
 status: implemented
+version: 1
 created_at: "2026-06-04"
 author: test@example.com
 intent: |
@@ -18,8 +19,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-95b526f5
-supersedes: ""
-superseded_by: ""
+implements_version: 1
 related: []
 sealed_at_sha: 61fc8e558789bd6529f7e842c93272a060b75714
 associated_specs:

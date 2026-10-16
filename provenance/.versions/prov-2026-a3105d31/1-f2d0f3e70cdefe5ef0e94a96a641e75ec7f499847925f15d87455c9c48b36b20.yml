@@ -1,0 +1,43 @@
+id: prov-2026-a3105d31
+version: 1
+content_hash: sha256:f2d0f3e70cdefe5ef0e94a96a641e75ec7f499847925f15d87455c9c48b36b20
+parent_hash: ""
+reason: |-
+  Three clause families parse and then do nothing. The legacy table-keyed FindMock path never calls matchesSemanticConstraints, so VERIFY_* on a table-form EXPECT cannot fail. NO_TRANSACTION is stored by the parser and never read. The MongoDB interceptor calls only FindMock, so ACCESSING_TABLES and VERIFY_* on Mongo expectations are dead. This is the remaining gap after the earlier fix for the semantic path, which made the semantic path enforce VERIFY_* but did not touch FindMock itself.
+  The fix applies the semantic constraint check inside FindMock and routes the Mongo interceptor through it. For NO_TRANSACTION, either enforce it or reject it at parse time as unsupported; leaving it accepted and inert is the one outcome ruled out. Enforcing it in the registry for Mongo only was rejected as it leaves the SQL path uneven.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-08T19:15:46Z"
+spec_hashes:
+  - sha256:71d6e37d20b85539efb1344be0a73ec7b3324b42805f4a0a02fbbc07d17b5b40
+content:
+  id: prov-2026-a3105d31
+  title: 'Dead semantic clauses: VERIFY_* on legacy table EXPECTs, NO_TRANSACTION, and MongoDB ACCESSING_TABLES/VERIFY_* are parsed but never enforced'
+  type: imprint
+  created_at: "2026-10-06"
+  author: caleb.cowen@linq.com
+  intent: |
+    Three clause families parse and then do nothing. The legacy table-keyed FindMock path never calls matchesSemanticConstraints, so VERIFY_* on a table-form EXPECT cannot fail. NO_TRANSACTION is stored by the parser and never read. The MongoDB interceptor calls only FindMock, so ACCESSING_TABLES and VERIFY_* on Mongo expectations are dead. This is the remaining gap after the earlier fix for the semantic path, which made the semantic path enforce VERIFY_* but did not touch FindMock itself.
+    The fix applies the semantic constraint check inside FindMock and routes the Mongo interceptor through it. For NO_TRANSACTION, either enforce it or reject it at parse time as unsupported; leaving it accepted and inert is the one outcome ruled out. Enforcing it in the registry for Mongo only was rejected as it leaves the SQL path uneven.
+  constraints:
+    - A table-form EXPECT with a VERIFY_* clause that does not hold fails the spec
+    - Mongo ACCESSING_TABLES and VERIFY_* clauses can fail a spec
+    - NO_TRANSACTION is either enforced or a parse error, never silently ignored
+    - Specs that pass today with correct VERIFY_* clauses keep passing
+    - Existing TestIssue159 semantic enforcement tests keep passing
+  affected_scope:
+    - pkg/registry/registry.go
+    - pkg/proxy/mongodb/interceptor.go
+    - pkg/dsl/parser.go
+  implements: prov-2026-001
+  implements_version: 1
+  related:
+    - prov-2026-28061661
+  associated_specs:
+    - path: pkg/registry/legacy_verify_enforcement_test.go
+      type: unit
+  tags:
+    - registry
+    - mongodb
+    - verify
+    - silent-pass

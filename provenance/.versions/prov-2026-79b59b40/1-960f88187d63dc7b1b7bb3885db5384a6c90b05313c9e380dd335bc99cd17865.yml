@@ -1,0 +1,37 @@
+id: prov-2026-79b59b40
+version: 1
+content_hash: sha256:960f88187d63dc7b1b7bb3885db5384a6c90b05313c9e380dd335bc99cd17865
+parent_hash: ""
+reason: |-
+  LoadConfigFile decodes .linespec.yml with a non-strict yaml.Unmarshal, so a misspelled key (proxy, init_script, start_command) is dropped and the default applies. An unknown database type reaches the runner's switch default and logs only at Debug, so no proxy starts and mocks silently never match. Both are configuration mistakes reported as nothing.
+  The fix decodes with unknown fields rejected, naming the key and line, and makes an unknown database type a config validation error listing the supported types. Warning instead of erroring was rejected: warnings in a green run are the silence this fixes. The risk is configs that carry currently ignored keys, so strictness must be checked against every .linespec.yml in the repo's examples before it ships.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-08T19:15:46Z"
+spec_hashes:
+  - sha256:6074ff5103539f78d4922dbc6e66ff597caa832815fd0a16802c79e190fe6ab8
+content:
+  id: prov-2026-79b59b40
+  title: 'Config typos are silently ignored: non-strict YAML decode and unknown database type only logged at Debug'
+  type: imprint
+  created_at: "2026-10-06"
+  author: caleb.cowen@linq.com
+  intent: |
+    LoadConfigFile decodes .linespec.yml with a non-strict yaml.Unmarshal, so a misspelled key (proxy, init_script, start_command) is dropped and the default applies. An unknown database type reaches the runner's switch default and logs only at Debug, so no proxy starts and mocks silently never match. Both are configuration mistakes reported as nothing.
+    The fix decodes with unknown fields rejected, naming the key and line, and makes an unknown database type a config validation error listing the supported types. Warning instead of erroring was rejected: warnings in a green run are the silence this fixes. The risk is configs that carry currently ignored keys, so strictness must be checked against every .linespec.yml in the repo's examples before it ships.
+  constraints:
+    - An unknown top-level or nested key in .linespec.yml fails loading with the key name
+    - An unknown database type fails validation and names the supported types
+    - Every .linespec.yml under examples/ loads without error
+    - The provenance section, including embedding settings, still loads
+  affected_scope:
+    - pkg/config/parser.go
+    - pkg/runner/runner.go
+  implements: prov-2026-001
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/strict_config_test.go
+      type: unit
+  tags:
+    - config
+    - silent-pass

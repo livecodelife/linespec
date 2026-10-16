@@ -1,8 +1,42 @@
 id: prov-2026-012
 title: 'LineSpec v1.0.0 release strategy: Provenance Records as stable, LineSpec Testing as beta via build tags'
 status: implemented
+version: 2
+reason: |-
+  linespec-beta is a 22MB statically-linked Linux x86-64 ELF binary committed
+  into the repo root, last rebuilt 2026-04-30 (e998292). Nothing consumes it:
+
+    - Dockerfile.linespec builds from source (`COPY . .` + `go build`) in a
+      golang:1.23-alpine builder stage; it never copies the committed binary.
+    - .goreleaser.yml builds its own linespec-beta artifact from source for
+      the backward-compatible Homebrew formula.
+    - The Makefile's build-beta target only *produces* this path; nothing
+      reads it.
+
+  It is a leftover from a retired practice of rebuilding and committing the
+  binary on release (prov-2026-5c6ea0f5, prov-2026-c9e62857,
+  prov-2026-8ae0dd5d). Since v2.0.0 the beta binary has been byte-identical in
+  purpose to the stable one, and since the Cobra collapse there is not even a
+  `beta` build tag left to distinguish them, so a committed copy has no
+  remaining reason to exist.
+
+  It is also stale in a way that actively misleads: it predates the Cobra CLI
+  rewrite, so `./linespec-beta` still presents the old hand-rolled
+  `linespec <command>` interface and reports a version that no longer
+  corresponds to anything released.
+
+  Root cause of it being tracked at all: .gitignore ignores `/linespec` but has
+  no matching `/linespec-beta` entry, so the sibling build artifact was never
+  ignored and got committed. Fixing the ignore rule alongside the deletion is
+  what stops it coming back the next time someone runs `make build-beta`.
+
+  Removing it from HEAD does not shrink the existing git history; the goal is
+  to stop the churn and remove the misleading artifact, not to rewrite history.
+reason_kind: fix
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
+aliases:
+  - prov-2026-a0b6be6b
 intent: |
     LineSpec currently contains two major features: Provenance Records (fully functional CLI subsystem) and LineSpec Integration Testing (DSL-based testing with proxies). To provide a clear release strategy that reflects the maturity of each component, we will release v1.0.0 with Provenance Records as the stable, production-ready feature while LineSpec Testing remains in beta.
 
@@ -17,49 +51,67 @@ intent: |
 
     This decision establishes a clear separation between stable and experimental functionality, sets expectations appropriately for users, and provides multiple installation paths for different use cases.
 constraints:
-    - The default build (no tags) MUST only include provenance commands - test and proxy commands must be completely excluded
-    - Beta-tagged builds MUST include all functionality - provenance, test, and proxy commands
-    - Help text in stable builds MUST NOT show beta commands or mention their existence
-    - Module path MUST be updated from github.com/calebcowen/linespec to github.com/livecodelife/linespec
-    - All internal imports MUST be updated to use the new module path
-    - GoReleaser configuration MUST create separate build pipelines for stable and beta
-    - Beta releases MUST be marked as pre-release in GitHub
-    - Homebrew formulas MUST be in separate tap repository (livecodelife/homebrew-linespec)
-    - Stable homebrew formula MUST install only stable binary
-    - Beta homebrew formula MUST install beta binary and be named linespec-beta to allow side-by-side installation
-    - Windows platform support is optional - included if builds succeed, skipped if not
-    - All proxy packages (mysql, postgresql, http, kafka) MUST be behind beta build tags
-    - Test runner and registry packages MUST be behind beta build tags
-    - Documentation MUST clearly distinguish stable vs beta features in all three files (README, AGENTS, LINESPEC)
-    - PROVENANCE_RECORDS.md MUST be created as the primary documentation with no beta warnings
-    - Release notes MUST emphasize Provenance Records as the v1.0.0 feature
-    - Build tests MUST verify that stable builds don't contain beta code paths
+  - The default build (no tags) MUST only include provenance commands - test and proxy commands must be completely excluded
+  - Beta-tagged builds MUST include all functionality - provenance, test, and proxy commands
+  - Help text in stable builds MUST NOT show beta commands or mention their existence
+  - Module path MUST be updated from github.com/calebcowen/linespec to github.com/livecodelife/linespec
+  - All internal imports MUST be updated to use the new module path
+  - GoReleaser configuration MUST create separate build pipelines for stable and beta
+  - Beta releases MUST be marked as pre-release in GitHub
+  - Homebrew formulas MUST be in separate tap repository (livecodelife/homebrew-linespec)
+  - Stable homebrew formula MUST install only stable binary
+  - Beta homebrew formula MUST install beta binary and be named linespec-beta to allow side-by-side installation
+  - Windows platform support is optional - included if builds succeed, skipped if not
+  - All proxy packages (mysql, postgresql, http, kafka) MUST be behind beta build tags
+  - Test runner and registry packages MUST be behind beta build tags
+  - Documentation MUST clearly distinguish stable vs beta features in all three files (README, AGENTS, LINESPEC)
+  - PROVENANCE_RECORDS.md MUST be created as the primary documentation with no beta warnings
+  - Release notes MUST emphasize Provenance Records as the v1.0.0 feature
+  - Build tests MUST verify that stable builds don't contain beta code paths
+  - |
+    Delete the tracked linespec-beta file and add `/linespec-beta` to
+    .gitignore next to the existing `/linespec` entry, so `make build-beta`
+    output is ignored the same way `make build` output already is.
+  - |
+    No change to the Makefile build-beta / install-beta targets or to
+    .goreleaser.yml — the beta formula and its from-source artifact stay
+    exactly as they are. This removes only the committed binary.
+  - |
+    `make build`, `make build-beta`, and `docker build -f Dockerfile.linespec .`
+    must all still succeed after the removal, confirming nothing consumed the
+    committed file.
+  - |
+    `git status` must be clean after running `make build-beta`, proving the new
+    ignore rule covers the regenerated artifact.
 affected_scope:
-    - cmd/linespec/main.go
-    - cmd/linespec/main_stable.go (new)
-    - cmd/linespec/main_beta.go (new)
-    - pkg/proxy/mysql/
-    - pkg/proxy/postgresql/
-    - pkg/proxy/http/
-    - pkg/proxy/kafka/
-    - pkg/runner/
-    - pkg/registry/
-    - go.mod
-    - README.md
-    - AGENTS.md
-    - LINESPEC.md
-    - PROVENANCE_RECORDS.md (new)
-    - .goreleaser.yml
-    - .github/workflows/release.yml
+  - cmd/linespec/main.go
+  - cmd/linespec/main_stable.go (new)
+  - cmd/linespec/main_beta.go (new)
+  - pkg/proxy/mysql/
+  - pkg/proxy/postgresql/
+  - pkg/proxy/http/
+  - pkg/proxy/kafka/
+  - pkg/runner/
+  - pkg/registry/
+  - go.mod
+  - README.md
+  - AGENTS.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md (new)
+  - .goreleaser.yml
+  - .github/workflows/release.yml
+  - linespec-beta
+  - .gitignore
 forbidden_scope:
     - re:.*_test\.go$
     - pkg/provenance/**
     - provenance/*.yml
-supersedes: ""
-superseded_by: ""
 related:
     - prov-2026-006
-associated_specs: []
+associated_specs:
+  - path: .gitignore
+    type: config
+    run_command: sh -c 'grep -q "^/linespec-beta$" {{path}} && test ! -e linespec-beta'
 associated_traces: []
 monitors: []
 tags:
@@ -70,3 +122,5 @@ tags:
     - homebrew
     - build-tags
     - v1.0.0
+type: blueprint
+sealed_at_sha: 62453a274cf46a624fbeaa9bebc98e26bb15fc4d

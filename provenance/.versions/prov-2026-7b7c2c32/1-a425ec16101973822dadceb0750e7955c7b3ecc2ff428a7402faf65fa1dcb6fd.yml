@@ -1,0 +1,29 @@
+id: prov-2026-7b7c2c32
+version: 1
+content_hash: sha256:a425ec16101973822dadceb0750e7955c7b3ecc2ff428a7402faf65fa1dcb6fd
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:ca0cf006db470ba824dd08230d9576b363ee1804955ba173377ad702d55a2e1e
+content:
+  id: prov-2026-7b7c2c32
+  title: Fix integer overflow in gRPC interceptor frame handling
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    CodeQL flagged two integer overflow risks in pkg/proxy/grpc/interceptor.go. On 32-bit systems, casting uint32 to int truncates large values; on all platforms, 5+len(msg) can overflow int when msg is near max size, causing a panic in make(). Fix by comparing in uint32 space and capping msgLen.
+  constraints:
+    - No behavioral change for normal-sized messages
+  affected_scope:
+    - pkg/proxy/grpc/interceptor.go
+  related:
+    - prov-2026-ce3ba028
+  associated_specs:
+    - path: pkg/proxy/grpc/interceptor_test.go
+      type: go-test
+  tags:
+    - security
+    - grpc

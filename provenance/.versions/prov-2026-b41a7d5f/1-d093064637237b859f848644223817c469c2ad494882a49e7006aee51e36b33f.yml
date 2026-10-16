@@ -1,0 +1,54 @@
+id: prov-2026-b41a7d5f
+version: 1
+content_hash: sha256:d093064637237b859f848644223817c469c2ad494882a49e7006aee51e36b33f
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-08-20T03:45:02Z"
+spec_hashes:
+  - sha256:9aec9524b36db11b8474e033e6184048f38cbbf480b577349d21ab3c220d7f59
+content:
+  id: prov-2026-b41a7d5f
+  title: Move the injected version into pkg/buildinfo rather than adding a second ldflag target
+  type: imprint
+  created_at: "2026-08-19"
+  author: calebcowen@gmail.com
+  intent: |
+    The runner needs the binary's version to pin the default proxy image, but the
+    injected value lived in `main.version` — unreachable from pkg/runner, since
+    nothing can import package main.
+
+    Three options were on the table. Injecting a second variable (e.g.
+    pkg/runner.Version) alongside main.version was rejected outright: two -X
+    targets across four build systems (Makefile, both .goreleaser.yml build ids,
+    Dockerfile.linespec) is exactly the drift the blueprint's constraint forbids,
+    and the failure would be silent — a binary reporting 3.18.0 while asking the
+    registry for some other tag. Having the runner call debug.ReadBuildInfo()
+    itself was rejected too: it works for `go install` but not for the ldflag
+    path, where Main.Version is "(devel)" and the real version only exists in the
+    ldflag — so released binaries, the ones that matter here, would get it wrong.
+
+    Chose to move the injected variable into a new pkg/buildinfo and repoint all
+    four ldflags at it. The version-resolution logic moved with it as
+    buildinfo.Resolve, and main's resolveDisplayVersion became a one-line
+    delegation. Keeping that symbol with its original signature was deliberate:
+    cmd/linespec/version_test.go's eight-case precedence table then keeps passing
+    unchanged and keeps covering the path `--version` actually takes, so the move
+    is provably behaviour-preserving rather than merely believed to be. Verified
+    end to end: `make build && ./linespec --version` reports 3.18.0 through the
+    new target.
+  affected_scope:
+    - pkg/buildinfo/buildinfo.go
+    - cmd/linespec/main_stable.go
+    - Makefile
+    - .goreleaser.yml
+    - Dockerfile.linespec
+  implements: prov-2026-f57f1570
+  implements_version: 1
+  associated_specs:
+    - path: cmd/linespec/version_test.go
+      type: go_test
+  tags:
+    - version
+    - build
+    - refactor

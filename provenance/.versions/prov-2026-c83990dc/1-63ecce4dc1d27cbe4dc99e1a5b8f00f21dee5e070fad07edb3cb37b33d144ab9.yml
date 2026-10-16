@@ -1,0 +1,44 @@
+id: prov-2026-c83990dc
+version: 1
+content_hash: sha256:63ecce4dc1d27cbe4dc99e1a5b8f00f21dee5e070fad07edb3cb37b33d144ab9
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-06T23:57:01Z"
+spec_hashes:
+  - sha256:add8b9a7db7dc5f4f40e1da8b1c7f251c67a56c91f809cf951841fa9cb6a1cdc
+content:
+  id: prov-2026-c83990dc
+  title: 'Blueprint: generate behavioral spec documents from provenance'
+  type: blueprint
+  created_at: "2026-05-06"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement a `linespec provenance generate` subcommand in the stable CLI that compiles a behavioral specification document from provenance records. The command produces Markdown by default (for human distribution) or YAML (for machine consumption / Phoenix input). All generation logic lives in pkg/provenance/generate.go; CLI wiring is in cmd/linespec/main_stable.go.
+  constraints:
+    - Generate logic is isolated in pkg/provenance/generate.go as a Generate method on Commands
+    - GenerateOptions carries RecordID, Format, OutputFile, and ConfigFile fields
+    - Markdown is the default format; YAML is selectable via --format yaml
+    - Output goes to stdout unless --output file is given
+    - 'Error path: imprint or bug target exits with error'
+    - 'Error path: record not found exits with error'
+    - 'Warning path: superseded or deprecated target prints to stderr, continues'
+    - generateFromAll collects active briefs, then standalone blueprints/bugs at tip of supersedes chain
+    - Imprint records are always excluded from generated output
+    - Bug records that extend a blueprint have their intent appended and constraints merged
+    - Bug records that supersede a blueprint replace that blueprint content in the document
+    - When targeting a brief, implementing blueprints are resolved through the SupersededBy chain
+  affected_scope:
+    - pkg/provenance/generate.go
+    - pkg/provenance/generate_test.go
+    - cmd/linespec/main_stable.go
+  implements: prov-2026-511eef9d
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/generate_test.go
+      type: code
+  tags:
+    - generation
+    - feature
+    - docs

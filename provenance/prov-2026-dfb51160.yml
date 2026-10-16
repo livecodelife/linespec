@@ -1,6 +1,7 @@
 id: prov-2026-dfb51160
 title: Migrate linespec to provenance v2 records and CLI
 status: open
+version: 1
 created_at: "2026-10-16"
 author: calebcowen@gmail.com
 intent: |
@@ -47,8 +48,6 @@ affected_scope:
   - docs/templates/**
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: ""
 associated_specs:

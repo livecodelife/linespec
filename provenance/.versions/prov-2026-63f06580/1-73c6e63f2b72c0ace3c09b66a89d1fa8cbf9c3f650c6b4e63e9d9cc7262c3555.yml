@@ -1,0 +1,64 @@
+id: prov-2026-63f06580
+version: 1
+content_hash: sha256:73c6e63f2b72c0ace3c09b66a89d1fa8cbf9c3f650c6b4e63e9d9cc7262c3555
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T21:42:05Z"
+spec_hashes:
+  - sha256:84feb17b215ae6ae4dd6d946eebec8f3e47ac51bbaccaf8dd3ceb295fb934da4
+  - sha256:703d30c50d29eb362e54141b95a78969edede9a380292344a4bd2d6b2f8d3c07
+  - sha256:04a3ab5f6715d3bce9ce94799bca947bd8a6e2d2dae5c6fb22a146ff41dfc93b
+content:
+  id: prov-2026-63f06580
+  title: 'Fix P3-C Kafka consumer protocol: JoinGroup follower, protocol name, ListOffsets, YAML→JSON HTTP responses'
+  type: blueprint
+  created_at: "2026-04-06"
+  author: calebcowen@gmail.com
+  intent: |
+    Bug fixes discovered during example-suite testing of the P3-C Kafka consumer
+    implementation. Five distinct issues prevented the consumer test from passing:
+
+    1. JoinGroup response made the consumer the group leader with 0-byte member_metadata,
+       causing aiokafka to crash decoding ConsumerProtocolSubscription from empty bytes.
+       Fixed by returning a fake leader ID so the consumer is always a follower.
+
+    2. JoinGroup response hardcoded protocol_name="range" but aiokafka 0.9.0 defaults
+       to RoundRobinPartitionAssignor (protocol "roundrobin"). Fixed by parsing the
+       actual protocol name from the JoinGroup request and echoing it back.
+
+    3. ListOffsets response returned offset=count (high watermark), causing consumers
+       with auto_offset_reset='latest' to seek past the seeded message. Fixed by
+       always returning offset 0 so consumers read from the start of seeded messages.
+
+    4. HTTP interceptor served YAML payload files as raw YAML bytes, but HTTP clients
+       (Python httpx, etc.) call response.json() expecting JSON. Fixed by re-encoding
+       YAML and JSON payloads as JSON before serving.
+
+    5. KAFKA_BROKERS env override was set at step 4 (infrastructure defaults, lowest
+       priority) but .linespec.yml service environment (step 2) overwrote it. Fixed by
+       moving the override to after step 2 so it always wins.
+
+    Also: --debug flag was not parsed in runProxy() so Kafka proxy containers never
+    enabled debug logging even when the runner passed --debug.
+  constraints:
+    - Must not break existing user-linespecs, todo-linespecs, or order-linespecs
+    - YAML→JSON conversion must only apply to application/yaml content types (not XML)
+    - JoinGroup follower approach must still result in SyncGroup being handled correctly
+  affected_scope:
+    - pkg/proxy/kafka/interceptor.go
+    - pkg/proxy/http/interceptor.go
+    - pkg/proxy/http/interceptor_test.go
+    - pkg/runner/runner.go
+    - cmd/linespec/main_beta.go
+    - provenance/prov-2026-abc98f0d.yml
+  related:
+    - prov-2026-abc98f0d
+    - prov-2026-ebfa7835
+  associated_specs:
+    - path: examples/notification-linespecs/process_todo_created_event.linespec
+      type: linespec
+    - path: pkg/proxy/kafka/interceptor_test.go
+      type: go-test
+    - path: pkg/proxy/http/interceptor_test.go
+      type: go-test

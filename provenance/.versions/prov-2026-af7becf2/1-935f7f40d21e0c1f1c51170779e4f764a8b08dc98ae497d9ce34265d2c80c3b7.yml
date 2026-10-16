@@ -1,0 +1,41 @@
+id: prov-2026-af7becf2
+version: 1
+content_hash: sha256:935f7f40d21e0c1f1c51170779e4f764a8b08dc98ae497d9ce34265d2c80c3b7
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-07-10T00:17:03Z"
+spec_hashes:
+  - sha256:7da7a65058ec815ce43acad2435346a4ec1318fc74ff872cebbe72c95ab33ca2
+content:
+  id: prov-2026-af7becf2
+  title: Collapse main_beta.go into the unified Cobra command tree
+  type: imprint
+  created_at: "2026-06-23"
+  author: calebcowen@gmail.com
+  intent: |
+    Collapse the two build-tagged entrypoints into a single command tree. Remove the
+    !beta build tag from the Cobra files, delete main_beta.go's parallel os.Args
+    dispatch and its duplicated handlers, and make the unified Cobra tree the sole
+    entrypoint. Reconcile the command-set divergence (build/clone/import exist only
+    in the stable entrypoint today) so the single binary is a superset that preserves
+    every command. Scheduled after the per-group migrations (334ced6a, c226f230,
+    ede333d1) so the unified tree is already fully declarative when the tag is dropped.
+  constraints:
+    - The resulting single binary must expose every command currently reachable in either entrypoint; no command may be silently dropped.
+    - make build and make build-beta continue to succeed and produce the (now genuinely identical) binary; the beta tag becomes a no-op alias.
+    - Structural deduplication of the entrypoint layer only — no business-logic change in any handler or in pkg/.
+    - Consider renaming provenance_cobra.go (it now holds the whole root tree, not just provenance) as part of this cleanup.
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - cmd/linespec/provenance_cobra.go
+    - cmd/linespec/cli.go
+  implements: prov-2026-f1241113
+  implements_version: 3
+  associated_specs:
+    - path: cmd/linespec/main_stable.go
+      type: code
+  tags:
+    - cobra
+    - cli

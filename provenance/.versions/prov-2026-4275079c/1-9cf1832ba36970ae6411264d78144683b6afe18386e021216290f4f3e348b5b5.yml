@@ -1,0 +1,88 @@
+id: prov-2026-4275079c
+version: 1
+content_hash: sha256:9cf1832ba36970ae6411264d78144683b6afe18386e021216290f4f3e348b5b5
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-18T13:27:12Z"
+spec_hashes:
+  - sha256:88dc4dd92a5cf4f525f272bd258491ecb0789fccc500abf59d64eb596fca1fcd
+  - sha256:713827253bc83ed0028179aba12eeafefdc6619278071c0a36cdd2f9889ccfb6
+  - sha256:f608753bdee36e9db826ff5a4e9f405e5e6590394c8b10fd4290122a434895f7
+  - sha256:0ffdab82503b797d151224120ca1581bccb95275914b67072c64c0de8d5c31ff
+  - sha256:5fb5c9a1456fba9ee2e7097c40fe68d3ca3963da363162868b5c40695afaf25b
+  - null
+content:
+  id: prov-2026-4275079c
+  title: 'Phase 1: Database Configuration and Framework Abstraction'
+  type: blueprint
+  created_at: "2026-03-18"
+  author: calebcowen@gmail.com
+  intent: |
+    Phase 1 of the LineSpec Improvement Plan focuses on addressing critical hardcoded values and framework coupling issues. This includes removing hardcoded database names (todo_api_development), credentials (todo_user/todo_password), and Rails-specific implementation details to make LineSpec framework-agnostic and support diverse technology stacks.
+    Session 1: Database Configuration - Replace hardcoded database values with configurable options read from .linespec.yml configuration files. Support custom database names, usernames, passwords, and initialization scripts. Create a common DatabaseProxyConfig abstraction that works for all database types (MySQL, PostgreSQL, MongoDB, etc.).
+    Session 2: Framework Abstraction - Create a FrameworkConfig interface with adapters for different frameworks (Rails, FastAPI, Django, Express, etc.) to handle framework-specific startup commands, migrations, and warmup logic generically. Remove Rails-only assumptions from the codebase.
+    Session 3: Service Naming - Update Docker image naming to use service.Name from .linespec.yml configuration instead of directory name, supporting decoupled test directories and service names.
+    These changes are foundational and unblock subsequent infrastructure and flexibility improvements in later phases.
+  constraints:
+    - MUST read database credentials from DatabaseConfig instead of hardcoded values
+    - MUST support custom database names other than "todo_api_development"
+    - MUST support custom usernames and passwords instead of "todo_user"/"todo_password"
+    - MUST support custom initialization script filenames beyond "init.sql"
+    - MUST remove hardcoded Rails-specific commands from runner
+    - MUST create DatabaseProxyConfig abstraction for configurable database names across all database types (MySQL, PostgreSQL, MongoDB, etc.)
+    - MUST support Docker image naming based on service.Name from configuration
+    - MUST update all database proxies (MySQL, PostgreSQL) to use common DatabaseProxyConfig abstraction
+    - MUST support Rails, FastAPI, Django, Express, and generic frameworks
+    - MUST allow custom frameworks via explicit start_command in config
+    - MUST make framework warmup configurable (delay and endpoint)
+    - MUST support configurable migration commands per framework
+    - MUST NOT break existing Rails-based test suites
+    - MUST provide backward compatibility for existing .linespec.yml files
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/config/parser.go
+    - pkg/config/framework_config_test.go
+    - pkg/config/database_config_test.go
+    - pkg/proxy/base/database_proxy.go
+    - pkg/proxy/base/database_proxy_test.go
+    - pkg/proxy/mysql/proxy.go
+    - pkg/proxy/mysql/proxy_test.go
+    - pkg/proxy/mysql/proxy_dbname_test.go
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/postgresql/proxy_dbname_test.go
+    - pkg/runner/runner.go
+    - examples/order-service/**
+    - examples/order-linespecs/**
+    - AGENTS.md
+    - README.md
+    - IMPROVEMENT_PLAN.md
+    - Makefile
+  forbidden_scope:
+    - pkg/proxy/http/*.go
+    - pkg/dsl/*.go
+    - pkg/provenance/*.go
+  related:
+    - prov-2026-028
+    - prov-2026-029
+    - prov-2026-030
+    - prov-2026-7136e8c4
+  associated_specs:
+    - path: pkg/config/framework_config_test.go
+      type: go-test
+    - path: pkg/config/database_config_test.go
+      type: go-test
+    - path: pkg/proxy/base/database_proxy_test.go
+      type: go-test
+    - path: pkg/proxy/mysql/proxy_test.go
+      type: go-test
+    - path: pkg/proxy/mysql/proxy_dbname_test.go
+      type: go-test
+    - path: pkg/proxy/postgresql/proxy_dbname_test.go
+      type: go-test
+  tags:
+    - architecture
+    - database
+    - framework
+    - phase-1
+    - improvement-plan

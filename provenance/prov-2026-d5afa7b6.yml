@@ -1,9 +1,11 @@
 id: prov-2026-d5afa7b6
 title: Runner RECEIVE JOB execution branch
 status: implemented
+version: 1
 created_at: "2026-05-14"
 author: test@example.com
 implements: prov-2026-bfa97730
+implements_version: 2
 intent: |
   Wire the Job channel into the runner. At seed-setup time, read job_backend from config and
   seed the right proxy (SeedRedisQueue for redis type, SeedTopic for kafka type, nothing for
@@ -23,8 +25,6 @@ affected_scope:
   - pkg/runner/runner.go
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: d29f7d3948e702b9e51e0b3bad8afbc7c52bf5cf
 associated_specs:

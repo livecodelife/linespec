@@ -1,9 +1,12 @@
 id: prov-2026-c60ec2ad
 title: 'Phase 1: route discovery and framework descriptions (Chi, Rails, Sinatra)'
 status: implemented
+version: 1
 created_at: "2026-06-04"
 author: test@example.com
 implements: prov-2026-0071506f
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: |
   Write the Chi, Rails, and Sinatra framework description files (YAML with tree-sitter
   queries) and build the route table assembler that consumes them.
@@ -39,8 +42,6 @@ affected_scope:
   - pkg/discover/framework/builtin/sinatra.yml
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 4168a6349f7f20a4d9161c4eb223e9f7ecebe6b1
 associated_specs:

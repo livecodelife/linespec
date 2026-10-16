@@ -1,0 +1,36 @@
+id: prov-2026-ccde6162
+version: 1
+content_hash: sha256:75901f14a7d2d419af0f35a4a1e3554ea80a83a9d4f5a9d60f9eb86413331dc1
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-15T06:30:26Z"
+spec_hashes:
+  - sha256:3abbdcac19cd5d6ac1d071a89b902fe443765270e4b757b2a3db85fb39757692
+content:
+  id: prov-2026-ccde6162
+  title: linespec clone command and manifest_url config field
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement the `linespec clone <manifest-url>` top-level command. It calls pkg/manifest.Fetch to download and verify all layers, then bootstraps a new project directory: git init, linespec provenance install-hooks, writes .linespec.yml with provenance.manifest_url set to the source manifest URL, and extracts all present layers to their correct paths. Also adds the manifest_url field to the ProvenanceConfig struct in pkg/config so .linespec.yml can store it.
+  constraints:
+    - git init, install-hooks, and .linespec.yml writing must all succeed before any layer is extracted to disk
+    - .linespec.yml must include provenance.manifest_url set to the original manifest URL (without @version suffix)
+    - the provenance layer is extracted into <destDir>/provenance/
+    - the specs layer is extracted into <destDir>/ preserving repo-relative paths
+    - other layers (code, prompt) are extracted into <destDir>/ preserving paths
+    - the destination directory name defaults to the last path segment of the manifest URL (without extension)
+  affected_scope:
+    - cmd/linespec/**
+    - pkg/config/**
+    - pkg/provenance/**
+  implements: prov-2026-587563e4
+  implements_version: 4
+  associated_specs:
+    - path: pkg/provenance/clone_test.go
+      type: go_test
+  tags:
+    - clone
+    - bootstrapping

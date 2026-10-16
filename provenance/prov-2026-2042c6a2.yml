@@ -1,9 +1,12 @@
 id: prov-2026-2042c6a2
 title: 'Phase 4: blueprint record generation and CLI command wiring'
 status: implemented
+version: 1
 created_at: "2026-06-04"
 author: test@example.com
 implements: prov-2026-0071506f
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: |
   Group related routes into draft blueprint provenance records using the framework
   description's grouping hints, emit those records to the provenance/ directory, and
@@ -44,8 +47,6 @@ affected_scope:
   - cmd/linespec/main_beta.go
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 4b43b8c0bedc6daa5179bb9ee27c5ffb12173d09
 associated_specs:

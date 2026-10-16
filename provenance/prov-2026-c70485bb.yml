@@ -1,8 +1,12 @@
 id: prov-2026-c70485bb
 title: v3.1.0 release preparation
 status: implemented
+version: 2
+reason: 'Supersedes prov-2026-623ee9b6: v3.1.0 release preparation'
 created_at: "2026-04-27"
 author: calebcowen@gmail.com
+aliases:
+  - prov-2026-623ee9b6
 intent: >
   Update CHANGELOG.md and version references to publish v3.1.0.
   Covers WITH body comparison (prov-2026-9e052576), gRPC descriptor fix (prov-2026-a9d51966),
@@ -22,8 +26,6 @@ affected_scope:
   - provenance/prov-2026-623ee9b6.yml
 forbidden_scope: []
 type: blueprint
-supersedes: prov-2026-623ee9b6
-superseded_by: ""
 related: []
 sealed_at_sha: 83265969b30384861419f62ec6543b931072813c
 associated_specs:

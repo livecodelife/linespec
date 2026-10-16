@@ -1,0 +1,31 @@
+id: prov-2026-011
+version: 1
+content_hash: sha256:2842ce554e6864ddbf937f9271dd3cc2aea78a44d39071628677bc9fd982304f
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-13T01:24:05Z"
+spec_hashes: []
+content:
+  id: prov-2026-011
+  title: Fix -c/--config flag to resolve provenance directory relative to config file location
+  type: blueprint
+  created_at: "2026-03-12"
+  author: calebcowen@gmail.com
+  intent: |
+    The -c/--config flag was added in prov-2026-010 to allow specifying a custom .linespec.yml configuration file. However, when using this flag with a config file in a subdirectory (e.g., examples/user-service/.linespec.yml), the provenance directory was being resolved relative to the current working directory instead of relative to the config file location.
+    This caused the provenance loader to look for records in the wrong directory, resulting in "Record not found" errors when trying to lint or complete records from service-level provenance directories.
+    The fix ensures that when a custom config file is specified, the provenance directory path is resolved relative to the directory containing the config file, not the process's current working directory.
+  constraints:
+    - When using -c/--config flag, the provenance directory must be resolved relative to the config file location
+    - Records must be discoverable from service-level provenance directories when using -c flag
+    - The fix must not break existing behavior when -c flag is not used
+    - The path resolution must work correctly for both absolute and relative config file paths
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  tags:
+    - bugfix
+    - cli
+    - provenance
+    - path-resolution

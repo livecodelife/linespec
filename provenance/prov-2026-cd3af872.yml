@@ -1,6 +1,7 @@
 id: prov-2026-cd3af872
 title: Fix enrich path resolution for --dir pointing to external repos
 status: implemented
+version: 1
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -25,8 +26,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-a18e2104
-supersedes: ""
-superseded_by: ""
+implements_version: 1
 related: []
 sealed_at_sha: b56bc6c994fac5fd95a72fb16b9f3cb53cb5e637
 associated_specs:

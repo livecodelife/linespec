@@ -1,0 +1,81 @@
+id: prov-2026-4446307d
+version: 1
+content_hash: sha256:6bfb06b68cd8cd6b58de104e7fd95fbded0f7c5b7b9b180db4daa726b2f45fb9
+parent_hash: ""
+reason: ""
+author: caleb.cowen@linq.com
+created_at: "2026-09-30T19:43:23Z"
+spec_hashes:
+  - sha256:7a25ac637899c34491bd2b6d0ed2e860e12471b73c28dd323051da33b7bb50bc
+  - sha256:7199aaedf349a6ef8202963261e95bab907cb95025de2fd5fa78f7695d7908a8
+  - sha256:f597509cbd307ad9ce7c0a5de091aeb6fbed004567709a0328b5bcc06d1a232b
+  - sha256:c1edb79ac2da6ae2370e2b3639b024f1eca3e46c68cfd87cf8e9dab4a79fa664
+  - sha256:87949e79ffe26983874f23ef3274329a327e0f56dcb98845898ebe0b0d65ab86
+  - sha256:5539208d6a9542695c9808fdeef17d7ba0dad7aba1dbb19ca13befb6bd933afc
+content:
+  id: prov-2026-4446307d
+  title: Next.js + JavaScript/TypeScript support for discover
+  type: blueprint
+  created_at: "2026-09-22"
+  author: caleb.cowen@linq.com
+  intent: |
+    discover currently only detects Go, Ruby, and Python (pkg/discover/lang/lang.go maps only
+    .go/.rb/.py), and only ships framework descriptions for Chi, Rails, and Sinatra
+    (prov-2026-c60ec2ad) — all registration-call-based routing. A file with an unrecognized
+    extension is skipped outright by both the framework-driven pipeline and framework-agnostic
+    mode (prov-2026-a5eb1192), not even reported as unclassified. Verified against a real
+    Next.js 16 App Router codebase (linq-lens): dry-run against app/, components/, lib/,
+    scripts/, and tests/ each returned zero draft records, because none of those files are
+    .go/.rb/.py.
+
+    This blueprint adds (1) TypeScript/JavaScript as a supported language for symbol
+    extraction — tree-sitter already ships production-grade TS/JS grammars, per
+    LINESPEC_DISCOVER.md's own parsing-infrastructure rationale for choosing tree-sitter over
+    per-language native tooling — and (2) a Next.js framework description so App Router (and
+    Pages Router) projects get real route-driven discovery instead of only directory grouping.
+
+    Next.js's routing is filesystem-convention-based, not registration-call-based like
+    Chi/Rails/Sinatra: a route is `app/**/route.ts` exporting `GET`/`POST`/etc., or
+    `app/**/page.tsx` for a page — there is no `r.Post(...)` or `get '/path' do` call site for
+    a tree-sitter route query to match. The route/middleware/group query shape LineSpec's
+    framework description format already assumes (see LINESPEC_DISCOVER.md's "Route queries")
+    is built around call-site matching, so Next.js needs a filesystem-convention detection mode
+    alongside (or instead of) query-based route matching.
+  constraints:
+    - MUST add .ts/.tsx/.js/.jsx to pkg/discover/lang/lang.go's extension map, with tree-sitter TypeScript/JavaScript grammars wired into symbols.Supported() and the per-language dispatch in pkg/discover/boundaries and pkg/discover/routes/assembler.go (currently Go/Ruby only).
+    - MUST NOT regress existing Go/Ruby/Python detection or the Chi/Rails/Sinatra framework-driven pipeline — the same non-regression bar prov-2026-a5eb1192 set for its own additions.
+    - MUST add a Next.js framework description (e.g. pkg/discover/framework/builtin/nextjs.yml) that derives routes from the app/ (and pages/) directory filesystem convention rather than from a route-registration call-site query, since Next.js has no such call site.
+    - MUST detect App Router route handlers (route.ts exporting GET/POST/PUT/PATCH/DELETE) and pages (page.tsx); SHOULD cover the legacy Pages Router (pages/**/*.tsx, pages/api/**/*.ts) where practical.
+    - MUST auto-detect Next.js from `next` in package.json dependencies, consistent with the existing dependency-manifest detection rules (go.mod/Gemfile) LINESPEC_DISCOVER.md already documents.
+    - Protocol boundary tracing for JS/TS SHOULD cover at least one common DB client and outbound fetch/HTTP calls, mirroring the Go/Ruby boundary query pattern in LINESPEC_DISCOVER.md Phase 2 — exact library coverage is an implementation decision, not a hard requirement of this blueprint.
+    - Grouping hints for Next.js SHOULD cluster by route segment/directory (the natural App Router unit), not by arbitrary file directory the way framework-agnostic mode does.
+  affected_scope:
+    - pkg/discover/lang/**
+    - pkg/discover/symbols/**
+    - pkg/discover/routes/**
+    - pkg/discover/boundaries/**
+    - pkg/discover/treesitter/**
+    - pkg/discover/framework/**
+    - cmd/linespec/discover_test.go
+  related:
+    - prov-2026-c60ec2ad
+    - prov-2026-a5eb1192
+  associated_specs:
+    - path: pkg/discover/lang/lang_test.go
+      type: go_test
+    - path: pkg/discover/symbols/symbols_test.go
+      type: go_test
+    - path: pkg/discover/boundaries/boundaries_test.go
+      type: go_test
+    - path: pkg/discover/routes/filesystem_test.go
+      type: go_test
+    - path: pkg/discover/framework/framework_test.go
+      type: go_test
+    - path: cmd/linespec/discover_test.go
+      type: go_test
+  tags:
+    - discovery
+    - nextjs
+    - typescript
+    - javascript
+    - framework-descriptions

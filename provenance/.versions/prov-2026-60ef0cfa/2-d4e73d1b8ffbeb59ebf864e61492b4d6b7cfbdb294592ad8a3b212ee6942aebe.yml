@@ -1,0 +1,55 @@
+id: prov-2026-60ef0cfa
+version: 2
+content_hash: sha256:d4e73d1b8ffbeb59ebf864e61492b4d6b7cfbdb294592ad8a3b212ee6942aebe
+parent_hash: sha256:5c450b8e37c021cfb6350c9202f0a8b37e9f954d44bec452c93298c10dfccf3f
+reason: |-
+  Go's filepath.Ext returns ".linespec" for a directory named ".linespec", so
+  TestParser_AllLineSpecs was picking up the .linespec schema-cache directory
+  as a spec file and failing to parse it. Add file.IsDir() guard to skip directories.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-05-17T18:03:56Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+  - sha256:7b9776f35e8bf34aa241d4b0a2e1367234163b5923705ac8f954e42a1d5081f8
+content:
+  id: prov-2026-60ef0cfa
+  title: 'Blueprint: Hash-based integrity for implemented provenance records'
+  type: blueprint
+  created_at: "2026-05-05"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement the hash-based provenance integrity system described in the parent brief. This blueprint covers three concrete deliverables: a Hasher type that owns the hash manifest (.linespec/hash_manifest.json), content hash computation using SHA-256 over a canonical YAML serialization of each record's fields, and a real validateImmutability check in the Linter that compares live hashes against the manifest without calling git. The Complete() command is extended to seal a content hash into the manifest at transition time, and the manifest also tracks a full-graph hash and an active-subset hash updated on every seal.
+  constraints:
+    - Hash manifest is stored at .linespec/hash_manifest.json, separate from record YAML files
+    - Content hash uses SHA-256 over yaml.Marshal output with FilePath cleared
+    - validateImmutability is implemented without any git calls
+    - Complete() writes the per-record hash and recomputes graph hashes on every seal
+    - If the manifest is absent, validateImmutability emits warnings rather than errors
+    - Full-graph hash covers all records sorted by ID; active-subset excludes superseded and deprecated
+  affected_scope:
+    - pkg/provenance/hasher.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/commands.go
+    - .linespec/hash_manifest.json
+    - pkg/provenance/linter_test.go
+    - pkg/provenance/provenance_test.go
+    - provenance/prov-2026-60ef0cfa.yml
+    - provenance/prov-2026-618113ec.yml
+    - provenance/prov-2026-9a992763.yml
+    - provenance/prov-2026-3ee43780.yml
+    - CHANGELOG.md
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - .github/workflows/ci.yml
+    - .github/workflows/provenance-lint-sarif.yml
+    - .github/workflows/index-provenance.yml
+    - pkg/dsl/integration_test.go
+  implements: prov-2026-82bd8b00
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code
+    - path: pkg/dsl/integration_test.go
+      type: go_test

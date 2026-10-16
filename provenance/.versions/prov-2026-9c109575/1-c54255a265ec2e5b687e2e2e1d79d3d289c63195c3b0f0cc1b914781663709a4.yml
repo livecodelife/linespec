@@ -1,0 +1,48 @@
+id: prov-2026-9c109575
+version: 1
+content_hash: sha256:c54255a265ec2e5b687e2e2e1d79d3d289c63195c3b0f0cc1b914781663709a4
+parent_hash: ""
+reason: |-
+  Considered, then rejected. The overlap selectors introduced by prov-2026-bc57fbdc
+  gate on sealed_at_sha, so implemented records that predate that field (e.g.
+  prov-2026-009, 010, 014, 021, 032) are excluded from the completion-time spec teeth.
+  We initially treated this as a defect.
+
+  Decision: this is intended behavior, not a bug. sealed_at_sha is the going-forward
+  paradigm — every record created under the current tooling has it. The only records
+  without it are the original bootstrap records, which exist solely in this repository
+  (the one where Provenance Records were first built). Requiring sealed_at_sha in the
+  overlap selector is acceptable, and broadening it to cover the legacy records is not
+  worth the added completion cost. This record is deprecated as a won't-fix so the
+  decision is on the books and the fix is not re-proposed later.
+reason_kind: fix
+author: test@example.com
+created_at: "2026-06-11T22:56:53Z"
+spec_hashes: []
+content:
+  id: prov-2026-9c109575
+  title: 'Won''t-fix: overlap selector intentionally requires sealed_at_sha'
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Considered, then rejected. The overlap selectors introduced by prov-2026-bc57fbdc
+    gate on sealed_at_sha, so implemented records that predate that field (e.g.
+    prov-2026-009, 010, 014, 021, 032) are excluded from the completion-time spec teeth.
+    We initially treated this as a defect.
+
+    Decision: this is intended behavior, not a bug. sealed_at_sha is the going-forward
+    paradigm — every record created under the current tooling has it. The only records
+    without it are the original bootstrap records, which exist solely in this repository
+    (the one where Provenance Records were first built). Requiring sealed_at_sha in the
+    overlap selector is acceptable, and broadening it to cover the legacy records is not
+    worth the added completion cost. This record is deprecated as a won't-fix so the
+    decision is on the books and the fix is not re-proposed later.
+  affected_scope:
+    - provenance/prov-2026-9c109575.yml
+  implements: prov-2026-bc57fbdc
+  implements_version: 1
+  tags:
+    - wontfix
+    - decision
+    - governance

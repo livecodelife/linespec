@@ -1,0 +1,34 @@
+id: prov-2026-d5afa7b6
+version: 1
+content_hash: sha256:602e0ddf2a790badddfc1db594c5174103a4f9372ceafa684ec294cae430ef41
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-14T22:57:47Z"
+spec_hashes:
+  - sha256:3112a2f0ec0a346f0b29b88d8262468b6ef13b400cfce5535f7380344cc6bfb9
+content:
+  id: prov-2026-d5afa7b6
+  title: Runner RECEIVE JOB execution branch
+  type: imprint
+  created_at: "2026-05-14"
+  author: test@example.com
+  intent: |
+    Wire the Job channel into the runner. At seed-setup time, read job_backend from config and
+    seed the right proxy (SeedRedisQueue for redis type, SeedTopic for kafka type, nothing for
+    scheduled). In runTestPhase, add a Job branch that shares the same proxy-polling loop as
+    the Kafka consumer path. Exclude Job tests from persistent containers for the same reason
+    as Kafka consumer tests.
+  constraints:
+    - canUsePersistentContainers must return false for types.Job (fresh container per test)
+    - Seed setup reads serviceConfig.JobBackend; redis type calls SeedRedisQueue with queue key and loaded payload; kafka type calls SeedTopic with queue as topic name; scheduled type and missing WithFile skip seeding entirely
+    - If job_backend is nil and channel is Job, return a clear error at seed-setup time
+    - runTestPhase Job branch uses the identical proxy-polling loop as the Kafka consumer path; error message must be generic (not kafka-specific)
+    - No change to any other runner behaviour
+  affected_scope:
+    - pkg/runner/runner.go
+  implements: prov-2026-bfa97730
+  implements_version: 2
+  associated_specs:
+    - path: pkg/runner/port_allocator_test.go
+      type: go_test

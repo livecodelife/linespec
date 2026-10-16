@@ -1,9 +1,12 @@
 id: prov-2026-25d0b28d
 title: Update provenance skill with next, discover, govern, and CLI-first guidance
 status: implemented
+version: 1
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 implements: prov-2026-dfa5051f
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: |
   The provenance skill needs updating to reflect recently shipped capabilities and to
   steer coding agents toward correct usage patterns. Four gaps:
@@ -52,8 +55,6 @@ affected_scope:
   - pkg/provenance/commands.go
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-dfa5051f
   - prov-2026-3bfc4e1a

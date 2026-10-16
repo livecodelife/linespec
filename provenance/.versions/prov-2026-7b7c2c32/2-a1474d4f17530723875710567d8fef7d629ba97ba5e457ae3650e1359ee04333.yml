@@ -1,0 +1,29 @@
+id: prov-2026-7b7c2c32
+version: 2
+content_hash: sha256:a1474d4f17530723875710567d8fef7d629ba97ba5e457ae3650e1359ee04333
+parent_hash: sha256:a425ec16101973822dadceb0750e7955c7b3ecc2ff428a7402faf65fa1dcb6fd
+reason: 'Supersedes prov-2026-ae5d2ade: Fix CodeQL allocation overflow with int-safe max message size'
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:ca0cf006db470ba824dd08230d9576b363ee1804955ba173377ad702d55a2e1e
+content:
+  id: prov-2026-7b7c2c32
+  title: Fix CodeQL allocation overflow with int-safe max message size
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    Previous fix (prov-2026-ae5d2ade) used (1<<32)-1-5 as the max message size which overflows int on 32-bit systems where int is 32 bits. CodeQL still flags the 5+msgLen allocation as potentially overflowing. Replace with an int-safe constant (1<<30 - 1) that fits on all platforms.
+  constraints:
+    - No behavioral change for messages under 1 GB
+  affected_scope:
+    - pkg/proxy/grpc/interceptor.go
+  related:
+    - prov-2026-ae5d2ade
+  associated_specs:
+    - path: pkg/proxy/grpc/interceptor_test.go
+      type: go-test
+  tags:
+    - security
+    - grpc

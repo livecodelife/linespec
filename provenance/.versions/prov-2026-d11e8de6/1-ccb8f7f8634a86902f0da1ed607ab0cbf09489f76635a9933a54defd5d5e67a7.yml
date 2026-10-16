@@ -1,0 +1,30 @@
+id: prov-2026-d11e8de6
+version: 1
+content_hash: sha256:ccb8f7f8634a86902f0da1ed607ab0cbf09489f76635a9933a54defd5d5e67a7
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-10-16T15:25:09Z"
+spec_hashes:
+  - sha256:21d1fe49eb3a29a96b3aec89e9d9e675ec2194be892c631bbeedfc8d09bf7623
+content:
+  id: prov-2026-d11e8de6
+  title: Install the v2 plugin, skills and hooks from provenance assets
+  type: imprint
+  created_at: "2026-10-16"
+  author: calebcowen@gmail.com
+  intent: |
+    Replace linespec's embedded plugin, skills and hook installer with the provenance CLI's own: the
+    Claude Code plugin and skill come from the provenance repo's assets (origin/main at the pinned SHA), and
+    git hooks are installed by `provenance hooks install`. Remove plugins/provenance and the duplicate skill
+    copies that the v1 `install-plugin`/`install-skills`/`install-hooks` embedded, or turn them into thin
+    copies of the assets.
+  affected_scope:
+    - plugins/provenance/**
+    - skills/provenance/**
+    - .claude/skills/provenance/**
+  implements: prov-2026-dfb51160
+  implements_version: 1
+  associated_specs:
+    - path: plugins/provenance/hooks_test.go
+      type: code

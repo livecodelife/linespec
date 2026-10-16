@@ -1,8 +1,49 @@
 id: prov-2026-37958093
 title: An Oracle channel that watches the wire without answering for it
 status: implemented
+version: 2
+reason: |-
+  Read both encodings of a long statement's length, and pin each to a packet the
+  client that sends it really sent.
+
+  prov-2026-37958093 found that a statement carries a one-byte length below 254 and
+  0xFE plus a 4-byte LITTLE-endian length at or above it, and pinned that against
+  captured packets. The capture was sqlplus. Oracle's managed .NET driver does not
+  do that: it sends 0xFE followed by a MARSHALLED length - one byte giving how many
+  length bytes follow, then that many bytes BIG-endian. A 489-byte statement arrives
+  as fe 02 01 e9, where sqlplus would send fe e9 01 00 00. The short form is the same
+  in both, one byte, which is why nothing showed until a statement crossed 254.
+
+  What it costs is not an error but silence. The parser finds no length it can agree
+  with, the packet contributes no interaction, and an expectation written against
+  that statement is reported as never called - or, worse, a different statement in
+  the same request satisfies it and the spec passes. Both were observed on the same
+  page: a get-by-key at 259 bytes vanished, and a paginated list matched its COUNT
+  while the 489-byte ROW_NUMBER query it was written for was never seen.
+
+  It matters more than the byte count suggests. Every service linespec would point
+  at an Oracle is a .NET service using this driver, and 254 bytes is a small
+  statement - a generated repository's SELECT with three columns and an alias is
+  already past it. On the sqlplus form the channel works; on the form its real users
+  send, it silently sees only the short statements.
+
+  The two forms are told apart the way the two packet framings already are, by what
+  agrees with itself: the length must be matched by exactly that many printable
+  bytes opening with a SQL verb, and Statement already scans every offset and keeps
+  the longest match. So reading a second interpretation adds a candidate rather than
+  a branch to get wrong.
+
+  One consequence surfaced while implementing it and belongs here rather than in a
+  comment alone: that agreement test required the verb at byte zero, and a C#
+  verbatim interpolated string - which is how the base class assembles a paginated
+  query - puts a newline and an indent before SELECT. Oracle sends the statement
+  faithfully, whitespace included, so the test was rejecting a real statement on its
+  formatting. Leading whitespace is now skipped before the verb is looked for.
+reason_kind: fix
 created_at: "2026-09-03"
 author: caleb.cowen@linq.com
+aliases:
+  - prov-2026-37bc00ad
 intent: |
   Add READ:ORACLE and WRITE:ORACLE. The proxy frames TNS, pulls the statement out
   of the client's packets, and hands it to the same registry matching every other
@@ -55,6 +96,11 @@ constraints:
   - A packet too large for the framing to express is refused rather than misread.
   - Analysis is delegated to sqlanalysis.Oracle; this package parses the protocol and nothing about SQL.
   - The other channels are untouched; the full unit suite and both existing proxy integration suites pass unchanged.
+  - Both encodings are asserted against packets captured from the client that sends them - sqlplus for one, ODP.NET for the other - never bytes this package encoded.
+  - The existing sqlplus captures keep passing unchanged; this adds a reading, it does not replace one.
+  - A length that does not agree with the bytes that follow it is not a length, whichever encoding proposed it.
+  - The marshalled count byte is bounded, so a stray 0xFE cannot name a length from arbitrary following bytes.
+  - Leading whitespace does not disqualify a statement; the verb is looked for after it, not at byte zero.
 affected_scope:
   - pkg/proxy/oracle/**
   - pkg/config/parser.go
@@ -64,13 +110,14 @@ affected_scope:
   - CHANGELOG.md
   - scripts/go-test-for.sh
   - Makefile
+  - pkg/proxy/oracle/tns.go
+  - pkg/proxy/oracle/tns_test.go
+  - pkg/proxy/oracle/testdata/**
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-0ea7902a
-sealed_at_sha: 9970b84a244bf8ae1f7c6d05743dfbad756da770
+sealed_at_sha: 1fb4ba4720f71a1aa3adf2160fc503d60f111107
 associated_specs:
   - path: pkg/proxy/oracle/tns_test.go
     run_command: scripts/go-test-for.sh

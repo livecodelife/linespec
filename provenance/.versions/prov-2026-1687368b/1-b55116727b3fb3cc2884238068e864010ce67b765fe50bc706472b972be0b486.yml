@@ -1,0 +1,27 @@
+id: prov-2026-1687368b
+version: 1
+content_hash: sha256:b55116727b3fb3cc2884238068e864010ce67b765fe50bc706472b972be0b486
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-20T21:16:16Z"
+spec_hashes:
+  - sha256:c7e52ffc5d3796399cf6d20cee0bdf0f6d19b0f1e53875fbfb0bc4ecb70e8b7d
+content:
+  id: prov-2026-1687368b
+  title: 'Fix Homebrew post_install: use rescue BuildError instead of unless system'
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: |
+    Homebrew's Formula#system raises BuildError on failure; it does not return false. On success it returns nil, which is falsy in Ruby. The formula used `unless system(...)` which evaluates to `unless nil` — always truthy — so the opoo warning fired on every install regardless of whether linespec build succeeded. The fix uses `rescue BuildError` inside a begin/rescue block, which is the idiomatic Homebrew pattern: system runs and raises on failure; the rescue catches BuildError and shows the opoo warning; on success nothing is caught and post_install returns cleanly.
+  constraints:
+    - Use begin/rescue BuildError, not unless/system — Homebrew's system never returns false
+    - The opoo text is unchanged
+  affected_scope:
+    - .goreleaser.yml
+  related:
+    - prov-2026-0e5c82e4
+  associated_specs:
+    - path: .goreleaser.yml
+      type: code

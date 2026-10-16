@@ -1,0 +1,38 @@
+id: prov-2026-a31a18c9
+version: 1
+content_hash: sha256:103b9e7463319e12b33bcb589435247c9ff0109b74d6095390ac45f180c0f5a4
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-17T19:16:29Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+  - sha256:408b02e4c9084b0cb5c0d52fb7f1f3fc222587008c9b9b43b5e55c6e1f327ed5
+content:
+  id: prov-2026-a31a18c9
+  title: 'v2.5.0 release: install-skills docs update and version bump'
+  type: blueprint
+  created_at: "2026-04-17"
+  author: calebcowen@gmail.com
+  intent: Update all documentation and the docs site to reflect the renamed install-skills command and new linespec-testing skill, then bump the version to v2.5.0 and tag the release.
+  constraints:
+    - All references to install-skill must be replaced with install-skills
+    - All references to the --name flag must be removed
+    - The linespec-testing skill must be mentioned alongside the provenance skill in install instructions
+    - Version string must be updated to v2.5.0 in all files
+  affected_scope:
+    - CHANGELOG.md
+    - PROVENANCE_RECORDS.md
+    - README.md
+    - VERSION
+    - docs/index.html
+    - docs/provenance.html
+    - docs/docs.html
+    - docs/linespec.html
+  related:
+    - prov-2026-5a3f28a5
+  associated_specs:
+    - path: CHANGELOG.md
+      type: documentation
+    - path: VERSION
+      type: documentation

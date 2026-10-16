@@ -1,8 +1,47 @@
 id: prov-2026-8ea5aa89
 title: Auto-commit on provenance record status change
-status: superseded
+status: implemented
+version: 2
+reason: |-
+  Supersedes prov-2026-8ea5aa89 (Auto-commit on provenance record status change).
+  That blueprint added the commit_on_status_change option: when enabled, the open,
+  complete, and deprecate commands stage the modified record file and create a git
+  commit after a successful status transition. This record carries that feature
+  forward unchanged in every respect except one: how a rejected commit is handled.
+
+  The original blueprint deliberately specified that when the git commit fails (e.g.
+  a pre-commit hook rejects it), the on-disk status change is left applied so the
+  user can resolve and commit manually. In practice this leaves the repository in an
+  inconsistent state: the record has been mutated and saved with no matching commit.
+  It is especially damaging for the complete command, which before committing sets
+  status to implemented, writes sealed_at_sha, and calls SealRecord to write the
+  record's content hash into the manifest. A rejected commit therefore leaves the
+  record sealed-and-implemented on disk but uncommitted — re-running complete fails
+  with "already implemented", and the now-immutable record cannot be cleanly
+  re-edited. The user is stuck reconciling the state by hand.
+
+  This record overturns that one decision: the status change and its auto-commit must
+  be atomic. If the commit fails, the record file — and, for complete, the hash
+  manifest — are restored to their pre-transition contents and unstaged, leaving the
+  repository exactly as if the transition had never been attempted. The error is
+  still surfaced to the user. All other behavior of the feature is preserved.
+
+  Beyond the auto-commit case, the open and complete transitions must never persist a
+  record in a state it cannot legally occupy. complete in particular seals the record
+  (sealed_at_sha + manifest hash) and makes it immutable; if the resulting record does
+  not pass lint, it is locked into an invalid, unfixable state. So open and complete
+  must validate the post-transition record (lint it) before the change is committed to
+  disk, UNCONDITIONALLY — independent of commit_on_status_change. If validation fails,
+  the transition is rolled back to the pre-transition state (for complete, the seal and
+  manifest hash are undone too) and a clear, actionable message is emitted explaining
+  which checks failed and that the transition was aborted. The validation guard and the
+  auto-commit atomicity share one rollback primitive; failure on either path leaves the
+  record exactly as it was before the command ran and tells the user why.
+reason_kind: fix
 created_at: "2026-05-19"
 author: test@example.com
+aliases:
+  - prov-2026-79ce86dc
 intent: |
   Add a commit_on_status_change boolean option to the provenance section of .linespec.yml. When enabled, the open, complete, and deprecate commands automatically stage the modified record file and create a git commit with the appropriate conventional message after a successful status transition. The create command is explicitly excluded because records are not fully filled out at creation time and would fail git hooks.
 constraints:
@@ -11,6 +50,14 @@ constraints:
   - If the git commit fails (e.g. hook rejection), the error must be surfaced to the user; the status change on disk is already applied so the user can resolve and commit manually.
   - The feature must be opt-in via the commit_on_status_change boolean in .linespec.yml provenance section; default is false so existing users see no behavior change.
   - The field must be wired through both main_stable.go and main_beta.go config loaders.
+  - If the git commit fails (e.g. hook rejection), the status change must be rolled back so the transition is atomic with its commit — the record file, and for complete the hash manifest, are restored to their pre-transition contents and unstaged, leaving the repository exactly as if the transition had not been attempted. The error must still be surfaced to the user.
+  - For complete, the rollback must also undo the seal — no orphaned sealed_at_sha on disk and no stale or orphaned hash in the manifest may remain after a failed commit.
+  - The in-memory record handled after a failed transition must reflect the rolled-back (original) status, not the attempted new status.
+  - On a successful commit, behavior is unchanged from the superseded blueprint (status changed, sealed where applicable, committed).
+  - The open and complete commands must lint the post-transition record before persisting the change, and must do so unconditionally — regardless of whether commit_on_status_change is enabled. If the record would not pass lint, the transition is aborted and rolled back to the pre-transition state, so a record (especially a sealed/immutable completed one) can never be left in a state that fails validation.
+  - The commit-failure rollback applies only when commit_on_status_change is enabled and the commit actually fails; the lint-validation rollback always applies to open and complete. Neither path may leave the record half-transitioned.
+  - Every aborted transition — whether from failed lint validation or a rejected commit — must emit a clear, actionable message stating why the transition did not happen (which lint checks failed, or that the commit/hook was rejected) and confirming the record was left unchanged.
+  - make test must pass.
 affected_scope:
   - pkg/config/types.go
   - pkg/provenance/commands.go
@@ -18,17 +65,19 @@ affected_scope:
   - cmd/linespec/main_stable.go
   - cmd/linespec/main_beta.go
   - .linespec.yml
+  - pkg/provenance/transition_rollback_test.go
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: prov-2026-79ce86dc
 related: []
-sealed_at_sha: cbc17683c2b7f86710e3377b05f8fabf4dddd49c
+sealed_at_sha: b494e85c7b2fa3fc3c28c0574c4340553d092f97
 associated_specs:
   - path: pkg/provenance/provenance_test.go
     type: go_test
     run_command: make test
   - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/transition_rollback_test.go
     type: go_test
     run_command: make test
 associated_traces: []

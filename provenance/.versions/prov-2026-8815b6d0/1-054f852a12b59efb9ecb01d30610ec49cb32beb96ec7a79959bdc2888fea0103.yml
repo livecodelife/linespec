@@ -1,0 +1,23 @@
+id: prov-2026-8815b6d0
+version: 1
+content_hash: sha256:054f852a12b59efb9ecb01d30610ec49cb32beb96ec7a79959bdc2888fea0103
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T03:59:35Z"
+spec_hashes:
+  - sha256:576d68e32b52dfea8966e4e2591eda9049380cef673bec6ac8264a9254817d3d
+content:
+  id: prov-2026-8815b6d0
+  title: Mark Chunk 2 complete in project management doc
+  type: imprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: Mark Chunk 2 as complete in PROVENANCE_PROJECT_MANAGEMENT.md.
+  affected_scope:
+    - PROVENANCE_PROJECT_MANAGEMENT.md
+  implements: prov-2026-53e3e311
+  implements_version: 1
+  associated_specs:
+    - path: PROVENANCE_PROJECT_MANAGEMENT.md
+      type: config

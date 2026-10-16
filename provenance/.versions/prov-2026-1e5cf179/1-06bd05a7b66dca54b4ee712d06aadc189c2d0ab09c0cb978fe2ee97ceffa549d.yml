@@ -1,0 +1,27 @@
+id: prov-2026-1e5cf179
+version: 1
+content_hash: sha256:06bd05a7b66dca54b4ee712d06aadc189c2d0ab09c0cb978fe2ee97ceffa549d
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-18T19:58:38Z"
+spec_hashes:
+  - sha256:132d279916f66954d57bd0294552f3635adf634595f09a834dd30626651e690d
+content:
+  id: prov-2026-1e5cf179
+  title: 'Diagnose infra container failures: exit detection and log capture in port wait'
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    waitForContainerPort silently polls for 30 seconds when an infrastructure container (e.g., Kafka) exits immediately on startup — there's no early exit detection, so the full 30-second timeout elapses before any error is reported, and the actual crash reason is never surfaced. Fix: detect container exit inside the poll loop and fail immediately with the container's stdout/stderr logs captured from the Docker API, so the real cause is visible in CI output. Also fix the Kafka CLUSTER_ID to be generated at runtime with base64.RawURLEncoding so it is always a properly-padded base64url UUID (the hardcoded value MkU3OEVBNTcwNTJENDM2Qk has non-zero padding bits in its final character).
+  constraints:
+    - Exit detection must only fail-fast for containers in "exited" or "dead" state — "running" containers with no port yet must keep polling
+    - Container logs must be captured with a short timeout (5 seconds) to avoid blocking indefinitely
+    - Log output must be included in the error message so it is visible in CI
+    - The generated Kafka cluster ID must use base64.RawURLEncoding (URL-safe, no padding) over 16 random bytes
+  affected_scope:
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: pkg/runner/runner.go
+      type: code

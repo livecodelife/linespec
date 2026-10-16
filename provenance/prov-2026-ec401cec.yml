@@ -1,6 +1,7 @@
 id: prov-2026-ec401cec
 title: Wire body matching into HTTP, gRPC, and Kafka proxy interceptors
 status: implemented
+version: 1
 created_at: "2026-04-26"
 author: noreply@anthropic.com
 intent: Replace FindHTTPMockWithHeaders with FindHTTPMockWithBody in the HTTP interceptor;
@@ -9,6 +10,7 @@ intent: Replace FindHTTPMockWithHeaders with FindHTTPMockWithBody in the HTTP in
   mock WithFile via dsl.PayloadLoader and calls verify.CompareJSON against the actual request
   body. Also adds SetResolver to the Kafka interceptor so variables work in WITH files.
 implements: prov-2026-9e052576
+implements_version: 2
 constraints: []
 affected_scope:
   - pkg/proxy/http/interceptor.go
@@ -17,8 +19,6 @@ affected_scope:
   - cmd/linespec/main_beta.go
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: af95233acc760a78f0bd3fdd66f72edb22d50911
 associated_specs: []

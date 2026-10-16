@@ -1,9 +1,12 @@
 id: prov-2026-c6f1241c
 title: 'discover --enrich: configurable model & max_tokens, robust empty-response handling for local LLMs'
 status: implemented
+version: 1
 created_at: "2026-07-20"
 author: calebcowen@gmail.com
 implements: prov-2026-0071506f
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: |
   Phase 5 (`--enrich`) hard-codes the LLM request: the model is always the
   provider default (`gpt-4o-mini` / `claude-haiku-4-5-...`) and `max_tokens` is
@@ -44,8 +47,6 @@ affected_scope:
   - pkg/discover/enrich/**
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: e19e5ddc7e2ff7167002951af845fd9d8beb23c9
 associated_specs:

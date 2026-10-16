@@ -1,0 +1,29 @@
+id: prov-2026-9c0de23b
+version: 1
+content_hash: sha256:c01e840b1d36621455b1ccd5771a9085d78bfee2c70e8e3b426b4ed1534ea608
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-19T17:41:06Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-9c0de23b
+  title: Implement PROV023 imprint scope containment check
+  type: imprint
+  created_at: "2026-05-19"
+  author: test@example.com
+  intent: |
+    Add validateImprintScopeContainment to linter.go and wire it into lintRecord. The check enumerates actual files matched by the imprint's affected_scope patterns and tests each against the blueprint's affected_scope using MatchPattern. If any matched file is not covered by any blueprint pattern, emit a PROV023 error. Add corresponding test cases to linter_test.go.
+  constraints:
+    - Uses existing MatchPattern and a new filesMatchingPatterns helper; no new pattern-matching logic.
+    - Exempt when imprint is draft, remote, or when blueprint has no affected_scope.
+    - One error issue per out-of-scope file, consistent with existing per-surface patterns.
+  affected_scope:
+    - pkg/provenance/linter.go
+    - pkg/provenance/linter_test.go
+  implements: prov-2026-d9f69b27
+  implements_version: 2
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: go_test

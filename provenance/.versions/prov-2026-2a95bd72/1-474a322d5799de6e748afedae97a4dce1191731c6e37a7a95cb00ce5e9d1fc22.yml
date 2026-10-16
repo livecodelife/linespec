@@ -1,0 +1,37 @@
+id: prov-2026-2a95bd72
+version: 1
+content_hash: sha256:474a322d5799de6e748afedae97a4dce1191731c6e37a7a95cb00ce5e9d1fc22
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-14T22:52:49Z"
+spec_hashes:
+  - sha256:b4317017e6f146786ff3d0da5a3ed02fdfd9b6c69144925198c78a375e68a037
+content:
+  id: prov-2026-2a95bd72
+  title: Redis proxy BRPOP/LPOP seed mechanism
+  type: imprint
+  created_at: "2026-05-14"
+  author: test@example.com
+  intent: |
+    Extend the Redis proxy and registry to support seeding a job payload that is returned on
+    the worker's next BRPOP, BLPOP, or LPOP call. Mirrors the existing Kafka SeedTopic pattern:
+    registry holds the seed bytes, interceptor copies them at startup, and returns the RESP2
+    two-element array [queue-key, payload] on the first matching pop command. This is the
+    protocol-level mechanism that lets Redis-backed job frameworks (Sidekiq, BullMQ, Asynq, etc.)
+    receive a test job without any service modification.
+  constraints:
+    - Add SeedRedisQueue(key, value) and GetRedisSeeds() to registry, mirroring SeedTopic/GetSeeds
+    - Redis interceptor gets a seeds map initialized from registry at startup
+    - On BRPOP, BLPOP, or LPOP with a seeded key, pop and return the seed as a RESP2 two-element bulk-string array of queue-key and payload bytes; consume the seed so a second call returns nil (natural empty-queue behaviour)
+    - If no seed exists for the key, fall through to existing mock lookup then nil response
+    - BRPOP/BLPOP/LPOP must be added to the read-command classification so they return nil (not OK) when no seed and no mock match
+    - Thread-safe — seed map access protected by the interceptor's existing mutex
+  affected_scope:
+    - pkg/registry/registry.go
+    - pkg/proxy/redis/interceptor.go
+  implements: prov-2026-bfa97730
+  implements_version: 2
+  associated_specs:
+    - path: pkg/proxy/redis/interceptor_test.go
+      type: go_test

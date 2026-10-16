@@ -1,6 +1,7 @@
 id: prov-2026-40b513dc
 title: Reword three supersede-implying enforcement messages (git.go stale-scope, formatter.go hint, linter.go locked-scope) so none implies supersede is required
 status: implemented
+version: 1
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -11,6 +12,7 @@ intent: >
   linter.go locked-scope error (resolving overlap is a governance decision, not a
   mandatory supersede). Keeps wording consistent with the skill/doc decision tree.
 implements: prov-2026-38971b27
+implements_version: 1
 constraints:
   - Strings only; no logic, control flow, severities, or field names change.
   - make test must pass.
@@ -21,8 +23,6 @@ affected_scope:
   - pkg/provenance/git_test.go
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: e5e582796cbea9c0edd91328e787631dc75afcb4
 associated_specs:

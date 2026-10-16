@@ -1,0 +1,59 @@
+id: prov-2026-95b526f5
+version: 1
+content_hash: sha256:769e63618e5384a0320cda14bc769182f2f98d109ab73dd3fe67f1bf9cedbb29
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-22T19:27:30Z"
+spec_hashes:
+  - sha256:f597509cbd307ad9ce7c0a5de091aeb6fbed004567709a0328b5bcc06d1a232b
+content:
+  id: prov-2026-95b526f5
+  title: 'Phase 2: protocol boundary tracing via syntactic call graph walk'
+  type: blueprint
+  created_at: "2026-06-04"
+  author: test@example.com
+  intent: |
+    For each discovered handler, locate its implementation and walk the call graph
+    syntactically (bounded to 3 levels deep by default) running the framework
+    description's protocol boundary queries against each function body.
+
+    Boundary queries identify calls to known database, HTTP client, cache, and message
+    queue libraries. Each hit yields (protocol, direction, target):
+      - Go: pgx/database-sql (postgresql), net/http client (http), go-redis (redis),
+        sarama/franz-go (kafka)
+      - Ruby: ActiveRecord (Model.where/find/create/update/destroy and raw SQL via
+        ActiveRecord::Base.connection.execute), Net::HTTP/Faraday/HTTParty (http),
+        Redis gem (redis), Bunny/Sneakers (rabbitmq), ruby-kafka (kafka)
+
+    ActiveRecord model names are mapped to table names via Rails naming conventions
+    (pluralize + underscore). Raw SQL table names are extracted from static query strings.
+    Dynamically constructed queries and metaprogrammed calls are flagged as
+    "dynamic — manual classification needed" rather than silently dropped.
+
+    The call graph walk is purely syntactic (tree-sitter, no type resolution). Cross-file
+    function resolution relies on naming conventions and import patterns, not resolved types.
+  constraints:
+    - 'MUST walk call graph syntactically up to configurable depth (default: 3 levels)'
+    - MUST implement boundary queries for Go (pgx, database/sql, net/http client, go-redis, sarama/franz-go)
+    - MUST implement boundary queries for Ruby (ActiveRecord, Net::HTTP, Faraday, HTTParty, Redis, Bunny, ruby-kafka)
+    - MUST infer ActiveRecord table names from model names via Rails naming conventions
+    - MUST extract table names from static raw SQL strings
+    - MUST flag unresolvable dynamic patterns explicitly rather than dropping them
+    - MUST produce (protocol, direction, target) tuples per boundary hit
+  affected_scope:
+    - pkg/discover/boundaries/**
+    - pkg/discover/framework/builtin/chi.yml
+    - pkg/discover/framework/builtin/rails.yml
+    - pkg/discover/framework/builtin/sinatra.yml
+  implements: prov-2026-0071506f
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/discover/boundaries/boundaries_test.go
+      type: go_test
+  tags:
+    - discovery
+    - boundaries
+    - protocol-tracing
+    - call-graph

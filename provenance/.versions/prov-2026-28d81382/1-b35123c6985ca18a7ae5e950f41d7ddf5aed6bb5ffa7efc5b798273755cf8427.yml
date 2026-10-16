@@ -1,0 +1,50 @@
+id: prov-2026-28d81382
+version: 1
+content_hash: sha256:b35123c6985ca18a7ae5e950f41d7ddf5aed6bb5ffa7efc5b798273755cf8427
+parent_hash: ""
+reason: ""
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+created_at: "2026-08-12T15:15:29Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-28d81382
+  title: Reconstruct 3.17.0 CHANGELOG entry from seven completed records
+  type: imprint
+  created_at: "2026-08-12"
+  author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+  intent: |
+    Record how the [3.17.0] CHANGELOG.md entry was reconstructed, since
+    [Unreleased] was empty at release time and the entry had to be assembled
+    after the fact from the seven records' own intent/constraints text rather
+    than from incrementally-maintained changelog fragments.
+  constraints:
+    - |
+      Each bullet cites its governing record link(s) and, where the record's
+      intent text names a GitHub issue number, that issue number — matching the
+      existing CHANGELOG.md convention (e.g. "(#166)") rather than introducing a
+      new citation style.
+    - |
+      prov-2026-93bcd5b8 (the write_restriction imprint) is folded into the same
+      bullet as its parent blueprint prov-2026-c1515def rather than getting its
+      own entry — imprints document implementation decisions for readers of the
+      provenance graph, not user-facing behavior, so a changelog reader only
+      needs the one bullet per shipped behavior change.
+    - |
+      No new prose describes functionality beyond what each record's own intent
+      and constraints already establish — per the blueprint's constraint that
+      this release adds no doc content beyond version pins and the changelog.
+  implements: prov-2026-0cc0b3cc
+  implements_version: 1
+  related:
+    - prov-2026-3687be46
+    - prov-2026-28061661
+    - prov-2026-a0bac0d9
+    - prov-2026-c1515def
+    - prov-2026-93bcd5b8
+    - prov-2026-f011d231
+    - prov-2026-3486daec
+  associated_specs:
+    - path: CHANGELOG.md
+  tags:
+    - release

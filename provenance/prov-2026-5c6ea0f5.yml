@@ -1,6 +1,7 @@
 id: prov-2026-5c6ea0f5
 title: Rebuild linespec-beta binary with multi-database support
 status: implemented
+version: 1
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -15,8 +16,6 @@ constraints:
 affected_scope:
   - linespec-beta
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-ad64db54
   - prov-2026-91ed882c
@@ -30,3 +29,4 @@ monitors: []
 tags:
   - binary
   - multi-database
+type: blueprint

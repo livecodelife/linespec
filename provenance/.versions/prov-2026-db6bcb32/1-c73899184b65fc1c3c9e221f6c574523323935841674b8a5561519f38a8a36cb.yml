@@ -1,0 +1,33 @@
+id: prov-2026-db6bcb32
+version: 1
+content_hash: sha256:c73899184b65fc1c3c9e221f6c574523323935841674b8a5561519f38a8a36cb
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-15T12:20:49Z"
+spec_hashes:
+  - sha256:8a800c4b33d6a1593bf02d70eff4606f33886bc0d55a5507190b19a15f92f6a7
+  - sha256:28b9d94eb8416a78ef820f37b1d3d8272021b446ad962b3ae296cde899a11ae3
+content:
+  id: prov-2026-db6bcb32
+  title: Document linespec clone and import in PROVENANCE_RECORDS.md and README.md
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Add ### Clone and ### Import sections to PROVENANCE_RECORDS.md after ### Publish,
+    and add linespec clone and linespec import to the CLI Commands block in README.md.
+  constraints:
+    - Clone section covers usage, --version and --dir flags, behavior (git init, hooks, .linespec.yml, layer extraction), and when to use
+    - Import section covers usage, --version flag, behavior (conflict check, atomic write, post-lint), and when to use
+    - README CLI Commands block adds clone and import under the Manifest distribution group
+  affected_scope:
+    - PROVENANCE_RECORDS.md
+    - README.md
+  implements: prov-2026-1df957ee
+  implements_version: 1
+  associated_specs:
+    - path: PROVENANCE_RECORDS.md
+      type: code
+    - path: README.md
+      type: code

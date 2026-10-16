@@ -1,0 +1,40 @@
+id: prov-2026-9d655373
+version: 1
+content_hash: sha256:145a06cb73f0344c47c6969a0a7ba39491dbbfb7bf1b74c1c93d3e27c8250fb7
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-22T19:27:30Z"
+spec_hashes:
+  - sha256:ef33e59ad84f4c2bde9fe17169f9c17ef94d6f60581b84e3420f8e1d98deb9c8
+content:
+  id: prov-2026-9d655373
+  title: Framework description YAMLs for Chi, Rails, Sinatra
+  type: imprint
+  created_at: "2026-06-04"
+  author: test@example.com
+  intent: |
+    Write the three built-in framework description YAML files: chi.yml, rails.yml, sinatra.yml.
+
+    Each file contains detection rules, route queries, middleware queries, group queries, and
+    boundary query stubs for Sedum sharing. Key decisions:
+    - Chi group query captures the func_literal body node so the assembler can determine which
+      route registrations fall within its byte range, enabling full prefix resolution.
+    - MiddlewareQuery and GroupQuery types lack a Filter field (Phase 0 decision), so filtering
+      is handled via inline tree-sitter #eq?/#match? predicates applied by FilterPredicates.
+    - Rails has two route queries: one that captures the `to:` handler, one without. Route
+      deduplication by (method, path, file, line) ensures only the more-specific match is kept.
+    - Rails resources/resource queries capture the symbol name; expansion to conventional
+      endpoints is done in Go code (not in tree-sitter).
+  affected_scope:
+    - pkg/discover/framework/builtin/chi.yml
+    - pkg/discover/framework/builtin/rails.yml
+    - pkg/discover/framework/builtin/sinatra.yml
+  implements: prov-2026-c60ec2ad
+  implements_version: 1
+  associated_specs:
+    - path: pkg/discover/routes/routes_test.go
+      type: go_test
+  tags:
+    - discovery
+    - framework-descriptions

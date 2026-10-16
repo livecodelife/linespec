@@ -1,0 +1,46 @@
+id: prov-2026-031
+version: 1
+content_hash: sha256:1a8ec0358ec5a52bf85c5b1deb27c890c8001a8ff8a8f06dbaa318319487c6e5
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-13T18:50:46Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+  - sha256:bf77fb8f654071a3019a1a9661dd7e35c2ad7d6c24df2c69696e931b99029e33
+content:
+  id: prov-2026-031
+  title: Fix path validation in linter - associated_specs and scope patterns
+  type: blueprint
+  created_at: "2026-03-13"
+  author: calebcowen@gmail.com
+  intent: |
+    Fix two critical validation bugs in the provenance linter that allow invalid file paths to pass validation silently. These bugs were discovered when a path with parentheses in affected_scope was not flagged as an error.
+    Bug 1: associated_specs validation only checks for os.IsNotExist(err), which means permission errors, I/O errors, and invalid path syntax are silently ignored. This allows invalid proof artifacts to pass validation.
+    Bug 2: Scope pattern validation (affected_scope and forbidden_scope) only validates that regex patterns compile correctly. It does NOT check whether exact file paths exist on disk, or whether glob/regex patterns match any real files. This allows non-existent files to be listed in scope.
+    The fix must: 1. Handle ALL os.Stat errors for associated_specs, not just IsNotExist 2. Add path existence validation for exact paths and glob patterns in scope 3. Only apply scope validation to OPEN records (preserving dead records) 4. Error on directories in exact paths (users should use globs for dirs) 5. Use filepath.Walk to validate regex patterns match at least one file (including untracked)
+    This ensures that provenance records accurately reflect the actual files they govern, and prevents silent failures when paths are mistyped or files are moved/deleted.
+  constraints:
+    - The linter MUST handle ALL os.Stat errors for associated_specs paths, not just IsNotExist
+    - The linter MUST validate that exact paths in affected_scope and forbidden_scope exist (including untracked)
+    - The linter MUST validate that exact paths are files, not directories
+    - The linter MUST validate that glob patterns match at least one existing file (including untracked)
+    - The linter MUST validate regex patterns match at least one existing file (including untracked)
+    - Scope path validation MUST only apply to OPEN records (preserving dead records feature)
+    - All path validation errors MUST be severity error, not warning
+    - The dead records check MUST continue to work as before for all record statuses
+  affected_scope:
+    - pkg/provenance/linter.go
+    - pkg/provenance/git.go
+    - pkg/provenance/linter_test.go
+    - pkg/provenance/provenance_test.go
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: go-test
+    - path: pkg/provenance/provenance_test.go
+      type: go-test
+  tags:
+    - bug-fix
+    - validation
+    - linter
+    - provenance

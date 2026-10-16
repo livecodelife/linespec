@@ -1,8 +1,21 @@
 id: prov-2026-60ef0cfa
 title: 'Blueprint: Hash-based integrity for implemented provenance records'
 status: implemented
+version: 3
+reason: |-
+  The complete command calls SealRecord to write the correct hash of the newly-implemented
+  record to the hash manifest on disk, but CommitRecord only stages the record YAML file.
+  The manifest update is left unstaged, so the committed manifest always has a stale hash
+  for the just-completed record. PROV-IMM then fires in CI because the stored hash (from
+  the last explicit compile run) does not match the current file content (which was modified
+  by complete). The fix makes CommitRecord variadic and passes the manifest path alongside
+  the record file in the Complete command's auto-commit.
+reason_kind: fix
 created_at: "2026-05-05"
 author: calebcowen@gmail.com
+aliases:
+  - prov-2026-98b8bd73
+  - prov-2026-077a7629
 intent: >
   Implement the hash-based provenance integrity system described in the parent
   brief. This blueprint covers three concrete deliverables: a Hasher type that
@@ -19,6 +32,9 @@ constraints:
   - Complete() writes the per-record hash and recomputes graph hashes on every seal
   - If the manifest is absent, validateImmutability emits warnings rather than errors
   - Full-graph hash covers all records sorted by ID; active-subset excludes superseded and deprecated
+  - CommitRecord signature must become variadic (message string, filePaths ...string) to avoid breaking Open and Deprecate callers
+  - Complete must include the manifest path in the commit only when a manifest exists (ManifestExists check)
+  - make test must pass
 affected_scope:
   - pkg/provenance/hasher.go
   - pkg/provenance/linter.go
@@ -36,17 +52,26 @@ affected_scope:
   - .github/workflows/ci.yml
   - .github/workflows/provenance-lint-sarif.yml
   - .github/workflows/index-provenance.yml
+  - pkg/dsl/integration_test.go
+  - pkg/provenance/git.go
+  - pkg/provenance/git_test.go
 forbidden_scope: []
 type: blueprint
 implements: prov-2026-82bd8b00
-supersedes: ""
-superseded_by: ""
+implements_repo: livecodelife-cli
+implements_version: 1
 related: []
-sealed_at_sha: 1cb923875df1281dd4232f33ffff938fee730de7
+sealed_at_sha: f3557db0d7cda38aca6fdafd880614f87884f923
 associated_specs:
   - path: pkg/provenance/linter_test.go
     type: code
     run_command: go test ./pkg/provenance/... -run "TestHash|TestValidateImmutability|TestHasher"
+  - path: pkg/dsl/integration_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/git_test.go
+    type: go_test
+    run_command: make test
 associated_traces: []
 monitors: []
 tags: []

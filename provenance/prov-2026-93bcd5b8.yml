@@ -1,9 +1,11 @@
 id: prov-2026-93bcd5b8
 title: 'write_restriction config toggle: *bool default-true, gate both Reconcile call sites and relockClosedScope'
 status: implemented
+version: 1
 created_at: "2026-07-31"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 implements: prov-2026-c1515def
+implements_version: 1
 intent: |-
   Record the implementation decisions behind provenance.write_restriction: the
   *bool encoding chosen for the config field, and the two non-obvious places
@@ -17,8 +19,6 @@ constraints:
 affected_scope: []
 forbidden_scope: []
 type: imprint
-supersedes: ''
-superseded_by: ''
 related: []
 sealed_at_sha: 9e24c78c80d4392c53ddbc34af9960f2314044b2
 associated_specs:

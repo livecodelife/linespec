@@ -1,0 +1,35 @@
+id: prov-2026-08b36e49
+version: 1
+content_hash: sha256:17a12d775c5c5915782cc86b2523ef7d208a6bf33c72757ad4114d374788b291
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-14T15:42:36Z"
+spec_hashes:
+  - sha256:f59c883a3e36c32dbb599ac6e2d2f39353c2ae5b8e0d110a142259fc17db0f78
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-08b36e49
+  title: Implement --warn/--info/--all output filter flags for lint
+  type: imprint
+  created_at: "2026-05-14"
+  author: calebcowen@gmail.com
+  intent: |
+    Add ShowWarn, ShowInfo, and ShowAll fields to LintOptions; parse --warn, --info, --all flags in parseLintOptions; filter FormatLint output to only the selected severity while always printing the summary line.
+  constraints:
+    - 'LintOptions gains three bool fields: ShowWarn, ShowInfo, ShowAll.'
+    - parseLintOptions sets these fields from --warn, --info, --all respectively.
+    - FormatLint skips issues whose severity doesn't match the active filter; with no flag set it skips everything except errors.
+    - The summary line (passed/warnings/errors) is always printed regardless of filter.
+    - Help text for lint is updated to document the three new flags.
+  affected_scope:
+    - pkg/provenance/commands.go
+    - pkg/provenance/formatter.go
+    - cmd/linespec/main_stable.go
+  implements: prov-2026-4358fe61
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/formatter_test.go
+      type: code
+    - path: pkg/provenance/linter_test.go
+      type: code

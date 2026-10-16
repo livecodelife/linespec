@@ -1,6 +1,7 @@
 id: prov-2026-cfcd95a9
 title: Fix notification linespecs missing WRITE:REDIS step and deprecated associated_linespecs fields
 status: implemented
+version: 1
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: >
@@ -20,8 +21,6 @@ affected_scope:
   - examples/user-service/provenance/prov-2026-001-user-service.yml
   - examples/user-service/provenance/prov-2026-002-user-service.yml
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 5c0c24daad23e36829d5d0ee1ebbe053b9ebfda4
 associated_specs:
@@ -32,3 +31,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

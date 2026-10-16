@@ -1,0 +1,28 @@
+id: prov-2026-08169255
+version: 1
+content_hash: sha256:e961dcbefa067bd550e7a80197fc4c4cb01690108148afe9285ebd8c4ff95ff3
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T21:42:05Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:105303586f3a9f3ff6ec77ae78c0dcd5fae0f9a37b82b7d4e73373875ca90713
+content:
+  id: prov-2026-08169255
+  title: 'P5-E: Source network alias exclusively from containerNaming config'
+  type: blueprint
+  created_at: "2026-04-13"
+  author: calebcowen@gmail.com
+  intent: |
+    The network alias "real-db" appears hardcoded in at least three locations in pkg/runner/runner.go (PostgreSQL container network endpoint, PostgreSQL proxy upstream address, MySQL proxy upstream address). Additionally, the suite's containerNaming field is initialized with hardcoded defaults and never updated from the discovered .linespec.yml config, so any user-configured network_alias is silently ignored. Fix both: (1) replace all inline "real-db" string literals with r.suite.containerNaming.NetworkAlias, and (2) after DiscoverServices, apply the first found ContainerNaming from the service configs to the suite so that user configuration is respected.
+  constraints:
+    - Default behavior must remain identical (NetworkAlias defaults to "real-db")
+    - All example test suites must continue to pass
+  affected_scope:
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/create_user_success.linespec
+      type: linespec

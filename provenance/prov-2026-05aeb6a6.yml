@@ -1,6 +1,7 @@
 id: prov-2026-05aeb6a6
 title: Lead skill investigation with next; document discover/govern; fix context -f syntax bug
 status: implemented
+version: 1
 created_at: "2026-07-10"
 author: calebcowen@gmail.com
 intent: |
@@ -18,9 +19,8 @@ constraints:
   - "Frontmatter (name, description, when_to_use) must remain byte-identical
     to the pre-existing values, per the blueprint's constraint."
 implements: prov-2026-25d0b28d
+implements_version: 1
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 2c5edca745a77640c97245c1d4ad5b3cb04c765f
 associated_specs:

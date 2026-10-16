@@ -1,0 +1,45 @@
+id: prov-2026-50dc42de
+version: 1
+content_hash: sha256:d321957a1057128cf9ce61148940870751304857f7273a5bb18a3c6e98e3baf3
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-11T21:51:11Z"
+spec_hashes:
+  - sha256:9eb5cb18399126b96d4fa4a81968f7210604fae6939504b8e89b2c3b4096fa7c
+content:
+  id: prov-2026-50dc42de
+  title: Quality gate script, pre-push hook, and Makefile targets
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Add the code-quality gate plumbing: scripts/go-quality.sh (single source of
+    truth), the scripts/pre-push hook shim, and Makefile targets.
+
+    Key decision — deadcode false-positive cutting: raw `deadcode ./...` reports
+    48 unreachable funcs, but ~30 are test-only helpers or code reachable only
+    under the beta/integration build tags. The script runs deadcode across all
+    five build configurations (default, -test, -test -tags beta,
+    -test -tags integration, -test -tags 'integration beta') and reports only
+    the intersection — functions dead in EVERY configuration. Verified: that
+    intersection is exactly 18 functions, so the gate is meaningful, not noisy.
+
+    Decision — pre-push, installed via Makefile: deadcode is whole-program and
+    too slow for pre-commit. The hook is a thin shim delegating to the script;
+    `make install-hooks-quality` copies it into the worktree-correct hooks dir
+    (`git rev-parse --git-path hooks`). Kept separate from the linespec-managed
+    pre-commit/commit-msg hooks so `linespec install-hooks` never clobbers it.
+
+    Decision — dupl is warn-only: it found 48 clone groups, dominated by the
+    inherent main_beta.go/main_stable.go near-duplication and test-table repaints.
+    Blocking on that would be hostile, so dupl reports but never fails.
+  affected_scope:
+    - scripts/go-quality.sh
+    - scripts/pre-push
+    - Makefile
+  implements: prov-2026-a241eaa6
+  implements_version: 1
+  associated_specs:
+    - path: scripts/go-quality.sh
+      type: code

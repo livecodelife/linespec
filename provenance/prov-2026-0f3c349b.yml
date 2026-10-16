@@ -1,6 +1,7 @@
 id: prov-2026-0f3c349b
 title: 'provenance index: stored vector width is hardcoded to 2048, so base_url still can''t reach most local embedders'
 status: implemented
+version: 1
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -88,8 +89,6 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-57aff9e1
   - prov-2026-684303c3

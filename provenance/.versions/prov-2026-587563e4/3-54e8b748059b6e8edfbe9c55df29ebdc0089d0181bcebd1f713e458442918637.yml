@@ -1,0 +1,78 @@
+id: prov-2026-587563e4
+version: 3
+content_hash: sha256:54e8b748059b6e8edfbe9c55df29ebdc0089d0181bcebd1f713e458442918637
+parent_hash: sha256:a39813332590678213c2d412ccbbfd8a3677121766eeb414bb93994f8269dc2b
+reason: |-
+  The clone command extracts specs, code, and prompt layer tarballs into the destination
+  directory, but files end up nested inside a subdirectory (e.g., linespec.manifest/) instead
+  of the destination root. This happens because tar entries in published layer artifacts carry
+  a leading directory prefix from the source repository's layout. The fix strips any common
+  single top-level directory component from tar entries when extracting non-provenance layers,
+  so files land directly in the destination root.
+
+  After the fix, a cloned project directory should have this structure:
+    <manifest_name>/
+      <spec_directory>/
+      <code_files_and_directories>
+      <prompt_file>
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-05-16T16:14:30Z"
+spec_hashes:
+  - sha256:8a71ac2596233dd1ea69eb970eadaee7395e2f7c561a28045e22c4b7a6aecf08
+  - sha256:3abbdcac19cd5d6ac1d071a89b902fe443765270e4b757b2a3db85fb39757692
+  - sha256:1c252c31831e1dcc40f17eaa83efcd92eba07ece2d06454718580caa40e9d8ec
+content:
+  id: prov-2026-587563e4
+  title: Implement linespec clone and import commands
+  type: blueprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement two new top-level commands — `linespec clone <manifest-url>` and `linespec import <manifest-url>` — that consume a published manifest to bootstrap or extend a governed repository. Clone creates a fully development-ready project (git init, hooks, .linespec.yml, layers extracted). Import pulls provenance records from a manifest into an existing repository. Both commands perform integrity verification (root_hash then per-layer hashes) before writing anything to disk, and abort cleanly on any mismatch.
+  constraints:
+    - clone verifies root_hash against the concatenation of the resolved version's layer hashes before fetching any layer artifacts; aborts before fetching on mismatch
+    - each layer artifact is hash-verified after download and before extraction; on mismatch, abort and report — no files are written to disk
+    - cloned project setup runs git init, linespec provenance install-hooks, writes .linespec.yml with provenance.manifest_url set to the source manifest URL, and expands all layers to their correct paths
+    - specs layer files are extracted to their preserved repo-relative paths without consulting provenance records
+    - import aborts without writing if any local record ID already exists (no overwrite); conflict must be resolved manually
+    - import runs linespec provenance lint after all records are written to surface reference issues
+    - version pinning is supported via @version suffix in the URL and a --version flag; unpinned targets the latest field
+    - packLayer must always produce a tar archive regardless of whether the input is a file or directory
+    - all layer artifacts written by publish must have the .tar extension
+    - the packed filename inside the tar for a single-file input must be the original filename (filepath.Base of the source path)
+    - clone extraction behavior must remain unchanged — ExtractSpecs (extractTar) handles all non-provenance layers
+    - existing unit tests for packLayer must be updated to reflect the new behavior
+    - |
+      Only strip a leading prefix when ALL entries in the tar share the same single top-level
+      directory component. If entries have mixed top-level paths, extract without stripping.
+    - |
+      Provenance layer extraction must remain unchanged — provenance records are always flat
+      <id>.yml entries with no leading directory prefix.
+    - |
+      If tar entries have no common top-level prefix (they start at root), extraction is unchanged.
+    - |
+      Existing tests for ExtractProvenance and extractTar must continue to pass. New tests must
+      cover: stripping when all entries share a prefix, no-op when entries are already flat.
+  affected_scope:
+    - cmd/linespec/**
+    - pkg/manifest/**
+    - pkg/provenance/**
+    - pkg/provenance/publish.go
+    - pkg/provenance/publish_test.go
+    - cmd/linespec/main_stable.go
+  implements: prov-2026-92f06ee9
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/manifest/manifest_test.go
+      type: go_test
+    - path: pkg/provenance/clone_test.go
+      type: go_test
+    - path: pkg/provenance/publish_test.go
+      type: go_test
+  tags:
+    - manifest
+    - clone
+    - import
+    - bootstrapping

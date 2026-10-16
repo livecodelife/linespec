@@ -1,0 +1,144 @@
+id: prov-2026-4446307d
+version: 3
+content_hash: sha256:d8d237d3fe15373081ecc44fe37b22cd61d53c09dc81ec8bc6ba5c82da718995
+parent_hash: sha256:3b2606ec949162667a53f8a515b8b5e5f1043ebc81a8f3c469a0e1a6f453d410
+reason: |-
+  prov-2026-afd410b6 diagnosed the repo-root discover hang as Tracer.traceHandler's lack of
+  memoization causing exponential blowup on JS/TS name collisions (get, map, filter, ...),
+  fixed it by memoizing (function name, remaining depth) results, and sealed with a passing
+  test (TestTracer_TypeScript_NoExponentialBlowupOnNameCollisions, 40 synthetic files / 8
+  shared names). That fix is real — its own test passes — but the original symptom still
+  reproduces on a real, only moderately larger file set. This is the same hang, still open,
+  not a new mechanism as far as verification could tell; it extends rather than duplicates
+  prov-2026-afd410b6 because that record is sealed/immutable and the fix it shipped is
+  correct as far as it goes, just insufficient.
+
+  Re-verified against linq-lens at the current sealed commit (built from source, associated
+  specs for both prov-2026-afd410b6 and prov-2026-ebc2266b passing): `discover --dry-run` at
+  the repo root still pegs ~95% CPU with zero output for 2+ minutes before being killed.
+
+  Isolated with a much smaller, portable repro than "the whole linq-lens repo" (built by
+  copying real linq-lens source, no synthetic fixture):
+    1. A scratch dir containing only linq-lens's app/ (56 files) plus a minimal package.json
+       declaring a `next` dependency (so the framework auto-detects, same as at linq-lens's
+       real root). `discover --dry-run` there: fast, correctly finds 36 routes
+       (prov-2026-ebc2266b's fix confirmed working here).
+    2. The same scratch dir with linq-lens's lib/ and components/ also copied in (236 files
+       total, same 36 routes — lib/ and components/ contain no route.ts/page.tsx of their
+       own): hangs the same way as the full repo root.
+
+  So the threshold is somewhere between 56 and 236 total indexed files, with the route count
+  held constant at 36 — this is not about more routes, it's about a bigger shared file index
+  for those same 36 routes' call-graph tracing to walk. One plausible link to the fix that
+  didn't take: prov-2026-afd410b6's fix landed while prov-2026-ebc2266b's route-detection fix
+  was also landing (both sealed in nearby commits under the same open blueprint), and 0
+  routes were being found through most of this bug's original investigation — meaning Phase 2
+  boundary tracing may never have run for real against a repo-sized index until both fixes
+  were in place together. The memoization fix was validated against a 40-file synthetic
+  fixture; it may cover the within-single-handler collision case but not whatever scales with
+  total index size across many real handlers. Root cause beyond that is unconfirmed — this
+  record documents the smaller repro so it doesn't have to be rediscovered from the full
+  linq-lens tree.
+
+  Root cause confirmed: reproduced a 180+ second, still-not-finished trace against a 236-file/
+  36-route fixture built from scratch with entirely UNIQUE function names (no collisions at
+  all), ruling out the exponential-blowup mechanism prov-2026-afd410b6 fixed as the cause here.
+  boundaries.go's queryForNode/queryNode both called sitter.NewQuery fresh on every single
+  invocation — compiling a tree-sitter query is not cheap, and the same pattern (a boundary
+  query, the static callee pattern, or one function's funcDefPatterns entry) was being
+  recompiled from scratch once per file, for every memoized (name, depth) pair. The
+  memoization fix made the number of distinct lookups roughly linear in call-graph size, but
+  each lookup still scanned every file in the index, so the *count* of query compilations is
+  roughly (distinct (name, depth) pairs) × (files) × (patterns per lookup) — on this fixture,
+  back-of-envelope, on the order of 1,000 pairs × 236 files × ~3 patterns ≈ 700k+ compiles,
+  which lines up with the observed multi-minute wall time. Fixed by caching each distinct
+  compiled query pattern for the lifetime of one Trace() call (queryCache), so a pattern is
+  compiled once and reused — via qc.Exec(q, tree) — across every file/node it's matched
+  against, which is tree-sitter's own intended usage pattern (a compiled Query is stateless
+  with respect to which tree it runs against).
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-09-30T19:43:23Z"
+spec_hashes:
+  - sha256:7a25ac637899c34491bd2b6d0ed2e860e12471b73c28dd323051da33b7bb50bc
+  - sha256:7199aaedf349a6ef8202963261e95bab907cb95025de2fd5fa78f7695d7908a8
+  - sha256:f597509cbd307ad9ce7c0a5de091aeb6fbed004567709a0328b5bcc06d1a232b
+  - sha256:c1edb79ac2da6ae2370e2b3639b024f1eca3e46c68cfd87cf8e9dab4a79fa664
+  - sha256:87949e79ffe26983874f23ef3274329a327e0f56dcb98845898ebe0b0d65ab86
+  - sha256:5539208d6a9542695c9808fdeef17d7ba0dad7aba1dbb19ca13befb6bd933afc
+content:
+  id: prov-2026-4446307d
+  title: Next.js + JavaScript/TypeScript support for discover
+  type: blueprint
+  created_at: "2026-09-22"
+  author: caleb.cowen@linq.com
+  intent: |
+    discover currently only detects Go, Ruby, and Python (pkg/discover/lang/lang.go maps only
+    .go/.rb/.py), and only ships framework descriptions for Chi, Rails, and Sinatra
+    (prov-2026-c60ec2ad) — all registration-call-based routing. A file with an unrecognized
+    extension is skipped outright by both the framework-driven pipeline and framework-agnostic
+    mode (prov-2026-a5eb1192), not even reported as unclassified. Verified against a real
+    Next.js 16 App Router codebase (linq-lens): dry-run against app/, components/, lib/,
+    scripts/, and tests/ each returned zero draft records, because none of those files are
+    .go/.rb/.py.
+
+    This blueprint adds (1) TypeScript/JavaScript as a supported language for symbol
+    extraction — tree-sitter already ships production-grade TS/JS grammars, per
+    LINESPEC_DISCOVER.md's own parsing-infrastructure rationale for choosing tree-sitter over
+    per-language native tooling — and (2) a Next.js framework description so App Router (and
+    Pages Router) projects get real route-driven discovery instead of only directory grouping.
+
+    Next.js's routing is filesystem-convention-based, not registration-call-based like
+    Chi/Rails/Sinatra: a route is `app/**/route.ts` exporting `GET`/`POST`/etc., or
+    `app/**/page.tsx` for a page — there is no `r.Post(...)` or `get '/path' do` call site for
+    a tree-sitter route query to match. The route/middleware/group query shape LineSpec's
+    framework description format already assumes (see LINESPEC_DISCOVER.md's "Route queries")
+    is built around call-site matching, so Next.js needs a filesystem-convention detection mode
+    alongside (or instead of) query-based route matching.
+  constraints:
+    - MUST add .ts/.tsx/.js/.jsx to pkg/discover/lang/lang.go's extension map, with tree-sitter TypeScript/JavaScript grammars wired into symbols.Supported() and the per-language dispatch in pkg/discover/boundaries and pkg/discover/routes/assembler.go (currently Go/Ruby only).
+    - MUST NOT regress existing Go/Ruby/Python detection or the Chi/Rails/Sinatra framework-driven pipeline — the same non-regression bar prov-2026-a5eb1192 set for its own additions.
+    - MUST add a Next.js framework description (e.g. pkg/discover/framework/builtin/nextjs.yml) that derives routes from the app/ (and pages/) directory filesystem convention rather than from a route-registration call-site query, since Next.js has no such call site.
+    - MUST detect App Router route handlers (route.ts exporting GET/POST/PUT/PATCH/DELETE) and pages (page.tsx); SHOULD cover the legacy Pages Router (pages/**/*.tsx, pages/api/**/*.ts) where practical.
+    - MUST auto-detect Next.js from `next` in package.json dependencies, consistent with the existing dependency-manifest detection rules (go.mod/Gemfile) LINESPEC_DISCOVER.md already documents.
+    - Protocol boundary tracing for JS/TS SHOULD cover at least one common DB client and outbound fetch/HTTP calls, mirroring the Go/Ruby boundary query pattern in LINESPEC_DISCOVER.md Phase 2 — exact library coverage is an implementation decision, not a hard requirement of this blueprint.
+    - Grouping hints for Next.js SHOULD cluster by route segment/directory (the natural App Router unit), not by arbitrary file directory the way framework-agnostic mode does.
+    - MUST NOT hang or exhibit worse than roughly linear-in-file-count behavior when discover's framework-driven pipeline runs across a repo root containing multiple top-level source directories — reproduce against a multi-directory fixture, not only single-directory fixtures, since that is precisely what individual-directory testing missed here.
+    - A CLI run that will take a long time SHOULD emit periodic progress output (even under plain, non-debug operation) so a hang is distinguishable from a slow-but-live scan; right now there is no way to tell the two apart from the outside.
+    - Root-causing this MUST include a repro fixture shaped like linq-lens (several top-level source directories, a generated multi-hundred-line .ts file, real cross-file imports between them) — the existing associated_specs for prov-2026-4446307d and its imprints only exercise small/single-directory fixtures and did not catch this.
+    - MUST NOT hang or exhibit worse than roughly linear-in-(routes × index size) behavior once discover's route detection actually finds a realistic number of routes (36 here) — the original bug's symptom was masked for most of its own investigation by prov-2026-ebc2266b's separate 0-routes bug, so it was never exercised end-to-end until both fixes landed together.
+    - MUST be reproduced and fixed against a fixture in the 56-to-236-file range with routes held roughly constant, not only against the smaller synthetic collision fixture that validated the prior fix — that fixture did not catch this.
+    - 'Before considering this resolved, MUST re-run the exact repro that surfaced it: a directory combining app/, lib/, and components/-shaped real source (not just minimized/synthetic files) with a package.json declaring `next`, run through plain `discover --dry-run` with no --dir/--framework overrides.'
+    - SHOULD add basic timing/progress instrumentation to discover (echoed already as a SHOULD in prov-2026-afd410b6) so future regressions like this show up as "slow" rather than as an indistinguishable-from-hung silent spin.
+  affected_scope:
+    - pkg/discover/lang/**
+    - pkg/discover/symbols/**
+    - pkg/discover/routes/**
+    - pkg/discover/boundaries/**
+    - pkg/discover/treesitter/**
+    - pkg/discover/framework/**
+    - cmd/linespec/discover_test.go
+    - pkg/discover/boundaries/boundaries.go
+    - pkg/discover/boundaries/boundaries_test.go
+  related:
+    - prov-2026-c60ec2ad
+    - prov-2026-a5eb1192
+  associated_specs:
+    - path: pkg/discover/lang/lang_test.go
+      type: go_test
+    - path: pkg/discover/symbols/symbols_test.go
+      type: go_test
+    - path: pkg/discover/boundaries/boundaries_test.go
+      type: go_test
+    - path: pkg/discover/routes/filesystem_test.go
+      type: go_test
+    - path: pkg/discover/framework/framework_test.go
+      type: go_test
+    - path: cmd/linespec/discover_test.go
+      type: go_test
+  tags:
+    - discovery
+    - nextjs
+    - typescript
+    - javascript
+    - framework-descriptions

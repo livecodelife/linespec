@@ -1,0 +1,40 @@
+id: prov-2026-799d52f0
+version: 1
+content_hash: sha256:2f0f0f21f1e21af674b05155577eb55be876785821e6d22f03d58c6fde1f066b
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-11T22:14:43Z"
+spec_hashes:
+  - sha256:554e05122272d48a2f1652bcc33e926819e0afe03ee6f3dd1f7b6a8ccaeda1dd
+  - sha256:1f87dc46f84d25d1a7c6eadd9fbae6250d0ed3a163580a10002bb152383ea543
+  - sha256:174ac4df438904a347d214d1a8651614a2a22ca6c13ac09bdc5a0089b5579053
+  - sha256:174ac4df438904a347d214d1a8651614a2a22ca6c13ac09bdc5a0089b5579053
+content:
+  id: prov-2026-799d52f0
+  title: 'Overhaul install-skills content: rewrite linespec-testing skill, add scope-enforcement/associated_specs/command-flags to provenance skill, sync on-disk copies'
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Overhaul the skills shipped by `linespec provenance install-skills` (embedded as Go constants in pkg/provenance/commands.go). Rewrite the linespec-testing skill to v3.11.7 (semantic SQL primary, RECEIVE JOB/GRPC/KAFKA, EXPECT GRPC, WITH-as-request-body, RESPONSE_HEADERS, RETURNS variants, multi-channel EXPECT_NOT, full VERIFY targets, fix the .linespec.yml-location claim). Add to the provenance skill the Scope Enforcement section, associated_specs reference, command-flags-over-manual-edits (fixing the manual Superseding guidance), and the missing commands. Only the embedded skill constants change — no command logic. Regenerate the on-disk copies (.claude/skills/**, skills/**) to match the embed exactly. `make test` must pass.
+  constraints:
+    - Only the embedded skill string constants in commands.go change; no logic/flags/behavior.
+    - On-disk skill copies must match the authoritative embed byte-for-byte.
+    - Skill content verified against pkg/dsl, pkg/config, pkg/provenance.
+  affected_scope:
+    - pkg/provenance/commands.go
+    - .claude/skills/provenance/SKILL.md
+    - .claude/skills/linespec-testing/SKILL.md
+    - skills/provenance/SKILL.md
+  implements: prov-2026-38971b27
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/commands.go
+      type: go_test
+    - path: .claude/skills/linespec-testing/SKILL.md
+      type: docs
+    - path: .claude/skills/provenance/SKILL.md
+      type: docs
+    - path: skills/provenance/SKILL.md
+      type: docs

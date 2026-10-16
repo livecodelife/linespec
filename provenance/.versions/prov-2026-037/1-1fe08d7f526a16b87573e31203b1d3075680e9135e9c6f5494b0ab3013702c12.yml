@@ -1,0 +1,52 @@
+id: prov-2026-037
+version: 1
+content_hash: sha256:1fe08d7f526a16b87573e31203b1d3075680e9135e9c6f5494b0ab3013702c12
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-14T22:11:59Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-037
+  title: Release v1.2.0
+  type: blueprint
+  created_at: "2026-03-14"
+  author: calebcowen@gmail.com
+  intent: |
+    Release version 1.2.0 of LineSpec with new beta features and a stable bug fix.
+    Beta Features: - Extended VERIFY functionality (prov-2026-030) with unified verification engine
+      supporting SQL queries, HTTP headers/body/URLs, and Kafka message keys/values/headers
+    - Environment variable substitution (prov-2026-028) with ${VAR_NAME} syntax to catch
+      hardcoded tokens and API keys
+
+    Stable Fixes: - Formatter empty file handling (prov-2026-036) - clearer error messages when
+      attempting to commit with implemented records
+
+    Version updates across all documentation and source files.
+  constraints:
+    - The version string in main_stable.go MUST be updated to v1.2.0
+    - The version string in main_beta.go MUST be updated to v1.2.0-beta
+    - The README.md version strings MUST be updated to v1.2.0
+    - The CHANGELOG.md MUST be updated with v1.2.0 release notes
+    - The PROVENANCE_RECORDS.md install instructions MUST be updated to v1.2.0
+    - The LINESPEC.md install instructions MUST be updated to v1.2.0
+    - All modified files MUST be committed with the provenance record ID
+    - The git tag v1.2.0 MUST be created and pushed
+    - The git tag v1.2.0-beta MUST be created and pushed
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - README.md
+    - CHANGELOG.md
+    - PROVENANCE_RECORDS.md
+    - LINESPEC.md
+  related:
+    - prov-2026-028
+    - prov-2026-030
+    - prov-2026-036
+  associated_specs:
+    - path: CHANGELOG.md
+      type: markdown
+  tags:
+    - release

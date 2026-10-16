@@ -1,0 +1,34 @@
+id: prov-2026-a10b1173
+version: 1
+content_hash: sha256:64547ab0f200833207be1ce43549c322eb6684ec21105fe7d203f10f3998e705
+parent_hash: ""
+reason: ""
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+created_at: "2026-08-21T19:05:48Z"
+spec_hashes:
+  - sha256:967d9d6558353fcbfee5e5472e45cefec4765bd3da17fe4d7fc2f13d7df8350c
+content:
+  id: prov-2026-a10b1173
+  title: Fix ReadAll short-read desync and Index silent-skip masking
+  type: imprint
+  created_at: "2026-08-21"
+  author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+  intent: |
+    Implementation note for bug fix prov-2026-772101a3 (linked via related, since imprint records may only implement a blueprint; this imprint implements the blueprint prov-2026-7136e8c4 that the bug extends). Two fixes: (1) pkg/embeddings/store.go's Store.ReadAll now uses io.ReadFull instead of a single bufio.Reader.Read call to consume each record ID, since Read only guarantees 1..len(idBytes) bytes and a short read silently desyncs every subsequent record. (2) pkg/provenance/commands.go's Commands.Index no longer `continue`s (dropping the record from toIndex) when store.Exists returns a real, non-os.IsNotExist error; it now falls through and adds the record to toIndex so it is retried and, if the store is still wedged, surfaced as a counted failure via the existing failCount path instead of vanishing from the plan and letting the run report false completion. Verified both fixes: reverting the ReadAll fix makes the new pkg/embeddings/index_wedge_test.go round-trip test fail (it sweeps a suffixed record ID across every position in a 200-record corpus, matching issue #206's exact repro). The Commands.Index fix (falling through to toIndex instead of `continue`ing past a real Exists error) was verified the same way with a local, not-committed test using a fake OpenAI-compatible httptest server plus a deliberately wedged embeddings.bin — reverting the fix made Index print "All implemented records already have embeddings." and return nil despite the wedged record never being indexed; that harness lived in pkg/provenance/index_test.go, which was dropped before commit because it fell outside this bug's affected_scope (only pkg/embeddings/** and pkg/provenance/commands.go, not a new provenance test file) — a follow-up record covering pkg/provenance test scope could restore it.
+  constraints:
+    - Store.ReadAll must fully consume each record ID via io.ReadFull regardless of length or buffer boundary.
+    - Commands.Index must not silently exclude a record from toIndex when its Exists check errors with something other than file-not-found.
+  affected_scope:
+    - pkg/embeddings/store.go
+    - pkg/embeddings/index_wedge_test.go
+    - pkg/provenance/commands.go
+  implements: prov-2026-7136e8c4
+  implements_version: 2
+  related:
+    - prov-2026-772101a3
+  associated_specs:
+    - path: pkg/embeddings/index_wedge_test.go
+  tags:
+    - embeddings
+    - index
+    - bug

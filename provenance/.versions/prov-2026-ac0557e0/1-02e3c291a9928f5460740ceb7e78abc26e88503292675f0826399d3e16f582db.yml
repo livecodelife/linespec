@@ -1,0 +1,24 @@
+id: prov-2026-ac0557e0
+version: 1
+content_hash: sha256:02e3c291a9928f5460740ceb7e78abc26e88503292675f0826399d3e16f582db
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-20T21:08:23Z"
+spec_hashes:
+  - sha256:408b02e4c9084b0cb5c0d52fb7f1f3fc222587008c9b9b43b5e55c6e1f327ed5
+content:
+  id: prov-2026-ac0557e0
+  title: Version bump to v2.8.4
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: Patch release v2.8.4 for the DOCKER_HOST socket probe fix.
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+  related:
+    - prov-2026-c8585133
+  associated_specs:
+    - path: VERSION
+      type: code

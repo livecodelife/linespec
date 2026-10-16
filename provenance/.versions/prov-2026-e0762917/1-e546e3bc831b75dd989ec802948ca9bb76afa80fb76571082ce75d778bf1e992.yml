@@ -1,0 +1,39 @@
+id: prov-2026-e0762917
+version: 1
+content_hash: sha256:e546e3bc831b75dd989ec802948ca9bb76afa80fb76571082ce75d778bf1e992
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-27T16:16:46Z"
+spec_hashes:
+  - sha256:809743b545cd850588e4a3d5a1fda93768061e06e56c52d47bfa9275b7b05098
+content:
+  id: prov-2026-e0762917
+  title: Add build optimization flags to reduce binary size
+  type: blueprint
+  created_at: "2026-04-27"
+  author: calebcowen@gmail.com
+  intent: |
+    Add -ldflags="-s -w" and -trimpath to all go build and go install targets in
+    the Makefile. These flags strip debug symbols, DWARF debugging information,
+    and local filesystem paths from the compiled binaries. The expected result is
+    a ~29% reduction in binary size (21MB → ~15MB for stable, 22MB → ~15MB for
+    beta) with no impact on runtime functionality.
+  constraints:
+    - Build flags must not break the binary's runtime behavior — all existing tests must pass
+    - The -s -w ldflags strip symbol table and DWARF debug info, which are not needed in distributed binaries
+    - The -trimpath flag removes local filesystem paths for security hygiene with no functional impact
+    - All four Makefile targets must be updated — build, build-beta, install, install-beta
+    - The binary must continue to function correctly after stripping
+  affected_scope:
+    - Makefile
+  implements: prov-2026-f45bc922
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: Makefile
+      type: code
+  tags:
+    - cli
+    - optimization
+    - build

@@ -1,0 +1,29 @@
+id: prov-2026-94cb3ba8
+version: 1
+content_hash: sha256:113b13b414c1a681e581cbf5fa94a73b547da515ab52e82c5971c3960e460dbb
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-27T21:30:48Z"
+spec_hashes:
+  - sha256:305959e5091fec9196264cf1aa02878e650a1fbae846cbba8463d66f7d13de24
+content:
+  id: prov-2026-94cb3ba8
+  title: Fix oidForColumn and binary int64 encoding in result.go
+  type: imprint
+  created_at: "2026-05-27"
+  author: calebcowen@gmail.com
+  intent: |
+    Add INT8 (OID 20) to oidForColumn for count/aggregate column names, and fix
+    sendDataRowInternal to encode integers as int64 (8 bytes big-endian) when the
+    column OID is INT8. Add a toInt64 helper alongside the existing toInt32.
+  constraints:
+    - oidForColumn returns OID 20, size 8 for "count", "total", "num_" prefix, "_count" suffix
+    - binary integer encoding consults oidForColumn to choose 4-byte vs 8-byte encoding
+  affected_scope:
+    - pkg/proxy/postgresql/result.go
+  implements: prov-2026-258574ee
+  implements_version: 6
+  associated_specs:
+    - path: pkg/proxy/postgresql/result.go
+      type: code

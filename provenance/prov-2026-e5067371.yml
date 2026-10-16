@@ -1,6 +1,7 @@
 id: prov-2026-e5067371
 title: Next.js filesystem routing bypasses query-based Assemble; per-file handler-ref scoping added to Tracer
 status: implemented
+version: 1
 created_at: "2026-09-22"
 author: caleb.cowen@linq.com
 intent: |
@@ -76,8 +77,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-4446307d
-supersedes: ""
-superseded_by: ""
+implements_version: 4
 related: []
 sealed_at_sha: 7c08ddd5030fabe22cd7809e866f9ae4b3ac4c85
 associated_specs:

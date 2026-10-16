@@ -1,0 +1,36 @@
+id: prov-2026-40b513dc
+version: 1
+content_hash: sha256:713af3e2bfba304d6d5b1d500531943397b195aa26c15d148da7da48d57fd833
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-11T22:14:43Z"
+spec_hashes:
+  - sha256:aa048fe7426d7289e1f5caea2234b159961abe89433c66aa10d0150d621240dc
+  - sha256:2e0b713a52710a9cfb5f079a1ff192feeecc187767907d1362ce4d35b881c4b4
+  - sha256:b01d2dfa2ee411220d90e9a816c028e0fea30e513580038c32663fc4e68f717e
+content:
+  id: prov-2026-40b513dc
+  title: Reword three supersede-implying enforcement messages (git.go stale-scope, formatter.go hint, linter.go locked-scope) so none implies supersede is required
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Reword three user-facing enforcement messages so none implies superseding is the required remedy — strings only, no severity/behavior change: the git.go stale-scope warning (reframe as informational/non-blocking), the formatter.go violation hint (the new record only needs to govern the file), and the linter.go locked-scope error (resolving overlap is a governance decision, not a mandatory supersede). Keeps wording consistent with the skill/doc decision tree.
+  constraints:
+    - Strings only; no logic, control flow, severities, or field names change.
+    - make test must pass.
+  affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/formatter.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/git_test.go
+  implements: prov-2026-38971b27
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/git.go
+      type: go_test
+    - path: pkg/provenance/formatter.go
+      type: go_test
+    - path: pkg/provenance/linter.go
+      type: go_test

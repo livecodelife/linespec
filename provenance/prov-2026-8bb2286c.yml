@@ -1,6 +1,7 @@
 id: prov-2026-8bb2286c
 title: Skip hash manifest path in CheckStaged and CheckCommit scope loops
 status: implemented
+version: 1
 created_at: "2026-05-19"
 author: test@example.com
 intent: >
@@ -9,14 +10,13 @@ intent: >
   system path as returned by git), skip it without raising a violation. A helper
   isHashManifest(file) keeps the check readable and avoids repeating the literal string.
 implements: prov-2026-29863b76
+implements_version: 1
 constraints: []
 affected_scope:
   - pkg/provenance/git.go
   - pkg/provenance/git_test.go
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 83d633e682ceed2cd3c4c0ab3cd0fc60a1151ebd
 associated_specs:
