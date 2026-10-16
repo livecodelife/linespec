@@ -99,6 +99,11 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "-p" {
 		os.Args[1] = "provenance"
 	}
+	// `linespec provenance <cmd>` forwards to the provenance CLI for the commands it implements
+	// (DESIGN migration step 2). This runs before cobra so the CLI's own flags reach it untouched.
+	if shouldForwardProvenance(os.Args[1:]) {
+		os.Exit(forwardProvenance(os.Args[1:], defaultForwardEnv()))
+	}
 	root := newRootCmd()
 	// gen-docs is a hidden, build-time-only command: it generates the CLI
 	// reference for the docs site from the command tree and is registered here
