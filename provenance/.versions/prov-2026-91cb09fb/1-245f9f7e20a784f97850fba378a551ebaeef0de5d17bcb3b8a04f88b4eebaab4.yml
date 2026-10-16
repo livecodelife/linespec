@@ -1,0 +1,28 @@
+id: prov-2026-91cb09fb
+version: 1
+content_hash: sha256:245f9f7e20a784f97850fba378a551ebaeef0de5d17bcb3b8a04f88b4eebaab4
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-21T16:20:53Z"
+spec_hashes:
+  - sha256:3b215318ae2a4425c71b053279bbe8f7b96188900e98ccf00f2ab219fcf4aafd
+content:
+  id: prov-2026-91cb09fb
+  title: Document gRPC support in LINESPEC.md
+  type: blueprint
+  created_at: "2026-04-21"
+  author: calebcowen@gmail.com
+  intent: |
+    LINESPEC.md lists gRPC support under "Future Extensions (Planned)" even though gRPC proxy support shipped in v2.x. This record covers removing gRPC from the planned section and adding a proper EXPECT GRPC reference section to LINESPEC.md so the markdown reference matches the existing site documentation.
+  constraints:
+    - LINESPEC.md must gain a dedicated EXPECT GRPC subsection consistent with the style and depth of the EXPECT READ:REDIS and EXPECT WRITE:REDIS sections
+    - gRPC must be removed from the "Future Extensions (Planned)" list
+    - No changes to any source code or other documentation files
+  affected_scope:
+    - LINESPEC.md
+  related:
+    - prov-2026-9f50db3c
+  associated_specs:
+    - path: LINESPEC.md
+      type: code

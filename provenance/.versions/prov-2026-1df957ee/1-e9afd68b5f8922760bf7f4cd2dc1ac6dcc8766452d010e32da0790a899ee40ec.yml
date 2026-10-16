@@ -1,0 +1,52 @@
+id: prov-2026-1df957ee
+version: 1
+content_hash: sha256:e9afd68b5f8922760bf7f4cd2dc1ac6dcc8766452d010e32da0790a899ee40ec
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-15T12:16:08Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+  - sha256:8a800c4b33d6a1593bf02d70eff4606f33886bc0d55a5507190b19a15f92f6a7
+  - sha256:28b9d94eb8416a78ef820f37b1d3d8272021b446ad962b3ae296cde899a11ae3
+content:
+  id: prov-2026-1df957ee
+  title: 'v3.6.0 release: document linespec clone and import commands'
+  type: blueprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Document the linespec clone and linespec import top-level commands in all user-facing surfaces
+    (PROVENANCE_RECORDS.md, docs/provenance.html, README.md), update the CHANGELOG with entries for
+    clone, import, and pkg/manifest, and bump the version to v3.6.0. The doc site (provenance.html)
+    is also missing the Publish section — add it there alongside clone and import.
+  constraints:
+    - PROVENANCE_RECORDS.md must have
+    - docs/provenance.html must have equivalent Publish, Clone, and Import HTML sections inserted after the Generate section
+    - README.md CLI Commands block must list linespec clone and linespec import
+    - CHANGELOG.md [Unreleased] must be expanded with clone, import, and pkg/manifest entries, then promoted to [3.6.0] - 2026-05-15
+    - Version bump uses make bump-version NEW=3.6.0 to update all doc/site references atomically
+  affected_scope:
+    - CHANGELOG.md
+    - PROVENANCE_RECORDS.md
+    - README.md
+    - docs/provenance.html
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - provenance/**
+    - .linespec/hash_manifest.json
+  implements: prov-2026-92f06ee9
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: CHANGELOG.md
+      type: code
+    - path: PROVENANCE_RECORDS.md
+      type: code
+    - path: README.md
+      type: code
+  tags:
+    - release
+    - documentation

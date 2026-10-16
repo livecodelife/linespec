@@ -1,0 +1,31 @@
+id: prov-2026-02213cc0
+version: 1
+content_hash: sha256:94f076b9138c845783173ff7b868a990464ba0b3a8c851984d6e7a89803f9c63
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-27T21:32:46Z"
+spec_hashes:
+  - sha256:fc7d91b58165af1af8c6f385dace905676ee5798cab23af8b5840c4288f4643f
+content:
+  id: prov-2026-02213cc0
+  title: Add count_users job handler and linespec to asynq-worker
+  type: imprint
+  created_at: "2026-05-27"
+  author: calebcowen@gmail.com
+  intent: |
+    Add a count_users job type to the asynq-worker that does SELECT COUNT(*) FROM users,
+    scans the result into int64, and posts the count to the webhook. Add the corresponding
+    linespec and payload files so the proxy fix has a runnable regression test.
+  constraints:
+    - Handler must scan COUNT(*) into int64 (not int or int32)
+    - Linespec must use RETURNING on the PostgreSQL READ to verify the count value
+  affected_scope:
+    - examples/asynq-worker/main.go
+    - examples/asynq-worker/linespecs/count_users.linespec
+    - examples/asynq-worker/linespecs/payloads/**
+  implements: prov-2026-258574ee
+  implements_version: 6
+  associated_specs:
+    - path: examples/asynq-worker/linespecs/count_users.linespec
+      type: linespec

@@ -1,6 +1,7 @@
 id: prov-2026-3b749a71
 title: Guard Lint --save-scope against remote records
 status: implemented
+version: 1
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -20,8 +21,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-90ec670e
-supersedes: ""
-superseded_by: ""
+implements_version: 1
 related: []
 sealed_at_sha: 9fae63e7b26661c4cb333850bd3a967749e7a7df
 associated_specs:

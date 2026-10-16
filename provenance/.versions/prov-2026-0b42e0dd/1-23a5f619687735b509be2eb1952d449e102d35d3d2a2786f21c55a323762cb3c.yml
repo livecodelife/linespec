@@ -1,0 +1,35 @@
+id: prov-2026-0b42e0dd
+version: 1
+content_hash: sha256:23a5f619687735b509be2eb1952d449e102d35d3d2a2786f21c55a323762cb3c
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-15T15:14:47Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-0b42e0dd
+  title: Update CHANGELOG and bump version to v3.7.0
+  type: imprint
+  created_at: "2026-05-15"
+  author: test@example.com
+  intent: |
+    Expand CHANGELOG.md [Unreleased] with an entry for the provenance skill update (compile, init, publish, import, clone commands documented), then promote [Unreleased] to [3.7.0] - 2026-05-15 with a fresh empty [Unreleased] header above. Run make bump-version NEW=3.7.0 to update VERSION and all doc/site version references. Run linespec provenance compile to rebuild the hash manifest.
+  constraints:
+    - '[Unreleased] is promoted to [3.7.0] - 2026-05-15; a fresh empty [Unreleased] section is added above it.'
+    - make bump-version NEW=3.7.0 handles VERSION, docs/index.html, docs/linespec.html, docs/docs.html, docs/provenance.html, README.md, LINESPEC.md.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  implements: prov-2026-bbe4b5cd
+  implements_version: 1
+  associated_specs:
+    - path: CHANGELOG.md
+      type: code

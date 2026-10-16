@@ -1,0 +1,38 @@
+id: prov-2026-446d8d6a
+version: 1
+content_hash: sha256:36a8c9d8d9421065e86c4352f85f778632fdf62466464baee752b175ab815951
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-17T17:10:18Z"
+spec_hashes:
+  - sha256:43c200e27055471ad88ba24cb6e53c81ec67c2e9e82bd03323d0b6ad8f0f3653
+  - sha256:298fda0e44de456f8cc3072bad37f55bf75902f3267ce4eb47146b0b5abdee4e
+content:
+  id: prov-2026-446d8d6a
+  title: Bump version to v2.4.1, add CHANGELOG entry for sealed_at_sha linter fix
+  type: blueprint
+  created_at: "2026-04-17"
+  author: calebcowen@gmail.com
+  intent: |
+    Release v2.4.1. Bump VERSION from 2.4.0 to 2.4.1 and add CHANGELOG entry for the sealed_at_sha linter fix shipped in prov-2026-755704af: the linter now correctly allows sealed_at_sha on superseded and deprecated records.
+  constraints:
+    - VERSION must be exactly "2.4.1"
+    - CHANGELOG entry must appear above the [2.4.0] entry
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - provenance/prov-2026-464c2105.yml
+  related:
+    - prov-2026-464c2105
+  associated_specs:
+    - path: examples/user-linespecs/get_user_with_vars.linespec
+      type: linespec
+    - path: examples/notification-linespecs/get_notification_success.linespec
+      type: linespec

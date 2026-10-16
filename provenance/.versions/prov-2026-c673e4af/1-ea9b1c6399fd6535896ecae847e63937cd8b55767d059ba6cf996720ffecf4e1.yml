@@ -1,0 +1,25 @@
+id: prov-2026-c673e4af
+version: 1
+content_hash: sha256:ea9b1c6399fd6535896ecae847e63937cd8b55767d059ba6cf996720ffecf4e1
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-15T23:09:06Z"
+spec_hashes:
+  - sha256:62327ef0592f4885194460628e3d08f8b24c07b28e9ac02fec84eaf8138eb494
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+content:
+  id: prov-2026-c673e4af
+  title: Ensure Docker containers are always cleaned up when test run ends
+  type: blueprint
+  created_at: "2026-04-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Fix the test runner so that all Docker containers started during a test run are guaranteed to be removed when the process exits, regardless of whether tests pass, fail, or the user cancels with Ctrl+C. Add SIGINT/SIGTERM signal handling and restructure exit paths so cleanup defers always execute before the process terminates.
+  affected_scope:
+    - cmd/linespec/main_beta.go
+  associated_specs:
+    - path: examples/catalog-linespecs/get_product_success.linespec
+      type: linespec
+    - path: examples/order-linespecs/create_order_success.linespec
+      type: linespec

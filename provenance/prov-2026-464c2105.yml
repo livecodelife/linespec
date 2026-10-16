@@ -1,6 +1,7 @@
 id: prov-2026-464c2105
 title: Bump version to v2.4.0, add CHANGELOG entries for VARS block and interpolation improvements
 status: implemented
+version: 1
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: >
@@ -16,8 +17,6 @@ affected_scope:
   - VERSION
   - CHANGELOG.md
 forbidden_scope: []
-supersedes: ""
-superseded_by: prov-2026-446d8d6a
 related:
   - prov-2026-935c1716
 sealed_at_sha: d014bc8c9e9c073b07e77d174739a4b8b7c6c3bc
@@ -29,3 +28,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

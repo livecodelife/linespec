@@ -1,6 +1,7 @@
 id: prov-2026-c673e4af
 title: Ensure Docker containers are always cleaned up when test run ends
 status: implemented
+version: 1
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -13,8 +14,6 @@ constraints: []
 affected_scope:
   - cmd/linespec/main_beta.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: a098d37669821607a96bbc1e74054c4e56f4c9ec
 associated_specs:
@@ -25,3 +24,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

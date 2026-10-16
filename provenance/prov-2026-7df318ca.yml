@@ -1,8 +1,37 @@
 id: prov-2026-7df318ca
 title: Add lock-layer command and locked scope lint enforcement
 status: implemented
+version: 3
+reason: |-
+  `LockLayer` creates the record as `implemented` and only then makes its first
+  commit. The pre-commit scope check refuses any commit tagged with a record
+  that is already implemented, so the command fails on the commit that
+  introduces the record:
+
+      ✗ Forbidden scope violation in staged
+          <id> is already implemented - cannot commit with this ID.
+      Commit blocked due to provenance scope violations
+
+  It therefore works in a bare repo and fails in every repo that has run
+  `provenance install-hooks` — which is every repo using provenance seriously.
+  Reproduced in a downstream repo after 3.22.0; the workaround was to commit
+  the record while still a draft and complete it separately, which is two
+  commits and exactly the ordering the command should do itself.
+
+  The fix is to commit the draft before completing rather than completing
+  before committing, inside `LockLayer`. Rejected: exempting implemented
+  records from the scope check, which would weaken the check that catches
+  someone reusing a sealed record's id for new work.
+
+  This hid behind the four defects fixed in prov-2026-54d2b3f1 because that
+  work was verified in throwaway repos with no hooks. A locked record could
+  not be produced at all before 3.22.0, so nothing had ever reached this step.
+reason_kind: fix
 created_at: "2026-04-03"
 author: caleb.cowen@gmail.com
+aliases:
+  - prov-2026-54d2b3f1
+  - prov-2026-cdb13afd
 intent: >
   Implement a lock-layer governance feature that allows declaring a portion of
   the system as crystallized. The `linespec provenance lock-layer` command creates
@@ -18,16 +47,21 @@ intent: >
   commands).
 
 constraints:
-  - "LockLayer must reuse Create and Complete methods (DRY, no duplicate record creation logic)"
-  - "LockLayer must pass --no-edit to Create, then open editor from LockLayer unless user passed --no-edit"
-  - "LockLayer requires --title flag"
-  - "checkLockedScope lint rule must check all 4 combinations: open affected_scope vs locked affected_scope, open affected_scope vs locked associated_specs, open associated_specs vs locked affected_scope, open associated_specs vs locked associated_specs"
-  - "checkLockedScope must report dynamic field name (affected_scope or associated_specs) based on which surface of the open record is the offender"
-  - "checkLockedScope must skip open records that supersedes the locked record"
-  - "checkLockedScope must only check locked records (locked: true), not all implemented records"
-  - "Beta build must have all stable provenance commands plus beta features"
-  - "Beta build must include embedder client setup for search/audit/index"
-  - "Documentation must cover lock-layer and context commands in both PROVENANCE_RECORDS.md and docs/provenance.html"
+  - LockLayer must reuse Create and Complete methods (DRY, no duplicate record creation logic)
+  - LockLayer must pass --no-edit to Create, then open editor from LockLayer unless user passed --no-edit
+  - LockLayer requires --title flag
+  - 'checkLockedScope lint rule must check all 4 combinations: open affected_scope vs locked affected_scope, open affected_scope vs locked associated_specs, open associated_specs vs locked affected_scope, open associated_specs vs locked associated_specs'
+  - checkLockedScope must report dynamic field name (affected_scope or associated_specs) based on which surface of the open record is the offender
+  - checkLockedScope must skip open records that supersedes the locked record
+  - 'checkLockedScope must only check locked records (locked: true), not all implemented records'
+  - Beta build must have all stable provenance commands plus beta features
+  - Beta build must include embedder client setup for search/audit/index
+  - Documentation must cover lock-layer and context commands in both PROVENANCE_RECORDS.md and docs/provenance.html
+  - A record created during a command is resolvable by its id for the rest of that command.
+  - lock-layer produces a record that is implemented and locked.
+  - A locked record makes an overlapping open record fail lint.
+  - lock-layer completes in a repository with the provenance hooks installed.
+  - A commit introducing a record is tagged with that record while it is still a draft.
 
 affected_scope:
   - pkg/provenance/types.go
@@ -39,13 +73,13 @@ affected_scope:
   - cmd/linespec/main_beta.go
   - PROVENANCE_RECORDS.md
   - docs/provenance.html
+  - pkg/provenance/loader.go
+  - cmd/linespec/cli.go
 
 forbidden_scope: []
 
-supersedes: ""
-superseded_by: ""
 related: []
-sealed_at_sha: c2b1ba2c96320b2a6a8d32bbc3c0f6dc72db772c
+sealed_at_sha: 93719a01c351344558959affb35c9e8162a6c443
 associated_specs:
   - path: pkg/provenance/lock_layer_test.go
     type: go-test
@@ -57,3 +91,4 @@ tags:
   - linting
   - documentation
   - beta-parity
+type: blueprint

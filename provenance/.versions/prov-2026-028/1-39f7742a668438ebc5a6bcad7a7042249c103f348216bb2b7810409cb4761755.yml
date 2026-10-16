@@ -1,0 +1,41 @@
+id: prov-2026-028
+version: 1
+content_hash: sha256:39f7742a668438ebc5a6bcad7a7042249c103f348216bb2b7810409cb4761755
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-13T21:47:30Z"
+spec_hashes:
+  - sha256:efdb2710d014cefb0cd958f806c0e7b00cb25ef4bf157b7e3a4bea59c62eeb01
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:d3d666bbd661a50a896c5bac8554581b72fa07ae83bc287861c0f15845458661
+content:
+  id: prov-2026-028
+  title: Add implicit environment variable substitution to LineSpec DSL
+  type: blueprint
+  created_at: "2026-03-13"
+  author: calebcowen@gmail.com
+  intent: |
+    LineSpec tests can currently only catch hardcoded values if the test author explicitly writes VERIFY rules with specific patterns. This makes it easy to accidentally write a test that matches the buggy implementation instead of validating correct behavior.
+    This feature adds implicit environment variable substitution using ${VAR_NAME} syntax. The test runner will generate random values for these variables at test time, ensuring that the actual service implementation must read from environment variables to match the expected values in the test mocks.
+    This enables LineSpec to catch hardcoded tokens, API keys, and other configuration values that should be read from the environment.
+  constraints:
+    - MUST support ${VAR_NAME} syntax in HTTP headers
+    - MUST support ${VAR_NAME} syntax in HTTP URLs and paths
+    - MUST support ${VAR_NAME} syntax in payload files (YAML/JSON)
+    - MUST generate random values at test runtime to prevent hardcoded matching
+    - MUST inject generated values into service container environment
+  affected_scope:
+    - pkg/dsl/parser.go
+    - pkg/dsl/payload.go
+    - pkg/runner/runner.go
+    - pkg/interpolate/interpolate.go
+    - pkg/interpolate/interpolate_test.go
+    - pkg/dsl/interpolate_test.go
+  associated_specs:
+    - path: examples/user-linespecs/authenticate_user_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: linespec
+    - path: examples/notification-linespecs/list_notifications_success.linespec
+      type: linespec

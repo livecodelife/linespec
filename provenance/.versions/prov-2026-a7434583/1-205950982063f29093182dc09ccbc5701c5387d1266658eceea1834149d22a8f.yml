@@ -1,0 +1,35 @@
+id: prov-2026-a7434583
+version: 1
+content_hash: sha256:205950982063f29093182dc09ccbc5701c5387d1266658eceea1834149d22a8f
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-10-16T15:25:09Z"
+spec_hashes:
+  - sha256:23c73ceb45cfa8e7697a76260d68a0462ef0c47ccd0c071f5fa473795f398b08
+content:
+  id: prov-2026-a7434583
+  title: Forward linespec provenance commands to the provenance CLI
+  type: imprint
+  created_at: "2026-10-16"
+  author: calebcowen@gmail.com
+  intent: |
+    Forward every `linespec provenance <cmd>` that the provenance v2 CLI implements to that binary
+    (found via $PROVENANCE or PATH), with a deprecation warning on stderr and a clear install message
+    (pinned to the full SHA) when the binary is missing. Port the forwarder from branch provenance-forward
+    (prov-2026-d3d04540) and the TestMain git isolation (prov-2026-f3c3e6e7), and update the forwarded set
+    to the v2 command list (TestForwardListMatchesCLI compares it with the CLI's own --help). Commands the
+    CLI does not implement (audit, discover, generate, index, lock-layer, lock-scope, publish) stay in
+    process and are documented as not working on migrated (v2) repos.
+  affected_scope:
+    - cmd/linespec/provenance_forward.go
+    - cmd/linespec/provenance_forward_test.go
+    - cmd/linespec/testmain_test.go
+    - pkg/provenance/testmain_test.go
+    - cmd/linespec/cli.go
+    - cmd/linespec/main_stable.go
+  implements: prov-2026-dfb51160
+  implements_version: 1
+  associated_specs:
+    - path: cmd/linespec/provenance_forward_test.go
+      type: code

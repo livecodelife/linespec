@@ -1,0 +1,57 @@
+id: prov-2026-0bc2b792
+version: 1
+content_hash: sha256:6ff693ebe80f3344efbf1458c0184eb39b487fa90860b8533c5d7425c0cc6131
+parent_hash: ""
+reason: ""
+author: caleb.cowen@linq.com
+created_at: "2026-09-10T22:42:55Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+  - sha256:408b02e4c9084b0cb5c0d52fb7f1f3fc222587008c9b9b43b5e55c6e1f327ed5
+content:
+  id: prov-2026-0bc2b792
+  title: 'Release 3.23.0: VERIFY-aware HTTP mock selection'
+  type: blueprint
+  created_at: "2026-09-10"
+  author: caleb.cowen@linq.com
+  intent: |
+    Ships prov-2026-e24c7a3f: a concurrent fan-out to one endpoint is paired with
+    its mocks by their VERIFY rules rather than by arrival order.
+
+    Minor rather than patch. The CLI surface is unchanged — no flag, no field, no
+    output contract moves — which is the bar 3.22.1 was measured against. Two
+    things sit above it. `FindHTTPMockWithBody` takes a fifth parameter, so any
+    importer of `pkg/registry` fails to compile; the package is under `pkg/`, not
+    `internal/`, so that is a public break however rarely it is exercised. And
+    selection itself changed observably: a mock declaring no VERIFY rules is
+    vacuously satisfied, so it can now absorb a call that previously reached an
+    earlier VERIFY-constrained mock and returned 400.
+
+    Every suite that passed before passes unchanged — when the first candidate
+    already satisfied its rules, it is still the one chosen. Only outcomes that
+    were failures move, which is what makes this a fix and not a regression. But
+    "previously failing, now passing" is still a change in what the runner
+    reports, and a reader deciding whether to upgrade should not have to infer it
+    from a patch bump.
+
+    The release is the bump and the changelog entry only. No behavior is added
+    here; prov-2026-e24c7a3f is already implemented and sealed at a3e85b3.
+  constraints:
+    - The CHANGELOG entry names the record that made the change.
+    - Version strings move only through scripts/bump-version.sh.
+    - No rendered docs artifact is hand-edited.
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+  related:
+    - prov-2026-e24c7a3f
+  associated_specs:
+    - path: CHANGELOG.md
+      type: code
+    - path: VERSION
+      type: code
+  tags:
+    - release

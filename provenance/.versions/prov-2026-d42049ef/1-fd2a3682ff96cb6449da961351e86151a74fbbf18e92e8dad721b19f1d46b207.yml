@@ -1,0 +1,30 @@
+id: prov-2026-d42049ef
+version: 1
+content_hash: sha256:fd2a3682ff96cb6449da961351e86151a74fbbf18e92e8dad721b19f1d46b207
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T16:52:52Z"
+spec_hashes:
+  - sha256:2e0b713a52710a9cfb5f079a1ff192feeecc187767907d1362ce4d35b881c4b4
+content:
+  id: prov-2026-d42049ef
+  title: Annotate remote-owned nodes in graph output
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Graph output gives no visual indication that a node originates from a shared repo rather than the local provenance directory. A Brief resolved from a remote cache looks identical to a local Brief, making the cross-repo boundary invisible. Add a [remote] annotation to the text graph and a remote boolean field to the JSON graph so users can see at a glance which nodes are remote-owned.
+  constraints:
+    - Text graph annotation is a plain "[remote]" suffix on the title, no colour needed
+    - JSON graph adds a "remote" boolean field (omitted when false)
+    - Determination uses the same path-separator-aware check as isRemoteRecord
+    - No DOT output exists; the review mention of outputDotGraph was speculative
+    - No change to graph structure or traversal logic
+  affected_scope:
+    - pkg/provenance/formatter.go
+  implements: prov-2026-90ec670e
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/formatter.go
+      type: code

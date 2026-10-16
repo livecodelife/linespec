@@ -1,0 +1,122 @@
+id: prov-2026-059ba152
+version: 3
+content_hash: sha256:c0108f0b33b12f570ac2c24edcd39f1e8be409618fcb918fe268ca117e6c74a4
+parent_hash: sha256:97b3cbf3713504d7509459a4d8995d68a19f333725a11ac88859493e3bad16bd
+reason: |-
+  A tester's retest of prov-2026-ad21b28e showed schema_discovery.validate fires only for the
+  first spec of a run. Alone, the bad-column spec fails with the schema error; behind another
+  spec in the same directory it runs and fails on its response body instead. RunTest builds a
+  fresh testRunner per spec, and run() returns early on the persistent-container reuse path
+  (prepareForReuse then runTestPhase) before the database setup block, so fetchPostgresSchema
+  and validatePostgresMocks run only for the spec that starts the containers.
+
+  Decision: cache the discovered schema on the TestSuite, keyed by db.Host, with a mutex, when
+  fetchPostgresSchema runs (a failed or empty discovery is cached as "attempted, none").
+  run() validates the spec against that cache before the reuse branch, so the 2nd and later
+  specs are checked even though no setup or fetch happens; the existing call after the fetch
+  covers the spec that populates the cache, and a per-spec flag prevents validating twice when
+  a failed reuse falls back to a fresh start. The "no schema discovered; skipping" note is
+  logged once per run, not per spec (the earlier decision in prov-2026-ad21b28e). Warn mode
+  logs each spec's own errors; error mode fails only the offending spec. The cmd loop already
+  counts each RunTest error as one failed spec and continues, which is how other per-spec
+  setup errors are reported. Off stays a no-op.
+
+  Rejected: validating all specs up front in one pass. It reports every error together and
+  fails fast, but the schema comes from the live database, so the first container must start
+  before any validation, and it needs a new whole-run phase the cmd loop does not have.
+  Per-spec validation reuses the existing seam and error reporting.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-12T17:32:12Z"
+spec_hashes:
+  - sha256:35928c289bfa80a04881683a6c5437b075b2840ee53389fecd2120f383ae8a18
+  - sha256:712d686b218ef8b6d8a5cd024ac9fd4fdc5d51fe8eb2a6994ddb1d0b68b04b03
+  - sha256:9143b11115d4acdfcfc7e0ed9e9e4bf382341363a546558bc49ebe207f81de08
+  - sha256:ba74dc6325b13326132a388de15512a8dda43812c289a6d2864b9927103c09be
+  - sha256:a4ddde510998f2bdff6dad482757baa21f36bf0eb33b1385d933153888a63633
+  - sha256:d3af12244aabc2a7d297d6f1c3090c4a1f890be540459293b3a8e1813071477e
+  - sha256:150f37aab3150c7426cc0ea13cee1c82b097abfd70da586b94fda987b6d16708
+content:
+  id: prov-2026-059ba152
+  title: 'Schema discovery: support configurable non-public PostgreSQL schemas'
+  type: blueprint
+  created_at: "2026-10-09"
+  author: caleb.cowen@linq.com
+  intent: |
+    In 3.26.0 AutoDiscoverer hardcodes the public schema: DiscoverTables filters pg_tables on schemaname='public' and postgresColumns on table_schema='public'. A database whose tables live elsewhere (CNP: 33 tables in cnp_global, 30 in cnp_ops_<state>, none in public) discovers nothing, so the PostgreSQL proxy's schemaCache (table to column type OIDs) is empty.
+
+    Add schema_discovery.schemas ([]string on SchemaDiscoveryConfig), defaulting to [public] so public-only users are unchanged. Discovery covers every listed schema. Each table is keyed twice: schema-qualified (cnp_global.errors) and bare (errors). When a bare name exists in several listed schemas the first listed schema wins, mirroring search_path order; the qualified key is always unambiguous.
+
+    The between-test reset is public-only too. Checked in pkg/runner: truncatePostgreSQLTables selects from pg_tables WHERE schemaname='public' and truncates unquoted bare names, so tables in other schemas are never reset and state leaks between specs. It becomes schema-aware, truncating quoted, schema-qualified names across the configured schemas. MySQL paths are untouched.
+
+    Relationship to the planned core refactor (prov-2026-167380f0, draft): that blueprint
+    replaces the runner's per-database switches with a Dependency interface (Start, Env,
+    ProxyArgs, VerifyAddr, Reset, Stop). The schema-aware truncation here is the PostgreSQL
+    Reset behaviour that interface will own, so it is written as a self-contained function
+    taking the connection and the schema list, not threaded through the runner's bool
+    guards, and can move behind Dependency.Reset unchanged. schema_discovery.schemas is
+    config the PostgreSQL dependency consumes; it adds no new runner-level switch. This
+    record does not touch the proxy and does not change how interactions are keyed.
+
+    Rejected: discovering every non-system schema. It silently changes behaviour for existing users; an explicit list keeps the default identical. Extends prov-2026-9a74b241 (AutoDiscoverer) and prov-2026-8227b384 (SchemaDiscoveryConfig) without superseding them.
+  constraints:
+    - Default behaviour is byte-identical for public-only users, including schema map keys when schemas is unset
+    - MySQL discovery and truncation paths are unaffected
+    - Schema-aware truncation is a self-contained function (connection, schemas) with no new runner-level bool guards or database switches, so it can become Dependency.Reset from prov-2026-167380f0 unchanged
+    - Collision rule is first listed schema wins for the bare name; qualified keys are always emitted
+    - Truncation of non-public schemas uses quoted schema-qualified identifiers and still skips schema_migrations
+    - Unit tests cover the discoverer (multi-schema, collision, default) and config parsing of schema_discovery.schemas
+    - 'Implementation check: confirm the proxy extractTable resolves a schema-qualified query to a schemaCache key; the proxy is out of scope here, so a gap becomes a follow-up record'
+    - 'Non-goal, follow-up for later verification: ACCESSING_TABLES with unqualified ops tables under a non-default search_path'
+    - 'Non-goal, follow-up for later verification: strict_passthrough on undeclared queries'
+    - 'Non-goal, follow-up for later verification: Npgsql Pooling=false behaviour'
+    - Default behaviour unchanged, so validate defaults to off; with it off no validation runs and no new output appears
+    - The validator is a pure function (specs, schema map) -> []error with no runner, proxy or config state, so prov-2026-167380f0 (parser-typed Predicates, per-channel allowed clauses, ProtocolSpec) can call it on typed predicates later
+    - The new `validate` field is added to SchemaDiscoveryConfig, which is decoded with KnownFields(true) (prov-2026-79b59b40); an unknown value other than off, warn or error is a config error at load, not a silent fallback
+    - No discovered schema (mode none, no proxy, discovery failed or empty) skips validation with a note; an unresolvable or schema-less table is skipped, never a false error
+    - MySQL discovery and MySQL expects are not validated or changed in this record
+    - 'Unit tests cover: unknown column, unknown table, schema-qualified table (qualified and bare keys), case differences in table and column, RETURNS subset of columns accepted, no schema discovered, validate off/warn/error handling and the invalid-value config error'
+    - 'DECIDED (human, 2026-10-09): validate defaults to off in this release; warn may become the default in a later release and error only at a major version. The tester opts into error in their own config now'
+    - 'DECIDED (human, 2026-10-09): validate does not trigger or force schema discovery. PostgreSQL discovery keeps running only when the database has proxy: true, and with no discovered schema validation is skipped with one note, so no container start timing changes'
+    - 'Default behaviour unchanged: validate off runs nothing and logs nothing; MySQL discovery and expects are untouched'
+    - Every spec in a run is validated against the discovered schema, including specs that reuse persistent database/proxy containers and skip the setup block and fetchPostgresSchema
+    - The discovered schema is cached on TestSuite keyed by db.Host and guarded by a mutex (testRunner is created per spec); the cache is filled by the existing fetch and never triggers a new discovery or changes container start timing (prov-2026-ad21b28e)
+    - The "no schema discovered; skipping" note is logged once per run, not per spec; a spec is never validated twice, even when reuse falls back to a fresh start
+    - warn mode logs each spec's own errors; error mode fails only the spec with errors and the run continues with the next spec (DECIDED by the human, 2026-10-09; aborting the whole run is rejected because it needs a new code path and the cmd loop already counts each RunTest error as one failed spec)
+    - validateSpecMocks and the tests of prov-2026-ad21b28e are unchanged; the new tests live in a separate file
+    - 'Unit tests in pkg/runner cover: validation runs for the 2nd and later specs when setup is reused, warn logs per spec, error fails the bad spec only, the skip note appears once per run, off is a no-op'
+  affected_scope:
+    - pkg/schema/auto_discoverer.go
+    - pkg/config/types.go
+    - pkg/config/parser.go
+    - pkg/runner/runner.go
+    - pkg/schema/multi_schema_test.go
+    - pkg/config/schema_discovery_schemas_test.go
+    - pkg/runner/truncate_schemas_test.go
+    - pkg/schema/validate_mocks.go
+    - pkg/schema/validate_mocks_test.go
+    - pkg/config/schema_discovery_validate_test.go
+    - pkg/runner/schema_validation_test.go
+    - pkg/runner/schema_validation_reuse_test.go
+  related:
+    - prov-2026-9a74b241
+    - prov-2026-8227b384
+    - prov-2026-167380f0
+  associated_specs:
+    - path: pkg/schema/multi_schema_test.go
+      type: go
+    - path: pkg/config/schema_discovery_schemas_test.go
+      type: go
+    - path: pkg/runner/truncate_schemas_test.go
+      type: go
+    - path: pkg/schema/validate_mocks_test.go
+      type: unit
+    - path: pkg/config/schema_discovery_validate_test.go
+      type: unit
+    - path: pkg/runner/schema_validation_test.go
+      type: unit
+    - path: pkg/runner/schema_validation_reuse_test.go
+      type: unit
+  tags:
+    - postgresql
+    - schema-discovery

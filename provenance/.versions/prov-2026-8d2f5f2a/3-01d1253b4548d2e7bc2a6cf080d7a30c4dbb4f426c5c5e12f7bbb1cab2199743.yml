@@ -1,0 +1,206 @@
+id: prov-2026-8d2f5f2a
+version: 3
+content_hash: sha256:01d1253b4548d2e7bc2a6cf080d7a30c4dbb4f426c5c5e12f7bbb1cab2199743
+parent_hash: sha256:b0631c00a486f40f8fa95a6ab1612f2f37a290cde8f2d08deb046a92b1f42752
+reason: |-
+  The filesystem-write-enforcement feature (blueprint prov-2026-8d2f5f2a, brief
+  prov-2026-e8fb1e96) is built around enforcing "record creation BEFORE file
+  creation": you declare a path in an open record's affected_scope, and that
+  declaration is what unlocks the path so the file can be written/created.
+  Reconcile explicitly supports this for files that do not exist yet — see
+  fswrite.go Reconcile (the loop at ~L371-385, "Unlock parent directories of
+  declared-but-not-yet-existing open-scope paths so they can be created").
+
+  But the `open` transition cannot be reached for such a declaration. Opening a
+  record runs the linter's scope-existence check (linter.go validateScopePaths /
+  validateExactPath), and for an OPEN record a missing EXACT path is a hard
+  SeverityError (linter.go:419), which rolls the transition back:
+
+      $ linespec provenance open --record <id>
+      ✗ Cannot open <id>: the record does not pass validation:
+          · scope: Scope path does not exist: src/new.go
+        The transition was rolled back — <id> is unchanged (still draft).
+
+  So a record that declares a brand-new file by its exact path (the headline
+  "declare before you create it" case) can never be opened, and reconcile's
+  not-yet-existing-path dir-unlock logic is therefore unreachable through the
+  exact-path flow. The two layers contradict each other.
+
+  Reproduction (verified manually in an isolated repo, enforcement: strict):
+    1. create a blueprint, affected_scope: [src/new.go]  (src/new.go absent)
+    2. linespec provenance open --record <id>
+       → REJECTED: "Scope path does not exist: src/new.go", rolled back.
+    3. change affected_scope to a glob, e.g. src/*.go, in a src/ dir that
+       ALREADY contains other .go files
+    4. linespec provenance open --record <id>
+       → SUCCEEDS; reconcile unlocks src/ (because an existing matched file
+         lives there); `echo ... > src/new.go` is ALLOWED.
+    5. BUT change affected_scope to a glob into an empty/new dir with no
+       existing match, e.g. emptydir/*.go, then open
+       → REJECTED identically: "Glob pattern matches no files: emptydir/*.go".
+         (Verified.) So the glob is NOT a general escape hatch — it only
+         "works" in step 4 because the directory already held a matching file.
+
+  Root cause: linter.go validateScopePaths requires every open-record scope
+  pattern to match at least one EXISTING file, and applies the same missingSev
+  (SeverityError for open records) when none does: an exact path must exist
+  (validateExactPath, linter.go:455), a glob must match >=1 file
+  (validateGlobPattern, "matches no files", linter.go:499), and a regex must
+  match >=1 walked file (validateRegexPattern). None of the three pattern kinds
+  is exempted for a path that is declared precisely because it is
+  about-to-be-created. The earlier draft of this record wrongly claimed
+  glob/regex "escape the check"; they do not — the step-4 glob only passed
+  because src/ already contained pre-existing .go files.
+
+  Compounding this on the reconcile side: fswrite.go Reconcile's
+  not-yet-existing-path dir-unlock loop (~L371-385) explicitly SKIPS glob
+  patterns (`if containsGlobMeta(p) { continue }`), so even if `open` accepted a
+  glob naming a new file in an otherwise-empty directory, reconcile would still
+  not unlock that directory for it. In step 4 the dir got unlocked only as a
+  side effect of an existing matched file setting writableDirs — not by the
+  not-yet-existing handling. A complete fix therefore spans BOTH layers.
+
+  Impact: the feature's primary advertised workflow (declare the new path in an
+  open record, then create the file under the unlocked directory) does not work
+  for ANY pattern kind when the declared path does not already match an existing
+  file. Authors are forced to create an empty file first and then open — which
+  violates "record before file creation", the whole point of the blueprint.
+
+  Secondary observations found during the same manual test pass, recorded here
+  for traceability but NOT fixed by this bug (each is arguably by-design and, if
+  actioned, warrants its own record):
+    - associated_specs paths are always-writable regardless of record status
+      (fswrite.go AlwaysWritablePaths, ~L82-89, intentional per its comment).
+      Consequence: a `type: code` spec whose path IS a source file (the pattern
+      this repo uses with run_command: make test) makes that source file
+      permanently writable and exempt from lock enforcement, even after the
+      governing record is completed. May be intended (specs must stay
+      runnable/editable); flagged for confirmation.
+    - `linespec provenance next` for an uncovered file only ever suggests
+      "create a new blueprint", never "add this path to an existing open
+      record's scope", although the blueprint constraint lists both remediations.
+      Minor/heuristic, not a correctness defect.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-07-15T22:28:56Z"
+spec_hashes:
+  - sha256:333e39509ac7156dbd82417ecc945bcbf392e92d8e4a310c085636b2e08802e8
+  - sha256:fa03c20a3be7ca4bfa6bfdbd1b79700aac8776b6fd5863757f5b06493dc0d803
+  - sha256:21d1fe49eb3a29a96b3aec89e9d9e675ec2194be892c631bbeedfc8d09bf7623
+content:
+  id: prov-2026-8d2f5f2a
+  title: Enforce provenance-before-code via filesystem write permissions
+  type: blueprint
+  created_at: "2026-07-10"
+  author: calebcowen@gmail.com
+  intent: |-
+    Move provenance-before-code enforcement from the commit boundary to the
+    filesystem write boundary, so an agent cannot write source first and author
+    the governing record afterward to satisfy a commit-time check. The governed
+    tree defaults to non-writable; a source path becomes writable only when an
+    open, allowlist-mode record (affected_scope non-empty) declares it. File
+    permissions become a pure projection of the current set of open records'
+    scopes: `linespec provenance open` (and scope widening on an already-open
+    record) materialize write access as part of the same atomic operation that
+    declares it, and a `reconcile` operation re-derives the entire write-bit
+    state from current record state so it can be run idempotently at agent
+    session start. Because the filesystem itself performs the enforcement, this
+    holds regardless of which agent harness is driving and remains in effect
+    even when git hooks are absent or bypassed.
+  constraints:
+    - The governed tree MUST default to non-writable. A source path becomes writable only when covered by the affected_scope of an open, allowlist-mode record.
+    - Writability MUST be a pure projection of the current set of open records' scopes. Enforcement state changes MUST occur only at discrete CLI command boundaries (`open`, `add-scope`, `complete`, `deprecate`, `reconcile`), never via a resident watching process.
+    - '`linespec provenance open` MUST materialize write permissions for the record''s affected_scope as part of the same operation that transitions the record to open. Declaration and permission MUST move together atomically, reusing the existing snapshot/rollback machinery (snapshotFiles/restoreFiles) so a rejected transition leaves permissions untouched.'
+    - Adding a path to an already-open record's affected_scope MUST go through a dedicated `linespec provenance add-scope` CLI verb (not overloaded onto `lock-scope`) and MUST materialize that path's write permission in the same atomic operation.
+    - A dedicated `linespec provenance reconcile` CLI verb MUST re-derive the entire write-bit state from the current set of open records' scopes (sourced from the existing scope-index cache), unlocking covered paths and re-locking uncovered ones, and MUST be idempotent. Enforcement MUST NOT depend on the Claude Code plugin hooks being installed, since a user may not have them set up — `linespec provenance next` MUST therefore also trigger reconcile unconditionally on every invocation (not gated behind an env var only a hook script sets), so work always begins against correctly projected permissions regardless of which harness — if any — is driving. `plugins/provenance/hooks/session-start.sh` may still call `next`, but only as a thin renderer of its output, never as the sole trigger for reconcile.
+    - The always-writable set MUST be derived, not separately hand-maintained. It is the union of the existing provenance.exclude_paths whitelist (pkg/provenance/exclude.go) and the authoring coop (the configured provenance.dir, .linespec.yml, and associated_specs paths).
+    - The configured provenance directory MUST be treated as unconditionally writable, reusing the existing provenance.dir configuration. No path under it may ever be locked, so the Brief-to-Blueprint-to-Imprint authoring chain can never block its own creation.
+    - Unlocking a directory to permit creation of a not-yet-existing declared path MUST NOT alter the permission bits of files already present in that directory. Already-locked files MUST remain locked.
+    - Cold-start posture MUST default to warn-until-first-record for hand-initialized projects (no records yet), deferring enforcement until the first record exists. A project created via `linespec clone` MUST default to strict-deny, since it arrives pre-seeded with open records to enforce against.
+    - '`linespec provenance next` MUST incorporate this workflow: when a source path is blocked or the agent is uncertain how to proceed, `next` MUST surface the corrective action — opening a governing record, or adding the path to an existing open record''s scope — as the guided next step.'
+    - |
+      Add LineSpec's managed .linespec/ state files to the always-writable set in
+      AlwaysWritablePaths (pkg/provenance/fswrite.go) — at minimum .linespec/embeddings.bin and
+      .linespec/hash_manifest.json, preferably the managed-state paths as a group — mirroring the
+      existing always-writable treatment of the provenance dir and .linespec.yml, so reconcile
+      never locks state LineSpec itself regenerates.
+    - |
+      After the fix, running `reconcile` (directly, or via `next`) in a repo that tracks
+      .linespec/embeddings.bin and/or .linespec/hash_manifest.json leaves both writable, and a
+      subsequent `provenance index` succeeds instead of failing with "permission denied".
+    - |
+      Projection semantics for genuine source are unchanged: out-of-scope tracked source files
+      still lock, and files covered by an open allowlist record's affected_scope stay writable.
+    - |
+      Consider surfacing rather than swallowing scope-index cache write failures
+      (refreshScopeIndexCache in pkg/provenance/scope_index.go) so an unwritable cache is
+      visible instead of silently stale. Secondary to the always-writable fix.
+    - |
+      Opening a record MUST NOT be blocked solely because a declared
+      affected_scope path does not yet exist on disk, so that reconcile can unlock
+      the parent directory and the declared file can then be created. This is the
+      not-yet-existing-path handling fswrite.go Reconcile (~L371-385) already
+      intends to support — but which is currently unreachable because `open`
+      rejects the declaration first.
+    - |
+      The relaxation MUST be scoped to the missing-path (existence) check only. It
+      MUST NOT weaken other open-time validations (e.g. forbidden_scope handling,
+      associated_specs-required-under-strict, or matching a path that resolves to
+      an excluded location). A scope path that exists but is a directory, or other
+      genuinely invalid patterns, must keep their current severity.
+    - |
+      The fix MUST cover ALL pattern kinds, not just the exact path. Today an
+      exact path ("Scope path does not exist"), a glob ("Glob pattern matches no
+      files"), and a regex (no walked match) that each name only not-yet-existing
+      files ALL fail at `open` — none is a working escape hatch. Whatever
+      relaxation is applied MUST let all three be opened when they name
+      declared-but-not-yet-existing paths; do not merely align the exact path to a
+      (mistakenly assumed) already-working glob.
+    - |
+      Because the glob case spans two layers, the fix MUST also address reconcile:
+      fswrite.go Reconcile's not-yet-existing-path dir-unlock loop currently skips
+      glob patterns (`containsGlobMeta`), so a glob naming a new file in an
+      otherwise-empty directory would still not get its parent unlocked even after
+      `open` accepts it. Opening a not-yet-existing glob/regex scope MUST result in
+      a usable (unlocked) parent directory for the declared file.
+    - |
+      make test must pass, and regression tests MUST assert that opening a record
+      whose affected_scope names a not-yet-existing path succeeds — covering the
+      exact path, a glob into an otherwise-empty directory, and a regex with no
+      existing match — and that reconcile then unlocks each declared path's parent
+      directory so the file can be created, guarding all three failures reproduced
+      above (the empty-directory glob case is the one the earlier draft wrongly
+      assumed already worked).
+    - |
+      The existing test TestOpen_FailsCleanlyWithoutPermissionSideEffectsWhenScopePathMissing
+      (pkg/provenance/fswrite_transitions_test.go:84) currently encodes the pre-fix
+      behavior as correct — it asserts Open MUST fail, and MUST NOT unlock the
+      parent directory, when a declared scope path is missing. This is exactly the
+      behavior the fix inverts, so the implementer MUST rewrite (not merely
+      supplement) that test: the missing-declared-path case flips to success +
+      parent-dir unlock. The test's OTHER guarantee — that a genuinely-invalid
+      Open (e.g. a real validation failure, or the commit-rejection rollback
+      covered by TestOpen_RollsBackPermissionsOnCommitRejection) leaves
+      permissions untouched with no side effects — MUST be preserved, retargeted
+      onto a still-invalid case rather than deleted.
+  affected_scope:
+    - pkg/provenance/fswrite.go
+    - pkg/provenance/fswrite_test.go
+    - pkg/provenance/fswrite_transitions_test.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/exclude.go
+    - pkg/provenance/scope_index.go
+    - pkg/provenance/next.go
+    - pkg/config/types.go
+    - plugins/provenance/hooks/session-start.sh
+    - plugins/provenance/hooks_test.go
+    - cmd/linespec/cli.go
+    - PROVENANCE_RECORDS.md
+    - pkg/provenance/linter.go
+  implements: prov-2026-e8fb1e96
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/fswrite_test.go
+    - path: pkg/provenance/fswrite_transitions_test.go
+    - path: plugins/provenance/hooks_test.go

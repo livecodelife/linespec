@@ -1,0 +1,51 @@
+id: prov-2026-7cc26544
+version: 1
+content_hash: sha256:fbb27c29b435e7abb7a2d621f56ef6829777838a35f687430d46b66863f20454
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-16T13:13:30Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:239c0356e623577a6bbded19814fae6e0ac0a11a0129ec0e659cf189471912f7
+  - sha256:84feb17b215ae6ae4dd6d946eebec8f3e47ac51bbaccaf8dd3ceb295fb934da4
+  - sha256:7b5932b4dc1d350efcf24ee7899e94a5f426cadd6f7e43b1d3ded42d7bb31721
+content:
+  id: prov-2026-7cc26544
+  title: Graduate LineSpec Testing from beta to stable (v2.0.0 release)
+  type: blueprint
+  created_at: "2026-04-16"
+  author: calebcowen@gmail.com
+  intent: |
+    LineSpec Testing has reached sufficient maturity to leave the beta designation. This record governs the v2.0.0 release, which merges the beta build into the stable build: the linespec binary now includes test and proxy commands by default, eliminating the need for the -tags beta build flag. All documentation and the doc site are updated to remove beta language, and the version is bumped to v2.0.0 to signal the milestone clearly.
+  constraints:
+    - All unit tests must pass (make test)
+    - All integration tests must pass (make test-integration)
+    - All 4 linespec example suites must pass
+    - All version references in docs and doc site must reflect v2.0.0
+    - No [BETA] labels in user-facing CLI output
+    - The LineSpec Testing doc site page (docs/linespec.html) must be comprehensively reviewed for completeness and accuracy — all beta warnings removed, coverage expanded to match the full feature set now shipping as stable
+  affected_scope:
+    - cmd/linespec/main_beta.go
+    - cmd/linespec/main_stable.go
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/docs.html
+    - docs/linespec.html
+    - docs/provenance.html
+    - .goreleaser.yml
+    - Makefile
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/authenticate_user_invalid_token.linespec
+      type: linespec
+    - path: examples/notification-linespecs/process_todo_created_event.linespec
+      type: linespec
+    - path: examples/multi-db-linespecs/create_order_success.linespec
+      type: linespec
+  tags:
+    - release
+    - v2.0.0

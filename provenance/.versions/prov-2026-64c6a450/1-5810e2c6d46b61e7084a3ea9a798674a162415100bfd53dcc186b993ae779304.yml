@@ -1,0 +1,33 @@
+id: prov-2026-64c6a450
+version: 1
+content_hash: sha256:5810e2c6d46b61e7084a3ea9a798674a162415100bfd53dcc186b993ae779304
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T17:45:04Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-64c6a450
+  title: Update local docs for bug type and field enforcement matrix
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Update PROVENANCE_RECORDS.md, PROVENANCE_RECORD_SCHEMA.md, and CHANGELOG.md to document the new bug type, the extends field, and the per-type field enforcement matrix. The docs/ site files are not modified.
+  constraints:
+    - bug type documented in tier hierarchy and type reference tables
+    - extends field documented in field reference with applicable types noted
+    - Per-type field enforcement matrix and conditional rules section added or updated
+    - CHANGELOG.md entry added for this release
+  affected_scope:
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - CHANGELOG.md
+  forbidden_scope:
+    - docs/**
+  implements: prov-2026-9ffe68bb
+  implements_version: 2
+  associated_specs:
+    - path: CHANGELOG.md
+      type: config

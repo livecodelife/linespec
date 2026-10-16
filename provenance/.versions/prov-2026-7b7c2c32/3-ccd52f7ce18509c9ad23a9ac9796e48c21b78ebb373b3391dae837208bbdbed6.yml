@@ -1,0 +1,30 @@
+id: prov-2026-7b7c2c32
+version: 3
+content_hash: sha256:ccd52f7ce18509c9ad23a9ac9796e48c21b78ebb373b3391dae837208bbdbed6
+parent_hash: sha256:a1474d4f17530723875710567d8fef7d629ba97ba5e457ae3650e1359ee04333
+reason: 'Supersedes prov-2026-710251c7: Resolve CodeQL allocation overflow by slicing msg before allocation'
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:ca0cf006db470ba824dd08230d9576b363ee1804955ba173377ad702d55a2e1e
+content:
+  id: prov-2026-7b7c2c32
+  title: Resolve CodeQL allocation overflow by slicing msg before allocation
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    CodeQL flags the make([]byte, 5+msgLen) allocation in encodeGRPCFrame as a potential overflow. Previous fix (prov-2026-710251c7) capped msgLen but did not slice the msg slice itself, so CodeQL taint tracker still sees the original unbounded msg flowing into the allocation. Fix by slicing msg to maxGRPCMessageSize before computing the allocation size, so the taint source is directly bounded.
+  constraints:
+    - No behavioral change for messages under 1 GB
+  affected_scope:
+    - pkg/proxy/grpc/interceptor.go
+    - provenance/
+  related:
+    - prov-2026-ae5d2ade
+  associated_specs:
+    - path: pkg/proxy/grpc/interceptor_test.go
+      type: go-test
+  tags:
+    - security
+    - grpc

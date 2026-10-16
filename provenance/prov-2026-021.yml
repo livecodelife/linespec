@@ -1,6 +1,7 @@
 id: prov-2026-021
 title: Add sealed_at_sha field to Provenance Records for stale scope detection
 status: implemented
+version: 1
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 sealed_at_sha: d8ae6f2d2c6899f0ecac075bcf341effb8770bbb
@@ -64,8 +65,6 @@ affected_scope:
     - AGENTS.md
     - pkg/provenance/*_test.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 associated_specs: []
 associated_traces: []
@@ -75,3 +74,4 @@ tags:
     - schema
     - git-integration
     - provenance-records
+type: blueprint

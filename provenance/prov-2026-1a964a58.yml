@@ -1,9 +1,11 @@
 id: prov-2026-1a964a58
 title: Pivot layer artifact format to tar archives for path-preserving extraction
 status: implemented
+version: 1
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-dac81a68
+implements_version: 1
 intent: >
   Replace raw byte concatenation with tar archives for all layer artifacts so that
   linespec clone (prov-2026-92f06ee9) can extract layers to their correct
@@ -37,8 +39,6 @@ affected_scope:
   - "pkg/provenance/publish_test.go"
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 548cbb5fa893ccd9a54fb7dbd6a7895f391b0f26
 associated_specs:

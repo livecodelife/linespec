@@ -1,6 +1,7 @@
 id: prov-2026-ad64db54
 title: Support multiple databases per service in .linespec.yml
 status: implemented
+version: 1
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: |
@@ -72,8 +73,6 @@ affected_scope:
   - LINESPEC.md
   - examples/multi-db-linespecs/**
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-007
   - prov-2026-8227b384
@@ -89,3 +88,4 @@ tags:
   - multi-database
   - config
   - runner
+type: blueprint

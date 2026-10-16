@@ -1,0 +1,40 @@
+id: prov-2026-9368095a
+version: 1
+content_hash: sha256:fad64316c1447bcfb0e58fcd5aeb562255110657b07f663bb858bacc57e57b97
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-27T18:58:24Z"
+spec_hashes:
+  - sha256:768000d3c37558a32fa70c65c87079d3d3a4fb69493547f7448acb6ffb381590
+content:
+  id: prov-2026-9368095a
+  title: Support nested subdirectories in provenance loader
+  type: blueprint
+  created_at: "2026-05-27"
+  author: test@example.com
+  intent: |
+    Allow provenance records to be organized into nested subdirectories within the configured
+    provenance directory. Currently LoadFromDir only reads .yml files at the top level and
+    skips all subdirectories. Engineers should be able to group records by feature, team, or
+    time period using subdirectories without losing discoverability by CLI commands.
+  constraints:
+    - LoadFromDir must recurse into subdirectories and load all prov-*.yml files found at any depth
+    - All existing CLI commands (status, lint, check, search, graph, context, complete) must work unchanged against records in subdirectories
+    - Record IDs remain the authoritative key; file location within the provenance directory is irrelevant to record identity
+    - The create command must continue to write new records to the top-level provenance directory by default (no change to write path)
+    - Shared repo loading must also recurse
+  affected_scope:
+    - pkg/provenance/loader.go
+    - provenance/**
+    - VERSION
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+  associated_specs:
+    - path: pkg/provenance/loader.go
+      type: code

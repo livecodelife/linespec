@@ -1,0 +1,41 @@
+id: prov-2026-fbc7387f
+version: 1
+content_hash: sha256:684cea27f92a02a15ba6ba80ec2667c85b0215bd9f1afeb9409ee644633b1d3b
+parent_hash: ""
+reason: |-
+  The CI job "Example LineSpec Tests" fails at the user-linespecs suite with "migrations failed for service todo-api: failed to start migration container: No such image: todo-api:latest". The workflow builds each example app image just before its own suite (user-service, test, todo-api, test, order-service, ...), but the runner runs migrations for every service config it discovers, not only the suite's own. Until the migration-failure record made failed migrations fatal, a missing image was swallowed at Debug and the ordering never mattered. CI was relying on that swallowed failure.
+  The fix builds every example app image (user-service, todo-api, order-service, order-events-service) before the first example suite runs, leaving suite order and the docker build commands unchanged. The job stops at its first failure, so the later suites have not run yet and may hide the same kind of failure; this also removes the image ordering as a cause.
+  Rejected: restoring the swallowed migration error, which is the bug the earlier record fixed. Narrowing the runner to migrate only the suite's own services is a separate behaviour change and a possible follow-up record.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-08T19:15:46Z"
+spec_hashes:
+  - sha256:0b08243cd8349a453a7461573359c1ee35f812fbfd74c2d5dc70e18aac37ff54
+content:
+  id: prov-2026-fbc7387f
+  title: Build all example app images before the first example suite runs in CI
+  type: imprint
+  created_at: "2026-10-08"
+  author: caleb.cowen@linq.com
+  intent: |
+    The CI job "Example LineSpec Tests" fails at the user-linespecs suite with "migrations failed for service todo-api: failed to start migration container: No such image: todo-api:latest". The workflow builds each example app image just before its own suite (user-service, test, todo-api, test, order-service, ...), but the runner runs migrations for every service config it discovers, not only the suite's own. Until the migration-failure record made failed migrations fatal, a missing image was swallowed at Debug and the ordering never mattered. CI was relying on that swallowed failure.
+    The fix builds every example app image (user-service, todo-api, order-service, order-events-service) before the first example suite runs, leaving suite order and the docker build commands unchanged. The job stops at its first failure, so the later suites have not run yet and may hide the same kind of failure; this also removes the image ordering as a cause.
+    Rejected: restoring the swallowed migration error, which is the bug the earlier record fixed. Narrowing the runner to migrate only the suite's own services is a separate behaviour change and a possible follow-up record.
+  constraints:
+    - Every example app image is built before the first example suite runs
+    - Suite order and the existing docker build commands are otherwise unchanged
+    - No other workflow changes
+  affected_scope:
+    - .github/workflows/ci.yml
+  implements: prov-2026-001
+  implements_version: 1
+  related:
+    - prov-2026-3168d841
+    - prov-2026-c3977f44
+  associated_specs:
+    - path: pkg/config/ci_example_image_order_test.go
+      type: unit
+  tags:
+    - ci
+    - migrations
+    - example-images

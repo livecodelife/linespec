@@ -1,0 +1,26 @@
+id: prov-2026-d59f5c0c
+version: 1
+content_hash: sha256:66b3f0c4b30b73d64a56b9b88628f730e14dc0ed0f8658195088bcbebb52c951
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:298fda0e44de456f8cc3072bad37f55bf75902f3267ce4eb47146b0b5abdee4e
+content:
+  id: prov-2026-d59f5c0c
+  title: Add .linespec/ to .gitignore
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    The .linespec/ directory contains generated runtime artifacts (embeddings index, schema cache) that should not be tracked in version control.
+  constraints:
+    - Documentation and config only - no code changes
+  affected_scope:
+    - .gitignore
+  associated_specs:
+    - path: examples/notification-linespecs/get_notification_success.linespec
+      type: linespec
+  tags:
+    - gitignore

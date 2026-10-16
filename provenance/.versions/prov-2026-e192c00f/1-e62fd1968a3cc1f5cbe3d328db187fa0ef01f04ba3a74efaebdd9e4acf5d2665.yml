@@ -1,0 +1,44 @@
+id: prov-2026-e192c00f
+version: 1
+content_hash: sha256:e62fd1968a3cc1f5cbe3d328db187fa0ef01f04ba3a74efaebdd9e4acf5d2665
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-28T19:57:30Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-e192c00f
+  title: Release v3.11.6
+  type: blueprint
+  created_at: "2026-05-28"
+  author: calebcowen@gmail.com
+  intent: |
+    Version bump and release artifacts for v3.11.6. Patch release containing one
+    bug fix: the example order-service now reconnects automatically when the
+    PostgreSQL proxy resets connections between test runs (persistent container
+    reuse path). Fixes create_order_success returning HTTP 500 after
+    cancel_order_success passes in the same suite run.
+  constraints:
+    - |
+      Promote [Unreleased] in CHANGELOG.md to [3.11.6] - 2026-05-28 with an entry
+      for the example service reconnect fix; add a fresh empty [Unreleased] section above it.
+    - make bump-version NEW=3.11.6 handles VERSION and all doc/site references.
+    - Run linespec provenance compile to rebuild the hash manifest.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-2f472fcb
+  associated_specs:
+    - path: CHANGELOG.md
+      type: code
+  tags:
+    - release

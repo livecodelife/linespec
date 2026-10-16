@@ -1,6 +1,7 @@
 id: prov-2026-024
 title: Release v1.0.4 - Enforce immutability for implemented records
 status: implemented
+version: 1
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: |
@@ -32,8 +33,6 @@ affected_scope:
 related:
     - prov-2026-023
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 sealed_at_sha: 274b683d0af1c020210300d487f521e8a86e0891
 associated_specs: []
 associated_traces: []
@@ -41,3 +40,4 @@ monitors: []
 tags:
     - release
     - v1.0.4
+type: blueprint

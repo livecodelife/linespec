@@ -1,0 +1,85 @@
+id: prov-2026-ce3ba028
+version: 1
+content_hash: sha256:3eb3535ddbc0d4335123b53f60d99df7ff04d991396767417b73dd665494a651
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:ca0cf006db470ba824dd08230d9576b363ee1804955ba173377ad702d55a2e1e
+  - sha256:6d9260edf2e846c33ecd2a0e8798322a10de007dcf839bab0471fec06e78663a
+  - sha256:3a0da8dc1f1fb217611a9d53b5e4a801deee0198eaae1c979e5e218d841b3f59
+  - sha256:48fbfde7ff79aab77b2111aacaa8fa276ae7558ea0940a10e9d72dc6279f1596
+  - sha256:399dea6c929d6d6fd5e7d411bd730fd7dffcf82b5c59070d54eda717af5b9760
+content:
+  id: prov-2026-ce3ba028
+  title: 'Extend gRPC support: upstream passthrough, content-type echo, protobuf descriptor mocks'
+  type: blueprint
+  created_at: "2026-04-22"
+  author: calebcowen@gmail.com
+  intent: 'Extend the gRPC proxy beyond JSON-only pure-mock mode to support real upstream passthrough, content-type echo, and protobuf descriptor-driven JSON-to-protobuf conversion. This enables testing async workflow systems (e.g. Temporal) behind webhooks where gRPC calls to the workflow engine need to be either mocked or forwarded to a real backend. Three gaps are addressed: (1) unmocked gRPC calls currently return UNIMPLEMENTED instead of forwarding to an upstream, (2) the response content-type is hardcoded to application/grpc+json instead of echoing the request''s content-type, and (3) users cannot write protobuf-shaped RETURNS payloads without hand-encoding binary bytes. The fix adds HTTP/2 reverse proxy forwarding for unmocked calls, content-type echo, and a descriptor-driven JSON-to-protobuf conversion path. Config is extended to support type: grpc dependencies with optional grpc_descriptor_set fields at both service-level (default) and per-dependency (override) scope.'
+  constraints:
+    - 'Backward compatibility is mandatory - existing .linespec.yml configs with infrastructure.grpc: true must continue working as pure-mock JSON-only proxies'
+    - When upstream is empty or unset, the proxy must behave identically to today (return UNIMPLEMENTED for unmocked calls)
+    - Content-type echo must default to application/grpc+json when the request does not specify a content-type
+    - Descriptor loading is optional - if no grpc_descriptor_set is configured, payloads are served as raw bytes unchanged
+    - gRPC streaming remains out of scope - only unary RPCs are supported
+    - h2c (HTTP/2 cleartext) transport only; TLS is not needed for container-internal traffic
+    - The proxy must use HTTP/2 reverse proxy forwarding for unmocked calls (not raw TCP relay), fitting the existing h2c handler architecture
+    - Per-dependency grpc_descriptor_set overrides service-level; the runner merges all descriptor sets into one FileDescriptorSet before passing to the proxy container
+    - All existing unit tests and example test suites must continue to pass
+  affected_scope:
+    - pkg/proxy/grpc/interceptor.go
+    - pkg/proxy/grpc/interceptor_test.go
+    - pkg/proxy/grpc/descriptor.go
+    - pkg/proxy/grpc/descriptor_test.go
+    - pkg/proxy/grpc/testdata/test.pb
+    - pkg/config/types.go
+    - pkg/runner/runner.go
+    - pkg/runner/grpc_deps_test.go
+    - cmd/linespec/main_beta.go
+    - cmd/linespec/main_stable.go
+    - go.mod
+    - go.sum
+    - examples/temporal-service/app/main.py
+    - examples/temporal-service/Dockerfile
+    - examples/temporal-service/requirements.txt
+    - examples/temporal-service/.dockerignore
+    - examples/temporal-service/proto/workflow.proto
+    - examples/temporal-service/proto/workflow.pb
+    - examples/temporal-linespecs/.linespec.yml
+    - examples/temporal-linespecs/start_workflow_success.linespec
+    - examples/temporal-linespecs/get_workflow_result_success.linespec
+    - examples/temporal-linespecs/payloads/start_workflow_http_req.json
+    - examples/temporal-linespecs/payloads/start_workflow_request.yaml
+    - examples/temporal-linespecs/payloads/start_workflow_response.json
+    - examples/temporal-linespecs/payloads/start_workflow_http_resp.json
+    - examples/temporal-linespecs/payloads/get_result_http_req.json
+    - examples/temporal-linespecs/payloads/get_result_request.yaml
+    - examples/temporal-linespecs/payloads/get_result_response.json
+    - examples/temporal-linespecs/payloads/get_result_http_resp.json
+  forbidden_scope:
+    - pkg/proxy/postgresql/**
+    - pkg/proxy/mysql/**
+    - pkg/proxy/http/**
+    - pkg/proxy/kafka/**
+    - pkg/proxy/redis/**
+    - pkg/proxy/mongodb/**
+    - pkg/provenance/**
+  related:
+    - prov-2026-9f50db3c
+  associated_specs:
+    - path: pkg/proxy/grpc/interceptor_test.go
+      type: go-test
+    - path: pkg/proxy/grpc/descriptor_test.go
+      type: go-test
+    - path: pkg/runner/grpc_deps_test.go
+      type: go-test
+    - path: examples/temporal-linespecs/start_workflow_success.linespec
+      type: linespec
+    - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+      type: linespec
+  tags:
+    - grpc
+    - proxy
+    - protobuf

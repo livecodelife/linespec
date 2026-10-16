@@ -1,6 +1,7 @@
 id: prov-2026-24c7e7aa
 title: Remove Rails-flavored credential defaults, fix init script path, remove MySQL proxy hardcoded db name (P2-C, P2-D, P2-E)
 status: implemented
+version: 1
 created_at: "2026-04-01"
 author: calebcowen@gmail.com
 intent: |
@@ -26,8 +27,6 @@ affected_scope:
   - examples/user-linespecs/.linespec.yml
   - examples/todo-linespecs/.linespec.yml
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 7f2299249835274bd875adc2e5eb9335071c7eba
 associated_specs:
@@ -38,3 +37,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

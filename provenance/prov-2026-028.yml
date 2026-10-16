@@ -1,6 +1,7 @@
 id: prov-2026-028
 title: Add implicit environment variable substitution to LineSpec DSL
 status: implemented
+version: 1
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 intent: >
@@ -31,8 +32,6 @@ affected_scope:
   - pkg/interpolate/interpolate_test.go
   - pkg/dsl/interpolate_test.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 44e36bfef253b7b31ba59a2edcc3669ffa401b08
 associated_specs:
@@ -45,3 +44,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

@@ -1,0 +1,29 @@
+id: prov-2026-dac887f7
+version: 1
+content_hash: sha256:3505d3a7231e3c14c02704952049d608d7727b2e93f7bf82d5358746b96650c3
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-16T00:11:25Z"
+spec_hashes:
+  - sha256:8a71ac2596233dd1ea69eb970eadaee7395e2f7c561a28045e22c4b7a6aecf08
+content:
+  id: prov-2026-dac887f7
+  title: fetchBytes helper and local path auto-resolution in Fetch
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Add fetchBytes(location string) that dispatches to httpGet for http/https schemes and
+    os.ReadFile otherwise. Refactor Fetch to use fetchBytes for both the manifest and layer
+    artifacts. When the manifest was loaded from a local path and a layer URL is empty,
+    auto-resolve the artifact as linespec-{layerName}-{version}.tar beside the manifest file.
+    Remote manifests with empty layer URLs retain the existing error.
+  affected_scope:
+    - pkg/manifest/manifest.go
+    - pkg/manifest/manifest_test.go
+  implements: prov-2026-fde4ee3a
+  implements_version: 1
+  associated_specs:
+    - path: pkg/manifest/manifest_test.go
+      type: go_test

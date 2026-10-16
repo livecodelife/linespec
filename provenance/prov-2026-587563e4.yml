@@ -1,9 +1,38 @@
 id: prov-2026-587563e4
 title: Implement linespec clone and import commands
 status: implemented
+version: 4
+reason: |-
+  When `linespec clone` bootstraps a project from a manifest, the provenance layer is
+  correctly extracted into a dedicated provenance/ directory, but the specs layer (the
+  .linespec test files and their payloads) is extracted directly into the destination
+  root. This dumps loose .linespec files and payload directories alongside the project
+  files at the top level, which is messy and inconsistent with how provenance records
+  are cloned.
+
+  The fix makes the specs layer extract into a dedicated linespecs/ subdirectory of the
+  destination, mirroring the provenance/ convention. After the fix, a cloned project
+  directory should look like:
+    <manifest_name>/
+      provenance/
+        <id>.yml
+      linespecs/
+        <spec files and payload subdirectories>
+      .linespec.yml
+
+  This is scoped to the clone command only. The code and prompt layers retain their
+  current extraction behavior (extracted to the destination root), since they represent
+  service source and prompt artifacts that belong at the repo root, not test specs.
+reason_kind: fix
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
+aliases:
+  - prov-2026-4b89538a
+  - prov-2026-a6be4165
+  - prov-2026-ba855ac7
 implements: prov-2026-92f06ee9
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: >
   Implement two new top-level commands — `linespec clone <manifest-url>` and
   `linespec import <manifest-url>` — that consume a published manifest to
@@ -20,21 +49,56 @@ constraints:
   - import aborts without writing if any local record ID already exists (no overwrite); conflict must be resolved manually
   - import runs linespec provenance lint after all records are written to surface reference issues
   - version pinning is supported via @version suffix in the URL and a --version flag; unpinned targets the latest field
+  - packLayer must always produce a tar archive regardless of whether the input is a file or directory
+  - all layer artifacts written by publish must have the .tar extension
+  - the packed filename inside the tar for a single-file input must be the original filename (filepath.Base of the source path)
+  - clone extraction behavior must remain unchanged — ExtractSpecs (extractTar) handles all non-provenance layers
+  - existing unit tests for packLayer must be updated to reflect the new behavior
+  - |
+    Only strip a leading prefix when ALL entries in the tar share the same single top-level
+    directory component. If entries have mixed top-level paths, extract without stripping.
+  - |
+    Provenance layer extraction must remain unchanged — provenance records are always flat
+    <id>.yml entries with no leading directory prefix.
+  - |
+    If tar entries have no common top-level prefix (they start at root), extraction is unchanged.
+  - |
+    Existing tests for ExtractProvenance and extractTar must continue to pass. New tests must
+    cover: stripping when all entries share a prefix, no-op when entries are already flat.
+  - |
+    The specs layer is extracted into a fixed linespecs/ subdirectory of the clone
+    destination (created if absent), not into the destination root.
+  - |
+    Within linespecs/, the existing common-top-level-prefix stripping behavior is
+    preserved so files do not end up double-nested (e.g. linespecs/linespec.manifest/...).
+  - |
+    Provenance layer extraction is unchanged — records continue to land flat in
+    provenance/.
+  - |
+    The code and prompt layers continue to extract to the destination root; only the
+    specs layer target changes.
+  - |
+    Tests must cover: specs layer lands under linespecs/ with prefix stripping applied,
+    and provenance/code/prompt targets are unaffected.
 affected_scope:
   - cmd/linespec/**
   - pkg/manifest/**
   - pkg/provenance/**
+  - pkg/provenance/publish.go
+  - pkg/provenance/publish_test.go
+  - cmd/linespec/main_stable.go
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
-sealed_at_sha: 3bc046f66efbce16ea387e59625f26278a3bb9f7
+sealed_at_sha: adebd18f3cf68e0b4d6b9ae66c4648987edd80cf
 associated_specs:
   - path: pkg/manifest/manifest_test.go
     type: go_test
     run_command: make test
   - path: pkg/provenance/clone_test.go
+    type: go_test
+    run_command: make test
+  - path: pkg/provenance/publish_test.go
     type: go_test
     run_command: make test
 associated_traces: []

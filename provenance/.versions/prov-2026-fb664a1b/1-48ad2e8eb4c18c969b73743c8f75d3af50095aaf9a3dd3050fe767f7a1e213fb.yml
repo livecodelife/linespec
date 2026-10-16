@@ -1,0 +1,26 @@
+id: prov-2026-fb664a1b
+version: 1
+content_hash: sha256:48ad2e8eb4c18c969b73743c8f75d3af50095aaf9a3dd3050fe767f7a1e213fb
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-10T14:58:19Z"
+spec_hashes:
+  - sha256:d55f861b07d61206795fbd24cf1125e059ccddd8fb756696c884d34a3588a778
+content:
+  id: prov-2026-fb664a1b
+  title: Fix integer overflow in writeMessage allocation
+  type: imprint
+  created_at: "2026-06-09"
+  author: test@example.com
+  intent: |
+    Fix CodeQL go/allocation-size-overflow finding in writeMessage: add an explicit bounds check before computing the uint32 message length and allocation capacity so that oversized payloads are rejected cleanly rather than silently overflowing.
+  constraints:
+    - All proxy unit tests must continue to pass
+  affected_scope:
+    - pkg/proxy/postgresql/proxy.go
+  implements: prov-2026-c013b085
+  implements_version: 1
+  associated_specs:
+    - path: pkg/proxy/postgresql/proxy_startup_test.go
+      type: go_test

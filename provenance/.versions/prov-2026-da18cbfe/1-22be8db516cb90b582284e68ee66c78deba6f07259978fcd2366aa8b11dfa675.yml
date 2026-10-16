@@ -1,0 +1,54 @@
+id: prov-2026-da18cbfe
+version: 1
+content_hash: sha256:22be8db516cb90b582284e68ee66c78deba6f07259978fcd2366aa8b11dfa675
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-22T19:27:30Z"
+spec_hashes:
+  - sha256:1c8723d4e5071429a95e052c7fadd95c6abaf834b66e0bfa8934dbbe0287cf3d
+content:
+  id: prov-2026-da18cbfe
+  title: 'Phase 3: .linespec stub generation from routes and protocol boundaries'
+  type: blueprint
+  created_at: "2026-06-04"
+  author: test@example.com
+  intent: |
+    For each discovered route, combine its metadata with the traced protocol boundaries
+    to generate a skeleton .linespec file. The stubs establish correct structure —
+    which protocol interactions exist at each endpoint — without requiring complete
+    detail. Engineers fill in matcher bodies and response shapes; they never start blank.
+
+    Stub structure per route:
+      - RECEIVE: from the route's HTTP method and path
+      - HEADERS: inferred from middleware (e.g. auth middleware implies Authorization header)
+      - EXPECT: one clause per protocol boundary hit, body left as # TODO
+      - RESPOND: placeholder status code (200 for GET, 201 for POST/PUT, 204 for DELETE)
+
+    Stubs are written to a configurable directory (default: specs/), named by route:
+    specs/post_api_v1_users.linespec. Discover is additive: if a .linespec file already
+    exists at the target path, it is skipped and reported in the summary.
+
+    --dry-run mode prints what would be written without touching the filesystem.
+    --format table|json controls dry-run output format.
+  constraints:
+    - MUST generate valid .linespec DSL syntax for RECEIVE, HEADERS, EXPECT, and RESPOND clauses
+    - MUST infer HEADERS from middleware analysis (auth middleware → Authorization header)
+    - MUST produce one EXPECT clause per protocol boundary hit with
+    - MUST use conventional status codes (200 GET, 201 POST/PUT, 204 DELETE) as RESPOND defaults
+    - MUST name stub files by route (post_api_v1_users.linespec from POST /api/v1/users)
+    - MUST skip and report existing .linespec files; never overwrite
+    - MUST support --dry-run mode that shows output without writing files
+    - MUST support --format table|json for --dry-run output
+  affected_scope:
+    - pkg/discover/stubs/**
+  implements: prov-2026-0071506f
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/discover/stubs/stubs_test.go
+      type: go_test
+  tags:
+    - discovery
+    - stub-generation
+    - linespec-dsl

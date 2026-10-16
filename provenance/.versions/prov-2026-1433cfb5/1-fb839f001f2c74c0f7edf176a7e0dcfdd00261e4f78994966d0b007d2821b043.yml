@@ -1,0 +1,37 @@
+id: prov-2026-1433cfb5
+version: 1
+content_hash: sha256:fb839f001f2c74c0f7edf176a7e0dcfdd00261e4f78994966d0b007d2821b043
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T15:45:14Z"
+spec_hashes:
+  - sha256:554e05122272d48a2f1652bcc33e926819e0afe03ee6f3dd1f7b6a8ccaeda1dd
+content:
+  id: prov-2026-1433cfb5
+  title: Stale cache warning in lint and read-only guard on write commands
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Add a stale cache warning to Commands.Lint and a read-only guard to the three write
+    commands (Complete, Deprecate, Open).
+
+    In Commands.Lint, after running the linter, check each configured shared repo's cache
+    freshness via CacheManager.IsFresh. For any repo whose cache directory exists but is
+    older than cache_ttl_minutes, add a SeverityWarning issue to the result before formatting.
+
+    Add an isRemoteRecord helper to Commands that mirrors the Linter's existing private method:
+    a record is remote if its FilePath does not start with Config.Dir. Use this in Complete,
+    Deprecate, and Open to reject remote records with a clear error before any mutation.
+  constraints:
+    - Stale cache check only warns for repos whose cache directory already exists — never-synced repos are not warned about
+    - isRemoteRecord must use Config.Dir (absolute) as the prefix, matching how loader.Dir is resolved in NewCommands
+    - Write command error message must name the record ID and state it is owned by a remote repository
+  affected_scope:
+    - pkg/provenance/commands.go
+  implements: prov-2026-90ec670e
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/commands.go
+      type: code

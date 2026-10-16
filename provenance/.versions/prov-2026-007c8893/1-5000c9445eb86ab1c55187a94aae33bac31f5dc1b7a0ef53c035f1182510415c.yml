@@ -1,0 +1,67 @@
+id: prov-2026-007c8893
+version: 1
+content_hash: sha256:5000c9445eb86ab1c55187a94aae33bac31f5dc1b7a0ef53c035f1182510415c
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-12T20:56:53Z"
+spec_hashes:
+  - sha256:4902a3eead73911325ec956984928975bd20fac0142a3cdb91862eed08d7274a
+content:
+  id: prov-2026-007c8893
+  title: Cached scope index for sub-200ms context/next lookups (Phase 5a)
+  type: blueprint
+  created_at: "2026-06-12"
+  author: test@example.com
+  intent: |
+    Foundation for the Phase 5 Claude Code plugin (the hooks, 5b-5d, are deferred to a
+    follow-up blueprint). Today every CLI invocation calls Loader.LoadAll(), walking and
+    parsing all ~318 YAML records. That is too slow to sit in a per-edit Claude Code hook
+    (sub-200ms budget), and it is wasted work for the common case of a single per-file
+    governance lookup.
+
+    Build a cached scope index so `context` and `next` per-file lookups are fast and
+    hook-safe, with correctness identical to the uncached path:
+
+    - Persist a compact index in .linespec/ (mirroring the existing schema-cache.json
+      hash+data pattern): per record, the minimum needed for governance/advice —
+      id, status, type, affected_scope, forbidden_scope, and whether it has
+      associated_specs. Heavy fields (intent, constraints prose) are not cached.
+    - Invalidate with a CHEAP fingerprint of the provenance dir: a hash of
+      (filename, size, mtime) tuples across the record files — stat only, no file reads.
+      On a fingerprint match, serve lookups from the cache without LoadAll. On a mismatch,
+      rebuild from LoadAll and repersist. Lazy and self-healing; no manual invalidation.
+    - On ANY doubt — fingerprint mismatch mid-flight, malformed cache, read/parse error,
+      or a feature the cache cannot answer — fall back to the authoritative LoadAll path.
+      The cache is an optimization, never a source of truth for governance decisions.
+
+    This standalone piece also speeds up context/next for everyone, not just the plugin.
+
+    DEFERRED (separate blueprint): the plugin hooks (5b SessionStart, 5c PreToolUse on
+    Edit/Write, 5d commit-boundary gate), all rendering the Phase 2 engine. Per the user,
+    that plugin must be installable BOTH ways — a `linespec` install command (mirroring
+    install-skill) AND a marketplace-style .claude-plugin/plugin.json.
+  constraints:
+    - The cached `next` fast path must be sub-200ms and must not perform a full LoadAll on a cache hit; the dispatch consults the cache before constructing the heavy, eager-loading Commands.
+    - Cached `next` output must be byte-identical to the current uncached `next` output for the same state; a regression test asserts cached == uncached. (The full `context` rich output renders prose the compact cache intentionally omits, so `context` keeps its heavy path here; the lightweight per-file `context` lookup the hooks need — IDs/status only — lands with the hooks blueprint, consuming this same primitive.)
+    - The cache self-invalidates via a cheap stat-based fingerprint (no record-file reads to check freshness); a stale cache rebuilds transparently on next use.
+    - The cache must never serve wrong governance — on any mismatch, malformed/missing cache, or read error, fall back to the authoritative LoadAll path.
+    - The cache file lives under .linespec/ alongside the existing cache artifacts and is safe to delete at any time (it simply rebuilds).
+    - No behavioral change to any command other than the internal source of context/next lookups; enforcement, lint, and completion paths are untouched.
+    - make test must pass.
+  affected_scope:
+    - pkg/provenance/scope_index.go
+    - pkg/provenance/scope_index_test.go
+    - pkg/provenance/commands.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - .gitignore
+  related:
+    - prov-2026-54aaf9cf
+  associated_specs:
+    - path: pkg/provenance/scope_index_test.go
+      type: go_test
+  tags:
+    - agent-guidance
+    - phase-5
+    - cache

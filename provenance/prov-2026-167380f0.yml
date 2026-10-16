@@ -1,6 +1,7 @@
 id: prov-2026-167380f0
 title: Protocol-agnostic testing core
 status: draft
+version: 1
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -65,8 +66,6 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-a71a796a
   - prov-2026-919f8621

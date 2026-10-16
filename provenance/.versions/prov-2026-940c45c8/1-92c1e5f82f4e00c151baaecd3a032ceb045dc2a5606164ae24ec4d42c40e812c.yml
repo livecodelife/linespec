@@ -1,0 +1,30 @@
+id: prov-2026-940c45c8
+version: 1
+content_hash: sha256:92c1e5f82f4e00c151baaecd3a032ceb045dc2a5606164ae24ec4d42c40e812c
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-03T21:27:17Z"
+spec_hashes:
+  - sha256:06a094901a1f59e13ffa24434dfcaab43fe7ab3ff20dd7f676013c51955567d7
+content:
+  id: prov-2026-940c45c8
+  title: Prepare v1.4.0 release
+  type: blueprint
+  created_at: "2026-04-03"
+  author: calebcowen@gmail.com
+  intent: |
+    Prepare the v1.4.0 release for both stable and beta versions. This release includes the lock-layer command, SARIF output format, GitHub Code Scanning integration, documentation site, and all improvements since v1.3.0. Creates git tags v1.4.0 and v1.4.0-beta to trigger automated GoReleaser workflow for GitHub releases and Homebrew updates.
+  constraints:
+    - Must create CHANGELOG entry listing all changes since v1.3.0
+    - Must create and push v1.4.0 tag for stable release
+    - Must create and push v1.4.0-beta tag for beta release
+    - Must set up branch protection requiring PR approval
+  affected_scope:
+    - CHANGELOG.md
+  associated_specs:
+    - path: CHANGELOG.md
+      type: changelog
+  tags:
+    - release
+    - v1.4.0

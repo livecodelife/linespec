@@ -1,6 +1,14 @@
 id: prov-2026-22f54779
 title: Release prep for v3.26.0 including WITH payload assertion and per-spec DB container isolation
 status: implemented
+version: 1
+reason: |-
+  Prepare the v3.26.0 release. Sealed work since 3.25.0 made behaviour stricter, so this is a minor bump: EXPECT WRITE ... WITH payloads on MySQL/PostgreSQL are now asserted against written values (prov-2026-be9b4aab), so specs that passed only because WITH was ignored can now fail; per-spec PostgreSQL, Oracle and MongoDB containers now carry the per-run name suffix (prov-2026-06d7d70b); the database readiness timeout is configurable (prov-2026-22e2de8d); and INSERT lists and UPDATE SET extraction were fixed (prov-2026-468bbfbe, prov-2026-beed31fc).
+
+  Bump 3.25.0 to 3.26.0 with ./scripts/bump-version.sh 3.26.0, which edits only VERSION, README.md, LINESPEC.md and PROVENANCE_RECORDS.md. Then by hand, move the existing [Unreleased] content into a "## [3.26.0] - 2026-10-09" section of CHANGELOG.md, add an Upgrade note and the entries for the four other records, grouped Changed and Fixed, and leave an empty [Unreleased] heading above it.
+
+  Rejected: a patch bump, since the WITH assertion can turn a passing spec into a failing one. This record creates no tag, push or release; those are separate manual steps.
+reason_kind: fix
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
@@ -40,10 +48,7 @@ affected_scope:
   - PROVENANCE_RECORDS.md
   - CHANGELOG.md
 forbidden_scope: []
-type: bug
-extends: prov-2026-001
-supersedes: ""
-superseded_by: ""
+type: imprint
 related:
   - prov-2026-22e2de8d
   - prov-2026-be9b4aab
@@ -62,3 +67,5 @@ tags:
   - docs
   - changelog
   - version-bump
+implements: prov-2026-001
+implements_version: 1

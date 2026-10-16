@@ -1,0 +1,185 @@
+id: prov-2026-9e052576
+version: 1
+content_hash: sha256:bea77801df86e11d76c883c7399c6b188af04328d62d7820b7ed4f47381c69a7
+parent_hash: ""
+reason: ""
+author: noreply@anthropic.com
+created_at: "2026-04-26T22:19:51Z"
+spec_hashes:
+  - sha256:aab340ab995e09dba65f8501483f0e0825d95079aa0053220211cf511b564470
+  - sha256:5ef2bcd5763b3cdc78950af8d04d0086899537178dadea89c477d52820214041
+  - sha256:62327ef0592f4885194460628e3d08f8b24c07b28e9ac02fec84eaf8138eb494
+  - sha256:ea24575d9c52d56fce7a05a9d8f39db7fb0a1a3b1f5ca6923042fd8dbed78ae5
+  - sha256:7b5932b4dc1d350efcf24ee7899e94a5f426cadd6f7e43b1d3ded42d7bb31721
+  - sha256:10c9ce3ecaedee4e2daaac046919d91b3c3eaf11f7a9ed310e9f9b7472b546a7
+  - sha256:7f13400fbdfd62105411355b4aac9a4986f3a5da64302c17a9db816e9502af20
+  - sha256:298fda0e44de456f8cc3072bad37f55bf75902f3267ce4eb47146b0b5abdee4e
+  - sha256:cc03f15a8c594d89ca50bb7895ddcb27130e520a864f29643a800f5fc92354dc
+  - sha256:273fb59e8ad94dadc1acf5fc2475d78872ecf3b022a4d0b19fb4972d9c746d72
+  - sha256:d3d666bbd661a50a896c5bac8554581b72fa07ae83bc287861c0f15845458661
+  - sha256:42e9e8bc7fb8758332fb927a9791c78b90c8298ca16fd8e9f73cda0c905f9ff2
+  - sha256:84feb17b215ae6ae4dd6d946eebec8f3e47ac51bbaccaf8dd3ceb295fb934da4
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+  - sha256:399dea6c929d6d6fd5e7d411bd730fd7dffcf82b5c59070d54eda717af5b9760
+  - sha256:0d068facdc6d57bec60dd2793fd1c7ca3a194df6548112bece9aad3d226d5929
+  - sha256:94ecd13eba4b3af279b680172b0f28ba3a3606ec0b86db0f2e5c128e75ebbc36
+  - sha256:48fbfde7ff79aab77b2111aacaa8fa276ae7558ea0940a10e9d72dc6279f1596
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:2cdf1fa84e9c311007936a0967bf092e277efd2564c0c9bd29dd391199b75126
+  - sha256:300655f01dd7c2687d4fc85fbfdb7365db753a26e0d22d847893c7f34124b21c
+  - sha256:0562d0a5b4256caf030c587cd2bc967def341a151710c493642f066b957c8f01
+  - sha256:a113f81990b47aa116aca72a5079c96d58987d704ae8e6793b855fbf3e297874
+  - sha256:d762a07953e82f279bd71ad694a53e42f2ddf0d56602acb0e31a4fcffca242cc
+  - sha256:4938e029175dacc87b499a3f10b1465cc990aac1d9dab893bcaa930dbb3eb4a3
+  - sha256:241068bf11b83baefc1f22c5d48f668e8b9106587d3b87ad045308a7265ff6df
+  - sha256:239c0356e623577a6bbded19814fae6e0ac0a11a0129ec0e659cf189471912f7
+  - sha256:efdb2710d014cefb0cd958f806c0e7b00cb25ef4bf157b7e3a4bea59c62eeb01
+  - sha256:62823b51a3f63b81d5be1ec0c32013d008d10d941571dc39337cc53296629367
+  - sha256:04542e92a8a9875000757cc6043db8065a15dd2cb141eeebef5d573c6caa9ae3
+  - sha256:105303586f3a9f3ff6ec77ae78c0dcd5fae0f9a37b82b7d4e73373875ca90713
+  - sha256:0cfbd29bc6c76abc74757b965524c47e8ddccf7ba8e07fab90586598dfd341b8
+  - sha256:ad53e728a55934114fdc8e2d5d404b45bc4d60e5a172676cd3388187649ef88b
+  - sha256:75c7ebe07bb4e0d6601b933e6fa07ea2fb17caa8d6ea8e7a70597ddcfc62c706
+  - sha256:ce68749e0ae2e7466840cac5f442833dd2eaf212be9a821bdef8469860e40e61
+  - sha256:077455c5b9382219777399f85973b42f7117df2231585fc972bbad780def4e2e
+  - sha256:43c200e27055471ad88ba24cb6e53c81ec67c2e9e82bd03323d0b6ad8f0f3653
+  - sha256:492bb439c5fda8507d9e11867900c0aaace1fe82fe26a90a6c86d9fa2147efb0
+  - sha256:08564fdd6705aff3ffccdcceaac1121699e7a07e4c9337e677ca24f9ac3673f3
+  - sha256:c8426bc3182ad7a7c6124bfb6a3c6a35be7b520be2489172b7710980ba558e22
+  - sha256:05ea2298af5ce8db89ecf245f90dbf89594f922dd89715a8134f3c26150cc9a0
+  - sha256:78d236ce49d0aab8186863a06c3376d813eed7c865eb7f176a6eaf769ee32fcd
+  - sha256:cb7bf350754e3b51cd42ba163ae161f206c84a544b4b26451317b8f77c4fbf50
+  - sha256:1d1c7770b0ee8893564b5a37757e3791c637ff63a004f6fb49b7e58ecc5a6e4e
+  - sha256:e5adbc17f7467e0953cf416e6945f10fc5275ee647c055ebe5b1a9fef635387e
+content:
+  id: prov-2026-9e052576
+  title: Add request body comparison via WITH statements for HTTP, gRPC, and Kafka EXPECT blocks
+  type: blueprint
+  created_at: "2026-04-26"
+  author: noreply@anthropic.com
+  intent: |
+    When a service under test makes an outbound HTTP, gRPC, or Kafka call, the test author should be
+    able to assert that the request body (or message value) matches an expected payload defined in a
+    WITH file. This is analogous to how database EXPECTs use VERIFY_WRITTEN_VALUES to validate what
+    values the service wrote.
+
+    Currently, HTTP mocks match on URL + method + headers; gRPC mocks match on service + method only;
+    Kafka mocks match on topic name only. None of them compare the request body against the WITH file.
+
+    After this change:
+    - EXPECT HTTP:METHOD /path WITH {{file}} will verify the outbound HTTP request body matches the file.
+    - EXPECT GRPC:Service/Method WITH {{file}} will verify the outbound gRPC request body matches the file.
+    - EXPECT EVENT:topic WITH {{file}} will verify the Kafka Produce message value matches the file.
+
+    The WITH file acts as a discriminator: if multiple mocks share the same URL/service/topic, the one
+    whose WITH file matches the actual request body is selected. Mocks without a WITH file continue to
+    match any request body (existing behavior preserved).
+
+    Comparison uses deep JSON subset matching: all fields in the expected payload must be present in
+    the actual body with matching values; extra fields in the actual are ignored.
+  constraints:
+    - Body comparison must be opt-in via WITH file presence; omitting WITH preserves existing match-any behavior.
+    - Comparison is deep JSON subset where expected is a subset of actual. Non-JSON request bodies are not supported in this iteration.
+    - Body matching must participate in mock disambiguation — a mock with a mismatching WITH body is skipped rather than producing a hard error at the registry level.
+    - A shared CompareJSON utility must be used by all three proxies to avoid logic duplication.
+    - The Kafka interceptor must gain resolver support via SetResolver so WITH files can use ${VAR} substitution, consistent with HTTP and gRPC interceptors.
+    - All existing proxy tests must continue to pass unmodified.
+    - The cmd/linespec/main_beta.go Kafka wiring must call SetResolver so variable substitution works in production.
+  affected_scope:
+    - pkg/proxy/http/interceptor.go
+    - pkg/proxy/grpc/interceptor.go
+    - pkg/proxy/kafka/interceptor.go
+    - pkg/registry/registry.go
+    - pkg/verify/
+    - cmd/linespec/main_beta.go
+  associated_specs:
+    - path: examples/catalog-linespecs/create_product_success.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/get_product_not_found.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/get_product_success.linespec
+      type: linespec
+    - path: examples/catalog-linespecs/list_products_success.linespec
+      type: linespec
+    - path: examples/multi-db-linespecs/create_order_success.linespec
+      type: linespec
+    - path: examples/multi-db-linespecs/create_order_success_missing_expect_test.linespec
+      type: linespec
+    - path: examples/notification-linespecs/get_notification_not_found.linespec
+      type: linespec
+    - path: examples/notification-linespecs/get_notification_success.linespec
+      type: linespec
+    - path: examples/notification-linespecs/list_notifications_cache_hit.linespec
+      type: linespec
+    - path: examples/notification-linespecs/list_notifications_semantic.linespec
+      type: linespec
+    - path: examples/notification-linespecs/list_notifications_success.linespec
+      type: linespec
+    - path: examples/notification-linespecs/list_notifications_unauthenticated.linespec
+      type: linespec
+    - path: examples/notification-linespecs/process_todo_created_event.linespec
+      type: linespec
+    - path: examples/order-linespecs/create_order_success.linespec
+      type: linespec
+    - path: examples/temporal-linespecs/get_workflow_result_success.linespec
+      type: linespec
+    - path: examples/temporal-linespecs/signal_workflow_success.linespec
+      type: linespec
+    - path: examples/temporal-linespecs/signal_workflow_with_response.linespec
+      type: linespec
+    - path: examples/temporal-linespecs/start_workflow_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/create_todo_unauthenticated.linespec
+      type: linespec
+    - path: examples/todo-linespecs/create_todo_unavailable_user_service.linespec
+      type: linespec
+    - path: examples/todo-linespecs/delete_todo_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/get_todo_semantic.linespec
+      type: linespec
+    - path: examples/todo-linespecs/get_todo_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/list_todos_success.linespec
+      type: linespec
+    - path: examples/todo-linespecs/update_todo_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/authenticate_user_invalid_token.linespec
+      type: linespec
+    - path: examples/user-linespecs/authenticate_user_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/create_user_already_exists.linespec
+      type: linespec
+    - path: examples/user-linespecs/create_user_semantic.linespec
+      type: linespec
+    - path: examples/user-linespecs/create_user_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/delete_user_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/get_user_not_found.linespec
+      type: linespec
+    - path: examples/user-linespecs/get_user_semantic.linespec
+      type: linespec
+    - path: examples/user-linespecs/get_user_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/get_user_with_pattern_token.linespec
+      type: linespec
+    - path: examples/user-linespecs/get_user_with_vars.linespec
+      type: linespec
+    - path: examples/user-linespecs/login_success.linespec
+      type: linespec
+    - path: examples/user-linespecs/update_user_semantic.linespec
+      type: linespec
+    - path: examples/user-linespecs/update_user_success.linespec
+      type: linespec
+    - path: pkg/registry/registry_test.go
+      type: go_test
+    - path: pkg/verify/verify_test.go
+      type: go_test
+    - path: pkg/verify/verify_http_test.go
+      type: go_test
+    - path: pkg/verify/verify_grpc_test.go
+      type: go_test
+    - path: pkg/verify/verify_kafka_test.go
+      type: go_test

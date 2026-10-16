@@ -1,0 +1,48 @@
+id: prov-2026-758af159
+version: 2
+content_hash: sha256:c945e22408feeff20ea998104e46caf509ef7731b9a14ea9fcde8c75673b0e37
+parent_hash: sha256:d24d4f5248793e6f851b53da58a756fc67c43d6dfe370532a7fbf82f7a55ced8
+reason: 'Two defects introduced alongside the EXPECT_NOT feature (prov-2026-758af159): (1) The lexer regex for EXPECT_NOT uses `EXPECT\s+NOT` (space separator) while the documented syntax and all new spec files use `EXPECT_NOT` (underscore). The fix accepts both forms so existing specs using the space variant continue to work. (2) Test spec names containing spaces (e.g. `TEST create record success`) are passed verbatim into Docker container name templates, producing names that Docker rejects. The fix sanitizes spec names by replacing spaces with hyphens before substitution. A unit test and an example linespec are added to prevent regressions on both fixes.'
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-05-09T00:02:25Z"
+spec_hashes:
+  - sha256:05ea2298af5ce8db89ecf245f90dbf89594f922dd89715a8134f3c26150cc9a0
+  - sha256:c5f7956c15a015451c3e22e483a75b87954c0af1dc05e9b91d3f331754ade3d4
+  - sha256:a6b455c6580fc4e62b37afc16f1f1b62a071fdd5192d9b17ea84f7a395ae6631
+content:
+  id: prov-2026-758af159
+  title: Enforce EXPECT_NOT negative expectations (P1-A)
+  type: blueprint
+  created_at: "2026-03-31"
+  author: calebcowen@gmail.com
+  intent: 'Fix EXPECT_NOT enforcement: negative expectations are currently parsed and registered but FindMock/FindHTTPMock/PeekMock do not skip them, allowing them to be matched as interceptors. Add CheckNegativeMocks/CheckNegativeHTTPMocks functions so proxies can track when requests match negative expectations without serving them as mock responses. VerifyAll already checks the Negative flag correctly.'
+  constraints:
+    - Must not break existing positive mock matching behavior
+    - Negative mocks must never be returned by Find/Peek functions
+    - Hit counters for negative mocks must still be incremented when matching requests arrive
+    - Lexer regex updated to accept both EXPECT_NOT (underscore) and EXPECT NOT (space); existing specs must not break.
+    - sanitizeContainerName replaces spaces with hyphens and strips other invalid Docker name characters; applied both in substituteTemplate and in runner.go hardcoded container names (PostgreSQL, MongoDB).
+    - Unit test covers TokenExpectNot for both the underscore and space forms.
+    - New example linespec in an existing suite uses EXPECT_NOT (underscore) to provide integration-level coverage.
+    - Version bumped to v3.3.1; CHANGELOG entry added.
+  affected_scope:
+    - pkg/registry/registry.go
+    - pkg/registry/registry_test.go
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/mysql/proxy.go
+    - pkg/proxy/http/interceptor.go
+    - pkg/proxy/kafka/interceptor.go
+    - pkg/dsl/lexer.go
+    - pkg/config/types.go
+    - pkg/dsl/dsl_test.go
+    - examples/notification-linespecs/get_notification_unauthenticated.linespec
+    - VERSION
+    - CHANGELOG.md
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: pkg/registry/registry_test.go
+    - path: pkg/dsl/dsl_test.go
+      type: unit_test
+    - path: examples/notification-linespecs/get_notification_unauthenticated.linespec
+      type: linespec

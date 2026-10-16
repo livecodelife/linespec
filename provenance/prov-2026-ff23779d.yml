@@ -1,6 +1,7 @@
 id: prov-2026-ff23779d
 title: Build example service images in CI before each test suite
 status: implemented
+version: 1
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -16,8 +17,6 @@ constraints:
 affected_scope:
   - .github/workflows/ci.yml
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: 7838d522d01b3e4ae945a5ce2ade4c133e63cc0d
 associated_specs:
@@ -27,3 +26,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

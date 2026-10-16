@@ -1,6 +1,7 @@
 id: prov-2026-009
 title: Auto-affected_scope must be saveable from status command with clear UX
 status: implemented
+version: 1
 created_at: "2026-03-12"
 author: calebcowen@gmail.com
 intent: |
@@ -32,8 +33,6 @@ affected_scope:
     - provenance/prov-2026-003.yaml
     - provenance/prov-2026-004.yaml
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 associated_specs: []
 associated_traces: []
@@ -43,3 +42,4 @@ tags:
     - provenance
     - git
     - cli
+type: blueprint

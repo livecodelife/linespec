@@ -1,0 +1,22 @@
+id: prov-2026-ec401cec
+version: 1
+content_hash: sha256:02d42b554aa7c020ae83470660b6db91ab7080dfd16b9198feb44213e146336f
+parent_hash: ""
+reason: ""
+author: noreply@anthropic.com
+created_at: "2026-04-26T22:36:45Z"
+spec_hashes: []
+content:
+  id: prov-2026-ec401cec
+  title: Wire body matching into HTTP, gRPC, and Kafka proxy interceptors
+  type: imprint
+  created_at: "2026-04-26"
+  author: noreply@anthropic.com
+  intent: Replace FindHTTPMockWithHeaders with FindHTTPMockWithBody in the HTTP interceptor; replace FindGRPCMock with FindGRPCMockWithBody in the gRPC interceptor; replace FindMock with FindKafkaMockWithBody in the Kafka interceptor. Each passes a closure that loads the mock WithFile via dsl.PayloadLoader and calls verify.CompareJSON against the actual request body. Also adds SetResolver to the Kafka interceptor so variables work in WITH files.
+  affected_scope:
+    - pkg/proxy/http/interceptor.go
+    - pkg/proxy/grpc/interceptor.go
+    - pkg/proxy/kafka/interceptor.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-9e052576
+  implements_version: 2

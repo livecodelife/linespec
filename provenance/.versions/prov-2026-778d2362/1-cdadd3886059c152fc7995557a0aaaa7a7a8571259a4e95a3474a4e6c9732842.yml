@@ -1,0 +1,27 @@
+id: prov-2026-778d2362
+version: 1
+content_hash: sha256:cdadd3886059c152fc7995557a0aaaa7a7a8571259a4e95a3474a4e6c9732842
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-18T19:35:51Z"
+spec_hashes:
+  - sha256:ea48ed2d986ede877ce005ce530633217aa5d4de7868f580c0191fcd32fd21e6
+content:
+  id: prov-2026-778d2362
+  title: Suppress spinner animation in non-TTY environments
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    In non-TTY environments (CI, piped output), the spinner goroutine uses \r to overwrite the current line, but since there is no terminal to interpret carriage returns, each animation frame is flushed as a new line, bloating CI logs. The fix detects whether stdout is a TTY at startup; when it is not, ShowSpinner prints the message once as a plain line and returns immediately without starting the animation goroutine. StopSpinner and SetupComplete are made no-ops for the non-TTY path so callers require no changes.
+  constraints:
+    - TTY detection must use os.Stdout stat — no new dependencies
+    - Non-TTY path must print the message exactly once as a plain line, not suppress it entirely
+    - All callers of ShowSpinner/StopSpinner/SetupComplete must work unchanged
+    - The spinner goroutine must not start at all in non-TTY mode (not just suppressed output)
+  affected_scope:
+    - pkg/logger/logger.go
+  associated_specs:
+    - path: pkg/logger/logger.go
+      type: code

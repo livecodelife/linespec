@@ -1,6 +1,7 @@
 id: prov-2026-033
 title: Fix dead record detection to handle glob patterns
 status: implemented
+version: 1
 created_at: "2026-03-13"
 author: calebcowen@gmail.com
 sealed_at_sha: 5f45eaaee3de884c020254d742f1ad242aa1f444
@@ -27,8 +28,6 @@ constraints:
 affected_scope:
   - pkg/provenance/linter.go
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 associated_specs:
   - path: pkg/provenance/linter_test.go
@@ -40,3 +39,4 @@ tags:
   - linter
   - provenance
   - scope-validation
+type: blueprint

@@ -1,0 +1,43 @@
+id: prov-2026-c30ae0cb
+version: 1
+content_hash: sha256:da0642edf117768b96ec182f6dca3a6bca9ecc7204f57a657ae4beab38b1dd7b
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-06-22T16:40:35Z"
+spec_hashes:
+  - sha256:3112a2f0ec0a346f0b29b88d8262468b6ef13b400cfce5535f7380344cc6bfb9
+content:
+  id: prov-2026-c30ae0cb
+  title: Extract waitForSQLDB shared by waitForMySQL and waitForPostgreSQL
+  type: imprint
+  created_at: "2026-06-12"
+  author: calebcowen@gmail.com
+  intent: |
+    waitForMySQL and waitForPostgreSQL in pkg/runner/runner.go share an identical
+    poll-with-exponential-backoff loop (sql.Open, 1s PingContext, ctx.Done vs
+    expBackoff select). They differ only in driver name, DSN format, the protocol
+    label in the timeout error, and MySQL's driver-logging suppression.
+
+    Extract waitForSQLDB(ctx, driver, dsn, label, host, port, timeout) holding the
+    shared loop. waitForMySQL and waitForPostgreSQL keep building their own DSN and
+    delegate; waitForMySQL retains its mysql.SetLogger suppress/restore around the
+    delegated call so logging stays quiet for the whole poll.
+  constraints:
+    - Preserves the deadline, 1s ping timeout, expBackoff(attempt, 50ms, 2s) schedule, and ctx.Done handling
+    - Timeout error still names the protocol (MySQL / PostgreSQL) and host:port
+    - MySQL DSN, postgres DSN, and driver names ("mysql" / "postgres") unchanged
+    - MySQL driver-log suppression remains active for the full poll via defer in the wrapper
+    - Behavior unchanged; pkg/runner tests pass unmodified
+  affected_scope:
+    - pkg/runner/runner.go
+  implements: prov-2026-4bab0511
+  implements_version: 1
+  related:
+    - prov-2026-b1c025a5
+  associated_specs:
+    - path: pkg/runner/port_allocator_test.go
+      type: go_test
+  tags:
+    - runner
+    - dupl

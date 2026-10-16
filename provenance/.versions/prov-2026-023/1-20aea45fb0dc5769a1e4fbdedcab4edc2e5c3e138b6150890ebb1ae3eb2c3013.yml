@@ -1,0 +1,31 @@
+id: prov-2026-023
+version: 1
+content_hash: sha256:20aea45fb0dc5769a1e4fbdedcab4edc2e5c3e138b6150890ebb1ae3eb2c3013
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-13T06:07:09Z"
+spec_hashes: []
+content:
+  id: prov-2026-023
+  title: 'Fix: Reject commits tagged with implemented provenance records'
+  type: blueprint
+  created_at: "2026-03-13"
+  author: calebcowen@gmail.com
+  intent: "Fix a bug where the commit-msg hook allows commits tagged with already-implemented \nprovenance records. Implemented records should be immutable - no new commits should \nbe allowed to reference them since the architectural decision is finalized.\n\n**The Problem:**\nWhen a commit message includes a provenance ID (e.g., [prov-2026-021]), the commit-msg\nhook loads the record and checks scope, but doesn't validate whether the record is already\nin \"implemented\" status. This allows engineers to continue making changes under an\nimplemented record, violating the immutability principle.\n\n**The Solution:**\nAdd a status check in the CheckStaged function before processing scope validation.\nIf a record is implemented, return a violation explaining that implemented records\nare immutable and a new record must be created or the existing one superseded.\n\n**Exception:**\nThe completion transition (open → implemented) must still be allowed, which is already\nhandled by the isCompletionTransition check.\n"
+  constraints:
+    - MUST check if a record is implemented before allowing commits tagged with it
+    - MUST return a clear violation error when attempting to commit to an implemented record
+    - MUST still allow the completion transition (open → implemented) for the record's own file
+    - MUST provide helpful guidance on creating a new record or superseding the existing one
+    - MUST NOT affect the existing self-modification exception for open records
+    - MUST include test coverage for the new enforcement
+  affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+    - pkg/provenance/provenance_test.go
+  related:
+    - prov-2026-021
+  tags:
+    - bugfix
+    - enforcement

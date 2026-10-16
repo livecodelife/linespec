@@ -1,6 +1,7 @@
 id: prov-2026-c9e62857
 title: Rebuild linespec-beta binary for v1.4.8 release
 status: implemented
+version: 1
 created_at: "2026-04-15"
 author: calebcowen@gmail.com
 intent: >
@@ -13,8 +14,6 @@ constraints:
 affected_scope:
   - linespec-beta
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related:
   - prov-2026-732c4ad5
   - prov-2026-36e13aa2
@@ -31,3 +30,4 @@ monitors: []
 tags:
   - release
   - beta
+type: blueprint

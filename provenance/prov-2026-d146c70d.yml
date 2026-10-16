@@ -1,6 +1,7 @@
 id: prov-2026-d146c70d
 title: Release v1.3.0
 status: implemented
+version: 1
 created_at: "2026-03-17"
 author: calebcowen@gmail.com
 intent: >
@@ -38,8 +39,6 @@ affected_scope:
 
 forbidden_scope: []
 
-supersedes: ""
-superseded_by: ""
 
 related:
   - prov-2026-7136e8c4
@@ -52,3 +51,4 @@ associated_traces: []
 monitors: []
 tags:
     - release
+type: blueprint

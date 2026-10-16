@@ -1,0 +1,74 @@
+id: prov-2026-5c310d9d
+version: 1
+content_hash: sha256:937bff77e3c088cf8e0c1c47b0f002c2e2dd1d68565a6b6d9cd11856dc2add43
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-12T20:56:53Z"
+spec_hashes:
+  - sha256:8a800c4b33d6a1593bf02d70eff4606f33886bc0d55a5507190b19a15f92f6a7
+  - sha256:28b9d94eb8416a78ef820f37b1d3d8272021b446ad962b3ae296cde899a11ae3
+content:
+  id: prov-2026-5c310d9d
+  title: Document next/govern/install-plugin commands, overlap_specs_on_complete config, and the Claude Code plugin across docs + doc site
+  type: blueprint
+  created_at: "2026-06-12"
+  author: test@example.com
+  intent: |
+    The agent-guidance effort added user-facing surfaces that are not yet documented.
+    Update every reference doc and the doc site so they describe, code-verified, what
+    shipped:
+
+    New CLI commands:
+     - `linespec provenance next` — computed next provenance action (ambient, --files /
+       --plan for intent-aware planning, --json for hooks/agents). Cache-backed fast path.
+     - `linespec provenance govern` — active-only (open + implemented) per-file
+       governance lookup, --files / --json. Cache-backed; excludes superseded/deprecated.
+     - `linespec provenance install-plugin` — installs the Claude Code provenance plugin.
+
+    New configuration:
+     - `overlap_specs_on_complete: block | warn | off` in .linespec.yml (default block) —
+       severity of the completion-time cross-record overlap teeth. Document alongside
+       run_associated_specs_on_complete (the master switch).
+
+    New artifact / behavior:
+     - The Claude Code provenance plugin (plugins/provenance/): SessionStart guidance,
+       per-edit governance (PreToolUse), commit remediation (PostToolUse), a
+       /provenance-next slash command. Dual install — the install-plugin command AND a
+       marketplace .claude-plugin/plugin.json (`claude plugin install`).
+     - The scope cache (.linespec/scope-index.json) backing next/govern, mentioned where
+       the other .linespec cache artifacts are described (gitignored, self-healing).
+
+    Cover all the places these are already referenced: the doc-site pages (index,
+    provenance, and linespec config section), the LLM docs (llms.txt, llms-full.txt),
+    and the markdown references (PROVENANCE_RECORDS, PROVENANCE_RECORD_SCHEMA, README,
+    CLAUDE), plus a CHANGELOG entry under [Unreleased].
+  constraints:
+    - Content must be code-verified — command flags, the config key/values, and the plugin layout must match what actually shipped (do not invent flags or defaults).
+    - The default for overlap_specs_on_complete is block (current behavior); warn and off are the opt-in downgrades. Note that --force does NOT bypass the teeth.
+    - Keep each surface in its existing style — HTML pages stay HTML, llms.txt stays its terse format, markdown stays markdown; mirror the structure already used for the neighboring commands/config keys.
+    - The new commands are documented next to the existing provenance subcommands; the new config key next to run_associated_specs_on_complete; the plugin gets its own short section near the skills/install-skills material.
+    - CHANGELOG gets a single [Unreleased] entry summarizing the additions; do NOT cut a release or bump VERSION (release happens after merge).
+    - No code changes — documentation only.
+  affected_scope:
+    - docs/index.html
+    - docs/provenance.html
+    - docs/linespec.html
+    - docs/llms.txt
+    - docs/llms-full.txt
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - README.md
+    - CLAUDE.md
+    - CHANGELOG.md
+    - LINESPEC.md
+  related:
+    - prov-2026-54aaf9cf
+    - prov-2026-21e9f419
+    - prov-2026-cd1405fb
+  associated_specs:
+    - path: PROVENANCE_RECORDS.md
+    - path: README.md
+  tags:
+    - docs
+    - agent-guidance

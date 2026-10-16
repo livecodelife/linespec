@@ -1,0 +1,99 @@
+id: prov-2026-258574ee
+version: 2
+content_hash: sha256:472da9f2cc105f70737343a420119c1f12eaf242577195ed5a4bd591f7df1742
+parent_hash: sha256:dcd50402f9dc953c691f7508cfe04f296152ec2246ba5390500b3b87a85f3541
+reason: |-
+  The count_users job handler added to the asynq-worker example (prov-2026-02213cc0)
+  introduced a PostgreSQL dependency — github.com/lib/pq v1.10.9 in
+  examples/asynq-worker/go.mod, used by main.go for sql.Open("postgres", ...) and the
+  SELECT COUNT(*) FROM users query. The corresponding examples/asynq-worker/go.sum was
+  never committed, and it was not listed in the affected_scope of prov-2026-02213cc0
+  (which covered only main.go, the count_users linespec, and payloads/).
+
+  Worse, the go.sum left untracked in the working tree is incomplete: it carries only
+  the /go.mod hashes for lib/pq and go-redis and none of the h1: build hashes or the
+  transitive dependencies (cespare/xxhash, dgryski/go-rendezvous, bsm/ginkgo,
+  bsm/gomega). `go build ./...` against it fails with "missing go.sum entry". A fresh
+  checkout therefore cannot build the worker; it only succeeds today because the Docker
+  build regenerates go.sum at image build time, which masks the gap. Every sibling Go
+  example (catalog-service, multi-db-service) commits a complete go.sum; this one
+  should too.
+
+  The fix regenerates a complete examples/asynq-worker/go.sum via `go mod tidy` (adding
+  the missing h1: hashes and transitive-dependency entries) and commits it so the
+  example builds reproducibly without relying on on-the-fly regeneration.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-06-02T18:16:25Z"
+spec_hashes:
+  - sha256:305959e5091fec9196264cf1aa02878e650a1fbae846cbba8463d66f7d13de24
+  - sha256:bf378857dc11baa890d92f171f7636f004b8a5914351c3af44c9d2699808e3d1
+  - sha256:f1be5fcbf953dfb05146b2ccc9e7596abb67be0fb5680a4729c4c5cc2acb7628
+  - sha256:fc7d91b58165af1af8c6f385dace905676ee5798cab23af8b5840c4288f4643f
+  - sha256:2ae6876a8fe28940d4a9baf1463f3f70513d954d305eeacbbb0d603d9e5c74a4
+content:
+  id: prov-2026-258574ee
+  title: Fix PostgreSQL proxy binary encoding for integer types and COUNT(*)
+  type: blueprint
+  created_at: "2026-05-27"
+  author: calebcowen@gmail.com
+  intent: |
+    The PostgreSQL proxy does not correctly honour the result format codes that clients
+    supply in their Bind messages for integer types. The root cause is two related gaps:
+
+    1. oidForColumn returns TEXT (OID 25) for count-like column names (e.g. "count",
+       "total", "num_rows"). When a client like lib/pq reads OID 25 in the RowDescription
+       it requests text format in its Bind — so the proxy and client agree on text, but
+       the result does not match what real PostgreSQL sends for COUNT(*) (which has OID 20,
+       INT8). The OID mismatch means COUNT(*) values scanned into int64 work via text
+       parsing but any client that drives format selection from the OID gets the wrong type.
+
+    2. The binary encoding path in sendDataRowInternal (fmtCode == 1, default branch)
+       calls toInt32, which encodes all integers as 4-byte big-endian INT4. INT8 columns
+       (OID 20, 8 bytes) require 8-byte big-endian encoding. When lib/pq (or any client)
+       requests binary format for an int8 column it expects 8 bytes; receiving 4 bytes
+       causes a decode error or silent data corruption.
+
+    Fix oidForColumn to return INT8 (OID 20, size 8) for count/aggregate column names,
+    and fix sendDataRowInternal to encode integers as int64 (8 bytes) when the client
+    requests binary format for a column whose OID is INT8.
+
+    Add a COUNT(*) test case to the asynq-worker example suite so the fix has a
+    regression harness.
+  constraints:
+    - oidForColumn must return OID 20 (INT8, size 8) for column names "count", "total", and names with prefix "num_" or suffix "_count"
+    - sendDataRowInternal binary path must encode integer values as int64 (8 bytes big-endian) when the column OID is INT8; INT4 columns (OID 23) continue to use 4-byte encoding
+    - The OID-to-size mapping must be consistent between oidForColumn (RowDescription) and the binary encoding in sendDataRowInternal (DataRow)
+    - All existing example test suites must continue to pass (make test + all 4 example suites)
+    - No changes to the DSL, MySQL proxy, HTTP proxy, Kafka proxy, or Redis proxy
+    - |
+      Regenerate examples/asynq-worker/go.sum with `go mod tidy` so it contains complete
+      entries (both h1: and /go.mod hashes) for github.com/lib/pq v1.10.9 and
+      github.com/redis/go-redis/v9 v9.7.3 plus their transitive dependencies.
+    - |
+      go.sum must be consistent with examples/asynq-worker/go.mod (no module additions or
+      removals as part of this fix); `cd examples/asynq-worker && go build ./...` must
+      succeed against the committed go.sum.
+    - |
+      No source, proxy, runner, or linespec changes — this is purely the missing build
+      artifact.
+  affected_scope:
+    - pkg/proxy/postgresql/result.go
+    - pkg/proxy/postgresql/proxy.go
+    - examples/asynq-worker/main.go
+    - examples/asynq-worker/linespecs/**
+    - examples/asynq-worker/go.sum
+  related:
+    - prov-2026-1aac1dc7
+    - prov-2026-6165b458
+  associated_specs:
+    - path: pkg/proxy/postgresql/result.go
+      type: code
+    - path: examples/asynq-worker/linespecs/process_email_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/process_report_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/count_users.linespec
+      type: linespec
+    - path: examples/asynq-worker/go.sum
+      type: code

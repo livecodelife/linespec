@@ -1,0 +1,103 @@
+id: prov-2026-4bf54660
+version: 2
+content_hash: sha256:4d832fd3352503dd54af01113433a62228f45cf5f27a56ee49fdbcfd52771207
+parent_hash: sha256:e62e1318bd33ddc80888d2996913bcc32c1e037d69bdff68af13e09cf3c46ced
+reason: |-
+  The /reload-registry HTTP handler in the sidecar process is responsible for hot-reloading
+  the mock registry between test runs. A comment in the code explicitly states that the
+  handler should close existing PostgreSQL proxy connections so that the service reconnects
+  with clean per-connection state for each test. However, the handler never calls
+  pgProxy.ResetConnections() — the code declares the pgProxy variable with that comment
+  describing the intent, but the handler closure never uses it.
+
+  Without resetting connections, the service's PostgreSQL connection pool retains connections
+  that were established under the previous test's registry. When the service reuses these
+  stale connections, or when the proxy is in an inconsistent state relative to the newly
+  loaded registry, the service can encounter protocol-level errors such as:
+  "pq: unknown response for startup: \"(I) EmptyQueryResponse\""
+
+  The fix is to call pgProxy.ResetConnections() inside the /reload-registry handler after
+  reg.ClearState(), guarded by a nil check since pgProxy is only set when the proxy type
+  is postgresql.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-05-28T16:22:01Z"
+spec_hashes:
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+  - sha256:d55f861b07d61206795fbd24cf1125e059ccddd8fb756696c884d34a3588a778
+content:
+  id: prov-2026-4bf54660
+  title: Fix PostgreSQL proxy startup architecture and create shared connection manager
+  type: blueprint
+  created_at: "2026-03-19"
+  author: calebcowen@gmail.com
+  intent: |
+    Fix the PostgreSQL proxy's broken startup architecture that causes connection failures
+    during integration tests. The current implementation sends fake authentication responses
+    to the client before connecting to upstream, then tries to forward real responses,
+    causing protocol conflicts.
+
+    Additionally, refactor both MySQL and PostgreSQL proxies to share common connection
+    management logic through a base connection manager, reducing code duplication and
+    making future database proxy implementations easier.
+
+    This work includes:
+    1. Fixing CommandComplete tag generation for INSERT/UPDATE/DELETE operations
+    2. Fixing NoData handling for WRITE operations without RETURNING clause
+    3. Making table extraction dynamic based on DSL/linespec files (not hardcoded)
+    4. Creating shared connection manager in pkg/proxy/base/connection.go
+    5. Refactoring both proxies to use the shared connection manager
+    6. Refactoring PostgreSQL proxy to single-threaded message processing (like MySQL)
+       to eliminate race conditions between goroutines competing for the buffered reader
+
+    - PostgreSQL proxy connects upstream FIRST before any client communication
+    - Uses pure bidirectional io.Copy for transparent relay during startup
+    - Both directions are properly coordinated with channel-based synchronization
+    - Service successfully connects: "Connected to database successfully"
+    - Queries are being executed through the proxy
+  constraints:
+    - MUST fix the PostgreSQL proxy startup to connect upstream FIRST before any client communication
+    - MUST use pure transparent io.Copy relay during startup (no message inspection)
+    - MUST properly coordinate bidirectional relay with channel synchronization
+    - MUST wait for both relay directions to complete before closing connections
+    - MUST maintain MySQL proxy functionality while refactoring to use shared code
+    - MUST generate correct PostgreSQL CommandComplete tags (INSERT 0 N, UPDATE N, DELETE N, SELECT N)
+    - MUST handle WRITE operations without RETURNING clause correctly (no NoData message)
+    - MUST use dynamic table extraction from registry (not hardcoded table lists)
+    - MUST NOT break existing MySQL proxy tests
+    - MUST pass all unit tests after refactoring
+    - MUST pass order-linespecs/create_order_success.linespec test
+    - MUST pass all other database-dependent linespec tests
+    - |
+      Add `if pgProxy != nil { pgProxy.ResetConnections() }` after reg.ClearState() in the
+      /reload-registry handler in cmd/linespec/main_stable.go. The pgProxy variable is already
+      declared in the enclosing scope and captured by the closure; no structural changes needed.
+    - |
+      Do not modify pkg/proxy/postgresql/proxy.go — ResetConnections() already exists and is
+      correct. The fix is purely in the call site.
+    - |
+      The fix must apply only when pType == "postgresql". The nil guard on pgProxy handles this
+      since pgProxy is only set in that branch of the switch.
+  affected_scope:
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/postgresql/startup.go
+    - pkg/proxy/mysql/proxy.go
+    - pkg/proxy/base/*.go
+    - pkg/registry/registry.go
+    - examples/order-linespecs/**
+    - pkg/proxy/postgresql/command_complete_test.go
+    - linespec-beta
+    - cmd/linespec/main_stable.go
+  associated_specs:
+    - path: examples/order-linespecs/create_order_success.linespec
+      type: linespec
+    - path: pkg/proxy/postgresql/proxy_startup_test.go
+      type: go_test
+  tags:
+    - bugfix
+    - postgresql
+    - proxy
+    - architecture
+    - testing
+    - integration
+    - refactoring

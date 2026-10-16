@@ -1,0 +1,93 @@
+id: prov-2026-a6456485
+version: 2
+content_hash: sha256:811fd53ab5186291522925b95a416b7737d89e4fa0b296d3942f716019be2463
+parent_hash: sha256:5c66abdf4b66531bd2018d9415487a6ba7a0da8a90f194b8f50f06ba748f36cd
+reason: |-
+  `linespec build` cannot build the linespec:latest Docker image. It fails
+  during the host-side Linux cross-compile with a wall of
+  "undefined: Node" errors out of go-tree-sitter, then reports
+  "Failed to build a Linux binary for the Docker image: exit status 1".
+  Reproduced on macOS/arm64 with the v3.17.0 Homebrew build and independently
+  observed on a second machine.
+
+  Root cause: goBuildForLinux (cmd/linespec/main_stable.go:512) and
+  goInstallForLinux (main_stable.go:537) both hardcode CGO_ENABLED=0 in the
+  cross-compile environment. That was correct when it was written
+  (prov-2026-a6456485) because the binary was pure Go. v3.14.0 then added
+  pkg/discover, which pulls in github.com/smacker/go-tree-sitter — a cgo
+  package. With CGO_ENABLED=0 the build constraints exclude every cgo file in
+  the tree-sitter grammar packages, including the one that defines the `Node`
+  type, so the remaining pure-Go files (iter.go and friends) fail to compile.
+  The Dockerfile already documents exactly this failure mode in a comment and
+  avoids it by building inside the image with `apk add build-base` and
+  CGO_ENABLED=1.
+
+  The host-side cross-compile is now redundant work that only reintroduces the
+  toolchain problem the Dockerfile already solved: Dockerfile.linespec does
+  `COPY . .` and builds from source in a golang:1.23-alpine builder stage, so
+  it never consumes the host-built binary for a source-directory build.
+  Preferred fix is to drop the host-side Linux cross-compile from the
+  source-directory path and let `docker build -f Dockerfile.linespec` do it,
+  which is verified working: building the image directly produces a functional
+  43MB image where the previous `linespec build` path produced nothing.
+
+  Related smaller defect found while verifying: Dockerfile.linespec's
+  `go build` passes no -ldflags, so the binary inside the image reports its
+  version as "vdev" instead of the real version. Worth carrying the
+  -X main.version ldflag into the image build in the same change.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-08-13T16:51:06Z"
+spec_hashes:
+  - sha256:7da7a65058ec815ce43acad2435346a4ec1318fc74ff872cebbe72c95ab33ca2
+  - sha256:44aff95e2722a0a4f5945569a5110015f554e409ac5b1e645f1a43bde5e14100
+  - sha256:1d470fb241c505e0d390ae0de4037055f7be57c0a705cbad8cc7718be59e2d15
+  - sha256:e308aed8b08b56763e16acf074230723fef244991661b8e741284c53002f9dd4
+content:
+  id: prov-2026-a6456485
+  title: Fix linespec build cross-compile for non-Linux hosts
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: |
+    The `linespec build` command copies the host binary into an Alpine Docker image. On macOS (darwin), the binary is Mach-O format; Linux containers require ELF format. The result is `exec format error` when the proxy sidecar starts, silently breaking all non-PostgreSQL proxy types (MySQL, MongoDB, Redis) because the proxy container exits immediately. The fix cross-compiles a Linux binary before building the Docker image when the host OS is not Linux, using `go build` with `GOOS=linux` from the source root. The source root is located by walking up from the current working directory then from the executable path, looking for a `go.mod` containing `module github.com/livecodelife/linespec`.
+  constraints:
+    - On Linux hosts the current binary is used as-is — no cross-compile step
+    - On non-Linux hosts a fresh `go build` with GOOS=linux GOARCH=<host-arch> is run; if no source root can be found the command exits with a clear error describing how to obtain a Linux binary
+    - The cross-compiled binary is placed in the existing tmpDir alongside the Dockerfile so no additional temp directories are created
+    - |
+      `linespec build` run from a linespec source directory must produce a
+      working linespec:latest image on a macOS host with Docker running, with no
+      manual `docker build` fallback and no host C toolchain setup required.
+    - |
+      The cgo/tree-sitter dependency must be built with CGO_ENABLED=1 wherever
+      the Linux binary is actually produced. If any host-side cross-compile path
+      is kept, it must not hardcode CGO_ENABLED=0.
+    - |
+      The non-source-directory path (goInstallForLinux, used when `linespec
+      build` runs outside a checkout) must either be fixed the same way or fail
+      with a clear, actionable message instead of a tree-sitter compiler dump.
+    - |
+      The binary inside linespec:latest must report the real version via
+      `--version`, not "vdev".
+    - |
+      No change to the image's runtime contract: same entrypoint
+      (/app/linespec), same alpine base with ca-certificates and libstdc++, and
+      the image must stay usable by the existing test runner.
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - provenance/prov-2026-0e5c82e4.yml
+    - Dockerfile.linespec
+    - cmd/linespec/build_test.go
+    - cmd/linespec/build_integration_test.go
+  related:
+    - prov-2026-0e5c82e4
+  associated_specs:
+    - path: cmd/linespec/main_stable.go
+      type: code
+    - path: Dockerfile.linespec
+      type: docker
+    - path: cmd/linespec/build_test.go
+      type: go_test
+    - path: cmd/linespec/build_integration_test.go
+      type: go_test

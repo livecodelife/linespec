@@ -1,0 +1,24 @@
+id: prov-2026-e6b1e142
+version: 2
+content_hash: sha256:ebe02fe1412fc4c453d3b3f92650ceb6a2d77fc7045d6902519036013dc9f7a7
+parent_hash: sha256:8920e2d78b8cbde67608254cf02b4d764d472dbe059ac0ef74463b3f6ca47b23
+reason: 'Supersedes prov-2026-7711078a: Fix goreleaser v2 field name: skip_upload → skip'
+author: calebcowen@gmail.com
+created_at: "2026-04-13T22:33:40Z"
+spec_hashes:
+  - sha256:c7e52ffc5d3796399cf6d20cee0bdf0f6d19b0f1e53875fbfb0bc4ecb70e8b7d
+content:
+  id: prov-2026-e6b1e142
+  title: 'Fix goreleaser v2 field name: skip_upload → skip'
+  type: blueprint
+  created_at: "2026-04-13"
+  author: calebcowen@gmail.com
+  intent: 'GoReleaser v2 renamed the skip_upload field to skip in the brews section. The previous fix (prov-2026-7711078a) used skip_upload: false which was silently ignored by v2, causing it to fall back to the default ''auto'' behavior and still skip the beta formula update on prerelease tags. Fix both formulas to use the correct v2 field name: beta formula gets skip: false, stable formula gets skip: auto.'
+  constraints:
+    - Only rename the field; do not change the values
+  affected_scope:
+    - .goreleaser.yml
+    - provenance/prov-2026-7711078a.yml
+  associated_specs:
+    - path: .goreleaser.yml
+      type: config

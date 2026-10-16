@@ -1,6 +1,7 @@
 id: prov-2026-7efa1f1b
 title: Add compile, init, publish, import, clone to skill Useful Commands sections
 status: implemented
+version: 1
 created_at: "2026-05-15"
 author: test@example.com
 intent: >
@@ -17,8 +18,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-f25d8526
-supersedes: ""
-superseded_by: ""
+implements_version: 1
 related: []
 sealed_at_sha: a854c572b4d69adb5c0885d17355829fa59ac0fa
 associated_specs:

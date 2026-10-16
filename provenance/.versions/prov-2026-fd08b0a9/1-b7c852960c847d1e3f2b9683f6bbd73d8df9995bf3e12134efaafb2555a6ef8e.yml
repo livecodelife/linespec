@@ -1,0 +1,26 @@
+id: prov-2026-fd08b0a9
+version: 1
+content_hash: sha256:b7c852960c847d1e3f2b9683f6bbd73d8df9995bf3e12134efaafb2555a6ef8e
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-28T14:55:58Z"
+spec_hashes:
+  - sha256:1c252c31831e1dcc40f17eaa83efcd92eba07ece2d06454718580caa40e9d8ec
+content:
+  id: prov-2026-fd08b0a9
+  title: Add expandScopePatterns step to publish pipeline
+  type: imprint
+  created_at: "2026-05-28"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement expandScopePatterns and wire it into Publish between applyTransformPipeline
+    and packProvenanceLayer. Add unit tests covering all pattern types and edge cases.
+  affected_scope:
+    - pkg/provenance/publish.go
+    - pkg/provenance/publish_test.go
+  implements: prov-2026-fca900ac
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/publish_test.go
+      type: go_test

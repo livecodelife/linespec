@@ -1,6 +1,11 @@
 id: prov-2026-79b59b40
 title: 'Config typos are silently ignored: non-strict YAML decode and unknown database type only logged at Debug'
 status: implemented
+version: 1
+reason: |-
+  LoadConfigFile decodes .linespec.yml with a non-strict yaml.Unmarshal, so a misspelled key (proxy, init_script, start_command) is dropped and the default applies. An unknown database type reaches the runner's switch default and logs only at Debug, so no proxy starts and mocks silently never match. Both are configuration mistakes reported as nothing.
+  The fix decodes with unknown fields rejected, naming the key and line, and makes an unknown database type a config validation error listing the supported types. Warning instead of erroring was rejected: warnings in a green run are the silence this fixes. The risk is configs that carry currently ignored keys, so strictness must be checked against every .linespec.yml in the repo's examples before it ships.
+reason_kind: fix
 created_at: "2026-10-06"
 author: caleb.cowen@linq.com
 intent: >
@@ -25,10 +30,7 @@ affected_scope:
   - pkg/config/parser.go
   - pkg/runner/runner.go
 forbidden_scope: []
-type: bug
-extends: prov-2026-001
-supersedes: ""
-superseded_by: ""
+type: imprint
 related: []
 sealed_at_sha: 4fc53ae0d85be24622b3e5e6e6e594b395b835bc
 associated_specs:
@@ -40,3 +42,5 @@ monitors: []
 tags:
   - config
   - silent-pass
+implements: prov-2026-001
+implements_version: 1

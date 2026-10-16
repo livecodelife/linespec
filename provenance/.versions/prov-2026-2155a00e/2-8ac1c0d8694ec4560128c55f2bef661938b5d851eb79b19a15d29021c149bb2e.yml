@@ -1,0 +1,65 @@
+id: prov-2026-2155a00e
+version: 2
+content_hash: sha256:8ac1c0d8694ec4560128c55f2bef661938b5d851eb79b19a15d29021c149bb2e
+parent_hash: sha256:35d23f8bb12c3926b9967b17c4d03051a8280252369e644eb1e3842e504fd21a
+reason: |-
+  `linespec provenance complete` never actually runs a record's own `associated_specs`,
+  even when `run_associated_specs_on_complete: true` is set. `Complete()` only checks
+  that each spec's `path` exists on disk (os.Stat) and `FormatCompleteSuccess` prints
+  `✓` based on that same existence check — neither calls `runRecordSpecs`, the function
+  that `RunSpecs`/`run-specs` uses to actually execute each spec's command and inspect
+  its exit status. So a record whose proof command exits non-zero is reported as
+  verified and sealed to `implemented` anyway, while `run-specs` against the identical
+  record and config correctly reports `✗ failed` and exits 1. The completion-time
+  overlap "teeth" already call `runRecordSpecs` correctly, but only for *other* sealed
+  records the change happens to touch — never for the record actually being completed.
+  Fix `Complete()` to run the record's own `associated_specs` via `runRecordSpecs` when
+  `run_associated_specs_on_complete` is enabled, roll back the transition (leaving the
+  record `open`) and exit nonzero if any spec fails — mirroring the rollback-on-lint-
+  failure path already in `Complete()` — and fix `FormatCompleteSuccess` to report each
+  spec's actual pass/fail outcome instead of mere file existence.
+reason_kind: fix
+author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+created_at: "2026-08-12T23:17:26Z"
+spec_hashes:
+  - sha256:e23b9587da74245f3e8ef587eec98a13bf629b2236541bda045588012f4c03ee
+  - sha256:d9cd6c0a55e700ee727350a77b7b9717fdbf7111aaba35d58765b514564d1251
+content:
+  id: prov-2026-2155a00e
+  title: Run associated specs on pre-commit during implementation transition
+  type: blueprint
+  created_at: "2026-04-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Add an opt-in mechanism so the pre-commit hook runs a record's associated_specs before allowing the commit that marks it as implemented. This closes the gap between declaring a spec as proof of a decision and actually verifying it passes at commit time. Adds a run_command field to associated_specs entries so teams can override the default command for a given type, and exposes a linespec provenance run-specs subcommand for manual or scripted use.
+  constraints:
+    - Feature must be off by default (run_associated_specs_on_complete false); existing repos must not be affected without opt-in.
+    - Specs with no type and no run_command must be skipped with a warning, not a hard failure, to accommodate non-executable proof artifacts (type config).
+    - The run-specs command must silently exit 0 when the config flag is disabled so the hook can call it unconditionally without needing to parse config itself.
+    - run_command supports a path placeholder; if absent, path is appended as a trailing argument.
+    - When run_associated_specs_on_complete is true and a record has associated_specs, `complete` must execute them (via the same mechanism as `runRecordSpecs`/`run-specs`) before sealing, not merely check that each spec's path exists on disk.
+    - If any associated spec fails while run_associated_specs_on_complete is true, `complete` must roll back the transition — the record's status, sealed_at_sha, on-disk YAML, and hash manifest must be restored exactly as they were before the attempt (reusing the existing rollback() closure) — and the command must exit nonzero, matching `run-specs`'s exit-1 behavior for the same record/config.
+    - A record must never be left `implemented` with `sealed_at_sha` set after a `complete` invocation whose own associated_specs failed.
+    - This must hold identically whether or not commit_on_status_change is enabled — the gate must not depend on the pre-commit hook being installed or invoked.
+    - FormatCompleteSuccess (and any success path that reports on associated_specs) must report each spec's actual executed pass/fail outcome, not just whether the path exists on disk — printing `✓` for a spec that was not run, or that ran and failed, is itself wrong even when the gate is satisfied or disabled.
+    - 'When run_associated_specs_on_complete is false (the default), behavior is unchanged: complete does not execute associated_specs and continues to report on path existence only, since there is nothing to gate on.'
+    - The existing completion-time overlap-teeth behavior (verifying *other* sealed records' associated_specs via overlap_specs_on_complete) must be unaffected by this fix.
+    - Unknown-type / no-run_command specs continue to be skipped (as runRecordSpecs already does) rather than treated as failures, consistent with run-specs.
+  affected_scope:
+    - .linespec.yml
+    - pkg/provenance/types.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/run_specs_test.go
+    - pkg/config/types.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - PROVENANCE_RECORD_SCHEMA.md
+    - PROVENANCE_RECORDS.md
+    - CHANGELOG.md
+    - docs/provenance.html
+    - pkg/provenance/formatter.go
+    - pkg/provenance/transition_rollback_test.go
+  associated_specs:
+    - path: pkg/provenance/run_specs_test.go
+      type: go-test
+    - path: pkg/provenance/transition_rollback_test.go

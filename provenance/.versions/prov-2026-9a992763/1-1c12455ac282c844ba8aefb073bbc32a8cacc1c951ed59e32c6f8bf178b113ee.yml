@@ -1,0 +1,30 @@
+id: prov-2026-9a992763
+version: 1
+content_hash: sha256:1c12455ac282c844ba8aefb073bbc32a8cacc1c951ed59e32c6f8bf178b113ee
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-05T19:25:15Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-9a992763
+  title: Content hash computed from canonical YAML field serialization via SHA-256
+  type: imprint
+  created_at: "2026-05-05"
+  author: calebcowen@gmail.com
+  intent: |
+    To compute a tamper-evident content hash for a provenance record, serialize only the record's content fields (excluding FilePath and any manifest-derived values) into a deterministic YAML byte slice and hash it with SHA-256. Using the record's own YAML serialization avoids a separate canonical encoding scheme and keeps the hash verifiable with standard tooling. The full-graph hash is SHA-256 of the sorted concatenation of all record hashes; the active-subset hash is the same over only non-superseded, non-deprecated records.
+  constraints:
+    - Hash input is yaml.Marshal of the Record struct with FilePath cleared to empty string
+    - SHA-256 is the digest algorithm; output stored as lowercase hex
+    - Full-graph hash covers records of all statuses sorted by ID
+    - Active-subset hash covers only records not in superseded or deprecated status, sorted by ID
+    - Graph hashes are recomputed from all per-record hashes on each manifest write
+  implements: prov-2026-60ef0cfa
+  implements_version: 3
+  related:
+    - prov-2026-618113ec
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code

@@ -1,6 +1,7 @@
 id: prov-2026-bc228023
 title: Fix isRemoteRecord path-separator prefix match
 status: implemented
+version: 1
 created_at: "2026-04-24"
 author: calebcowen@gmail.com
 intent: >
@@ -20,8 +21,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-90ec670e
-supersedes: ""
-superseded_by: ""
+implements_version: 1
 related: []
 sealed_at_sha: ad8168f1cc93d24b8da7bc7bbf68af27001eccc3
 associated_specs:

@@ -1,0 +1,29 @@
+id: prov-2026-e1dfe6f6
+version: 1
+content_hash: sha256:ab33af183ec99c23fb1067de6c95fc703b9ae9fb554187d7753a46475bb89912
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-04T02:44:51Z"
+spec_hashes:
+  - null
+content:
+  id: prov-2026-e1dfe6f6
+  title: Use MERGE_TOKEN for automated embeddings PR approval
+  type: blueprint
+  created_at: "2026-04-03"
+  author: calebcowen@gmail.com
+  intent: Update the index-provenance.yml workflow to use a MERGE_TOKEN secret (from a different user/app) for approving and merging the automated embeddings PR, since GitHub Actions cannot self-approve PRs.
+  constraints:
+    - Must use MERGE_TOKEN secret for PR approval and merge steps
+    - Must use GITHUB_TOKEN for PR creation (to avoid permission issues)
+  affected_scope:
+    - .github/workflows/index-provenance.yml
+  related:
+    - prov-2026-da5fd142
+  associated_specs:
+    - path: .github/workflows/index-provenance.yml
+  tags:
+    - ci-cd
+    - branch-protection
+    - automation

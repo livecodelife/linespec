@@ -1,0 +1,27 @@
+id: prov-2026-a9a09e43
+version: 1
+content_hash: sha256:edf950ca84d7c7ff1a50e428c4d814d84c2ffe19de2d5179edb69558542ef87a
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-22T19:27:30Z"
+spec_hashes:
+  - sha256:803f1563240eaa7c0df549d27ebdb238ae53b2f9c9b8ced99c7228c01f432d53
+content:
+  id: prov-2026-a9a09e43
+  title: 'Fix discover output dirs: --dir scoping and specs→linespecs rename'
+  type: imprint
+  created_at: "2026-06-05"
+  author: test@example.com
+  intent: Fix two bugs in the discover CLI output paths. (1) When --dir is set, stubs and provenance records were written to the current working directory instead of relative to the scanned directory. (2) The default stubs directory was "specs/" but should be "linespecs/" to match project convention.
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-2042c6a2
+  implements_version: 1
+  associated_specs:
+    - path: pkg/discover/records/records_test.go
+      type: go_test
+  tags:
+    - discovery
+    - bugfix

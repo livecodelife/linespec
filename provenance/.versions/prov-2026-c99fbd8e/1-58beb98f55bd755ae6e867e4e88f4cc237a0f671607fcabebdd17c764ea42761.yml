@@ -1,0 +1,29 @@
+id: prov-2026-c99fbd8e
+version: 1
+content_hash: sha256:58beb98f55bd755ae6e867e4e88f4cc237a0f671607fcabebdd17c764ea42761
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-13T21:42:05Z"
+spec_hashes:
+  - sha256:823e789658f7057eb04425c299235592c3da364bf7525b23cefa216d285e5a74
+  - sha256:298fda0e44de456f8cc3072bad37f55bf75902f3267ce4eb47146b0b5abdee4e
+content:
+  id: prov-2026-c99fbd8e
+  title: 'Fix P5-B: HTTP proxy port is hardcoded to 80'
+  type: blueprint
+  created_at: "2026-04-08"
+  author: calebcowen@gmail.com
+  intent: 'Allow HTTP dependency proxies to bind on the port declared in .linespec.yml instead of always port 80. Services that connect to HTTP dependencies on non-80 ports (e.g., user-service:3001) currently cannot be intercepted. Fix by using DependencyConfig.Port (which already exists) in two places in the runner: proxy command bind address and generated _URL env vars.'
+  constraints:
+    - Default to port 80 when dep.Port is 0 for backward compatibility
+    - Document the single-port-per-proxy-container limitation in a comment
+  affected_scope:
+    - pkg/runner/runner.go
+    - examples/todo-linespecs/.linespec.yml
+    - examples/notification-linespecs/.linespec.yml
+  associated_specs:
+    - path: examples/todo-linespecs/create_todo_success.linespec
+      description: Exercises HTTP proxy interception via user-service dependency
+    - path: examples/notification-linespecs/get_notification_success.linespec
+      description: Exercises HTTP proxy interception via user-service dependency

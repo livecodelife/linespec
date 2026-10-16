@@ -1,0 +1,40 @@
+id: prov-2026-b5cbfedf
+version: 1
+content_hash: sha256:188d342c05624e8508880c10fef85bc7388cdd751b300d39a8692c618637b119
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-16T22:27:16Z"
+spec_hashes:
+  - sha256:d762a07953e82f279bd71ad694a53e42f2ddf0d56602acb0e31a4fcffca242cc
+  - sha256:0562d0a5b4256caf030c587cd2bc967def341a151710c493642f066b957c8f01
+  - sha256:241068bf11b83baefc1f22c5d48f668e8b9106587d3b87ad045308a7265ff6df
+content:
+  id: prov-2026-b5cbfedf
+  title: Fix todo-linespecs SQL mocks to use USING_SQL_CONTAINS
+  type: blueprint
+  created_at: "2026-04-16"
+  author: calebcowen@gmail.com
+  intent: |
+    The get_todo_success, delete_todo_success, and update_todo_success
+    linespecs used USING_SQL with "SELECT * FROM todos WHERE id = 1 AND
+    user_id = 42 LIMIT 1". Rails 7 .where(...).first generates
+    "SELECT todos.* FROM todos WHERE ... ORDER BY todos.id ASC LIMIT 1",
+    which doesn't match exactly. Switch to USING_SQL_CONTAINS with just
+    the WHERE clause so tests are resilient to ORM query shape differences.
+  constraints:
+    - Use USING_SQL_CONTAINS for the todo lookup WHERE clause
+  affected_scope:
+    - examples/todo-linespecs/get_todo_success.linespec
+    - examples/todo-linespecs/delete_todo_success.linespec
+    - examples/todo-linespecs/update_todo_success.linespec
+    - provenance/prov-2026-543305e3.yml
+  related:
+    - prov-2026-543305e3
+  associated_specs:
+    - path: examples/todo-linespecs/get_todo_success.linespec
+      type: test
+    - path: examples/todo-linespecs/delete_todo_success.linespec
+      type: test
+    - path: examples/todo-linespecs/update_todo_success.linespec
+      type: test

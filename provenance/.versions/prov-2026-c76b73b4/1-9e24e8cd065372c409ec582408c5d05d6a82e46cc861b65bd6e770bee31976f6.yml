@@ -1,0 +1,36 @@
+id: prov-2026-c76b73b4
+version: 1
+content_hash: sha256:9e24e8cd065372c409ec582408c5d05d6a82e46cc861b65bd6e770bee31976f6
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-23T18:29:31Z"
+spec_hashes:
+  - sha256:48fbfde7ff79aab77b2111aacaa8fa276ae7558ea0940a10e9d72dc6279f1596
+  - sha256:298fda0e44de456f8cc3072bad37f55bf75902f3267ce4eb47146b0b5abdee4e
+content:
+  id: prov-2026-c76b73b4
+  title: Update documentation for gRPC upstream passthrough, content-type echo, and protobuf descriptor mocks
+  type: blueprint
+  created_at: "2026-04-23"
+  author: calebcowen@gmail.com
+  intent: |
+    Update all documentation (doc site, README, CHANGELOG, LINESPEC.md) to reflect the gRPC proxy extensions added in prov-2026-ce3ba028: upstream passthrough via type:grpc dependencies, content-type echo, and protobuf descriptor mocks.
+  constraints:
+    - Documentation only - no code changes
+  affected_scope:
+    - docs/index.html
+    - docs/linespec.html
+    - README.md
+    - CHANGELOG.md
+    - LINESPEC.md
+  related:
+    - prov-2026-ce3ba028
+  associated_specs:
+    - path: examples/temporal-linespecs/start_workflow_success.linespec
+      type: linespec
+    - path: examples/notification-linespecs/get_notification_success.linespec
+      type: linespec
+  tags:
+    - documentation
+    - grpc

@@ -1,0 +1,28 @@
+id: prov-2026-000264e5
+version: 1
+content_hash: sha256:caa8ef7eb240bbc7008c89861d1ad0716c07d58c41e9b78721e4417e20d12938
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-18T18:27:01Z"
+spec_hashes:
+  - sha256:077455c5b9382219777399f85973b42f7117df2231585fc972bbad780def4e2e
+content:
+  id: prov-2026-000264e5
+  title: Add end-to-end example test for string pattern= constraint using provenance ID format
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    Add a new example linespec to the user-service suite that exercises the string pattern= constraint end-to-end. The test uses AUTH_TOKEN generated from the pattern prov-[0-9]{4}-[a-f0-9]{8}, which has the same structure as a provenance record ID: a literal prefix, a numeric segment, and a lowercase hex segment. The generated token flows through the full stack: injected into the service container as an env var, sent as a Bearer header, used in a MySQL lookup, returned in the DB mock response, and verified in the HTTP response.
+  constraints:
+    - The test MUST use pattern= for AUTH_TOKEN matching prov-[0-9]{4}-[a-f0-9]{8}
+    - The test MUST reuse existing user-linespecs payload files to keep scope minimal
+    - The test MUST NOT break any existing user-linespecs tests
+  affected_scope:
+    - examples/user-linespecs/get_user_with_pattern_token.linespec
+  related:
+    - prov-2026-a8304063
+  associated_specs:
+    - path: examples/user-linespecs/get_user_with_pattern_token.linespec
+      type: linespec

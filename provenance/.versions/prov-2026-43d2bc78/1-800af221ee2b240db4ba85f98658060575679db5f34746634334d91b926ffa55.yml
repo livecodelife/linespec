@@ -1,0 +1,29 @@
+id: prov-2026-43d2bc78
+version: 1
+content_hash: sha256:800af221ee2b240db4ba85f98658060575679db5f34746634334d91b926ffa55
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-27T19:00:34Z"
+spec_hashes:
+  - sha256:768000d3c37558a32fa70c65c87079d3d3a4fb69493547f7448acb6ffb381590
+content:
+  id: prov-2026-43d2bc78
+  title: Replace os.ReadDir with filepath.WalkDir in LoadFromDir for recursive loading
+  type: imprint
+  created_at: "2026-05-27"
+  author: test@example.com
+  intent: |
+    Replace the os.ReadDir loop in LoadFromDir with filepath.WalkDir so all prov-*.yml
+    files at any depth are discovered. The walk skips non-yml and non-prov-prefixed files
+    exactly as the flat scan did; directory entries are simply descended into rather than skipped.
+  constraints:
+    - Use filepath.WalkDir rather than a hand-rolled recursive call to keep the implementation minimal
+    - Return the walk error directly; do not swallow it
+  affected_scope:
+    - pkg/provenance/loader.go
+  implements: prov-2026-9368095a
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/loader.go
+      type: code

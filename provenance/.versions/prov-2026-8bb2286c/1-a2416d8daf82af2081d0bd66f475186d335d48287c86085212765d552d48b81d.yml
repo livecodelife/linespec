@@ -1,0 +1,25 @@
+id: prov-2026-8bb2286c
+version: 1
+content_hash: sha256:a2416d8daf82af2081d0bd66f475186d335d48287c86085212765d552d48b81d
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-19T15:48:38Z"
+spec_hashes:
+  - sha256:bc824b3bf1a2dff412007dae15554c4106214fe82516e5b98771a2d822e51709
+content:
+  id: prov-2026-8bb2286c
+  title: Skip hash manifest path in CheckStaged and CheckCommit scope loops
+  type: imprint
+  created_at: "2026-05-19"
+  author: test@example.com
+  intent: |
+    In both CheckStaged and CheckCommit, add a path check before the IsInScope call. If the staged/modified file equals ".linespec/hash_manifest.json" (the hard-coded system path as returned by git), skip it without raising a violation. A helper isHashManifest(file) keeps the check readable and avoids repeating the literal string.
+  affected_scope:
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+  implements: prov-2026-29863b76
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/git_test.go
+      type: go_test

@@ -1,6 +1,7 @@
 id: prov-2026-aa64b036
 title: 'P2-F: Unify proxy behavior between database types'
 status: implemented
+version: 1
 created_at: "2026-04-01"
 author: calebcowen@gmail.com
 intent: "Unify proxy startup behavior so both PostgreSQL and MySQL default to proxied mode. Remove the asymmetry where PostgreSQL always starts a proxy and MySQL requires explicit proxy: true. Add proxy: false opt-out for both database types with a warning that mock matching will not work."
@@ -17,8 +18,6 @@ affected_scope:
   - examples/todo-api/.linespec.yml
   - examples/notification-linespecs/.linespec.yml
 forbidden_scope: []
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: f1c0c39449f671af09efad3228f3be1e21222420
 associated_specs:
@@ -29,3 +28,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

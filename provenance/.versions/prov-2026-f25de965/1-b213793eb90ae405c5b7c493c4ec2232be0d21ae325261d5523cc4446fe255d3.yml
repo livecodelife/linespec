@@ -1,0 +1,54 @@
+id: prov-2026-f25de965
+version: 1
+content_hash: sha256:b213793eb90ae405c5b7c493c4ec2232be0d21ae325261d5523cc4446fe255d3
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-06-12T20:56:53Z"
+spec_hashes:
+  - sha256:bc00e634fd6a4465ada6d63b5752cfaeb288c6c252977a14c01fc9977f31384d
+content:
+  id: prov-2026-f25de965
+  title: 'Teeth-config implementation: normalize invalid->block, remote-skip in selectors, warn/off in Complete'
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Implements prov-2026-21e9f419. Records the concrete implementation decisions:
+
+    - Mode constants live in the provenance package (OverlapSpecsBlock/Warn/Off =
+      "block"/"warn"/"off"). A normalizeOverlapMode helper maps "" -> block (backward
+      compatible default) and any unrecognized value -> block, printing a one-line
+      stderr notice so an invalid setting is never silently treated as off.
+    - Remote-skip is added directly to the two selector functions
+      (overlappingSealedRecords, declaredOverlapSealedRecords) by extending their
+      existing skip guard with `|| c.isRemoteRecord(r)`. Putting it in the selectors
+      (not the Complete loop) means both the completion teeth and the open-time
+      heads-up exclude remote records with one change each.
+    - In Complete, the teeth block reads the normalized mode. off -> the
+      completionOverlapSelector call is skipped entirely (no selection, no run, no
+      FYI for touched-with-specs; the no-spec FYI is also skipped). block -> unchanged
+      (rollback on failure). warn -> specs still run for streamed output, but a
+      failure is collected and rendered as a non-blocking FYI instead of triggering
+      rollback; completion proceeds.
+    - The master switch run_associated_specs_on_complete is unchanged and still gates
+      whether any specs run; the new mode only refines the overlap-teeth severity when
+      the master switch is on.
+  constraints:
+    - Invalid/empty mode normalizes to block; never silently off.
+    - off skips selection so it costs nothing (no git history walk for overlap).
+    - warn must not roll back; it completes and prints a non-blocking FYI.
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/overlap_specs_test.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-21e9f419
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/overlap_specs_test.go
+      type: go_test
+  tags:
+    - governance-overlap
+    - config

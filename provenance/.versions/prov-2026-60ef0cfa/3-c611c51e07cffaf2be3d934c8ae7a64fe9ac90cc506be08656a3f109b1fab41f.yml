@@ -1,0 +1,67 @@
+id: prov-2026-60ef0cfa
+version: 3
+content_hash: sha256:c611c51e07cffaf2be3d934c8ae7a64fe9ac90cc506be08656a3f109b1fab41f
+parent_hash: sha256:d4e73d1b8ffbeb59ebf864e61492b4d6b7cfbdb294592ad8a3b212ee6942aebe
+reason: |-
+  The complete command calls SealRecord to write the correct hash of the newly-implemented
+  record to the hash manifest on disk, but CommitRecord only stages the record YAML file.
+  The manifest update is left unstaged, so the committed manifest always has a stale hash
+  for the just-completed record. PROV-IMM then fires in CI because the stored hash (from
+  the last explicit compile run) does not match the current file content (which was modified
+  by complete). The fix makes CommitRecord variadic and passes the manifest path alongside
+  the record file in the Complete command's auto-commit.
+reason_kind: fix
+author: test@example.com
+created_at: "2026-05-20T18:16:52Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+  - sha256:7b9776f35e8bf34aa241d4b0a2e1367234163b5923705ac8f954e42a1d5081f8
+  - sha256:bc824b3bf1a2dff412007dae15554c4106214fe82516e5b98771a2d822e51709
+content:
+  id: prov-2026-60ef0cfa
+  title: 'Blueprint: Hash-based integrity for implemented provenance records'
+  type: blueprint
+  created_at: "2026-05-05"
+  author: calebcowen@gmail.com
+  intent: |
+    Implement the hash-based provenance integrity system described in the parent brief. This blueprint covers three concrete deliverables: a Hasher type that owns the hash manifest (.linespec/hash_manifest.json), content hash computation using SHA-256 over a canonical YAML serialization of each record's fields, and a real validateImmutability check in the Linter that compares live hashes against the manifest without calling git. The Complete() command is extended to seal a content hash into the manifest at transition time, and the manifest also tracks a full-graph hash and an active-subset hash updated on every seal.
+  constraints:
+    - Hash manifest is stored at .linespec/hash_manifest.json, separate from record YAML files
+    - Content hash uses SHA-256 over yaml.Marshal output with FilePath cleared
+    - validateImmutability is implemented without any git calls
+    - Complete() writes the per-record hash and recomputes graph hashes on every seal
+    - If the manifest is absent, validateImmutability emits warnings rather than errors
+    - Full-graph hash covers all records sorted by ID; active-subset excludes superseded and deprecated
+    - CommitRecord signature must become variadic (message string, filePaths ...string) to avoid breaking Open and Deprecate callers
+    - Complete must include the manifest path in the commit only when a manifest exists (ManifestExists check)
+    - make test must pass
+  affected_scope:
+    - pkg/provenance/hasher.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/commands.go
+    - .linespec/hash_manifest.json
+    - pkg/provenance/linter_test.go
+    - pkg/provenance/provenance_test.go
+    - provenance/prov-2026-60ef0cfa.yml
+    - provenance/prov-2026-618113ec.yml
+    - provenance/prov-2026-9a992763.yml
+    - provenance/prov-2026-3ee43780.yml
+    - CHANGELOG.md
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - .github/workflows/ci.yml
+    - .github/workflows/provenance-lint-sarif.yml
+    - .github/workflows/index-provenance.yml
+    - pkg/dsl/integration_test.go
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+  implements: prov-2026-82bd8b00
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code
+    - path: pkg/dsl/integration_test.go
+      type: go_test
+    - path: pkg/provenance/git_test.go
+      type: go_test

@@ -1,8 +1,12 @@
 id: prov-2026-dbf6f240
 title: 'fswrite: dedicated add-scope/reconcile verbs, unconditional Next reconcile'
 status: implemented
+version: 2
+reason: 'Supersedes prov-2026-a8de41cd: fswrite: dedicated add-scope/reconcile verbs, unconditional Next reconcile'
 created_at: "2026-07-13"
 author: calebcowen@gmail.com
+aliases:
+  - prov-2026-a8de41cd
 intent: |-
   Supersedes prov-2026-a8de41cd. That imprint scoped scope-widening and
   reconcile down to fit within the blueprint's then-current affected_scope,
@@ -45,11 +49,10 @@ constraints:
   - A dedicated `reconcile` verb MUST exist for explicit invocation outside of `Next`.
   - Complete/Deprecate MUST continue to re-lock only the closing record's own affected_scope paths (relockClosedScope), not sweep the whole tree.
 implements: prov-2026-8d2f5f2a
+implements_version: 6
 affected_scope: []
 forbidden_scope: []
 type: imprint
-supersedes: prov-2026-a8de41cd
-superseded_by: ""
 related: []
 sealed_at_sha: b903f695d60c1d1518ee6342e70fe3906f3a7ea2
 associated_specs:

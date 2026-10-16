@@ -1,0 +1,37 @@
+id: prov-2026-d3b3320b
+version: 1
+content_hash: sha256:93929b6a5eab1e29fdcc90515a579b589bd41795517734b0e96ec9eb4ac20a9f
+parent_hash: ""
+reason: 'The CodeQL rerun on PR 238 reported five more go/allocation-size-overflow alerts in pkg/proxy/postgresql: CreateMessage and forwardMessage size a buffer from len(payload)+5, buildParameterDescription and buildParameterDescriptionFromOIDs size one from 2+n*4, and the two RowDescription builders size one from len(columns)*20. Remove the size arithmetic (fixed small capacity or appends) so the alerts clear, with identical bytes on the wire.'
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-10-12T17:32:12Z"
+spec_hashes:
+  - sha256:31214faaa6531435e69c869634fa067469a66ec3ff115ca6be9a44decfc7fcde
+content:
+  id: prov-2026-d3b3320b
+  title: Remove size arithmetic from PostgreSQL message allocations flagged by CodeQL
+  type: imprint
+  created_at: "2026-10-12"
+  author: caleb.cowen@linq.com
+  intent: |
+    The CodeQL rerun on PR 238 reported five more go/allocation-size-overflow alerts in pkg/proxy/postgresql: CreateMessage and forwardMessage size a buffer from len(payload)+5, buildParameterDescription and buildParameterDescriptionFromOIDs size one from 2+n*4, and the two RowDescription builders size one from len(columns)*20. Remove the size arithmetic (fixed small capacity or appends) so the alerts clear, with identical bytes on the wire.
+  constraints:
+    - CreateMessage, forwardMessage and the RowDescription builders allocate a fixed small capacity and grow by append
+    - ParameterDescription builders allocate without multiplying a caller-controlled count
+    - Wire bytes are unchanged for every input
+    - No other files change
+  affected_scope:
+    - pkg/proxy/postgresql/protocol.go
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/postgresql/result.go
+  implements: prov-2026-001
+  implements_version: 1
+  related:
+    - prov-2026-d522054c
+  associated_specs:
+    - path: pkg/proxy/postgresql/result_encoding_test.go
+      type: unit
+  tags:
+    - security
+    - codeql

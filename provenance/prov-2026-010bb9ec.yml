@@ -1,9 +1,12 @@
 id: prov-2026-010bb9ec
 title: 'Phase 0: tree-sitter infrastructure and framework description loader'
 status: implemented
+version: 1
 created_at: "2026-06-04"
 author: test@example.com
 implements: prov-2026-0071506f
+implements_repo: livecodelife-cli
+implements_version: 1
 intent: |
   Integrate go-tree-sitter into the linespec codebase and build the foundational
   infrastructure that all discovery phases depend on:
@@ -33,8 +36,6 @@ affected_scope:
   - Dockerfile.linespec
 forbidden_scope: []
 type: blueprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: d18b9150fcdae5124d360a5687bbce9208d5e44a
 associated_specs:

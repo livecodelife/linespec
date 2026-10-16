@@ -1,6 +1,7 @@
 id: prov-2026-446d8d6a
 title: Bump version to v2.4.1, add CHANGELOG entry for sealed_at_sha linter fix
 status: implemented
+version: 1
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: >
@@ -21,9 +22,8 @@ affected_scope:
   - docs/provenance.html
   - provenance/prov-2026-464c2105.yml
 forbidden_scope: []
-supersedes: prov-2026-464c2105
-superseded_by: ""
-related: []
+related:
+  - prov-2026-464c2105
 sealed_at_sha: 8a09677e85321eb24e881b97a115b161b046b337
 associated_specs:
   - path: examples/user-linespecs/get_user_with_vars.linespec
@@ -33,3 +33,4 @@ associated_specs:
 associated_traces: []
 monitors: []
 tags: []
+type: blueprint

@@ -1,0 +1,41 @@
+id: prov-2026-520279fa
+version: 1
+content_hash: sha256:04e3d6e4489d2c29a0d569f5f287ea415bc8d75474a44333c000b5fc6779f132
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-06-22T22:04:55Z"
+spec_hashes:
+  - sha256:3dcdc9da316232e1201c7459d0b70489679a08457a5ff43aad7978bae0ab5661
+  - sha256:fceca88c82e38f94c4a60f31e6e86c2f257ec93c3c0150f4b831a95dd7268f44
+content:
+  id: prov-2026-520279fa
+  title: Add ExcludePaths to config and provenance structs, implement path exclusion logic
+  type: imprint
+  created_at: "2026-06-22"
+  author: calebcowen@gmail.com
+  intent: |
+    Add ExcludePaths []string to both config.ProvenanceConfig and provenance.ProvenanceConfig, implement IsPathExcluded helper, wire the field through loadProvenanceConfigFromFile, and use it in the commit checker (CheckStaged/CheckCommit), context command, linter, and formatter to exempt matching files from all provenance rules.
+  constraints:
+    - ExcludePaths added to both config.ProvenanceConfig (YAML) and provenance.ProvenanceConfig
+    - 'Pattern types supported: regex (/…/), glob (*/?), directory prefix, exact path'
+    - CheckStaged/CheckCommit skip excluded files; if all staged files are excluded, no commit-tag required
+    - buildContextResult records exempt files in ContextResult.ExemptFiles
+    - FormatContext/FormatContextCompact/FormatContextJSON surface exempt files
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/config/exclude_paths_test.go
+    - pkg/provenance/commands.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/git.go
+    - pkg/provenance/types.go
+    - pkg/provenance/formatter.go
+    - pkg/provenance/exclude.go
+    - pkg/provenance/exclude_paths_test.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  implements: prov-2026-1b5fa2c2
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/exclude_paths_test.go
+    - path: pkg/provenance/exclude_paths_test.go

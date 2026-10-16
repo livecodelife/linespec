@@ -1,6 +1,21 @@
 id: prov-2026-9c109575
 title: "Won't-fix: overlap selector intentionally requires sealed_at_sha"
 status: deprecated
+version: 1
+reason: |-
+  Considered, then rejected. The overlap selectors introduced by prov-2026-bc57fbdc
+  gate on sealed_at_sha, so implemented records that predate that field (e.g.
+  prov-2026-009, 010, 014, 021, 032) are excluded from the completion-time spec teeth.
+  We initially treated this as a defect.
+
+  Decision: this is intended behavior, not a bug. sealed_at_sha is the going-forward
+  paradigm — every record created under the current tooling has it. The only records
+  without it are the original bootstrap records, which exist solely in this repository
+  (the one where Provenance Records were first built). Requiring sealed_at_sha in the
+  overlap selector is acceptable, and broadening it to cover the legacy records is not
+  worth the added completion cost. This record is deprecated as a won't-fix so the
+  decision is on the books and the fix is not re-proposed later.
+reason_kind: fix
 created_at: "2026-06-11"
 author: test@example.com
 intent: |
@@ -20,10 +35,7 @@ constraints: []
 affected_scope:
   - provenance/prov-2026-9c109575.yml
 forbidden_scope: []
-type: bug
-extends: prov-2026-bc57fbdc
-supersedes: ""
-superseded_by: ""
+type: imprint
 related: []
 sealed_at_sha: ""
 associated_specs: []
@@ -33,3 +45,5 @@ tags:
   - wontfix
   - decision
   - governance
+implements: prov-2026-bc57fbdc
+implements_version: 1

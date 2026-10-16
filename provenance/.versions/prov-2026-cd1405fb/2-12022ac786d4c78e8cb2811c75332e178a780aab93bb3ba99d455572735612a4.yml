@@ -1,0 +1,153 @@
+id: prov-2026-cd1405fb
+version: 2
+content_hash: sha256:12022ac786d4c78e8cb2811c75332e178a780aab93bb3ba99d455572735612a4
+parent_hash: sha256:72c861376cdd375d7c6a0c18b7544032cf874f583e426f8b2f73f61b5272f4e3
+reason: |-
+  The Claude Code provenance plugin (prov-2026-cd1405fb / prov-2026-a4204f20) does not
+  install correctly: after `claude plugin install linespec-provenance@linespec` the plugin
+  is present but disabled, and `claude plugin list` reports:
+
+      Status: ✘ failed to load
+      Error: Hook load failed: Duplicate hooks file detected: ./hooks/hooks.json resolves
+      to already-loaded file .../plugins/provenance/hooks/hooks.json. The standard
+      hooks/hooks.json is loaded automatically, so manifest.hooks should only reference
+      additional hook files.
+
+  Root cause: plugins/provenance/.claude-plugin/plugin.json declares
+
+      "hooks": "./hooks/hooks.json"
+
+  but Claude Code auto-loads a plugin's hooks from the conventional path hooks/hooks.json
+  already. Pointing the manifest `hooks` field at that same conventional file makes Claude
+  Code load it twice, which it rejects — so ALL three hooks (SessionStart guidance,
+  per-edit governance, commit remediation) never register and the plugin loads disabled.
+  The `hooks` manifest field is only meant to reference ADDITIONAL, non-standard hook
+  files; it must not point back at the auto-loaded hooks/hooks.json.
+
+  This affects BOTH advertised install paths equally, because both ship the same
+  plugin.json: the marketplace path (`claude plugin marketplace add` +
+  `claude plugin install`, printed by scripts/install-plugin and by
+  Commands.InstallPlugin) and the file-copy paths (scripts/install-plugin and
+  `linespec provenance install-plugin`, which write the same manifest into
+  .claude/plugins/linespec-provenance).
+
+  Reproduction (verified):
+    1. claude plugin marketplace add <repo>/plugins/provenance   → succeeds
+    2. claude plugin install linespec-provenance@linespec         → "succeeds"
+    3. claude plugin list  → linespec-provenance: ✘ failed to load (duplicate hooks file)
+  Fix verified: installing an otherwise-identical copy with the `hooks` field deleted from
+  plugin.json loads with Status ✔ enabled and all three hooks active.
+
+  Secondary observation (not load-breaking, hygiene only): scripts/install-plugin copies
+  the entire plugins/provenance/ directory and removes only embed.go, so it also ships the
+  Go test file hooks_test.go into the installed plugin. The embed.FS / Go install path does
+  not carry hooks_test.go (it is a _test.go file, excluded from the embed). Worth removing
+  hooks_test.go in the shell path too so the two install paths yield identical trees, but
+  it does not affect plugin loading.
+reason_kind: fix
+author: calebcowen@gmail.com
+created_at: "2026-07-15T21:27:37Z"
+spec_hashes:
+  - sha256:4902a3eead73911325ec956984928975bd20fac0142a3cdb91862eed08d7274a
+  - sha256:21d1fe49eb3a29a96b3aec89e9d9e675ec2194be892c631bbeedfc8d09bf7623
+content:
+  id: prov-2026-cd1405fb
+  title: Claude Code provenance plugin hooks (SessionStart/PreToolUse/commit-gate) + active-only per-file lookup + dual install (Phase 5b-5d)
+  type: blueprint
+  created_at: "2026-06-12"
+  author: test@example.com
+  intent: |
+    Completes Phase 5: surface the advice engine (prov-2026-54aaf9cf) inside the agent's
+    loop as a Claude Code plugin, consuming the 5a scope cache (prov-2026-007c8893) so
+    every hook stays fast. The hook scripts are THIN renderers — they shell out to
+    `linespec provenance ...` and format the result; no decision logic is duplicated in
+    the plugin.
+
+    Parts:
+
+    (lookup) Active-only per-file governance lookup. The 5c hook needs "which records
+    govern this file" but must exclude superseded/deprecated records (per the recorded
+    design note) — surfacing a replaced/withdrawn decision in the edit loop is exactly the
+    stale-signal failure mode this whole effort fights. The full `context` command keeps
+    showing everything (history value); this is a NEW, narrow, cache-backed lookup
+    (open + implemented only) the hook calls. It builds on the 5a fast path so it does not
+    pay a full LoadAll.
+
+    (5b) SessionStart hook. Runs the engine once and injects a compact ambient summary of
+    the single correct next action via hookSpecificOutput.additionalContext. The
+    cheapest, highest-value rail — the agent starts every session knowing the next step.
+
+    (5c) PreToolUse hook on Edit and Write. On the first write per file per session, runs
+    the active-only lookup; if any active records govern the file, injects them advisorily
+    (systemMessage / additionalContext, permissionDecision allow — NEVER a block here),
+    ending with the relevant next suggestion. Silent when no active record governs the
+    file (the common case). Dedup per file per session so it speaks at most once per file.
+
+    (5d) Commit-boundary gate. PostToolUse on Bash scoped to `git commit` (matcher Bash +
+    an `if: "Bash(git commit *)"` rule). Quiet on a clean commit. When the commit FAILED
+    on a provenance violation (the git commit-msg/pre-commit hook rejected it), it hands
+    the agent the engine's exact remediation as feedback rather than a bare door. The git
+    hook remains the actual gate; this surfaces the fix inside Claude's loop.
+
+    (command) Slash command. Bundle a commands/provenance-next.md slash command in the
+    plugin that runs `linespec provenance next`, so a user can ask for the engine's
+    guidance explicitly (on demand), not only through the hooks. Renders the same engine.
+
+    (install) Dual installation. (1) A `linespec provenance install-plugin` command
+    mirroring the existing install-skills/scripts/install-skill pattern, copying the
+    plugin into a target Claude Code config. (3) A marketplace-style
+    .claude-plugin/marketplace.json + .claude-plugin/plugin.json so users can also
+    `claude plugin install`. Hook scripts reference bundled paths via
+    ${CLAUDE_PLUGIN_ROOT} and call `linespec` from PATH.
+  constraints:
+    - Every hook renders from the engine via `linespec provenance ...` (next/the active-only lookup); the plugin holds NO copy of the advice/governance decision logic.
+    - The active-only per-file lookup returns only `open` + `implemented` records (excludes superseded/deprecated), and is cache-backed (5a) so it never pays a full LoadAll on a cache hit. A unit test asserts the status filtering.
+    - SessionStart (5b) and PreToolUse (5c) are advisory ONLY — they never block a tool. 5c is silent when no active record governs the file, and speaks at most once per file per session (deduped).
+    - The only place that surfaces a block-style message is the commit gate (5d), and only when a real commit-time provenance violation occurred; it always includes the engine's exact remediation command.
+    - Hooks must stay fast (well under the budget) — no full record reload on the hot path (use the 5a cache), no expensive path (no completion teeth, no embedding/index build) invoked from any hook. Tool/path matching is done by hook matchers, not in-script.
+    - Over-gating is the footgun that caused the original incident — after a few consecutive denials an agent escalates to the human and bails. Hooks err toward quiet/advisory.
+    - Installation must not clobber unrelated user Claude Code config; it adds the plugin and its hooks only. Both install paths (command and marketplace) yield the same hooks.
+    - make test must pass; the new lookup and any new Go wiring are covered by tests.
+    - |
+      Remove the `hooks` field from plugins/provenance/.claude-plugin/plugin.json (its value
+      points at the auto-loaded hooks/hooks.json, which Claude Code rejects as a duplicate).
+      The plugin's hooks must continue to load automatically from the conventional
+      hooks/hooks.json path — do not move or rename that file.
+    - |
+      After the fix, `claude plugin marketplace add <repo>/plugins/provenance` followed by
+      `claude plugin install linespec-provenance@linespec` yields Status ✔ enabled in
+      `claude plugin list`, with the SessionStart, PreToolUse(Edit|Write), and
+      PostToolUse(Bash) hooks all registered.
+    - |
+      Both install paths remain equivalent: the file-copy install (scripts/install-plugin and
+      `linespec provenance install-plugin`) and the marketplace install produce a plugin that
+      loads without the duplicate-hooks error.
+    - |
+      make test must pass; add a regression test asserting the embedded plugin.json does NOT
+      set `hooks` to the auto-loaded hooks/hooks.json path (guarding the exact failure).
+    - |
+      scripts/install-plugin must not ship build-time Go sources into the installed plugin
+      tree: drop hooks_test.go (and embed.go) so the shell install produces the same tree as
+      the embed.FS / `linespec provenance install-plugin` path, which excludes them.
+  affected_scope:
+    - plugins/provenance/**
+    - scripts/install-plugin
+    - pkg/provenance/scope_index.go
+    - pkg/provenance/scope_index_test.go
+    - pkg/provenance/commands.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+    - plugins/provenance/.claude-plugin/plugin.json
+    - plugins/provenance/hooks_test.go
+  related:
+    - prov-2026-54aaf9cf
+    - prov-2026-007c8893
+  associated_specs:
+    - path: pkg/provenance/scope_index_test.go
+      type: go_test
+    - path: plugins/provenance/hooks_test.go
+      type: go_test
+  tags:
+    - agent-guidance
+    - phase-5
+    - claude-code-plugin

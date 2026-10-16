@@ -1,0 +1,93 @@
+id: prov-2026-bfa97730
+version: 2
+content_hash: sha256:062f7897fd1a8af3ee920ec855d48d16ab3b88ab68b33feccaf2f58e28337560
+parent_hash: sha256:6e906e215b0b0dda60e75d8a359d70bef1f8d869bc66ff363a014d093aac5954
+reason: |-
+  prov-2026-806c453e introduced mock-only Parse interception: when a query is mocked, the proxy
+  sends ParseComplete locally instead of forwarding Parse to upstream. This works for clients like
+  asyncpg and lib/pq that supply explicit parameter type OIDs or use $N::TYPE casts. However,
+  tokio-postgres (Rust) sends num_params=0 in Parse with no OID hints and relies on the server's
+  ParameterDescription to discover parameter types. When the proxy returns OID=0 (unspecified) for
+  all parameters, tokio-postgres calls typeinfo(0), which queries pg_catalog for OID=0, finds no
+  rows, and raises "unexpected message from server" — causing any service using tokio-postgres to
+  return 500.
+
+  Fix: before intercepting Parse locally, check if OIDs can be resolved without the upstream. If
+  the client provided explicit OIDs in Parse, or the query contains $N::TYPE casts, or the query
+  has no parameters, use mock-only mode. Otherwise forward Parse to upstream so the real server's
+  ParameterDescription (with correct OIDs) is relayed to the client. Bind/Execute are still
+  intercepted and mocked as before.
+reason_kind: fix
+author: test@example.com
+created_at: "2026-05-15T03:24:53Z"
+spec_hashes:
+  - sha256:bf378857dc11baa890d92f171f7636f004b8a5914351c3af44c9d2699808e3d1
+  - sha256:f1be5fcbf953dfb05146b2ccc9e7596abb67be0fb5680a4729c4c5cc2acb7628
+  - sha256:483655e8e82776e4ac3ecc63f19e09b5b39de5d880485b92991d60192fc8c4b5
+  - sha256:c85a3e4f19da97a149c13c5175001aa5a5cefb52e09d253d57c2e1f19917f6d5
+  - sha256:25cb321e6af4cd16bd7445fcc2749d0e559c9eacaafff144b9c85690afed3b3b
+  - sha256:4ecabb1cba95f047f6f9578335f2d05cc871d7ad54faaf283b6bd99d048098c2
+content:
+  id: prov-2026-bfa97730
+  title: 'RECEIVE JOB: background job trigger channel'
+  type: blueprint
+  created_at: "2026-05-14"
+  author: test@example.com
+  intent: |
+    Add RECEIVE JOB as a new test trigger channel for background job systems. Tests seed the job
+    payload into the service's backing queue at the wire protocol level — Redis BRPOP/LPOP/BLPOP,
+    Kafka topic, or DB proxy mock rows — so the worker picks it up naturally. For cron/scheduled
+    jobs, no seed is needed: the service's internal scheduler fires the job, and LineSpec observes
+    the resulting interactions through the proxies.
+
+    In all cases, EXPECT statements serve a dual role for worker tests: some mock the inputs the
+    job reads (e.g., EXPECT READ:POSTGRESQL returns a pending record the worker processes), while
+    others verify the outputs the job produces (writes, outbound HTTP calls, published events).
+    Completion is detected when all EXPECTs are satisfied via the existing proxy polling loop —
+    no service endpoint required, no modification to the service under test.
+
+    Job backend is configured once in .linespec.yml; individual test files stay clean.
+  constraints:
+    - RECEIVE JOB must work without any modification to the service under test
+    - Redis-backed frameworks (Sidekiq, BullMQ, Resque, RQ, Asynq, Dramatiq) must work via seed injected at BRPOP/LPOP/BLPOP — the proxy returns the seeded payload on the worker's next blocking pop, wrapped as the correct RESP2 two-element array [key, value]
+    - DB-backed frameworks (Oban, GoodJob, Que, River, Delayed Job, Solid Queue) must work via EXPECT READ on the DB proxy — worker's SELECT returns the mocked job row; no special seeding required beyond the standard EXPECT READ mock
+    - Kafka-backed frameworks must work via the existing Kafka seed mechanism
+    - Scheduled/cron jobs must work via observe-only mode (no seed, no trigger action) — the service's internal scheduler fires the job naturally; EXPECT READ mocks supply any input data the job reads, and EXPECT WRITE/HTTP/etc. verify what the job produces; the test uses a configurable TIMEOUT to allow the scheduler to fire; scheduler interval is controlled via env var in the test environment (standard practice, not a code change)
+    - Job backend type and queue key configured once in .linespec.yml under a job_backend section; RECEIVE JOB tests do not embed infrastructure details
+    - Completion detection must be purely proxy-based using the existing polling loop — no service status endpoint required
+    - DSL follows existing channel patterns — RECEIVE JOB with optional TIMEOUT; WITH supplies the job payload for queue-backed triggers; scheduled/observe-only mode omits WITH
+    - Example applications must cover three primary scenarios with working LineSpec tests against real containerized implementations — Go + Asynq (Redis-backed worker demonstrating the BRPOP seed mechanism), Node.js + BullMQ (Redis-backed worker demonstrating the same seed across a different framework and key convention), and a Go scheduled worker using an internal ticker that demonstrates observe-only mode with DB reads and outbound HTTP calls
+    - LINESPEC.md must be updated with RECEIVE JOB DSL reference including all three modes
+    - When a mocked query has parameters but no explicit OIDs from the client and no $N::TYPE casts, Parse must be forwarded to upstream; Bind/Execute are still intercepted
+    - Clients sending explicit OIDs in Parse (asyncpg, newer tokio-postgres runs) continue to use mock-only Parse
+    - No regression in notification, todo, user, or order example test suites
+  affected_scope:
+    - pkg/types/types.go
+    - pkg/dsl/lexer.go
+    - pkg/dsl/parser.go
+    - pkg/config/**
+    - pkg/registry/registry.go
+    - pkg/proxy/redis/interceptor.go
+    - pkg/runner/runner.go
+    - examples/asynq-worker/**
+    - examples/bullmq-worker/**
+    - examples/scheduled-worker/**
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+    - provenance/prov-2026-bfa97730.yml
+    - pkg/proxy/postgresql/proxy.go
+    - pkg/proxy/postgresql/result.go
+    - cmd/linespec/main_stable.go
+    - cmd/linespec/main_beta.go
+  associated_specs:
+    - path: examples/asynq-worker/linespecs/process_email_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/process_report_job.linespec
+      type: linespec
+    - path: examples/bullmq-worker/linespecs/send_notification_job.linespec
+      type: linespec
+    - path: examples/bullmq-worker/linespecs/generate_invoice_job.linespec
+      type: linespec
+    - path: examples/scheduled-worker/linespecs/nightly_sync_job.linespec
+      type: linespec
+    - path: examples/order-linespecs/create_order_success.linespec

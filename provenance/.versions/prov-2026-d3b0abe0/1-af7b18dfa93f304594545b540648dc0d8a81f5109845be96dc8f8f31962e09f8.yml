@@ -1,0 +1,27 @@
+id: prov-2026-d3b0abe0
+version: 1
+content_hash: sha256:af7b18dfa93f304594545b540648dc0d8a81f5109845be96dc8f8f31962e09f8
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-18T18:37:41Z"
+spec_hashes:
+  - sha256:7da7a65058ec815ce43acad2435346a4ec1318fc74ff872cebbe72c95ab33ca2
+content:
+  id: prov-2026-d3b0abe0
+  title: 'Fix SARIF lint output: skip multi-config loop when format is sarif'
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    When linespec provenance lint is run without an explicit config file, the CLI walks the repo tree, finds every .linespec.yml, and calls Lint once per file. With --format sarif each call writes a complete SARIF JSON document to stdout, so the output file ends up with multiple concatenated JSON objects. GitHub Code Scanning rejects this with "Unexpected non-whitespace character after JSON". Fix by skipping the multi-config loop when the output format is sarif and linting only the root config, which is where the actual provenance records live. Also update codeql-action from v3 to v4 per the upstream deprecation warning.
+  constraints:
+    - When format is sarif the lint command MUST produce exactly one JSON document
+    - The sarif output MUST cover the root provenance directory records only
+    - The fix MUST NOT change lint behavior for human or json formats
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - .github/workflows/provenance-lint-sarif.yml
+  associated_specs:
+    - path: cmd/linespec/main_stable.go
+      type: code

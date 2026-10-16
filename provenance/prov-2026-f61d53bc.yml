@@ -1,6 +1,7 @@
 id: prov-2026-f61d53bc
 title: Bootstrap pkg/discover/lang, symbols, graph package stubs
 status: implemented
+version: 1
 created_at: "2026-07-15"
 author: calebcowen@gmail.com
 intent: Create minimal package stubs for lang, symbols, and graph so the blueprint's affected_scope can be widened to include them and the reviewer's scope concern is addressed.
@@ -12,8 +13,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 implements: prov-2026-a5eb1192
-supersedes: ""
-superseded_by: ""
+implements_version: 3
 related: []
 sealed_at_sha: 47854f98874db922b7c946bffed6115a478420bb
 associated_specs:

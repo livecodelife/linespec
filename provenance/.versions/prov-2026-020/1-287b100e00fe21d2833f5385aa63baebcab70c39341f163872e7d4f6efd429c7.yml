@@ -1,0 +1,53 @@
+id: prov-2026-020
+version: 1
+content_hash: sha256:287b100e00fe21d2833f5385aa63baebcab70c39341f163872e7d4f6efd429c7
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-03-13T05:13:29Z"
+spec_hashes: []
+content:
+  id: prov-2026-020
+  title: Release v1.0.2 with bug fix for self-modification exception
+  type: blueprint
+  created_at: "2026-03-13"
+  author: calebcowen@gmail.com
+  intent: |
+    This is a patch release (v1.0.2) that fixes a critical bug discovered in v1.0.1.
+
+    **Bug Fixed:**
+    When completing a provenance record (transitioning from `status: open` to `status: implemented`),
+    the commit-msg hook was blocking the commit even though it was just the record modifying its
+    own YAML file to mark itself complete.
+
+    **Root Cause:**
+    When `linespec provenance complete` updates the record file, it modifies the working directory.
+    When the commit-msg hook runs, the Loader reads from disk (which now shows `status: implemented`),
+    so the check `record.Status == StatusOpen` fails, bypassing the self-modification exception.
+
+    **Fix:**
+    Added `isCompletionTransition()` method to detect the open→implemented transition by comparing
+    the HEAD version with the staged version. When this transition is detected, the self-modification
+    exception applies.
+
+    **Changes in v1.0.2:**
+    - Fixed self-modification exception for completion transition in allowlist mode
+    - Updated AGENTS.md with `--no-edit` flag documentation for CLI usage in non-interactive environments
+
+    See prov-2026-019 for full details on the bug fix.
+  constraints:
+    - MUST update CHANGELOG.md to document the bug fix
+    - MUST create git tag v1.0.2 after changelog update
+    - MUST reference prov-2026-019 in release notes for full context
+  affected_scope:
+    - CHANGELOG.md
+    - .goreleaser.yml
+  related:
+    - prov-2026-019
+    - prov-2026-013
+    - prov-2026-018
+  tags:
+    - release
+    - v1.0.2
+    - bugfix
+    - hotfix

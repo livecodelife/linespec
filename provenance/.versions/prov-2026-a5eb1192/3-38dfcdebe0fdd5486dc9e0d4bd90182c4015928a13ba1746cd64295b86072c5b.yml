@@ -1,0 +1,104 @@
+id: prov-2026-a5eb1192
+version: 3
+content_hash: sha256:38dfcdebe0fdd5486dc9e0d4bd90182c4015928a13ba1746cd64295b86072c5b
+parent_hash: sha256:7d1145da516e64d66af76397fd592cc6a059eff89c112a200c1e04a4b81ca586
+reason: |-
+  runDiscoverAgnostic's file walk (scanAgnosticFiles, cmd/linespec/main_stable.go:1493-1514)
+  skips only a hardcoded directory denylist (agnosticSkipDirs, main_stable.go:1392-1399:
+  .git, node_modules, vendor, .venv, venv, __pycache__) — it never reads .gitignore. Any
+  gitignored build/output directory outside that denylist gets walked and grouped like
+  source code.
+
+  Reproduced against a real Next.js project (linq-lens): `.next/` is gitignored but not in
+  agnosticSkipDirs, so a repo-root `discover --dry-run` produced 56 draft blueprint records,
+  54 of them for `.next/` build chunks (minified bundle output), against only 2 for anything
+  else. Running the real (non-dry-run, --enrich) command as-is would have written ~54 junk
+  provenance records for disposable build artifacts and spent ~54 real LLM calls
+  summarizing minified JS, before ever reaching the project's actual source tree.
+
+  The same gap exists in the framework-driven walk (pkg/discover/boundaries/boundaries.go's
+  buildIndex, ~line 103) and the git-history-only-file walk (main_stable.go:1018, which at
+  least skips .git by name) — none of the three walks parse .gitignore.
+reason_kind: fix
+author: caleb.cowen@linq.com
+created_at: "2026-09-30T19:43:23Z"
+spec_hashes:
+  - sha256:6ee2022d7aa4802ba36796dc9ec0637975f9ad0bf42b695c55b701d53c9d52f9
+  - sha256:7da7a65058ec815ce43acad2435346a4ec1318fc74ff872cebbe72c95ab33ca2
+  - sha256:5539208d6a9542695c9808fdeef17d7ba0dad7aba1dbb19ca13befb6bd933afc
+  - sha256:0bbe63a6b1cc6cd4f74e07b4e2509879ce61b0abe700ba00c1fd6ad55bd66018
+  - sha256:b1d66dece9331e216f1a60855fce65f614052e8d93c48405aeb007e4a4f1adc8
+  - sha256:203ccd82da2004a71eff130b31ef6cb6ffff587c63ce04504b8783631f65ea17
+  - sha256:f597509cbd307ad9ce7c0a5de091aeb6fbed004567709a0328b5bcc06d1a232b
+  - sha256:3a65ef88f4ae3f0aa723c5233223dd4d0ffddf06f9e5ce144f711c6ed513ed70
+content:
+  id: prov-2026-a5eb1192
+  title: 'Framework-agnostic discover: language detection, symbol extraction, directory grouping'
+  type: blueprint
+  created_at: "2026-07-15"
+  author: calebcowen@gmail.com
+  intent: |
+    The discover command currently requires a framework description to run — without one it
+    exits with an error. Many codebases (CLIs, workers, libraries, unsupported frameworks)
+    have no supported framework yet still benefit from provenance scaffolding. This blueprint
+    adds a framework-agnostic code path that detects language from file extensions, extracts
+    top-level symbols and import relationships using tree-sitter, groups files by
+    package/directory, and generates blueprint records per group — without generating
+    .linespec stubs (which require route and boundary information that only a framework
+    description provides). A Grouper interface is defined so that future community-detection
+    grouping (Option B) can replace directory grouping without changing the rest of the
+    pipeline.
+  constraints:
+    - When --framework is unspecified and auto-detection fails, discover MUST warn and proceed in framework-agnostic mode rather than exiting with an error.
+    - Framework-agnostic mode MUST NOT generate .linespec stubs (no routes or boundaries are known). It MUST generate blueprint records per group.
+    - Grouping in framework-agnostic mode MUST be driven through a Grouper interface so that community-detection grouping can be substituted without pipeline changes.
+    - Language detection MUST be extension-based and require no framework description.
+    - The existing framework-driven pipeline (when a framework IS detected or specified) MUST be unchanged.
+    - New language grammars added to pkg/discover/treesitter/ MUST be additive only; existing Go and Ruby support must not regress.
+    - Fix must not regress framework-based route discovery (routes still get blueprints).
+    - Fix must not duplicate blueprints for directories already covered by a route group.
+    - Fix must apply uniformly across all three supported frameworks (chi, rails, sinatra).
+    - 'Chi (grouping_strategy:package): non-route directories AND over-collapsed route groups both undercount.'
+    - 'Rails (grouping_strategy:controller): only config/routes.rb is read; models, jobs, mailers, services, concerns produce no blueprints.'
+    - 'Sinatra (grouping_strategy:file): per-file route grouping is least severe but helpers, models, and lib/ dirs are still skipped.'
+    - discover's directory walk(s) MUST exclude paths that a project's own .gitignore (and, where present, nested .gitignore files) would exclude, not just the hardcoded agnosticSkipDirs denylist.
+    - The hardcoded denylist MAY remain as a fallback for repos with no .gitignore, but MUST NOT be the only mechanism once a .gitignore is present.
+    - MUST NOT regress existing behavior for repos with no .gitignore file.
+    - 'Fix SHOULD apply uniformly to all three walks that currently lack it: scanAgnosticFiles (main_stable.go), boundaries.buildIndex (pkg/discover/boundaries/boundaries.go), and the git-history file walk (main_stable.go:1018).'
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - pkg/discover/treesitter/lang.go
+    - pkg/discover/treesitter/treesitter_test.go
+    - pkg/discover/lang/**
+    - pkg/discover/symbols/**
+    - pkg/discover/graph/**
+    - cmd/linespec/discover_test.go
+    - pkg/discover/graph/graph.go
+    - pkg/discover/graph/graph_test.go
+    - cmd/linespec/find_configs_test.go
+    - pkg/discover/boundaries/boundaries.go
+    - pkg/discover/boundaries/boundaries_test.go
+    - pkg/discover/ignorewalk/**
+  implements: prov-2026-0071506f
+  implements_repo: livecodelife-cli
+  implements_version: 1
+  related:
+    - prov-2026-0071506f
+    - prov-2026-c60ec2ad
+  associated_specs:
+    - path: pkg/discover/treesitter/treesitter_test.go
+      type: go_test
+    - path: cmd/linespec/main_stable.go
+      type: code
+    - path: cmd/linespec/discover_test.go
+      type: go_test
+    - path: pkg/discover/graph/graph_test.go
+      type: go_test
+    - path: pkg/discover/ignorewalk/gitignore_test.go
+      type: go_test
+    - path: pkg/discover/ignorewalk/walk_test.go
+      type: go_test
+    - path: pkg/discover/boundaries/boundaries_test.go
+      type: go_test
+    - path: cmd/linespec/find_configs_test.go
+      type: go_test

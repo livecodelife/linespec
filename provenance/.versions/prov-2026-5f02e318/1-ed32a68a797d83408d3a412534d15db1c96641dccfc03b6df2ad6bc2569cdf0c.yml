@@ -1,0 +1,39 @@
+id: prov-2026-5f02e318
+version: 1
+content_hash: sha256:ed32a68a797d83408d3a412534d15db1c96641dccfc03b6df2ad6bc2569cdf0c
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-16T16:58:21Z"
+spec_hashes:
+  - sha256:174ac4df438904a347d214d1a8651614a2a22ca6c13ac09bdc5a0089b5579053
+content:
+  id: prov-2026-5f02e318
+  title: Add Claude Code provenance skill and pre-commit validation workflow
+  type: blueprint
+  created_at: "2026-04-16"
+  author: calebcowen@gmail.com
+  intent: |
+    Introduce a reusable Claude Code skill that encodes the provenance record workflow and can be installed into any repo via a shell script. Replace the informal "user review required" gate on provenance create/complete commits with explicit pre-commit validation commands (lint, check, check --staged), and document these rules in CLAUDE.md, PROVENANCE_RECORDS.md, and the site.
+  constraints:
+    - The provenance skill must encode all workflow rules without relying on memory
+    - install-skill must work from any directory using the script's own location to resolve the template
+    - Pre-commit validation (lint + check) must precede every provenance create/complete commit
+    - check --staged must precede every intra-lifecycle implementation commit
+    - Version references in docs must be updated to v2.1.0
+  affected_scope:
+    - skills/provenance/SKILL.md
+    - scripts/install-skill
+    - CLAUDE.md
+    - PROVENANCE_RECORDS.md
+    - docs/provenance.html
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - VERSION
+  associated_specs:
+    - path: skills/provenance/SKILL.md
+      type: code

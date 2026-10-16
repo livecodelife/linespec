@@ -1,0 +1,37 @@
+id: prov-2026-6b014521
+version: 1
+content_hash: sha256:0f70c5c29858201348025452ac206b5f851325df30ced40f30fbd2167058ce8c
+parent_hash: ""
+reason: ""
+author: test@example.com
+created_at: "2026-05-14T23:06:06Z"
+spec_hashes:
+  - sha256:bf378857dc11baa890d92f171f7636f004b8a5914351c3af44c9d2699808e3d1
+  - sha256:f1be5fcbf953dfb05146b2ccc9e7596abb67be0fb5680a4729c4c5cc2acb7628
+content:
+  id: prov-2026-6b014521
+  title: Go Redis worker example with RECEIVE JOB tests
+  type: imprint
+  created_at: "2026-05-14"
+  author: test@example.com
+  intent: |
+    Build a minimal Go worker that BRPOPs jobs from a Redis queue and processes two job types:
+    send_email (SELECT user, POST to email service, INSERT into email_log) and generate_report
+    (SELECT orders, INSERT into reports, POST to webhook). Two LineSpec tests exercise RECEIVE JOB
+    end-to-end against real containerized service using the Redis seed mechanism.
+  constraints:
+    - Worker uses go-redis BRPOP on queue key "worker:jobs"
+    - Health endpoint at /health returns 200 for runner readiness check
+    - process_email_job.linespec must exercise SELECT users, HTTP POST to email service, and INSERT email_log
+    - process_report_job.linespec must exercise SELECT orders, INSERT reports, and HTTP POST to webhook
+    - .linespec.yml configures job_backend type redis with queue "worker:jobs"
+    - All database interactions use ACCESSING_TABLES semantic matching
+  affected_scope:
+    - examples/asynq-worker/**
+  implements: prov-2026-bfa97730
+  implements_version: 2
+  associated_specs:
+    - path: examples/asynq-worker/linespecs/process_email_job.linespec
+      type: linespec
+    - path: examples/asynq-worker/linespecs/process_report_job.linespec
+      type: linespec

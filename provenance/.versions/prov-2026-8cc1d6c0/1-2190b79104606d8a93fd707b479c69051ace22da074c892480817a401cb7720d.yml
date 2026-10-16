@@ -1,0 +1,35 @@
+id: prov-2026-8cc1d6c0
+version: 1
+content_hash: sha256:2190b79104606d8a93fd707b479c69051ace22da074c892480817a401cb7720d
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-04-24T15:45:14Z"
+spec_hashes:
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+content:
+  id: prov-2026-8cc1d6c0
+  title: Improve validateImplements error message for cross-repo resolution
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Update the error message in validateImplements when the referenced record cannot be
+    resolved. The old message said "must exist in the local provenance directory", which
+    is misleading now that cross-repo resolution via shared repo cache is supported.
+
+    The new message states the record was not found locally or in any configured
+    shared_repo cache, and directs the user to add the repo to shared_repos in
+    .linespec.yml and run linespec provenance sync.
+  constraints:
+    - Error message must mention both local and shared_repo cache as resolution sources
+    - 'Error message must suggest the specific remediation steps: add to shared_repos and run sync'
+    - The linter_test.go test for unresolved implements must be updated to match the new message
+  affected_scope:
+    - pkg/provenance/linter.go
+    - pkg/provenance/linter_test.go
+  implements: prov-2026-90ec670e
+  implements_version: 1
+  associated_specs:
+    - path: pkg/provenance/linter_test.go
+      type: code

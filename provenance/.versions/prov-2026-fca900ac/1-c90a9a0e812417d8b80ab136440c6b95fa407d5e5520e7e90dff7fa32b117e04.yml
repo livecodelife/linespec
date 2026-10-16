@@ -1,0 +1,62 @@
+id: prov-2026-fca900ac
+version: 1
+content_hash: sha256:c90a9a0e812417d8b80ab136440c6b95fa407d5e5520e7e90dff7fa32b117e04
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-05-28T14:45:28Z"
+spec_hashes:
+  - sha256:1c252c31831e1dcc40f17eaa83efcd92eba07ece2d06454718580caa40e9d8ec
+content:
+  id: prov-2026-fca900ac
+  title: Expand scope patterns to file lists in publish
+  type: blueprint
+  created_at: "2026-05-28"
+  author: calebcowen@gmail.com
+  intent: |
+    When linespec publish packages provenance records into the manifest artifact, the
+    affected_scope and forbidden_scope fields on each record contain patterns (globs,
+    re:-prefixed regexes, or exact paths). These patterns express intent — what area
+    of the codebase a record governs — but they are meaningless to a consumer who does
+    not have the original repository tree. A published manifest is a point-in-time
+    snapshot, so scope fields should contain the actual file paths that matched those
+    patterns at publish time, not the patterns themselves. This makes the provenance
+    layer self-contained and auditable: a reader of the manifest tar can see exactly
+    which files were in scope when the record was published.
+  constraints:
+    - |
+      A new transform step, expandScopePatterns(records []Record, repoRoot string) []Record,
+      must be applied after applyTransformPipeline and before packProvenanceLayer. It walks
+      the repo tree from repoRoot and, for each record, replaces AffectedScope and
+      ForbiddenScope with sorted lists of matched file paths. Paths in the output are relative
+      to repoRoot (the same convention used by the linter's filesMatchingPatterns).
+    - |
+      Pattern resolution must support all three pattern types already used in MatchPattern:
+      glob patterns (containing * or ?), re:-prefixed regex patterns, and exact paths.
+      The expansion logic must reuse or mirror the existing GlobToRegex / MatchPattern
+      conventions so the file lists are consistent with what scope enforcement would have
+      computed from the same patterns.
+    - |
+      If a pattern matches no files, it is silently dropped from the output list (the
+      pattern referred to a file that does not exist at publish time). If all patterns for
+      a field expand to zero files, the field becomes an empty slice.
+    - |
+      expandScopePatterns must not be added to applyTransformPipeline. It requires
+      filesystem access (repoRoot walk) while the pipeline functions are pure and
+      filesystem-free. Call it explicitly in Publish between applyTransformPipeline and
+      packProvenanceLayer.
+    - |
+      The existing transform pipeline functions (stripImprints, filterSuperseded, promoteBugs,
+      cleanDanglingRefs, resetStatus) must not be modified.
+    - |
+      Unit tests must cover: glob expansion, re: regex expansion, exact path passthrough,
+      a pattern that matches no files (dropped), and a record with empty scope fields
+      (unchanged).
+  affected_scope:
+    - pkg/provenance/publish.go
+    - pkg/provenance/publish_test.go
+  related:
+    - prov-2026-d422fec6
+  associated_specs:
+    - path: pkg/provenance/publish_test.go
+      type: go_test

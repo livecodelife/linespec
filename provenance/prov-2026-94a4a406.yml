@@ -1,9 +1,11 @@
 id: prov-2026-94a4a406
 title: 'pkg/manifest: fetch, verify, and extract manifest layers'
 status: implemented
+version: 1
 created_at: "2026-05-15"
 author: calebcowen@gmail.com
 implements: prov-2026-587563e4
+implements_version: 4
 intent: >
   Create the pkg/manifest package that handles all manifest consumption logic:
   fetching the manifest JSON from a URL, resolving a specific version (@version
@@ -22,8 +24,6 @@ affected_scope:
   - pkg/manifest/**
 forbidden_scope: []
 type: imprint
-supersedes: ""
-superseded_by: ""
 related: []
 sealed_at_sha: fa26b51a608fd78d56aea324354196a4c1875335
 associated_specs:
