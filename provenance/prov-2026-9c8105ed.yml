@@ -1,0 +1,31 @@
+id: prov-2026-9c8105ed
+title: Switch CI workflows and Makefile to the pinned provenance CLI
+status: draft
+created_at: "2026-10-16"
+author: calebcowen@gmail.com
+intent: |
+  Point the repo's CI and Makefile at the standalone provenance CLI. ci.yml's provenance-lint job and
+  provenance-lint-sarif.yml install provenance pinned to a full commit SHA of github.com/livecodelife/provenance,
+  run `provenance sync`, `provenance lint` and the SARIF form (`lint --format sarif`), and `check --range`
+  on pull requests. index-provenance.yml is dropped because `index` is parked and the embeddings index is
+  not part of v2. Makefile `lint` runs `provenance lint`.
+constraints: []
+affected_scope:
+  - .github/workflows/ci.yml
+  - .github/workflows/provenance-lint-sarif.yml
+  - .github/workflows/index-provenance.yml
+  - Makefile
+forbidden_scope: []
+implements: prov-2026-dfb51160
+type: imprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs:
+  - type: code
+    path: Makefile
+    run_command: make test
+associated_traces: []
+monitors: []
+tags: []
