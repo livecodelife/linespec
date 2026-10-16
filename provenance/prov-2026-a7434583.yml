@@ -1,6 +1,6 @@
 id: prov-2026-a7434583
 title: Forward linespec provenance commands to the provenance CLI
-status: draft
+status: open
 created_at: "2026-10-16"
 author: calebcowen@gmail.com
 intent: |
