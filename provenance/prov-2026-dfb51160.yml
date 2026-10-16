@@ -1,6 +1,6 @@
 id: prov-2026-dfb51160
 title: Migrate linespec to provenance v2 records and CLI
-status: open
+status: implemented
 version: 2
 reason: Scope covers .gitattributes, which collapses the generated snapshot files in diffs
 created_at: "2026-10-16"
@@ -51,7 +51,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 61fb35ac874eab2cee2e627109c06af492b6ee8a
 associated_specs:
   - type: code
     path: Makefile
