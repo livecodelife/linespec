@@ -36,6 +36,9 @@ affected_scope:
   - pkg/provenance/**
   - PROVENANCE_RECORDS.md
   - README.md
+  - PROVENANCE_PROJECT_MANAGEMENT.md
+  - PROVENANCE_RECORD_SCHEMA.md
+  - LINESPEC_DISCOVER.md
   - CLAUDE.md
   - CHANGELOG.md
   - docs/templates/**
