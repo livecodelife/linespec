@@ -14,3 +14,8 @@
 # <path>/.linespec.yml gets its own manifest under <path>/.linespec/) are
 # covered too, not just a root-level one.
 **/.linespec/hash_manifest.json merge=union
+
+# v2 provenance: sealed version snapshots and the version manifest are generated;
+# collapse them in PR diffs and skip them in `git diff`.
+provenance/.versions/** linguist-generated=true -diff
+.provenance/versions.jsonl linguist-generated=true -diff
