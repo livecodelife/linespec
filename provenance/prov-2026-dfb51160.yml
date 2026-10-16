@@ -26,6 +26,7 @@ constraints:
 affected_scope:
   - provenance/**
   - .linespec.yml
+  - .linespec/hash_manifest.json
   - .provenance.yml
   - .github/workflows/**
   - Makefile
@@ -53,7 +54,7 @@ sealed_at_sha: ""
 associated_specs:
   - type: code
     path: Makefile
-    run_command: make test
+    run_command: make test # {{path}}
 associated_traces: []
 monitors: []
 tags: []
