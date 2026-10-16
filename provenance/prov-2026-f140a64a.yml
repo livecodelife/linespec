@@ -30,7 +30,7 @@ sealed_at_sha: ""
 associated_specs:
   - type: code
     path: README.md
-    run_command: make test
+    run_command: make test # {{path}}
 associated_traces: []
 monitors: []
 tags: []
