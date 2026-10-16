@@ -113,7 +113,7 @@ bump-version:
 
 # Run linter
 lint:
-	@command -v provenance >/dev/null || { echo "provenance CLI not found: go install github.com/livecodelife/provenance/cmd/provenance@1d7f589617cff73720500c2f5f89b8882ce29bef"; exit 1; }
+	@command -v provenance >/dev/null || { echo "provenance CLI not found: go install github.com/livecodelife/provenance/cmd/provenance@f3088a41a2846302d8d8c9f31fc480a92ec92948"; exit 1; }
 	provenance lint
 
 # Quick test - unit tests only (for pre-commit)

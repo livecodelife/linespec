@@ -52,7 +52,7 @@ jobs:
     env:
       # The provenance CLI is pinned to a full commit SHA of github.com/livecodelife/provenance
       # (no release tag exists yet). Bump it deliberately, in its own PR.
-      PROVENANCE_SHA: 1d7f589617cff73720500c2f5f89b8882ce29bef
+      PROVENANCE_SHA: f3088a41a2846302d8d8c9f31fc480a92ec92948
     steps:
       - name: Checkout
         uses: actions/checkout@v4
