@@ -24,7 +24,7 @@ sealed_at_sha: ""
 associated_specs:
   - type: code
     path: plugins/provenance/hooks_test.go
-    run_command: go test -count=1 ./plugins/provenance
+    run_command: go test -count=1 ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags: []
