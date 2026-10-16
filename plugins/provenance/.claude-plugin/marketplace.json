@@ -1,13 +1,13 @@
 {
-  "name": "linespec",
+  "name": "provenance",
   "owner": {
-    "name": "LineSpec"
+    "name": "Provenance"
   },
   "plugins": [
     {
-      "name": "linespec-provenance",
+      "name": "provenance",
       "source": "./",
-      "description": "Ambient provenance guidance for Claude Code, rendered from the linespec advice engine."
+      "description": "Ambient provenance guidance for Claude Code, rendered from the provenance advice engine."
     }
   ]
 }
