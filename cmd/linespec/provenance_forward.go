@@ -62,7 +62,7 @@ const (
 	exitShimError      = 1
 	exitBinaryMissing  = 127 // the shell's "command not found"
 	exitSignalBase     = 128
-	provenanceInstall  = "go install github.com/livecodelife/provenance/cmd/provenance@1d7f589617cff73720500c2f5f89b8882ce29bef"
+	provenanceInstall  = "go install github.com/livecodelife/provenance/cmd/provenance@f3088a41a2846302d8d8c9f31fc480a92ec92948"
 	provenanceReleases = "https://github.com/livecodelife/provenance/releases"
 )
 
