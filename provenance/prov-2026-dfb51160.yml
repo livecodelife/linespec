@@ -1,0 +1,51 @@
+id: prov-2026-dfb51160
+title: Migrate linespec to provenance v2 records and CLI
+status: draft
+created_at: "2026-10-16"
+author: calebcowen@gmail.com
+intent: |
+  Move linespec from the in-process v1 provenance implementation to the standalone
+  provenance v2 CLI (github.com/livecodelife/provenance), in one PR. (1) Records: run
+  `provenance migrate` with the CLI pinned to 42605bc8a0c7eafa585b0852a39e7bd3111030bd
+  (521 v1 records -> 465 with --accept-suggestions, which keeps the 40 settled keep-separate
+  chains; plain migrate gives 425). lint, stale and check --range must be clean and the 26
+  shared-repo false errors gone. (2) Switch: ci.yml, provenance-lint-sarif.yml (lint --format
+  sarif) and index-provenance.yml (keep/drop decision, `index` is parked) install provenance
+  pinned to the full commit SHA; Makefile lint; git hooks via `provenance hooks install`;
+  plugin and skills from the provenance repo's assets/ (origin/main); docs (PROVENANCE_RECORDS.md,
+  README, CLAUDE.md, CHANGELOG release notes, gen-docs reference, docs/templates); the
+  `linespec provenance` forwarder with a deprecation notice. (3) Proof: full go test, make lint,
+  a careful read or act dry run of each workflow, a clean-clone check, and a rollback note.
+  Nothing is pushed; .git/config is untouched.
+constraints:
+  - No push, no remote or PR changes, no edits to linespec's .git/config.
+  - CI installs provenance pinned to a full commit SHA (no tag exists yet).
+  - CHANGELOG [Unreleased] must stay empty (a docs test checks it).
+  - docs/*.html and docs/llms*.txt are build artifacts; edit the Markdown sources only.
+  - Untracked scratch docs (MIGRATION_DRY_RUN, LIFECYCLE_TESTBED, MIREN_PDS_PROOF, scripts/migration-dry-run) are never committed.
+affected_scope:
+  - provenance/**
+  - .linespec.yml
+  - .provenance.yml
+  - .github/workflows/**
+  - Makefile
+  - plugins/provenance/**
+  - skills/provenance/**
+  - .claude/skills/provenance/**
+  - cmd/linespec/**
+  - pkg/provenance/**
+  - PROVENANCE_RECORDS.md
+  - README.md
+  - CLAUDE.md
+  - CHANGELOG.md
+  - docs/templates/**
+forbidden_scope: []
+type: blueprint
+supersedes: ""
+superseded_by: ""
+related: []
+sealed_at_sha: ""
+associated_specs: []
+associated_traces: []
+monitors: []
+tags: []
