@@ -2536,12 +2536,11 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 		_ = r.suite.orch.StopAndRemoveContainer(cleanupCtx, appContainerName)
 	}()
 
-	inspectApp, inspectErr := r.suite.orch.GetContainerInspect(ctx, appContainerName)
-	hostPort := ""
-	if inspectErr == nil && inspectApp.NetworkSettings != nil {
-		if p, ok := inspectApp.NetworkSettings.Ports[nat.Port(appPort+"/tcp")]; ok && len(p) > 0 {
-			hostPort = p[0].HostPort
-		}
+	// Docker publishes the host port a moment after the container starts, so a
+	// single inspect can come back empty on a slow runner: poll for it.
+	hostPort, err := r.suite.waitForContainerPort(ctx, appContainerName, appPort+"/tcp", appPortTimeout)
+	if err != nil {
+		return fmt.Errorf("app container %s never published host port for %s/tcp: %w", appContainerName, appPort, err)
 	}
 	logger.Debug("App started on host port: %s", hostPort)
 
@@ -3243,6 +3242,9 @@ func kafkaClusterID() string {
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// appPortTimeout bounds how long the app container may take to publish its host port.
+const appPortTimeout = 10 * time.Second
 
 // waitForContainerPort polls until a container's port binding is available.
 // If the container exits before the port binding appears, it fails immediately
