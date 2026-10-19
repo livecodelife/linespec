@@ -1,8 +1,8 @@
 id: prov-2026-86f3243a
 title: 'Fix CI: explicit infrastructure image pull, valid Kafka cluster ID'
-status: implemented
-version: 2
-reason: 'Supersedes prov-2026-6c7c0ab9: Fix CI: explicit infrastructure image pull, valid Kafka cluster ID'
+status: open
+version: 3
+reason: runner.go now polls the app container's host port (prov-2026-1e5cf179)
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 aliases:
@@ -28,7 +28,7 @@ affected_scope:
   - pkg/runner/runner.go
 forbidden_scope: []
 related: []
-sealed_at_sha: 33783b1b790a3a2babe75c7df323ac93e3446a5e
+sealed_at_sha: ""
 associated_specs:
   - type: code
     path: pkg/docker/orchestrator.go
