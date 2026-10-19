@@ -19,3 +19,4 @@
 # collapse them in PR diffs and skip them in `git diff`.
 provenance/.versions/** linguist-generated=true -diff
 .provenance/versions.jsonl linguist-generated=true -diff
+.provenance/versions.jsonl merge=provenance

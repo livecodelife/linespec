@@ -1,8 +1,8 @@
 id: prov-2026-dfb51160
 title: Migrate linespec to provenance v2 records and CLI
-status: implemented
-version: 2
-reason: Scope covers .gitattributes, which collapses the generated snapshot files in diffs
+status: open
+version: 3
+reason: Commit the manifest merge attribute
 created_at: "2026-10-16"
 author: calebcowen@gmail.com
 intent: |
@@ -25,6 +25,7 @@ constraints:
   - CHANGELOG [Unreleased] must stay empty (a docs test checks it).
   - docs/*.html and docs/llms*.txt are build artifacts; edit the Markdown sources only.
   - Untracked scratch docs (MIGRATION_DRY_RUN, LIFECYCLE_TESTBED, MIREN_PDS_PROOF, scripts/migration-dry-run) are never committed.
+  - .gitattributes sets .provenance/versions.jsonl merge=provenance so parallel branches merge the manifest with provenance merge-manifest (each clone runs provenance hooks install once)
 affected_scope:
   - provenance/**
   - .linespec.yml
@@ -51,7 +52,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: 61fb35ac874eab2cee2e627109c06af492b6ee8a
+sealed_at_sha: ""
 associated_specs:
   - type: code
     path: Makefile
