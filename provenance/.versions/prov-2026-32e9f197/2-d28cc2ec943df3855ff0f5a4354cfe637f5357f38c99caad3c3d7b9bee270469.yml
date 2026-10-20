@@ -1,0 +1,29 @@
+id: prov-2026-32e9f197
+version: 2
+content_hash: sha256:d28cc2ec943df3855ff0f5a4354cfe637f5357f38c99caad3c3d7b9bee270469
+parent_hash: sha256:cbec829cf13dd69a0028575e8b99a908a43e9ba521e355233181259245b1b097
+reason: 'Drop docs/provenance.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:44:20Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-32e9f197
+  title: Add Publish, Clone, Import sections to docs/provenance.html
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Insert Publish, Clone, and Import HTML sections into docs/provenance.html after the
+    Generate section and before Install Hooks. Update the stable version badge to v3.6.0.
+  constraints:
+    - Publish, Clone, and Import sections match the structure of existing sections (h3, code-block div, options ul, behavioral description)
+    - Inserted before the Install Hooks h3
+    - Version badge updated from v3.5.0 to v3.6.0
+  affected_scope:
+    - docs/provenance.html
+    - .linespec/hash_manifest.json
+  implements: prov-2026-1df957ee
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
