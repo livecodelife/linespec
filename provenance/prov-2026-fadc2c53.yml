@@ -1,7 +1,8 @@
 id: prov-2026-fadc2c53
 title: Release v3.10.2 - fix supersession scope bypass to require implemented status
-status: implemented
-version: 1
+status: open
+version: 2
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-05-20"
 author: test@example.com
 intent: >
@@ -28,10 +29,9 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: 8ad94e8cf90a8f036a104d7c33e5054c05293ca4
+sealed_at_sha: ""
 associated_specs:
-  - path: CHANGELOG.md
-    type: code
-    run_command: make test
+  - path: pkg/config/container_naming_docs_test.go
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
 tags:
   - release
