@@ -1,6 +1,6 @@
 id: prov-2026-d146c70d
 title: Release v1.3.0
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-03-17"
@@ -44,7 +44,7 @@ forbidden_scope: []
 related:
   - prov-2026-7136e8c4
   - prov-2026-84ab4e56
-sealed_at_sha: ""
+sealed_at_sha: 745ba149eb6f6124ab007e8055f736045deffe29
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
