@@ -1,6 +1,6 @@
 id: prov-2026-c1f0b7f9
 title: Update docs site to reflect v3.0.0 functionality
-status: open
+status: implemented
 version: 2
 reason: 'Drop docs/docs.html, docs/linespec.html, docs/provenance.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-24"
@@ -32,7 +32,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e0b3c565a4e1ffd1ab1d287738046ded6415d0da
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
