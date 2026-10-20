@@ -1,0 +1,26 @@
+id: prov-2026-4de0b5a7
+version: 2
+content_hash: sha256:54c8ba4650ca5bed8c0c519f492a2aa42407d3ec327ef77bc82a77b5348dd4e3
+parent_hash: sha256:889734131e62a46ccc37218bca07feddb979a8ecca23cd12a9a973436502db93
+reason: 'Drop docs/linespec.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:44:34Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-4de0b5a7
+  title: 'Update docs/linespec.html to mirror v3.11.7 DSL/config: RESPONSE_HEADERS, WITH request-body, multi-channel EXPECT_NOT/VERIFY, RETURNS EMPTY, Redis pops, config keys; remove NO_TRANSACTION'
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Mirror the LINESPEC.md DSL/config corrections into the doc site's DSL page (docs/linespec.html): document RESPONSE_HEADERS and WITH-as-request-body, fix the WITH-as-response-body error, expand VERIFY targets to HTTP/Kafka/gRPC, add multi-channel EXPECT_NOT (PostgreSQL/MongoDB), add Redis BRPOP/BLPOP/LPOP, add gRPC RETURNS EMPTY, correct config defaults (timeout 180, ports), add the missing config keys, and REMOVE the NO_TRANSACTION grammar entries + caveat.
+  constraints:
+    - Content verified against pkg/dsl, pkg/config — not copied from possibly-stale HTML.
+    - HTML must stay consistent with the updated LINESPEC.md.
+  affected_scope:
+    - docs/linespec.html
+  implements: prov-2026-38971b27
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

@@ -1,7 +1,8 @@
 id: prov-2026-4de0b5a7
 title: 'Update docs/linespec.html to mirror v3.11.7 DSL/config: RESPONSE_HEADERS, WITH request-body, multi-channel EXPECT_NOT/VERIFY, RETURNS EMPTY, Redis pops, config keys; remove NO_TRANSACTION'
-status: implemented
-version: 1
+status: open
+version: 2
+reason: 'Drop docs/linespec.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-06-11"
 author: test@example.com
 intent: >
@@ -21,11 +22,10 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 related: []
-sealed_at_sha: a0cccb7e0ad02054f48a230fe197e0c57c92f719
+sealed_at_sha: ""
 associated_specs:
-  - path: docs/linespec.html
-    type: docs
-    run_command: test -f {{path}}
+  - path: pkg/config/container_naming_docs_test.go
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags: []
