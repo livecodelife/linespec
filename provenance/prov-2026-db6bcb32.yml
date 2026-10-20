@@ -1,6 +1,6 @@
 id: prov-2026-db6bcb32
 title: Document linespec clone and import in PROVENANCE_RECORDS.md and README.md
-status: open
+status: implemented
 version: 2
 reason: 'Drop README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-05-15"
@@ -19,7 +19,7 @@ affected_scope:
   - README.md
 type: imprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 93cb30ae85a745db6da4977939023e3c4bf9335a
 associated_specs:
   - path: PROVENANCE_RECORDS.md
     type: code
