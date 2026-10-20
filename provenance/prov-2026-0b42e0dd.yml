@@ -1,6 +1,6 @@
 id: prov-2026-0b42e0dd
 title: Update CHANGELOG and bump version to v3.7.0
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-05-15"
@@ -29,7 +29,7 @@ type: imprint
 implements: prov-2026-bbe4b5cd
 implements_version: 1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: fde8f086559f2a3df9aacc3a7db41b763c773ade
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
