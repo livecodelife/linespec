@@ -1,6 +1,6 @@
 id: prov-2026-b7607eaa
 title: Docs and release prep for v3.25.0 including isolated container-name defaults
-status: open
+status: implemented
 version: 2
 reason: 'Refresh specs: the docs test no longer hardcodes a release version'
 reason_kind: ""
@@ -58,7 +58,7 @@ related:
   - prov-2026-a3105d31
   - prov-2026-919f8621
   - prov-2026-3168d841
-sealed_at_sha: ""
+sealed_at_sha: 0220f13345833caff9b12b4d9a8d298f83049dd2
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit
