@@ -1,6 +1,6 @@
 id: prov-2026-556ce2a7
 title: Add USING_SQL_CONTAINS DSL keyword and release v2.3.0
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md, LINESPEC.md, docs/linespec.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-16"
@@ -29,7 +29,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-782ae9dd
-sealed_at_sha: ""
+sealed_at_sha: a19b0a2a3e88fe9f0844c7e85d64ef80504bc2a6
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
