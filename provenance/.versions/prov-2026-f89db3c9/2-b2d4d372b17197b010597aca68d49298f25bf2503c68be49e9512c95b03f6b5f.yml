@@ -1,0 +1,28 @@
+id: prov-2026-f89db3c9
+version: 2
+content_hash: sha256:b2d4d372b17197b010597aca68d49298f25bf2503c68be49e9512c95b03f6b5f
+parent_hash: sha256:3c8081fb946cabd42cf249cbf3aaff53932416ac78a177cb155be37456c478d5
+reason: 'Drop CHANGELOG.md, README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:47:17Z"
+spec_hashes:
+  - sha256:8a800c4b33d6a1593bf02d70eff4606f33886bc0d55a5507190b19a15f92f6a7
+content:
+  id: prov-2026-f89db3c9
+  title: Document linespec provenance publish in README, PROVENANCE_RECORDS, and CHANGELOG
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Add documentation for the linespec provenance publish command to README.md, PROVENANCE_RECORDS.md, and CHANGELOG.md. The doc site is excluded.
+  constraints:
+    - README.md CLI commands list gains a publish entry alongside compile and generate.
+    - PROVENANCE_RECORDS.md gains a Publish section after the Compile section covering usage, all flags, artifact format, and when to use.
+    - CHANGELOG.md Unreleased section gains an entry describing the publish command.
+  implements: prov-2026-dac81a68
+  implements_version: 1
+  associated_specs:
+    - path: PROVENANCE_RECORDS.md
+      type: code
+  tags:
+    - docs
