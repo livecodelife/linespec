@@ -1,6 +1,6 @@
 id: prov-2026-05f57c68
 title: 'Release 3.22.1: lock-layer works in repos with hooks installed'
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-09-09"
@@ -35,7 +35,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-cdb13afd
-sealed_at_sha: ""
+sealed_at_sha: 1e6f171d730f2ac6cbabd8340ae9de411cde5982
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
