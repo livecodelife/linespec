@@ -1,0 +1,46 @@
+id: prov-2026-063a4c3c
+version: 2
+content_hash: sha256:13190ccd299a8c285901442347a964a4c0be7c2ca968cee169b4fe39f9d04a28
+parent_hash: sha256:64f71de47eaf2002b8d19d091d059e60d64c34c7a1959e797d814e7dcb97b56c
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:43:29Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-063a4c3c
+  title: Release 3.21.0
+  type: blueprint
+  created_at: "2026-09-08"
+  author: caleb.cowen@linq.com
+  intent: |
+    Release 3.21.0: the Oracle channel, and the hit-key fix that has to ship with
+    it rather than after it.
+
+    The hit key changes shape in this release, and the same function computes it
+    in the binary and in the proxy image. A user whose binary and image disagree
+    has every expectation reported as never called, so the two must move
+    together. They do — the published image is pinned to the binary's version —
+    but only for a machine with no locally built linespec:latest, which
+    resolveProxyImage prefers outright. That is the one upgrade note this release
+    carries, and it belongs in the CHANGELOG rather than in a reader's memory.
+
+    Oracle ships in the same tag because it is already on main and complete, not
+    to bundle it. Nothing in it depends on the hit-key change: its expectations
+    require ACCESSING_TABLES and key through the semantic branch, which this
+    release does not touch.
+  constraints:
+    - The published proxy image and the binary carry the same hit-key implementation.
+    - The CHANGELOG names the version, its date, and the record behind each entry.
+    - A version string in a tracked source states the released version.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - .linespec/hash_manifest.json
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release
