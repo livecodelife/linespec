@@ -1,6 +1,6 @@
 id: prov-2026-f89db3c9
 title: Document linespec provenance publish in README, PROVENANCE_RECORDS, and CHANGELOG
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md, README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-05-15"
@@ -19,7 +19,7 @@ affected_scope: []
 forbidden_scope: []
 type: imprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: bb750ed201c6d167ab5baaa826b5e314c0f4fb2d
 associated_specs:
   - path: PROVENANCE_RECORDS.md
     type: code
