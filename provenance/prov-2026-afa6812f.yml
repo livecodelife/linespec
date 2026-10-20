@@ -1,6 +1,6 @@
 id: prov-2026-afa6812f
 title: Release v3.3.1 — EXPECT_NOT lexer fix
-status: open
+status: implemented
 version: 2
 reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-05-08"
@@ -23,7 +23,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-f5c528ac
-sealed_at_sha: ""
+sealed_at_sha: bed8825374c51f279da4a6e94b9f534da3fffa86
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
