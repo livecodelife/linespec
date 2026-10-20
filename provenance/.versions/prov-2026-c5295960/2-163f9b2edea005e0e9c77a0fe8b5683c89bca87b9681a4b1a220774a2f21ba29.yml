@@ -1,0 +1,28 @@
+id: prov-2026-c5295960
+version: 2
+content_hash: sha256:163f9b2edea005e0e9c77a0fe8b5683c89bca87b9681a4b1a220774a2f21ba29
+parent_hash: sha256:87cc68bff2212b8d8de8a6d7c3060b518d1cd63a0d43bb8d52413da7f44ea998
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:46:21Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-c5295960
+  title: Release v3.10.0 artifacts
+  type: imprint
+  created_at: "2026-05-19"
+  author: test@example.com
+  intent: Update version strings and changelog for v3.10.0 release.
+  affected_scope:
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+  implements: prov-2026-d9f69b27
+  implements_version: 2
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
