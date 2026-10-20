@@ -1,0 +1,47 @@
+id: prov-2026-e3fa12f1
+version: 2
+content_hash: sha256:25b860151a3019060e107d5c2db16d8a543a6a535c5792cef78e361be56dcf33
+parent_hash: sha256:7e17c73cbfd4f246fde17a28cd46ab64154b91c33df8587ab8c67dc625f41763
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:46:46Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-e3fa12f1
+  title: Release v3.11.4
+  type: blueprint
+  created_at: "2026-05-28"
+  author: calebcowen@gmail.com
+  intent: |
+    Version bump and release artifacts for v3.11.4. Patch release containing two bug fixes:
+    1. pgProxy.ResetConnections() was never called from the /reload-registry handler despite
+       a comment saying it would be, causing stale PostgreSQL connections across test runs.
+    2. expandScopePatterns was added to the publish pipeline so scope patterns in provenance
+       records are expanded to real file lists in published manifest artifacts.
+  constraints:
+    - |
+      Promote [Unreleased] in CHANGELOG.md to [3.11.4] - 2026-05-28 with entries for
+      both fixes; add a fresh empty [Unreleased] section above it.
+    - |
+      make bump-version NEW=3.11.4 handles VERSION, docs/index.html, docs/linespec.html,
+      docs/docs.html, docs/provenance.html, README.md, LINESPEC.md.
+    - |
+      Run linespec provenance compile to rebuild the hash manifest.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-9b938965
+    - prov-2026-fca900ac
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release
