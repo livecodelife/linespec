@@ -1,6 +1,6 @@
 id: prov-2026-78d9250b
 title: 'Release v2.3.4: Multi-pack aware lint and check CLI commands'
-status: open
+status: implemented
 version: 2
 reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-17"
@@ -20,7 +20,7 @@ affected_scope:
   - linespec-beta
 forbidden_scope: []
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8f6e64b470427ccee28eb6530a6b85d57a179d8d
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
