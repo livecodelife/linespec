@@ -1,6 +1,6 @@
 id: prov-2026-ac0557e0
 title: Version bump to v2.8.4
-status: open
+status: implemented
 version: 2
 reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-20"
@@ -13,7 +13,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-c8585133
-sealed_at_sha: ""
+sealed_at_sha: dea0f2d69247e98a1de08d64d1cfb29c4b0de33c
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
