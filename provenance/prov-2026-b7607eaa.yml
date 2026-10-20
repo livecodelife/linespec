@@ -1,13 +1,9 @@
 id: prov-2026-b7607eaa
 title: Docs and release prep for v3.25.0 including isolated container-name defaults
-status: implemented
-version: 1
-reason: |-
-  Prepare the v3.25.0 release docs together with the container-name docs fix. The README and LINESPEC.md container_naming examples still show linespec-shared-db, linespec-shared-net, linespec-shared-kafka and the per-spec app/proxy/migrate names as if they were defaults. Since the concurrent-run fix, defaults carry 6 hex characters of the sha256 of the project root plus a 6 hex per-process token, so two runs never share names. A reader copying the old block gets the collision the fix removed.
-  Fix the docs: state the isolated defaults, mark the example values as explicit overrides used verbatim per role (unset roles still get the isolated default), say concurrent runs are isolated, and document the cost: cleanup removes only what the run created, so a crashed run's orphaned containers and network must be removed by hand with docker rm -f and docker network rm.
-  Release prep: bump 3.24.0 to 3.25.0 with ./scripts/bump-version.sh 3.25.0 (edits VERSION, README.md, LINESPEC.md, PROVENANCE_RECORDS.md, including the proxy image tag references). Minor, because sealed work since 3.24.0 made behaviour stricter. Add a CHANGELOG 3.25.0 entry with an Upgrade note (specs that passed only because a clause was ignored can now fail; default Docker names carry a per-run suffix), covering prov-2026-79b59b40, a71a796a, a3105d31, 919f8621, 3168d841 and c3977f44, grouped Changed and Fixed.
-  Rejected: deleting the example block, since users need the override keys. Rejected: restoring a startup sweep of stale linespec-* resources, since that let one run destroy another's network. This record creates no tag, push or release; those are separate manual steps.
-reason_kind: fix
+status: open
+version: 2
+reason: 'Refresh specs: the docs test no longer hardcodes a release version'
+reason_kind: ""
 created_at: "2026-10-08"
 author: caleb.cowen@linq.com
 intent: >
@@ -52,12 +48,7 @@ constraints:
   - No tag, push or release is created by this record
   - No hand edits to docs/*.html or docs/llms*.txt
   - No code changes
-affected_scope:
-  - README.md
-  - LINESPEC.md
-  - CHANGELOG.md
-  - VERSION
-  - PROVENANCE_RECORDS.md
+affected_scope: []
 forbidden_scope: []
 type: imprint
 related:
@@ -67,7 +58,7 @@ related:
   - prov-2026-a3105d31
   - prov-2026-919f8621
   - prov-2026-3168d841
-sealed_at_sha: 7ecff367ad27f11b61d9d78aa469b932a985fd51
+sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit
