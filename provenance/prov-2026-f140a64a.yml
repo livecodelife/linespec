@@ -1,6 +1,6 @@
 id: prov-2026-f140a64a
 title: Update docs and release notes for provenance v2
-status: open
+status: implemented
 version: 2
 reason: 'Drop README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-10-16"
@@ -27,7 +27,7 @@ implements: prov-2026-dfb51160
 implements_version: 1
 type: imprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: b1ac206d1344181d02b6ed977467d57557dbdc7f
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
