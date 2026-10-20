@@ -1,0 +1,12 @@
+{
+  "record_id": "prov-2026-f22371a0",
+  "version": 2,
+  "content_hash": "sha256:33f10ffe965278d010a344caa063e85fe5211e70e5123a91234730fd7595f386",
+  "spec_hashes": [
+    "sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1"
+  ],
+  "code_hash": "",
+  "passed": true,
+  "at": "2026-10-20T19:47:07Z",
+  "runner": "provenance complete"
+}
