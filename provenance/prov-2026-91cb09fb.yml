@@ -1,6 +1,6 @@
 id: prov-2026-91cb09fb
 title: Document gRPC support in LINESPEC.md
-status: open
+status: implemented
 version: 2
 reason: 'Drop LINESPEC.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-21"
@@ -20,7 +20,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-9f50db3c
-sealed_at_sha: ""
+sealed_at_sha: 9e53cb672c85ee9e326a3b2aee6ce06a0eb9e700
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
