@@ -1,7 +1,8 @@
 id: prov-2026-940c45c8
 title: Prepare v1.4.0 release
-status: implemented
-version: 1
+status: open
+version: 2
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-03"
 author: calebcowen@gmail.com
 intent: >
@@ -19,10 +20,10 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 related: []
-sealed_at_sha: d79268bc16db7299d835721943753257a1dadd33
+sealed_at_sha: ""
 associated_specs:
-  - path: CHANGELOG.md
-    type: changelog
+  - path: pkg/config/container_naming_docs_test.go
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags:
