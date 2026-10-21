@@ -1,0 +1,31 @@
+id: prov-2026-0f0517bc
+version: 3
+content_hash: sha256:882eec372566440e4d4236c243bef4f4f00278208046bcc15d41fcd4817ed07e
+parent_hash: sha256:e7cda5f96dbef36c2579f8a28e36e487c4dad97798a7e7094b56feedc27c99e1
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:21Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-0f0517bc
+  title: Release v3.11.0
+  type: imprint
+  created_at: "2026-05-27"
+  author: test@example.com
+  intent: Version bump and release artifacts for v3.11.0
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+  implements: prov-2026-9368095a
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release
