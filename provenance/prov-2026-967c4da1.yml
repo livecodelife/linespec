@@ -1,6 +1,6 @@
 id: prov-2026-967c4da1
 title: Reconstruct v3.19.0 CHANGELOG entry from six completed records
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-08-21"
@@ -40,7 +40,7 @@ type: imprint
 implements: prov-2026-82b2dee6
 implements_version: 1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 910d569c29f6d72ef9c39bb38b209a25c9410836
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
