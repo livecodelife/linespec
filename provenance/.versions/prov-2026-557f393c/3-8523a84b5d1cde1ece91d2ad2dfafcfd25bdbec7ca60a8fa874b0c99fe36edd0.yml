@@ -1,0 +1,30 @@
+id: prov-2026-557f393c
+version: 3
+content_hash: sha256:8523a84b5d1cde1ece91d2ad2dfafcfd25bdbec7ca60a8fa874b0c99fe36edd0
+parent_hash: sha256:45b58e21335dd57058b000b81e28b26c8aba0d16d042c1dfafdfdc939aba5e73
+reason: Refresh the spec hashes after the runner.go change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:15:39Z"
+spec_hashes:
+  - sha256:29bb03b033ba27ee249558f3818eb08bd956fc738390172a0993bbcaf73dc67c
+  - sha256:e4f127336dc753cf833057f836d165f23bd84503397f373690558a69ea564afd
+content:
+  id: prov-2026-557f393c
+  title: Configurable proxy image name and Kafka proxy startup guard
+  type: blueprint
+  created_at: "2026-04-14"
+  author: calebcowen@gmail.com
+  intent: 'Make the linespec proxy Docker image name configurable via .linespec.yml so users on other machines don''t need to build from source. Fix Kafka proxy startup to require infrastructure.kafka: true, consistent with all other proxies.'
+  constraints:
+    - Default proxy_image value must remain linespec:latest for backwards compatibility
+    - Kafka proxy startup fix must not affect tests that already have infrastructure.kafka set to true
+  affected_scope:
+    - pkg/config/types.go
+    - pkg/runner/runner.go
+    - README.md
+    - CHANGELOG.md
+  associated_specs:
+    - path: pkg/config/types.go
+      type: implementation
+    - path: pkg/runner/runner.go
+      type: implementation

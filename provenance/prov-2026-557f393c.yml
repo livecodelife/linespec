@@ -1,8 +1,8 @@
 id: prov-2026-557f393c
 title: Configurable proxy image name and Kafka proxy startup guard
-status: implemented
-version: 2
-reason: runner.go now polls the app container's host port (prov-2026-1e5cf179)
+status: open
+version: 3
+reason: Refresh the spec hashes after the runner.go change
 created_at: "2026-04-14"
 author: calebcowen@gmail.com
 intent: "Make the linespec proxy Docker image name configurable via .linespec.yml so users on other machines don't need to build from source. Fix Kafka proxy startup to require infrastructure.kafka: true, consistent with all other proxies."
@@ -16,7 +16,7 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 related: []
-sealed_at_sha: cad20950a710472a68a30ab9cdaa4d5064931349
+sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/types.go
     type: implementation
