@@ -1,6 +1,6 @@
 id: prov-2026-4de0b5a7
 title: 'Update docs/linespec.html to mirror v3.11.7 DSL/config: RESPONSE_HEADERS, WITH request-body, multi-channel EXPECT_NOT/VERIFY, RETURNS EMPTY, Redis pops, config keys; remove NO_TRANSACTION'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-06-11"
@@ -22,7 +22,7 @@ affected_scope:
 forbidden_scope: []
 type: imprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 1f0f44c6c4a5bbbaf46d73dd6787369715ee9380
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
