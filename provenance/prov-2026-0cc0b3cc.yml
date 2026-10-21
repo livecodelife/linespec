@@ -1,8 +1,8 @@
 id: prov-2026-0cc0b3cc
 title: Release 3.17.0
-status: implemented
-version: 2
-reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+status: open
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-08-12"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -65,7 +65,7 @@ related:
   - prov-2026-93bcd5b8
   - prov-2026-f011d231
   - prov-2026-3486daec
-sealed_at_sha: 5e3f8b8ab145927c8b956ca8d74c82308b7442dc
+sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
