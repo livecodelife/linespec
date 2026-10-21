@@ -1,8 +1,8 @@
 id: prov-2026-967c4da1
 title: Reconstruct v3.19.0 CHANGELOG entry from six completed records
-status: implemented
-version: 2
-reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+status: open
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-08-21"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: |
@@ -40,7 +40,7 @@ type: imprint
 implements: prov-2026-82b2dee6
 implements_version: 1
 related: []
-sealed_at_sha: 3eb5bb08975eafa244a9dea2ecdd9b52e4200d08
+sealed_at_sha: ""
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
