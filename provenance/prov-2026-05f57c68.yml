@@ -1,6 +1,6 @@
 id: prov-2026-05f57c68
 title: 'Release 3.22.1: lock-layer works in repos with hooks installed'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-09-09"
@@ -35,7 +35,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-cdb13afd
-sealed_at_sha: ""
+sealed_at_sha: c78db3d3f73762e11378000335aa5ff451d916c5
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
