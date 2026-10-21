@@ -1,6 +1,6 @@
 id: prov-2026-fadc2c53
 title: Release v3.10.2 - fix supersession scope bypass to require implemented status
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-20"
@@ -29,7 +29,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 8e9e173e0788149d1f019c315bb7b502929ad5b3
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
