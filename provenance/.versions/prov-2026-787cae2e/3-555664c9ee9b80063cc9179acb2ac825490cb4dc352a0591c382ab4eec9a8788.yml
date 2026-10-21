@@ -1,0 +1,36 @@
+id: prov-2026-787cae2e
+version: 3
+content_hash: sha256:555664c9ee9b80063cc9179acb2ac825490cb4dc352a0591c382ab4eec9a8788
+parent_hash: sha256:162d4cf4073f93145992d879b7050d398279dc0a921f2659d4f9a4002c1570a5
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:57Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-787cae2e
+  title: 'v2.6.0 release: VARS constraints, CI pipeline, SARIF fix'
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    Bump version to v2.6.0. This release adds typed constraints to the VARS block (integer min/max, string charset/length/pattern, enum), adds a CI workflow that runs unit tests and all four example linespec suites on every PR and push to main, and fixes the SARIF lint output bug where multiple JSON documents were concatenated causing GitHub Code Scanning to reject the upload.
+  constraints:
+    - Version string MUST be updated to v2.6.0 in all files
+    - CHANGELOG.md MUST include an entry for v2.6.0 covering all three areas
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/provenance.html
+    - docs/docs.html
+    - docs/linespec.html
+    - provenance/prov-2026-dab46dda.yml
+  related:
+    - prov-2026-a8304063
+    - prov-2026-d019b9ee
+    - prov-2026-d3b0abe0
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
