@@ -1,6 +1,6 @@
 id: prov-2026-0f0517bc
 title: Release v3.11.0
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-27"
@@ -21,7 +21,7 @@ type: imprint
 implements: prov-2026-9368095a
 implements_version: 1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 9e5c6c9376d7e2ac43592558a0e8f98806089960
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
