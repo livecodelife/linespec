@@ -1,7 +1,8 @@
 id: prov-2026-5c310d9d
 title: Document next/govern/install-plugin commands, overlap_specs_on_complete config, and the Claude Code plugin across docs + doc site
 status: implemented
-version: 1
+version: 2
+reason: 'Drop README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-06-12"
 author: test@example.com
 intent: |
@@ -65,12 +66,10 @@ related:
   - prov-2026-54aaf9cf
   - prov-2026-21e9f419
   - prov-2026-cd1405fb
-sealed_at_sha: 717a117ce7ce01d4281454300a1e3e8dc6070ed4
+sealed_at_sha: 6832ab37eee41e3e94969277e09916776793ec94
 associated_specs:
   - path: PROVENANCE_RECORDS.md
     run_command: grep -q overlap_specs_on_complete {{path}}
-  - path: README.md
-    run_command: grep -q 'provenance next' {{path}}
 associated_traces: []
 monitors: []
 tags:

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.28.0] - 2026-10-16
+## [3.28.0] - 2026-10-20
 
 **Upgrade note.** Provenance Records move to the standalone `provenance` CLI ([github.com/livecodelife/provenance](https://github.com/livecodelife/provenance)) and to record model v2. Four things change. First, this repository's records are migrated in place with `provenance migrate`: a chain of superseding records becomes versions of one record, old ids stay resolvable as `aliases`, the config moves from the `provenance:` block of `.linespec.yml` to `.provenance.yml`, and `.linespec/hash_manifest.json` is replaced by `.provenance/versions.jsonl` plus snapshots under `provenance/.versions/`. Second, `linespec provenance <command>` now forwards every command the `provenance` CLI implements (`add-scope`, `check`, `compile`, `complete`, `context`, `create`, `deprecate`, `diff`, `edit`, `evidence`, `govern`, `graph`, `history`, `hooks`, `init`, `install-plugin`, `install-skills`, `lint`, `migrate`, `next`, `open`, `reconcile`, `repin`, `revise`, `run-specs`, `search`, `stale`, `status`, `sync`) to that binary, found via `$PROVENANCE` or `PATH`. It prints a deprecation notice on stderr (silence it with `LINESPEC_NO_DEPRECATION_WARNING=1`) and exits 127 with the install command when the binary is missing. The forwarder is removed after two linespec minor releases, so move scripts to `provenance <command>`. Third, `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks` have no v2 counterpart yet. They still run in `linespec` but read v1 records, so they do not work on a migrated repository; use `provenance hooks install` in place of `install-hooks`. Fourth, there is no `superseded` status and no `bug` type any more: a change is a new version (`provenance revise`, `provenance edit`), and a fix is a version marked `--fix`.
 
@@ -21,11 +21,17 @@ To migrate your own repository: `provenance migrate --plan`, then `provenance mi
 
 - **Documentation for record model v2** ([prov-2026-f140a64a](./provenance/prov-2026-f140a64a.yml)) — PROVENANCE_RECORDS.md, PROVENANCE_RECORD_SCHEMA.md, README.md, CLAUDE.md and the site templates describe versions, pins, `stale`/`repin`, `.provenance.yml`, the forwarder and the migration. The landing page drops the semantic-search section.
 
+- **The version manifest is merged, not conflicted** ([prov-2026-dfb51160](./provenance/prov-2026-dfb51160.yml)) — `.provenance/versions.jsonl` and the snapshots under `provenance/.versions/` are marked as generated in `.gitattributes`, and the manifest is merged with `provenance merge-manifest`, so branches that each add a record version no longer conflict on it.
+
 ### Added
 
 - **`linespec provenance` forwarder** ([prov-2026-a7434583](./provenance/prov-2026-a7434583.yml)) — see the upgrade note. Tests that run git clear every `GIT_*` variable and isolate `HOME`, since linespec's hooks export `GIT_DIR` and `GIT_INDEX_FILE`.
 
 - **Migration to provenance v2** ([prov-2026-dfb51160](./provenance/prov-2026-dfb51160.yml)) — the blueprint for this release's record migration, CI switch and docs.
+
+### Fixed
+
+- **The app container's host port is polled, not read once** ([prov-2026-1e5cf179](./provenance/prov-2026-1e5cf179.yml)) — Docker can publish the port binding a moment after the container starts, so a single inspect on a slow CI runner read an empty port and every spec polled `http://localhost:/healthz` for two minutes. The app port now goes through the same bounded wait (10 seconds) as infrastructure containers, and a port that never appears fails with an error naming the container and port.
 
 ## [3.27.0] - 2026-10-09
 

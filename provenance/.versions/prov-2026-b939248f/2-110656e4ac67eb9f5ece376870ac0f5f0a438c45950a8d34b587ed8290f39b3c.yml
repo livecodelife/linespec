@@ -1,0 +1,23 @@
+id: prov-2026-b939248f
+version: 2
+content_hash: sha256:110656e4ac67eb9f5ece376870ac0f5f0a438c45950a8d34b587ed8290f39b3c
+parent_hash: sha256:b7e250d3c0b17d6cc0c3a4a9b3719641096142b8c34ab1a10666ab6abe7171be
+reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:45:58Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-b939248f
+  title: Version bump to v2.8.1
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: Patch release v2.8.1 for the cross-compile bug fix in linespec build.
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+  related:
+    - prov-2026-a6456485
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

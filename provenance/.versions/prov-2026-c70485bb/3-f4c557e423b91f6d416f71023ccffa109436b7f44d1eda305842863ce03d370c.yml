@@ -1,0 +1,34 @@
+id: prov-2026-c70485bb
+version: 3
+content_hash: sha256:f4c557e423b91f6d416f71023ccffa109436b7f44d1eda305842863ce03d370c
+parent_hash: sha256:6177c80ddb191095a579379f672bbba1fbd46048dbc7e9e54f37ce023b459155
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:46:23Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-c70485bb
+  title: v3.1.0 release preparation
+  type: blueprint
+  created_at: "2026-04-27"
+  author: calebcowen@gmail.com
+  aliases:
+    - prov-2026-623ee9b6
+  intent: |
+    Update CHANGELOG.md and version references to publish v3.1.0. Covers WITH body comparison (prov-2026-9e052576), gRPC descriptor fix (prov-2026-a9d51966), and Kafka resolver wiring fix (prov-2026-7c084083).
+  constraints:
+    - CHANGELOG.md must have a [3.1.0] entry dated 2026-04-27
+    - VERSION file must read 3.1.0
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - provenance/prov-2026-623ee9b6.yml
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

@@ -1,0 +1,50 @@
+id: prov-2026-241d539d
+title: Release prep for v3.28.0
+type: blueprint
+status: implemented
+version: 1
+reason: ""
+created_at: "2026-10-20"
+author: calebcowen@gmail.com
+intent: >
+  Prepare the v3.28.0 release. The 3.28.0 CHANGELOG section (provenance v2 migration) was
+  written on 2026-10-16 but VERSION was never bumped. Bump 3.27.0 to 3.28.0 with
+  ./scripts/bump-version.sh 3.28.0, set the section date to 2026-10-20, and add the
+  changes merged after it was written: a Fixed entry for prov-2026-1e5cf179 (the runner
+  polls the app container's host port instead of one inspect after start) and a Changed
+  line for the version manifest being merged with provenance merge-manifest
+  (prov-2026-dfb51160). Replace the hardcoded VERSION assertion in
+  pkg/config/container_naming_docs_test.go with one that reads VERSION and checks that
+  CHANGELOG.md has an entry for it, so a release no longer edits the test. This record
+  creates no tag, push or release; the tag is created after the PR merges.
+constraints:
+  - VERSION reads 3.28.0, produced by ./scripts/bump-version.sh 3.28.0
+  - CHANGELOG.md keeps an empty "## [Unreleased]" heading above "## [3.28.0] - 2026-10-20"
+  - The 3.28.0 entry covers prov-2026-1e5cf179 under Fixed and the merge-manifest change under Changed
+  - No tag, push or release is created by this record
+  - No hand edits to docs/*.html or docs/llms*.txt
+  - pkg/config/container_naming_docs_test.go no longer hardcodes a release version in its VERSION assertion
+  - No code changes outside the version assertion in the docs test
+affected_scope:
+  - VERSION
+  - README.md
+  - LINESPEC.md
+  - PROVENANCE_RECORDS.md
+  - CHANGELOG.md
+  - pkg/config/container_naming_docs_test.go
+forbidden_scope: []
+related:
+  - prov-2026-1e5cf179
+  - prov-2026-dfb51160
+  - prov-2026-fa19c7ff
+sealed_at_sha: 5e6bc010b07e05ae9797be313790804249dc92eb
+associated_specs:
+  - path: pkg/config/container_naming_docs_test.go
+    type: unit
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
+associated_traces: []
+monitors: []
+tags:
+  - release
+  - changelog
+  - version-bump

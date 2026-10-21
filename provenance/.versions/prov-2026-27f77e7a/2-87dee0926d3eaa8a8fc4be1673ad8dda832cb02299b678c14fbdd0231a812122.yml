@@ -1,0 +1,23 @@
+id: prov-2026-27f77e7a
+version: 2
+content_hash: sha256:87dee0926d3eaa8a8fc4be1673ad8dda832cb02299b678c14fbdd0231a812122
+parent_hash: sha256:58db69aecfc0e672fe02c112779a88e47115b6c2a0c9732788251383321f6905
+reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:44:03Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-27f77e7a
+  title: Version bump to v2.8.5
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: Patch release v2.8.5 for the Homebrew post_install rescue BuildError fix.
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+  related:
+    - prov-2026-1687368b
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

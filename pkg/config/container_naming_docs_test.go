@@ -86,9 +86,13 @@ func TestDocsDoNotPresentFixedContainerNamesAsDefaults(t *testing.T) {
 		})
 	}
 
-	t.Run("VERSION_is_3.27.0", func(t *testing.T) {
-		if got := strings.TrimSpace(readRepoFile(t, "../../VERSION")); got != "3.27.0" {
-			t.Errorf("VERSION = %q, want 3.27.0", got)
+	t.Run("CHANGELOG_has_entry_for_VERSION", func(t *testing.T) {
+		v := strings.TrimSpace(readRepoFile(t, "../../VERSION"))
+		if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(v) {
+			t.Fatalf("VERSION = %q, want MAJOR.MINOR.PATCH", v)
+		}
+		if !strings.Contains(readRepoFile(t, "../../CHANGELOG.md"), "## ["+v+"]") {
+			t.Errorf("CHANGELOG.md has no \"## [%s]\" heading", v)
 		}
 	})
 

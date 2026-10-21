@@ -1,7 +1,8 @@
 id: prov-2026-787cae2e
 title: 'v2.6.0 release: VARS constraints, CI pipeline, SARIF fix'
 status: implemented
-version: 1
+version: 2
+reason: 'Drop CHANGELOG.md, VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -28,12 +29,10 @@ related:
   - prov-2026-a8304063
   - prov-2026-d019b9ee
   - prov-2026-d3b0abe0
-sealed_at_sha: efb833b4393f3fddb48c46496f7316adfd0cb8ab
+sealed_at_sha: 148258c1c9d9ae293f9b2bb6e25b04e9739dc8f4
 associated_specs:
-  - path: CHANGELOG.md
-    type: documentation
-  - path: VERSION
-    type: documentation
+  - path: pkg/config/container_naming_docs_test.go
+    run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
 associated_traces: []
 monitors: []
 tags: []

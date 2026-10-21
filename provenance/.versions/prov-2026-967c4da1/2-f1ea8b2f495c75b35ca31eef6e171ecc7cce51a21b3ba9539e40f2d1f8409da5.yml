@@ -1,0 +1,49 @@
+id: prov-2026-967c4da1
+version: 2
+content_hash: sha256:f1ea8b2f495c75b35ca31eef6e171ecc7cce51a21b3ba9539e40f2d1f8409da5
+parent_hash: sha256:0336ee2dcf9bdda9babf08cd9fbd33a1c7bf66adb6b112edae23d8ad4fa1fc39
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:45:24Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-967c4da1
+  title: Reconstruct v3.19.0 CHANGELOG entry from six completed records
+  type: imprint
+  created_at: "2026-08-21"
+  author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
+  intent: |
+    Reconstructed the CHANGELOG.md [3.19.0] entry from the six records named in
+    prov-2026-82b2dee6's intent that weren't already covered by [Unreleased]
+    (prov-2026-3ee1f3c3 #200, prov-2026-2f2bf9c3 #201, prov-2026-8d5c9376 #202,
+    prov-2026-c65450b6 #203, prov-2026-772101a3 #207/#209,
+    prov-2026-531a0e0b #205/#210), and enhanced the existing
+    prov-2026-0f3c349b bullet to also cite its two imprints
+    (prov-2026-9eefeb1b, prov-2026-e1c1aa88) and PR numbers (#204, #208),
+    matching the citation style used by every other entry. All seven bullets
+    grouped under "Fixed" (all bug fixes; no Added/Changed items this cycle).
+    Ran ./scripts/bump-version.sh 3.19.0 (updates VERSION, README.md,
+    LINESPEC.md, PROVENANCE_RECORDS.md) and ./linespec provenance compile to
+    rebuild .linespec/hash_manifest.json (no-op: manifest was already current),
+    then verified with `make test` (all packages pass) and `linespec
+    provenance check --staged` (no forbidden scope violations) before
+    committing.
+  constraints:
+    - |
+      Every changelog bullet must cite real, implemented provenance records
+      that exist in provenance/ — no fabricated record IDs or PR numbers.
+    - No production code changes — this imprint covers documentation/release artifacts only, matching the blueprint's "release/version bump only" constraint.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - .linespec/hash_manifest.json
+  implements: prov-2026-82b2dee6
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release

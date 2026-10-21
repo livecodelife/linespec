@@ -1,14 +1,9 @@
 id: prov-2026-fa19c7ff
 title: Release prep for v3.27.0 including Npgsql proxy fixes and schema_discovery.validate
 status: implemented
-version: 1
-reason: |-
-  Prepare the v3.27.0 release. Eight sealed records since v3.26.1 make the PostgreSQL proxy work with Npgsql end to end, and add one config key, so this is a minor bump: prov-2026-9519f9c8 resolves schema-qualified tables to the right schemaCache key; prov-2026-4fc643ef builds the mock RowDescription from the query's selected columns; prov-2026-becc5d88 answers Parse locally for value-level VERIFY mocks so a pipelined Bind stays ordered, and an unmatched Bind on such a statement now returns an ErrorResponse instead of falling through to the real database; prov-2026-545e4690 records PostgreSQL passthrough so strict_passthrough is enforced; prov-2026-7e08a3cb encodes DataRow values with the same per-column OID as the RowDescription; prov-2026-18ec8274 declares the Bind result format codes in the RowDescription so binary columns are read as binary; prov-2026-ad21b28e adds schema_discovery.validate (off, warn, error; default off) to check spec mocks against the discovered PostgreSQL schema; prov-2026-e0174ee3 runs that check for every spec, not only the first of a reused database setup.
-
-  Bump 3.26.1 to 3.27.0 with ./scripts/bump-version.sh 3.27.0, which edits only VERSION, README.md, LINESPEC.md and PROVENANCE_RECORDS.md. Then by hand: move the empty [Unreleased] heading above a new "## [3.27.0] - 2026-10-09" section of CHANGELOG.md with an Upgrade note, Changed and Fixed entries for the eight records, and the known gaps; and document schema_discovery.schemas and schema_discovery.validate in the schema_discovery block of LINESPEC.md. The upgrade note states the behaviour changes: an unmatched Bind on a locally answered statement is now an error, binary-format columns are typed and encoded from the schema, and PostgreSQL passthrough is now recorded, so under strict_passthrough an app that runs DDL or catalog queries through the proxy at startup (for example SQLAlchemy create_all or select current_schema()) is reported, and without strict_passthrough those queries print passthrough warnings.
-
-  Minor rather than patch because it adds a documented config key and changes observable behaviour. This record creates no tag, push or release; those are separate manual steps.
-reason_kind: fix
+version: 2
+reason: 'Refresh specs: the docs test no longer hardcodes a release version'
+reason_kind: ""
 created_at: "2026-10-09"
 author: caleb.cowen@linq.com
 intent: >
@@ -55,13 +50,7 @@ constraints:
   - No tag, push or release is created by this record
   - No hand edits to docs/*.html or docs/llms*.txt
   - No code changes
-affected_scope:
-  - VERSION
-  - README.md
-  - LINESPEC.md
-  - PROVENANCE_RECORDS.md
-  - CHANGELOG.md
-  - pkg/config/container_naming_docs_test.go
+affected_scope: []
 forbidden_scope: []
 type: imprint
 related:
@@ -74,7 +63,7 @@ related:
   - prov-2026-18ec8274
   - prov-2026-e0174ee3
   - prov-2026-89807218
-sealed_at_sha: cb14f01914921b0c3ef8b5c0b29ae97ed0522f58
+sealed_at_sha: cdae80848bc63a19badea73f6ebcc824caf2831c
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit

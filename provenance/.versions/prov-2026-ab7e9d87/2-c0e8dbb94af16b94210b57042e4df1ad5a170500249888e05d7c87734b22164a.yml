@@ -1,0 +1,56 @@
+id: prov-2026-ab7e9d87
+version: 2
+content_hash: sha256:c0e8dbb94af16b94210b57042e4df1ad5a170500249888e05d7c87734b22164a
+parent_hash: sha256:a6bcfb575c0b2f19049379314fe60600153d4f5dbcad05328d9e44bec7afc4ba
+reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:45:36Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-ab7e9d87
+  title: Release v3.16.0
+  type: blueprint
+  created_at: "2026-07-20"
+  author: calebcowen@gmail.com
+  intent: |
+    Version bump and release artifacts for v3.16.0. Minor release bundling the
+    work accumulated on main since v3.15.0. The single functional change adds new
+    backwards-compatible CLI flags plus a bugfix, so a minor bump is correct.
+
+    Highlights:
+      - Added: `--model` and `--max-tokens` flags on `provenance discover`,
+        threaded through `runDiscoverEnrich` into `enrich.Input` (existing `Model`
+        field plus a new `MaxTokens` field). Lets `discover --enrich` name a
+        locally-loaded model and give reasoning models enough token budget to
+        emit a completion (prov-2026-c6f1241c, prov-2026-d0d0cfeb).
+      - Changed: the default `enrich` `max_tokens` is raised from 256 to 2048 so
+        reasoning models leave room for a completion after hidden reasoning; an
+        unset/zero flag uses the default (prov-2026-c6f1241c).
+      - Fixed: an empty LLM completion (HTTP 200 with blank `content`) is now
+        treated as a per-record error and rendered as ✗ with a clear message
+        instead of silently writing an empty intent and printing a green ✓
+        (prov-2026-c6f1241c, prov-2026-d0d0cfeb).
+  constraints:
+    - |
+      Promote [Unreleased] in CHANGELOG.md to [3.16.0] - 2026-07-20; add a fresh
+      empty [Unreleased] section above it. The [Unreleased] section is currently
+      empty, so the changelog for this release is reconstructed from the records
+      completed since v3.15.0 (prov-2026-c6f1241c and its imprint).
+    - ./scripts/bump-version.sh 3.16.0 handles VERSION and the doc references (README.md, LINESPEC.md, PROVENANCE_RECORDS.md).
+    - Run ./linespec provenance compile to rebuild the hash manifest.
+    - Docs/*.html and llms*.txt are gitignored build artifacts and are NOT part of the release commit; the Pages workflow rebuilds them on push to main.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-c6f1241c
+    - prov-2026-d0d0cfeb
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release

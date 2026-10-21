@@ -1,0 +1,35 @@
+id: prov-2026-f140a64a
+version: 2
+content_hash: sha256:77897d2db79f2ebbf53f06bd2193419e429827ec8a916c9e8ff3828c6e9522c0
+parent_hash: sha256:42d6be9ad8964174774128c168792b7b36b4ddf88204b8eec021ce1054cca1c3
+reason: 'Drop README.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:47:03Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-f140a64a
+  title: Update docs and release notes for provenance v2
+  type: imprint
+  created_at: "2026-10-16"
+  author: calebcowen@gmail.com
+  intent: |
+    Update the docs for the provenance v2 CLI: PROVENANCE_RECORDS.md, README, CLAUDE.md,
+    PROVENANCE_PROJECT_MANAGEMENT.md, PROVENANCE_RECORD_SCHEMA.md, LINESPEC_DISCOVER.md, docs/templates and the
+    generated CLI reference, plus CHANGELOG release notes ([Unreleased] stays empty, a docs test checks it).
+    Includes a rollback note.
+  affected_scope:
+    - PROVENANCE_RECORDS.md
+    - README.md
+    - CLAUDE.md
+    - PROVENANCE_PROJECT_MANAGEMENT.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - LINESPEC_DISCOVER.md
+    - LINESPEC.md
+    - pkg/config/container_naming_docs_test.go
+    - CHANGELOG.md
+    - docs/templates/**
+  implements: prov-2026-dfb51160
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

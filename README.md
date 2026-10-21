@@ -1,6 +1,6 @@
-# LineSpec v3.27.0
+# LineSpec v3.28.0
 
-[![Version](https://img.shields.io/badge/version-3.27.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
+[![Version](https://img.shields.io/badge/version-3.28.0-blue.svg)](https://github.com/livecodelife/linespec/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livecodelife/linespec)](https://goreportcard.com/report/github.com/livecodelife/linespec)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -13,7 +13,7 @@
 
 LineSpec is a tool for managing **Provenance Records** - structured decision documents that capture the intent, constraints, and reasoning behind architectural changes - and for **LineSpec Testing**. Provenance Records are managed by the standalone [`provenance`](https://github.com/livecodelife/provenance) CLI; `linespec provenance <command>` forwards to it and is deprecated.
 
-As of v3.27.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
+As of v3.28.0, **LineSpec Testing** is stable and included in the default installation alongside Provenance Records.
 
 ---
 
@@ -33,14 +33,14 @@ automatically the first time you run `linespec test`.
 ### Go Install
 
 ```bash
-go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.27.0
+go install github.com/livecodelife/linespec/v3/cmd/linespec@v3.28.0
 ```
 
 ### GitHub Releases
 
 Download pre-built binaries from the [releases page](https://github.com/livecodelife/linespec/releases).
 
-- `linespec_3.27.0_*` - Full release (Provenance Records + LineSpec Testing)
+- `linespec_3.28.0_*` - Full release (Provenance Records + LineSpec Testing)
 
 ---
 
@@ -272,7 +272,7 @@ infrastructure:
   kafka: false
   grpc: false # Start a gRPC proxy sidecar
   redis: false # Start a Redis proxy sidecar
-  proxy_image: "ghcr.io/livecodelife/linespec:3.27.0" # Override the proxy image (default: local linespec:latest if present, else the published image pinned to your version)
+  proxy_image: "ghcr.io/livecodelife/linespec:3.28.0" # Override the proxy image (default: local linespec:latest if present, else the published image pinned to your version)
 
 # Protobuf descriptor set for gRPC binary protobuf mocks (optional)
 grpc_descriptor_set: proto/workflow.pb
@@ -419,4 +419,4 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
-**LineSpec v3.27.0** - Built with Provenance Records
+**LineSpec v3.28.0** - Built with Provenance Records

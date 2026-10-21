@@ -1,0 +1,23 @@
+id: prov-2026-3ee436f3
+version: 2
+content_hash: sha256:9eb1695108f90373c3023eb1579aff93413080f624b688ae58897c68013011c0
+parent_hash: sha256:6c12011c60c49ae4ab58320bd397d42f65cbaec9453a857755eb63d8ba8f4be2
+reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+author: calebcowen@gmail.com
+created_at: "2026-10-20T19:44:29Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-3ee436f3
+  title: Version bump to v2.8.3
+  type: blueprint
+  created_at: "2026-04-20"
+  author: calebcowen@gmail.com
+  intent: Patch release v2.8.3 for the DOCKER_BUILDKIT=0 Homebrew post_install fix.
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+  related:
+    - prov-2026-336ba2a8
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
