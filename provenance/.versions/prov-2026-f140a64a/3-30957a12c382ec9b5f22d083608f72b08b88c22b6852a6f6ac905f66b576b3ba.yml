@@ -1,0 +1,35 @@
+id: prov-2026-f140a64a
+version: 3
+content_hash: sha256:30957a12c382ec9b5f22d083608f72b08b88c22b6852a6f6ac905f66b576b3ba
+parent_hash: sha256:77897d2db79f2ebbf53f06bd2193419e429827ec8a916c9e8ff3828c6e9522c0
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:39:49Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-f140a64a
+  title: Update docs and release notes for provenance v2
+  type: imprint
+  created_at: "2026-10-16"
+  author: calebcowen@gmail.com
+  intent: |
+    Update the docs for the provenance v2 CLI: PROVENANCE_RECORDS.md, README, CLAUDE.md,
+    PROVENANCE_PROJECT_MANAGEMENT.md, PROVENANCE_RECORD_SCHEMA.md, LINESPEC_DISCOVER.md, docs/templates and the
+    generated CLI reference, plus CHANGELOG release notes ([Unreleased] stays empty, a docs test checks it).
+    Includes a rollback note.
+  affected_scope:
+    - PROVENANCE_RECORDS.md
+    - README.md
+    - CLAUDE.md
+    - PROVENANCE_PROJECT_MANAGEMENT.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - LINESPEC_DISCOVER.md
+    - LINESPEC.md
+    - pkg/config/container_naming_docs_test.go
+    - CHANGELOG.md
+    - docs/templates/**
+  implements: prov-2026-dfb51160
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
