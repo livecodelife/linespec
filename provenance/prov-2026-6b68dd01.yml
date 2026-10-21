@@ -1,6 +1,6 @@
 id: prov-2026-6b68dd01
 title: Document Redis and MongoDB DSL expectations, add .linespec.yml reference
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-15"
@@ -21,7 +21,7 @@ affected_scope:
   - docs/linespec.html
 forbidden_scope: []
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 17561fdad51ba8012f499f1ef4741205d46243d8
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
