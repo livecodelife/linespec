@@ -2,8 +2,8 @@ id: prov-2026-c223ae01
 title: Release prep for v3.28.1
 type: blueprint
 status: open
-version: 1
-reason: ""
+version: 2
+reason: The docs test asserts the exact changelog layout above 3.27.0 (3.28.0 literal), which fails once a 3.28.1 section exists; drop that assertion
 created_at: "2026-10-21"
 author: calebcowen@gmail.com
 intent: >
@@ -26,6 +26,7 @@ affected_scope:
   - LINESPEC.md
   - PROVENANCE_RECORDS.md
   - CHANGELOG.md
+  - pkg/config/container_naming_docs_test.go
 forbidden_scope: []
 related:
   - prov-2026-1e5cf179

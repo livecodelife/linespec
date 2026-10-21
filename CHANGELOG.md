@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.28.1] - 2026-10-21
+
+A patch release with one fix. There are no config or behaviour changes to act on.
+
+### Fixed
+
+- **App containers from images without `EXPOSE` get a host port** ([prov-2026-1e5cf179](./provenance/prov-2026-1e5cf179.yml)) — a Docker daemon that publishes only exposed ports (Docker 28.0.4 on GitHub runners) mapped nothing for an image that declares no `EXPOSE`, so the runner's wait for the app's host port timed out. The app container's port is now declared as exposed (helper `appContainerConfig`), and a real-Docker regression test covers an image without `EXPOSE`.
+
 ## [3.28.0] - 2026-10-20
 
 **Upgrade note.** Provenance Records move to the standalone `provenance` CLI ([github.com/livecodelife/provenance](https://github.com/livecodelife/provenance)) and to record model v2. Four things change. First, this repository's records are migrated in place with `provenance migrate`: a chain of superseding records becomes versions of one record, old ids stay resolvable as `aliases`, the config moves from the `provenance:` block of `.linespec.yml` to `.provenance.yml`, and `.linespec/hash_manifest.json` is replaced by `.provenance/versions.jsonl` plus snapshots under `provenance/.versions/`. Second, `linespec provenance <command>` now forwards every command the `provenance` CLI implements (`add-scope`, `check`, `compile`, `complete`, `context`, `create`, `deprecate`, `diff`, `edit`, `evidence`, `govern`, `graph`, `history`, `hooks`, `init`, `install-plugin`, `install-skills`, `lint`, `migrate`, `next`, `open`, `reconcile`, `repin`, `revise`, `run-specs`, `search`, `stale`, `status`, `sync`) to that binary, found via `$PROVENANCE` or `PATH`. It prints a deprecation notice on stderr (silence it with `LINESPEC_NO_DEPRECATION_WARNING=1`) and exits 127 with the install command when the binary is missing. The forwarder is removed after two linespec minor releases, so move scripts to `provenance <command>`. Third, `audit`, `discover`, `generate`, `index`, `lock-layer`, `lock-scope`, `publish` and `install-hooks` have no v2 counterpart yet. They still run in `linespec` but read v1 records, so they do not work on a migrated repository; use `provenance hooks install` in place of `install-hooks`. Fourth, there is no `superseded` status and no `bug` type any more: a change is a new version (`provenance revise`, `provenance edit`), and a fix is a version marked `--fix`.
