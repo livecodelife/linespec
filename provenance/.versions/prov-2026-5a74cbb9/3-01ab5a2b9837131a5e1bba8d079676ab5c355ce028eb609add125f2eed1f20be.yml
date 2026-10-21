@@ -1,0 +1,59 @@
+id: prov-2026-5a74cbb9
+version: 3
+content_hash: sha256:01ab5a2b9837131a5e1bba8d079676ab5c355ce028eb609add125f2eed1f20be
+parent_hash: sha256:f302ff3057dce3964b1080fa0551974afd5f85f1505688e27cbfefc021f9a3ab
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:50Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-5a74cbb9
+  title: Release 3.24.0
+  type: blueprint
+  created_at: "2026-09-30"
+  author: caleb.cowen@linq.com
+  intent: |
+    Cut 3.24.0, shipping the 30 commits on main since v3.23.1: `extends` as a
+    same-tier additive edge on every tier (prov-2026-2a80a572, prov-2026-f3479b99),
+    TypeScript/JavaScript language support and Next.js filesystem routing for
+    `discover` (prov-2026-4446307d and its supporting records), and the fixes that
+    followed from running it on a real Next.js repo: `.gitignore`-aware directory
+    walks (prov-2026-f0b20266), route.ts detection and call-graph memoization
+    (prov-2026-ebc2266b, prov-2026-afd410b6), and cached compiled tree-sitter
+    queries (prov-2026-330a7fc5).
+
+    MINOR, not PATCH: new language support and a new record-graph capability are
+    additive features. Record authors also see one behavior change worth an
+    upgrade note: supersede is now blocked while a live extension of the record
+    exists.
+  constraints:
+    - |
+      VERSION MUST equal the tag being pushed, minus the leading "v". The release
+      image job compares the published image's self-reported version against
+      GITHUB_REF_NAME and fails the release on a mismatch.
+    - |
+      CHANGELOG.md MUST gain a [3.24.0] section dated with the release day,
+      including an upgrade note for the supersede-blocked-while-extended behavior.
+    - |
+      The tag MUST be pushed only after the release commit and the record
+      completion commit are on main.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-2a80a572
+    - prov-2026-f3479b99
+    - prov-2026-4446307d
+    - prov-2026-f0b20266
+    - prov-2026-ebc2266b
+    - prov-2026-afd410b6
+    - prov-2026-330a7fc5
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release
