@@ -1,0 +1,23 @@
+id: prov-2026-24e4e05b
+version: 3
+content_hash: sha256:dcaf562bd0d26c5ce6e2934cbdc00537817c47c5ccd83599d72e4859a9a0e9b9
+parent_hash: sha256:302e5d452994c1ccc239558016080ebafd4d7e9064b47f98216c3cfebd228094
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:28Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-24e4e05b
+  title: Version bump to v2.8.6
+  type: blueprint
+  created_at: "2026-04-21"
+  author: calebcowen@gmail.com
+  intent: Patch release v2.8.6 for the MySQL proxy ARG_MAX fix (pass schema via --schema-file instead of --schema-data CLI arg).
+  affected_scope:
+    - VERSION
+    - CHANGELOG.md
+  related:
+    - prov-2026-f0384a57
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
