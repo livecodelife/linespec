@@ -2,7 +2,6 @@ package runner
 
 import (
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/go-connections/nat"
 )
 
 // appContainerConfig is the configuration of the app container. It declares
@@ -14,8 +13,5 @@ func appContainerConfig(image string, env, cmd []string, appPort string) *contai
 		Image: image,
 		Env:   env,
 		Cmd:   cmd,
-		ExposedPorts: map[nat.Port]struct{}{
-			nat.Port(appPort + "/tcp"): {},
-		},
 	}
 }
