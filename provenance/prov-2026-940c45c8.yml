@@ -1,6 +1,6 @@
 id: prov-2026-940c45c8
 title: Prepare v1.4.0 release
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-03"
@@ -20,7 +20,7 @@ affected_scope:
   - CHANGELOG.md
 forbidden_scope: []
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 6c0840a874b7de90d3187d09196e3eef3fbea228
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
