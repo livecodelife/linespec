@@ -1,7 +1,7 @@
 id: prov-2026-241d539d
 title: Release prep for v3.28.0
 type: blueprint
-status: open
+status: implemented
 version: 2
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-10-20"
@@ -37,7 +37,7 @@ related:
   - prov-2026-1e5cf179
   - prov-2026-dfb51160
   - prov-2026-fa19c7ff
-sealed_at_sha: ""
+sealed_at_sha: 9c052405574e29223a5037823481283372352600
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit
