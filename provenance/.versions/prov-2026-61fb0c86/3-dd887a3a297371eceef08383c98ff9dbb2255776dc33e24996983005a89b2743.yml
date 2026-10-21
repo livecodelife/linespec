@@ -1,0 +1,28 @@
+id: prov-2026-61fb0c86
+version: 3
+content_hash: sha256:dd887a3a297371eceef08383c98ff9dbb2255776dc33e24996983005a89b2743
+parent_hash: sha256:1980c2a20eae27ebd70551cfc61be3ac3568286f0ffcb50083b2982195dde912
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:52Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-61fb0c86
+  title: Add llms.txt/llms-full.txt links to docs site, fix any residual version/link drift in index/docs html, finalize llms files
+  type: imprint
+  created_at: "2026-06-11"
+  author: test@example.com
+  intent: |
+    Make llms.txt and llms-full.txt discoverable from the documentation site (footer link on index.html, sidebar links on docs.html), add the new scope-enforcement anchor to the docs.html provenance nav, and finalize the llms.txt/llms-full.txt content now that the docs are updated.
+  constraints:
+    - llms files live under docs/ so GitHub Pages serves them at /llms.txt and /llms-full.txt.
+  affected_scope:
+    - docs/index.html
+    - docs/docs.html
+    - docs/llms.txt
+    - docs/llms-full.txt
+  implements: prov-2026-38971b27
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
