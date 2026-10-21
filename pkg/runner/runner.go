@@ -2512,11 +2512,7 @@ func (r *testRunner) run(ctx context.Context, specPath string) error {
 
 	appContainerName := r.suite.containerNaming.GetAppContainer(config.ContainerNameParams{SpecName: spec.Name})
 	logger.Debug("Starting app container %s with env vars: %v", appContainerName, appEnv)
-	_, err = r.suite.orch.StartContainer(ctx, &container.Config{
-		Image: serviceName + ":latest",
-		Env:   appEnv,
-		Cmd:   startCmd,
-	}, &container.HostConfig{
+	_, err = r.suite.orch.StartContainer(ctx, appContainerConfig(serviceName+":latest", appEnv, startCmd, appPort), &container.HostConfig{
 		ExtraHosts: extraHosts,
 		PortBindings: map[nat.Port][]nat.PortBinding{
 			nat.Port(appPort + "/tcp"): {{HostIP: "0.0.0.0", HostPort: "0"}},

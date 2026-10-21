@@ -1,0 +1,37 @@
+id: prov-2026-1e5cf179
+version: 5
+content_hash: sha256:e257b61f766b66385a94920c69f60c41e0d43fbbf6ae2d4fa66b8241a313c19a
+parent_hash: sha256:77c1b5796806399f32496ef764e39d36e1f258515821250b0e09111d8b8e5c0a
+reason: Refresh the spec hashes after the runner change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:12:02Z"
+spec_hashes:
+  - sha256:e4f127336dc753cf833057f836d165f23bd84503397f373690558a69ea564afd
+  - sha256:2943137fe50a797817184f549f15c6f7267a3b90e65e928ce5105cfed07ea200
+  - sha256:6f777effcf16611d261c0fd37c0348079bf120640064b1734d181c1a12d1f889
+content:
+  id: prov-2026-1e5cf179
+  title: 'Diagnose infra container failures: exit detection and log capture in port wait'
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  intent: |
+    waitForContainerPort silently polls for 30 seconds when an infrastructure container (e.g., Kafka) exits immediately on startup — there's no early exit detection, so the full 30-second timeout elapses before any error is reported, and the actual crash reason is never surfaced. Fix: detect container exit inside the poll loop and fail immediately with the container's stdout/stderr logs captured from the Docker API, so the real cause is visible in CI output. Also fix the Kafka CLUSTER_ID to be generated at runtime with base64.RawURLEncoding so it is always a properly-padded base64url UUID (the hardcoded value MkU3OEVBNTcwNTJENDM2Qk has non-zero padding bits in its final character). The app container's host port is read the same way: Docker can publish the binding a moment after StartContainer returns, so one inspect on a slow CI runner read an empty port and every spec polled http://localhost:/healthz for two minutes. The app port now goes through waitForContainerPort (10 second bound) and a port that never appears is a clear error naming the container and port.
+  constraints:
+    - Exit detection must only fail-fast for containers in "exited" or "dead" state — "running" containers with no port yet must keep polling
+    - Container logs must be captured with a short timeout (5 seconds) to avoid blocking indefinitely
+    - Log output must be included in the error message so it is visible in CI
+    - The app container's host port must be read through the polling wait, not from a single inspect, and a port that never appears must fail with an error naming the container and port
+    - The generated Kafka cluster ID must use base64.RawURLEncoding (URL-safe, no padding) over 16 random bytes
+    - The app container's configuration must declare the application port as an exposed port, not only as a port binding, because a Docker daemon that publishes only exposed ports (observed with Docker 28.0.4) otherwise maps no host port and the wait for the host port times out for an image that has no EXPOSE of its own
+  affected_scope:
+    - pkg/runner/runner.go
+    - pkg/runner/app_port_poll_test.go
+    - pkg/runner/app_container_config.go
+    - pkg/runner/app_container_config_test.go
+  associated_specs:
+    - path: pkg/runner/runner.go
+      type: code
+    - path: pkg/runner/app_port_poll_test.go
+      type: go_test
+    - path: pkg/runner/app_container_config_test.go
