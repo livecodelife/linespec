@@ -1,6 +1,6 @@
 id: prov-2026-0b42e0dd
 title: Update CHANGELOG and bump version to v3.7.0
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-15"
@@ -29,7 +29,7 @@ type: imprint
 implements: prov-2026-bbe4b5cd
 implements_version: 1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 0e0980c4058a7dd90cfc9aae88b594c650fcf98c
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
