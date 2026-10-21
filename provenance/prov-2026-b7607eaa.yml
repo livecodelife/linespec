@@ -1,6 +1,6 @@
 id: prov-2026-b7607eaa
 title: Docs and release prep for v3.25.0 including isolated container-name defaults
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 reason_kind: ""
@@ -58,7 +58,7 @@ related:
   - prov-2026-a3105d31
   - prov-2026-919f8621
   - prov-2026-3168d841
-sealed_at_sha: ""
+sealed_at_sha: c1f5878a27adb0c443780b86ed9ed723488dd138
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit
