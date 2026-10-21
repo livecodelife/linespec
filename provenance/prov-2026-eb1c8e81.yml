@@ -1,6 +1,6 @@
 id: prov-2026-eb1c8e81
 title: Release 3.18.0
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-08-19"
@@ -90,7 +90,7 @@ related:
   - prov-2026-3111394d
   - prov-2026-57aff9e1
   - prov-2026-684303c3
-sealed_at_sha: ""
+sealed_at_sha: 8dc68f97da045be099521fffe8d5a0eb4497ad98
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
