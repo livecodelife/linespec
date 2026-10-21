@@ -1,6 +1,6 @@
 id: prov-2026-059decf1
 title: Fix TIMEOUT placement documentation in docs site
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-09"
@@ -21,7 +21,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: 7f2c004fe94b9deb0a1d86e1724e1491843a6e0b
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
