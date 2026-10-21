@@ -1,6 +1,6 @@
 id: prov-2026-f4f93fd1
 title: 'Release v3.2.0: generate command and hash integrity'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-06"
@@ -23,7 +23,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: f9cb82794f07fd51ad5fe5b1aaa2d71f19c30545
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
