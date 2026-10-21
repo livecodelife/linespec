@@ -1,0 +1,38 @@
+id: prov-2026-7ade6d68
+version: 3
+content_hash: sha256:b9ac66d207c417287f1798a92d87415e17442c8f824702eb43cafe12a1d1e436
+parent_hash: sha256:c4074708b5918e1c89c07cd3e86ff37b3874eaca7ea450fe1925b30bf4376a9f
+reason: Refresh the spec hashes after the runner.go change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:15:40Z"
+spec_hashes:
+  - sha256:e4f127336dc753cf833057f836d165f23bd84503397f373690558a69ea564afd
+content:
+  id: prov-2026-7ade6d68
+  title: 'Bug Fix: Container Cleanup and Registry Contamination'
+  type: blueprint
+  created_at: "2026-03-18"
+  author: calebcowen@gmail.com
+  intent: |
+    Fix container cleanup issues that caused registry contamination between test runs.
+    During Phase 2 implementation, DEBUG code was added that disabled container cleanup for troubleshooting. This left stale containers running between tests, which caused the wrong proxy to be used and the wrong mock registry to be loaded.
+    Additionally, discovered an existing bug where HTTP proxy cleanup referenced the wrong container type parameter ("db" instead of "http"), which would prevent proper cleanup even when enabled.
+    Issues addressed: 1. Remove DEBUG cleanup code from runner.go 2. Fix HTTP proxy cleanup bug (wrong Type parameter) 3. Ensure all proxy containers are properly cleaned up after tests 4. Prevent registry file collisions between concurrent test runs
+  constraints:
+    - MUST remove all DEBUG cleanup code added during Phase 2 troubleshooting
+    - MUST fix HTTP proxy cleanup to use Type "http" instead of "db"
+    - MUST ensure all test containers are cleaned up after test completion
+    - MUST verify the order-linespecs test passes without registry contamination
+    - MUST maintain backward compatibility with existing tests
+    - MUST NOT break any existing test functionality
+  affected_scope:
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: pkg/runner/runner.go
+      type: go-source
+  tags:
+    - bug-fix
+    - cleanup
+    - containers
+    - registry
+    - outside-phases
