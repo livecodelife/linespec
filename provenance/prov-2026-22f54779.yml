@@ -1,6 +1,6 @@
 id: prov-2026-22f54779
 title: Release prep for v3.26.0 including WITH payload assertion and per-spec DB container isolation
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 reason_kind: ""
@@ -45,7 +45,7 @@ related:
   - prov-2026-468bbfbe
   - prov-2026-beed31fc
   - prov-2026-06d7d70b
-sealed_at_sha: ""
+sealed_at_sha: 47f515413d906eb440f3249d0f02dedac417a083
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     type: unit
