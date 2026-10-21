@@ -1,0 +1,48 @@
+id: prov-2026-53a12672
+version: 3
+content_hash: sha256:75e383ec85a3888a77deedf427ed39a173a43728fefca52838121130d77a26bd
+parent_hash: sha256:89e8e7bccffb8674d5fc68f02ad380a5ac581479aab5e70abde2808f526da655
+reason: Refresh the spec hashes after the runner.go change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:15:38Z"
+spec_hashes:
+  - sha256:c5f7956c15a015451c3e22e483a75b87954c0af1dc05e9b91d3f331754ade3d4
+  - sha256:341e37dab7dd672d2add9fd413029e4afd686ec38362c5caaa4bc8cca6de7442
+  - sha256:e4f127336dc753cf833057f836d165f23bd84503397f373690558a69ea564afd
+content:
+  id: prov-2026-53a12672
+  title: Staticcheck code quality fixes
+  type: blueprint
+  created_at: "2026-06-04"
+  author: test@example.com
+  intent: |
+    Fix all remaining staticcheck findings across the codebase excluding the PostgreSQL proxy dead code (covered by prov-2026-c013b085). Issues include: unused variables and struct fields (U1000/SA4006), deprecated Docker API usage (SA1019), error strings that should not be capitalized (ST1005), code that can use unconditional strings.Replace (S1017), a type conversion that should use a named conversion instead of struct literal (S1016), an unnecessary fmt.Sprintf call (S1039), and unused functions outside the proxy packages also caught by deadcode. Goal is a clean staticcheck ./... run.
+  constraints:
+    - All existing unit tests (make test) must continue to pass
+    - All linespec example suite tests must continue to pass
+    - Fixes must be semantically equivalent — no behavior changes, only code quality
+    - Do not remove exported functions that form a public API surface (keep pkg/embeddings, pkg/logger, pkg/manifest exports)
+    - Only remove unexported or clearly-internal dead code functions
+  affected_scope:
+    - cmd/linespec/main_stable.go
+    - pkg/docker/orchestrator.go
+    - pkg/dsl/parser.go
+    - pkg/dsl/dsl_test.go
+    - pkg/provenance/formatter.go
+    - pkg/provenance/git.go
+    - pkg/provenance/git_test.go
+    - pkg/provenance/linter.go
+    - pkg/provenance/loader.go
+    - pkg/runner/runner.go
+  related:
+    - prov-2026-c013b085
+  associated_specs:
+    - path: pkg/dsl/dsl_test.go
+      type: go_test
+    - path: pkg/provenance/linter_test.go
+      type: go_test
+    - path: pkg/runner/runner.go
+      type: code
+  tags:
+    - maintenance
+    - staticcheck
