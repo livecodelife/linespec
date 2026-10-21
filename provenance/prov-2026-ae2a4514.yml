@@ -1,7 +1,7 @@
 id: prov-2026-ae2a4514
 title: 'Replace USING_SQL/USING_SQL_CONTAINS with semantic SQL matching: ACCESSING_TABLES,
   VERIFY_WHERE, VERIFY_WRITTEN_VALUES'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-21"
@@ -89,7 +89,7 @@ related:
   - prov-2026-030
   - prov-2026-4dcca1c0
   - prov-2026-556ce2a7
-sealed_at_sha: ""
+sealed_at_sha: 17a2d7ced22682cc37123b77a7d1bc971050899f
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
