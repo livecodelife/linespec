@@ -1,6 +1,6 @@
 id: prov-2026-00ac6322
 title: Correct TIMEOUT prose and example in linespec.html
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-09"
@@ -20,7 +20,7 @@ type: imprint
 implements: prov-2026-059decf1
 implements_version: 1
 related: []
-sealed_at_sha: ""
+sealed_at_sha: d5bf8c3631c6f1d9d3ee7c9d56dde93a1d261c65
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
