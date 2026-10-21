@@ -1,6 +1,6 @@
 id: prov-2026-f140a64a
 title: Update docs and release notes for provenance v2
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-10-16"
@@ -27,7 +27,7 @@ implements: prov-2026-dfb51160
 implements_version: 1
 type: imprint
 related: []
-sealed_at_sha: ""
+sealed_at_sha: ff403b4081c74fc5dcbde22be83106c07b1ff4ee
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
