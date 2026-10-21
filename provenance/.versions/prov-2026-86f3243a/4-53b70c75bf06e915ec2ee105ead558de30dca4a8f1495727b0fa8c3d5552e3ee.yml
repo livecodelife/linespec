@@ -1,0 +1,34 @@
+id: prov-2026-86f3243a
+version: 4
+content_hash: sha256:53b70c75bf06e915ec2ee105ead558de30dca4a8f1495727b0fa8c3d5552e3ee
+parent_hash: sha256:c7bc62b1a51c611a30107200a9e5641746895547ae113272f47c567f4e92aba2
+reason: Refresh the spec hashes after the runner.go change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:15:42Z"
+spec_hashes:
+  - sha256:2b7b47327386ed81363d2214385ed25a67675ab3beac49e7836e9a83958b609c
+  - sha256:e4f127336dc753cf833057f836d165f23bd84503397f373690558a69ea564afd
+content:
+  id: prov-2026-86f3243a
+  title: 'Fix CI: explicit infrastructure image pull, valid Kafka cluster ID'
+  type: blueprint
+  created_at: "2026-04-18"
+  author: calebcowen@gmail.com
+  aliases:
+    - prov-2026-6c7c0ab9
+  intent: |
+    Two CI failures discovered after prov-2026-6c7c0ab9: (1) auto-pull in StartContainer was too broad — migration containers use the app image (todo-api:latest, user-service:latest) which needs to be built locally, not pulled; the auto-pull wasted time attempting Docker Hub pulls for images that don't exist there. (2) CLUSTER_ID=linespec-cluster is not a valid Kafka cluster ID — cp-kafka 7.x+ in KRaft mode requires a base64url-encoded UUID; an invalid value causes the broker to crash immediately so the port binding never appears. Fix: replace auto-pull in StartContainer with an explicit EnsureImage method called only for known infrastructure images (MySQL, Kafka, PostgreSQL, MongoDB). Fix Kafka CLUSTER_ID to use a valid base64url UUID.
+  constraints:
+    - EnsureImage must check if the image exists locally first (ImageInspect) before pulling
+    - StartContainer must NOT auto-pull — the pull responsibility belongs to the caller
+    - Only infrastructure containers (MySQL, Kafka, PostgreSQL, MongoDB) get EnsureImage calls
+    - App/migration containers must NOT get EnsureImage calls — they must fail fast with "No such image" if not built
+    - The Kafka CLUSTER_ID must be a 22-character base64url string (valid UUID format)
+  affected_scope:
+    - pkg/docker/orchestrator.go
+    - pkg/runner/runner.go
+  associated_specs:
+    - path: pkg/docker/orchestrator.go
+      type: code
+    - path: pkg/runner/runner.go
+      type: code
