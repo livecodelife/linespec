@@ -1,0 +1,35 @@
+id: prov-2026-70cbf556
+version: 3
+content_hash: sha256:55b9d3275578b6d5732c65c83dd4f78aaf0dbb181de688c8b13f14656efc584d
+parent_hash: sha256:edfaecd6e69632c875744ddc45ad758b3e7c081bebda103b087d1c8acb9cc719
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:56Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-70cbf556
+  title: Release v1.4.0-beta
+  type: blueprint
+  created_at: "2026-04-13"
+  author: calebcowen@gmail.com
+  intent: 'Tag and release v1.4.0-beta, documenting all Phase 1 and Phase 2 beta improvements to the LineSpec Testing system: EXPECT_NOT enforcement, registry determinism fix, PostgreSQL startup enforcement, MySQL CLIENT_QUERY_ATTRIBUTES parsing, auto table discovery, data-driven framework config, config decoupling + PostgreSQL deadlock fix, proxy behavior unification, and HTTP proxy Content-Type inference.'
+  constraints:
+    - CHANGELOG.md must be updated before tagging
+  affected_scope:
+    - CHANGELOG.md
+  related:
+    - prov-2026-758af159
+    - prov-2026-cd962cbc
+    - prov-2026-0a7ec7ff
+    - prov-2026-976c7d8a
+    - prov-2026-9a74b241
+    - prov-2026-83fdfdd9
+    - prov-2026-24c7e7aa
+    - prov-2026-eb5f2ecb
+    - prov-2026-aa64b036
+    - prov-2026-ebfa7835
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release
