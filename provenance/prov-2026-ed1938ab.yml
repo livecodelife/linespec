@@ -1,6 +1,6 @@
 id: prov-2026-ed1938ab
 title: Release v3.11.3
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-27"
@@ -22,7 +22,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-6616931d
-sealed_at_sha: ""
+sealed_at_sha: 0c2f17fe896e8614f13b0ad34e3d8858f2983e01
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
