@@ -1,6 +1,6 @@
 id: prov-2026-a31a18c9
 title: 'v2.5.0 release: install-skills docs update and version bump'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-17"
@@ -23,7 +23,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-5a3f28a5
-sealed_at_sha: ""
+sealed_at_sha: 26121215a5aaac6c3e5402c584b659fdf12b8e54
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
