@@ -1,6 +1,6 @@
 id: prov-2026-78d9250b
 title: 'Release v2.3.4: Multi-pack aware lint and check CLI commands'
-status: open
+status: implemented
 version: 3
 reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-17"
@@ -20,7 +20,7 @@ affected_scope:
   - linespec-beta
 forbidden_scope: []
 related: []
-sealed_at_sha: ""
+sealed_at_sha: e6043d9575f9ae976f71d95fac5830b7549958e7
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})
