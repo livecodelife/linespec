@@ -1,8 +1,8 @@
 id: prov-2026-3ee436f3
 title: Version bump to v2.8.3
 status: implemented
-version: 2
-reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: Patch release v2.8.3 for the DOCKER_BUILDKIT=0 Homebrew post_install fix.
@@ -13,7 +13,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-336ba2a8
-sealed_at_sha: bebfea3229c93360ded3099203be976606b71b67
+sealed_at_sha: 2b83de56d1bcd42db3d4750a5e600c22db165d92
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

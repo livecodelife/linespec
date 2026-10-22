@@ -1,0 +1,39 @@
+id: prov-2026-c223ae01
+version: 1
+content_hash: sha256:f2262366c5ab90b62d19c179d5e8764a6cd871cd04ea0eca80dba623219e8022
+parent_hash: ""
+reason: ""
+author: calebcowen@gmail.com
+created_at: "2026-10-21T21:53:30Z"
+spec_hashes:
+  - sha256:16d77eb1d50b86ed29c000e31b91626192ff5d694154b03f9cffbf7e5a51b9a1
+content:
+  id: prov-2026-c223ae01
+  title: Release prep for v3.28.1
+  type: blueprint
+  created_at: "2026-10-21"
+  author: calebcowen@gmail.com
+  intent: |
+    Prepare the v3.28.1 patch release. Bump 3.28.0 to 3.28.1 with ./scripts/bump-version.sh 3.28.1 and add a 3.28.1 CHANGELOG section, dated 2026-10-21, for the only change since v3.28.0 (PR #244, prov-2026-1e5cf179): the app container's port is now declared as exposed, so an image without EXPOSE gets a host port on daemons that publish only exposed ports (Docker 28.0.4 on GitHub runners) and the wait for the host port no longer times out. This record creates no tag, push or release; the tag is created after the PR merges.
+  constraints:
+    - VERSION reads 3.28.1, produced by ./scripts/bump-version.sh 3.28.1
+    - CHANGELOG.md keeps an empty "## [Unreleased]" heading above "## [3.28.1] - 2026-10-21"
+    - The 3.28.1 entry covers prov-2026-1e5cf179 under Fixed
+    - No tag, push or release is created by this record
+    - No hand edits to docs/*.html or docs/llms*.txt
+    - No code changes
+  affected_scope:
+    - VERSION
+    - README.md
+    - LINESPEC.md
+    - PROVENANCE_RECORDS.md
+    - CHANGELOG.md
+  related:
+    - prov-2026-1e5cf179
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+      type: unit
+  tags:
+    - release
+    - changelog
+    - version-bump

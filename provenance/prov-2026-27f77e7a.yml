@@ -1,8 +1,8 @@
 id: prov-2026-27f77e7a
 title: Version bump to v2.8.5
 status: implemented
-version: 2
-reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-20"
 author: calebcowen@gmail.com
 intent: Patch release v2.8.5 for the Homebrew post_install rescue BuildError fix.
@@ -13,7 +13,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-1687368b
-sealed_at_sha: d89c4ff96623c12c0c75e8e3d00aaefec95cec45
+sealed_at_sha: 842e6066ba563676b88ddccdb81d8fe1eda7a5bc
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

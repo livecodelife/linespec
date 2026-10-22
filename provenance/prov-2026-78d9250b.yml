@@ -1,8 +1,8 @@
 id: prov-2026-78d9250b
 title: 'Release v2.3.4: Multi-pack aware lint and check CLI commands'
 status: implemented
-version: 2
-reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-17"
 author: calebcowen@gmail.com
 intent: "Bump version to v2.3.4, update CHANGELOG with entry for multi-pack aware lint and check CLI commands, and rebuild the linespec-beta binary."
@@ -20,7 +20,7 @@ affected_scope:
   - linespec-beta
 forbidden_scope: []
 related: []
-sealed_at_sha: 8f6e64b470427ccee28eb6530a6b85d57a179d8d
+sealed_at_sha: e6043d9575f9ae976f71d95fac5830b7549958e7
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

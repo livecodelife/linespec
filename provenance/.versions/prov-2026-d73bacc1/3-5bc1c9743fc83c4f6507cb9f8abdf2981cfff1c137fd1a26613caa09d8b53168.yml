@@ -1,0 +1,47 @@
+id: prov-2026-d73bacc1
+version: 3
+content_hash: sha256:5bc1c9743fc83c4f6507cb9f8abdf2981cfff1c137fd1a26613caa09d8b53168
+parent_hash: sha256:cf8e0ae03d93236b4b242b181c6209c6ed82e52da2d28a3b1b5e871531e56ae6
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:39:39Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-d73bacc1
+  title: Release v3.8.0
+  type: blueprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Publish v3.8.0 with three changes to the publish/clone lifecycle:
+    - Bug fix: publish now wraps single-file layers (e.g. prompt.md) in a tar archive so
+      clone can always use extractTar regardless of layer type.
+    - Feature: clone and import accept local file paths in addition to HTTP/HTTPS URLs;
+      empty layer URLs are auto-resolved from the manifest directory using the publish
+      naming convention.
+    - Feature: clone now installs skills (.claude/skills/) alongside git hooks so the
+      provenance hooks are immediately usable in Claude Code.
+  constraints:
+    - make test must pass before tagging
+    - CHANGELOG.md [Unreleased] must be promoted to [3.8.0] - 2026-05-15 with a new empty [Unreleased] section above it
+    - make bump-version NEW=3.8.0 handles VERSION, docs/index.html, docs/linespec.html, docs/docs.html, docs/provenance.html, README.md, LINESPEC.md
+    - linespec provenance compile must run to rebuild the hash manifest
+    - git tag v3.8.0 must be created and pushed to trigger the release workflow
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-4b89538a
+    - prov-2026-fde4ee3a
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release

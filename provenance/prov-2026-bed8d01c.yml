@@ -1,8 +1,8 @@
 id: prov-2026-bed8d01c
 title: Release v3.10.3 - fix complete command to include hash manifest in auto-commit
 status: implemented
-version: 2
-reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-20"
 author: test@example.com
 intent: >
@@ -27,7 +27,7 @@ affected_scope:
 forbidden_scope: []
 type: blueprint
 related: []
-sealed_at_sha: 7299397bf4910810707820508cc19087d506a9be
+sealed_at_sha: a98d942cfbbc82ecbf5f5506d80d2cb7ea8233ae
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

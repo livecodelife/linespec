@@ -1,8 +1,8 @@
 id: prov-2026-c4b18872
 title: Document VARS block typed constraints in LINESPEC.md and docs site
 status: implemented
-version: 2
-reason: 'Drop LINESPEC.md, docs/linespec.html from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-18"
 author: calebcowen@gmail.com
 intent: >
@@ -21,7 +21,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-a8304063
-sealed_at_sha: 7b79c5847a6f15281773ff1b5a6d30f75096272e
+sealed_at_sha: 254dc3a22ba17899a13bf302f0187cba0f0bfebf
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

@@ -1,0 +1,51 @@
+id: prov-2026-57da3fe0
+version: 3
+content_hash: sha256:14893e687455290d333e7fe9152ff251b0690bfffdfe1299645ff78618e68fa3
+parent_hash: sha256:9d7214f338ce9fc69d544a9eec35ffd3116224df38d2af3deacaee7d0056516f
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:47Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-57da3fe0
+  title: Release v3.11.7
+  type: blueprint
+  created_at: "2026-06-02"
+  author: calebcowen@gmail.com
+  intent: |
+    Version bump and release artifacts for v3.11.7. Patch release bundling the
+    clone specs-layer fix and three example/test-fixture fixes:
+      - linespec clone now extracts the specs layer into a dedicated linespecs/
+        directory instead of dumping .linespec files at the project root
+        (prov-2026-ba855ac7).
+      - example asynq-worker now commits a complete go.sum (prov-2026-0714ca9d) and
+        the go.mod indirect require block (prov-2026-d4538081) so it builds
+        reproducibly under -mod=readonly.
+      - example notification-service now reconnects after the proxy resets
+        connections between tests via SQLAlchemy pool_pre_ping (prov-2026-e85895b5).
+  constraints:
+    - |
+      Promote [Unreleased] in CHANGELOG.md to [3.11.7] - 2026-06-02 with entries for
+      the clone fix and the example fixes; add a fresh empty [Unreleased] section above it.
+    - make bump-version NEW=3.11.7 handles VERSION and all doc/site references.
+    - Run linespec provenance compile to rebuild the hash manifest.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-ba855ac7
+    - prov-2026-0714ca9d
+    - prov-2026-d4538081
+    - prov-2026-e85895b5
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release

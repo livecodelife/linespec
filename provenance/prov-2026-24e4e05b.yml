@@ -1,8 +1,8 @@
 id: prov-2026-24e4e05b
 title: Version bump to v2.8.6
 status: implemented
-version: 2
-reason: 'Drop VERSION from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-04-21"
 author: calebcowen@gmail.com
 intent: Patch release v2.8.6 for the MySQL proxy ARG_MAX fix (pass schema via --schema-file instead of --schema-data CLI arg).
@@ -13,7 +13,7 @@ affected_scope:
 forbidden_scope: []
 related:
   - prov-2026-f0384a57
-sealed_at_sha: b1c0cf5b1e94008ef5796f91589082ec02b4df33
+sealed_at_sha: 3af1eb314ca30143ca9b4ad7d55666050b0419db
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

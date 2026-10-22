@@ -1,8 +1,8 @@
 id: prov-2026-b107a5da
 title: Release v3.4.0 — lint output filtering flags
 status: implemented
-version: 2
-reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-05-14"
 author: calebcowen@gmail.com
 intent: >
@@ -28,7 +28,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-4358fe61
-sealed_at_sha: af8af3b3c2abfe434864f380f5acce8f2a68a951
+sealed_at_sha: d3c5d0d3ab7f3a71b6620db35591836d03ea73d9
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

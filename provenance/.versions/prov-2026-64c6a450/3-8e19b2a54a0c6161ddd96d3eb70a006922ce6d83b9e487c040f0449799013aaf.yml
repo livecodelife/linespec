@@ -1,0 +1,32 @@
+id: prov-2026-64c6a450
+version: 3
+content_hash: sha256:8e19b2a54a0c6161ddd96d3eb70a006922ce6d83b9e487c040f0449799013aaf
+parent_hash: sha256:b03e0d07c61bb985e673ff5550e57a462cee1ba8f4453a67f468442599aa0dac
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:38:53Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-64c6a450
+  title: Update local docs for bug type and field enforcement matrix
+  type: imprint
+  created_at: "2026-04-24"
+  author: calebcowen@gmail.com
+  intent: |
+    Update PROVENANCE_RECORDS.md, PROVENANCE_RECORD_SCHEMA.md, and CHANGELOG.md to document the new bug type, the extends field, and the per-type field enforcement matrix. The docs/ site files are not modified.
+  constraints:
+    - bug type documented in tier hierarchy and type reference tables
+    - extends field documented in field reference with applicable types noted
+    - Per-type field enforcement matrix and conditional rules section added or updated
+    - CHANGELOG.md entry added for this release
+  affected_scope:
+    - PROVENANCE_RECORDS.md
+    - PROVENANCE_RECORD_SCHEMA.md
+    - CHANGELOG.md
+  forbidden_scope:
+    - docs/**
+  implements: prov-2026-9ffe68bb
+  implements_version: 2
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go

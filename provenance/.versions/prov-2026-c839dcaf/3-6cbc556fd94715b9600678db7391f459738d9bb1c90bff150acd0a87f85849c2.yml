@@ -1,0 +1,43 @@
+id: prov-2026-c839dcaf
+version: 3
+content_hash: sha256:6cbc556fd94715b9600678db7391f459738d9bb1c90bff150acd0a87f85849c2
+parent_hash: sha256:816c86b64ce3b5e819ccb38f18da20e8440f6f2cd27dee53461ff07bbaea905b
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:39:34Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-c839dcaf
+  title: Release v3.11.5
+  type: blueprint
+  created_at: "2026-05-28"
+  author: calebcowen@gmail.com
+  intent: |
+    Version bump and release artifacts for v3.11.5. Patch release containing one
+    bug fix: the PostgreSQL proxy now declares UUID-valued id columns with OID 2950
+    (UUID) in RowDescription instead of INT4, preventing typed clients like
+    tokio-postgres from panicking on row.get::<_, Uuid>(0) with an EOF on the
+    HTTP connection.
+  constraints:
+    - |
+      Promote [Unreleased] in CHANGELOG.md to [3.11.5] - 2026-05-28 with an entry
+      for the UUID OID fix; add a fresh empty [Unreleased] section above it.
+    - make bump-version NEW=3.11.5 handles VERSION and all doc/site references.
+    - Run linespec provenance compile to rebuild the hash manifest.
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - LINESPEC.md
+    - .linespec/hash_manifest.json
+  related:
+    - prov-2026-3b396f68
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
+  tags:
+    - release

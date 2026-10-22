@@ -1,8 +1,8 @@
 id: prov-2026-308f8177
 title: 'Release 3.23.1: provenance status --filter respects --format json and rejects unknown values'
 status: implemented
-version: 2
-reason: 'Drop CHANGELOG.md from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-09-14"
 author: caleb.cowen@linq.com
 intent: |
@@ -32,7 +32,7 @@ forbidden_scope: []
 type: blueprint
 related:
   - prov-2026-85bda068
-sealed_at_sha: 9f2b4cdb4956d47e70e7820ff94e44c0fc0ec57e
+sealed_at_sha: 63e0615484ebab80edacadfa487978ce2a25be98
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

@@ -1,8 +1,8 @@
 id: prov-2026-3111394d
 title: Exclude .docs-lead from the .docs-article p max-width rule
 status: implemented
-version: 2
-reason: 'Drop docs/assets/css/docs.css from associated_specs: release files and generated docs are not specs, and editing them invalidated the record''s hash'
+version: 3
+reason: Refresh the spec hashes after the docs test change
 created_at: "2026-08-13"
 author: 305597777+agent-loops-boxd[bot]@users.noreply.github.com
 intent: >
@@ -41,7 +41,7 @@ type: imprint
 implements: prov-2026-f05161eb
 implements_version: 1
 related: []
-sealed_at_sha: 5a58f248ef9568e2a1cd03119768261fc0044b23
+sealed_at_sha: 4f6f79288fdaea555c85fd80dc209e55d09fa330
 associated_specs:
   - path: pkg/config/container_naming_docs_test.go
     run_command: go test -count=1 -run TestDocsDoNotPresentFixedContainerNamesAsDefaults ./$(dirname {{path}})

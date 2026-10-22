@@ -1,0 +1,37 @@
+id: prov-2026-c503169a
+version: 3
+content_hash: sha256:fad7b30cdbe3ca99cc47c281e9b3f32e84b53c1cde54388eecbe3d74668118ca
+parent_hash: sha256:5d393e29cd701313c9c1278b39543832bdfbb526bc1a5c9ec747087e11885580
+reason: Refresh the spec hashes after the docs test change
+author: calebcowen@gmail.com
+created_at: "2026-10-21T22:39:29Z"
+spec_hashes:
+  - sha256:8ac9f9701a69b92b7e289ac651695cc98439152d5c65cb9c43d8e59880851603
+content:
+  id: prov-2026-c503169a
+  title: Update CHANGELOG and bump version to v3.6.0
+  type: imprint
+  created_at: "2026-05-15"
+  author: calebcowen@gmail.com
+  intent: |
+    Expand CHANGELOG.md [Unreleased] with entries for linespec clone, linespec import, and
+    pkg/manifest (fetch/verify/extract), then promote [Unreleased] to [3.6.0] - 2026-05-15
+    with a new empty [Unreleased] header above it. Run make bump-version NEW=3.6.0 to
+    update VERSION and all doc/site version references atomically.
+  constraints:
+    - CHANGELOG entries follow the existing style (bold command name, provenance record link, prose description)
+    - '[Unreleased] is promoted to [3.6.0] - 2026-05-15; a fresh empty [Unreleased] section is added above it'
+    - make bump-version NEW=3.6.0 handles VERSION, docs/index.html, docs/linespec.html, docs/docs.html, docs/provenance.html, README.md, LINESPEC.md
+  affected_scope:
+    - CHANGELOG.md
+    - VERSION
+    - docs/index.html
+    - docs/linespec.html
+    - docs/docs.html
+    - docs/provenance.html
+    - README.md
+    - .linespec/hash_manifest.json
+  implements: prov-2026-1df957ee
+  implements_version: 1
+  associated_specs:
+    - path: pkg/config/container_naming_docs_test.go
